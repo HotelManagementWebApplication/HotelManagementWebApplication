@@ -397,6 +397,18 @@ public class BillingService {
         return new InvoiceDtos.PageResponse(result.getContent().stream().map(this::toResponse).toList(), result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
+    @Transactional(readOnly = true)
+    public InvoiceDtos.PageResponse list(PaymentStatus status, Long reservationId, java.time.LocalDate from,
+                                         java.time.LocalDate to, int page, int size) {
+        int safeSize = Math.max(1, Math.min(100, size));
+        var result = invoices.search(status, reservationId, from == null ? null : from.atStartOfDay(),
+                to == null ? null : to.plusDays(1).atStartOfDay(),
+                org.springframework.data.domain.PageRequest.of(Math.max(0, page), safeSize,
+                        org.springframework.data.domain.Sort.by("issuedAt").descending()));
+        return new InvoiceDtos.PageResponse(result.getContent().stream().map(this::toResponse).toList(),
+                result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
+    }
+
     /** Tạo mã tham chiếu mô tả refund bắt nguồn từ payment nào. */
     private String sourceReference(PaymentTransaction source) { return "REFUND_OF:" + source.getId(); }
     /** Tạo DomainException thống nhất cho các lỗi billing. */

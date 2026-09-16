@@ -27,6 +27,14 @@ public class EmployeeAdminController {
     @PreAuthorize("@departmentAccess.allows(authentication, 'EMPLOYEE_READ')")
     public List<EmployeeAdminDtos.SessionResponse> sessions(@PathVariable String employeeId) { return service.sessions(employeeId); }
 
+    @GetMapping("/{employeeId}/login-history")
+    @PreAuthorize("@departmentAccess.allows(authentication, 'EMPLOYEE_READ')")
+    public EmployeeAdminDtos.LoginHistoryResponse loginHistory(@PathVariable String employeeId,
+                                                                @RequestParam(defaultValue = "0") int page,
+                                                                @RequestParam(defaultValue = "20") int size) {
+        return service.loginHistory(employeeId, page, size);
+    }
+
     @DeleteMapping("/{employeeId}/sessions/{sessionId}")
     @PreAuthorize("@departmentAccess.allows(authentication, 'EMPLOYEE_PROVISION') && @employeeService.canResetEmployee(authentication, #employeeId)")
     public void revokeSession(@PathVariable String employeeId, @PathVariable Long sessionId) { service.revokeSession(employeeId, sessionId); }
@@ -42,5 +50,12 @@ public class EmployeeAdminController {
     public EmployeeAdminDtos.Response role(@PathVariable String employeeId,
                                            @Valid @RequestBody EmployeeAdminDtos.RoleRequest request) {
         return service.setRole(employeeId, request.role());
+    }
+
+    @PatchMapping("/{employeeId}/employment")
+    @PreAuthorize("@departmentAccess.allows(authentication, 'EMPLOYEE_PROVISION') && @employeeService.canResetEmployee(authentication, #employeeId)")
+    public EmployeeAdminDtos.Response employment(@PathVariable String employeeId,
+                                                 @Valid @RequestBody EmployeeAdminDtos.EmploymentRequest request) {
+        return service.setEmployment(employeeId, request);
     }
 }

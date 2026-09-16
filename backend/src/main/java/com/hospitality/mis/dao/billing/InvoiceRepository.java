@@ -10,6 +10,10 @@ import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import com.hospitality.mis.entity.billing.PaymentStatus;
+import java.time.LocalDateTime;
 
 
 
@@ -24,4 +28,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select i from Invoice i where i.id = :id")
     Optional<Invoice> findForUpdate(@Param("id") Long id);
+
+    @Query("select i from Invoice i where (:status is null or i.status = :status) and (:reservationId is null or i.reservation.id = :reservationId) and (:fromAt is null or i.issuedAt >= :fromAt) and (:toAt is null or i.issuedAt < :toAt)")
+    Page<Invoice> search(@Param("status") PaymentStatus status, @Param("reservationId") Long reservationId,
+                         @Param("fromAt") LocalDateTime fromAt, @Param("toAt") LocalDateTime toAt,
+                         Pageable pageable);
 }

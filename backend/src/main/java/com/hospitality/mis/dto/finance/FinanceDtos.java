@@ -116,7 +116,9 @@ public final class FinanceDtos {
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record ReconciliationResponse(LocalDate fromDate, LocalDate toDate, Map<String, BigDecimal> totalsByMethod,
-                                         BigDecimal totalPayments, BigDecimal totalRefunds, BigDecimal netTotal) {}
+                                         BigDecimal totalPayments, BigDecimal totalRefunds, BigDecimal netTotal,
+                                         BigDecimal recognizedRevenue, BigDecimal outstandingPartnerDebt,
+                                         BigDecimal cashVariance) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record PageResponse<T>(java.util.List<T> items, int page, int size, long totalElements, int totalPages) {}

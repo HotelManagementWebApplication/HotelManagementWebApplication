@@ -16,6 +16,9 @@ public final class EmployeeShiftDtos {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record StatusRequest(@NotBlank String status) {}
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record UpdateRequest(@NotNull LocalDate shiftDate, @NotBlank String shiftCode,
+                                @NotNull LocalDateTime startsAt, @NotNull LocalDateTime endsAt) {}
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record CoverageResponse(LocalDate shiftDate, String shiftCode, int minimumStaff, long assignedStaff,
                                    long shortage, boolean understaffed) {}
 }

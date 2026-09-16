@@ -49,6 +49,8 @@ public class InventoryMovementService {
 
     private InventoryMovementDtos.Response recordOnce(InventoryMovementDtos.CreateRequest request, String actor) {
         if (actor == null || actor.isBlank()) throw new DomainException("ACTOR_REQUIRED", "Thiếu actor cập nhật tồn kho");
+        if (request.quantity() == 0 || (request.type() != InventoryMovement.MovementType.ADJUST && request.quantity() < 0))
+            throw new DomainException("INVALID_INVENTORY_QUANTITY", "Chỉ ADJUST được dùng số lượng âm và số lượng không được bằng 0");
         var service = services.findWithLockById(request.serviceId()).orElseThrow(() -> new DomainException("SERVICE_NOT_FOUND", "Không tìm thấy dịch vụ"));
         int signed = switch (request.type()) {
             case ISSUE, WASTE -> -request.quantity();

@@ -43,8 +43,11 @@ client phải xử lý cả 401 và 403.
 | POST | `/auth/employees/{employee_id}/password` | MANAGER |
 | GET | `/auth/employees?include_inactive=` / `/auth/employees/{employee_id}` | `EMPLOYEE_READ`; không trả password, có trạng thái account/login history |
 | GET | `/auth/employees/{employee_id}/sessions` | `EMPLOYEE_READ`; danh sách refresh session, family và thời hạn, không trả token gốc |
+| GET | `/auth/employees/{employee_id}/login-history?page=&size=` | `EMPLOYEE_READ`; lịch sử mọi lần đăng nhập thành công/thất bại, phân trang |
 | DELETE | `/auth/employees/{employee_id}/sessions/{session_id}` | `EMPLOYEE_PROVISION` + role ceiling; thu hồi một session và ghi security audit |
 | PATCH | `/auth/employees/{employee_id}/status` | `EMPLOYEE_PROVISION` + role ceiling; bật/tắt tài khoản và audit |
+| PATCH | `/auth/employees/{employee_id}/role` | `EMPLOYEE_PROVISION` + role ceiling; đổi role không vượt ceiling và không tự nâng quyền |
+| PATCH | `/auth/employees/{employee_id}/employment` | `EMPLOYEE_PROVISION` + role ceiling; WORKING/ON_LEAVE/TERMINATED và khoảng nghỉ hợp lệ |
 | GET | `/guests`, `/guests/{id}` | ADMIN, DIRECTOR, MANAGER, FRONT_DESK |
 | POST | `/guests` | MANAGER, FRONT_DESK |
 | GET | `/rooms`, `/rooms/availability` | ADMIN, DIRECTOR, MANAGER, FRONT_DESK, HOUSEKEEPING, TECHNICAL, STAFF |
@@ -66,11 +69,12 @@ client phải xử lý cả 401 và 403.
 | POST | `/rooms/{room_id}/images` | TECHNICAL, MANAGER, DIRECTOR, ADMIN; multipart `file`, tối đa 10 ảnh/phòng, 5 MB/ảnh, JPEG/PNG/WebP |
 | DELETE | `/rooms/{room_id}/images/{image_id}` | TECHNICAL, MANAGER, DIRECTOR, ADMIN; soft-delete metadata và xóa file local |
 | POST | `/amenities` | TECHNICAL, MANAGER, DIRECTOR, ADMIN |
+| GET/PUT | `/amenities`, `/amenities/{id}` | `ROOM_CATALOG_WRITE`; quản trị tên và active lifecycle của tiện nghi |
 | POST | `/room-types` | Có `ROOM_CATALOG_WRITE`; tạo `DRAFT`, bắt buộc `Idempotency-Key` |
 | GET/PUT | `/room-types/{room_type_id}` | GET: có `ROOM_READ`; PUT: `ROOM_CATALOG_WRITE`, chỉ sửa `DRAFT`/`REJECTED`, bắt buộc `Idempotency-Key` |
 | POST | `/room-types/{room_type_id}/revision` | `ROOM_CATALOG_WRITE`; snapshot loại phòng ACTIVE thành mã draft mới, bắt buộc `Idempotency-Key` |
 | POST | `/room-types/{room_type_id}/submit` | `ROOM_CATALOG_WRITE`; tạo approval nội bộ, bắt buộc `Idempotency-Key` |
-| POST | `/room-types/{room_type_id}/activate` | `ROOM_CATALOG_WRITE`, chỉ requester sau khi approval exact payload, bắt buộc `Idempotency-Key` |
+| POST | `/room-types/{room_type_id}/activate` | ADMIN, DIRECTOR, MANAGER; approver khác requester consume approval exact payload; revision sẽ retire bản cũ và chuyển phòng |
 | GET | `/room-types/{room_type_id}/price-history` | Có `ROOM_READ`; trả snapshot giá theo thời gian, approval và actor thay đổi |
 | PUT | `/room-types/{room_type_id}/amenities` | TECHNICAL, MANAGER, DIRECTOR, ADMIN; thay toàn bộ liên kết tiện nghi |
 | POST | `/reservations` | MANAGER, FRONT_DESK |
@@ -107,6 +111,8 @@ client phải xử lý cả 401 và 403.
 | GET | `/invoices?page=&size=` | `BILLING_READ`; danh sách invoice phân trang tối đa 100 bản ghi/trang |
 | GET/POST | `/invoices/{invoice_id}/payments?page=&size=` | GET hỗ trợ phân trang; MANAGER, ACCOUNTING, FRONT_DESK |
 | GET/POST | `/invoices/{invoice_id}/receipts?page=&size=` | GET hỗ trợ phân trang; MANAGER, ACCOUNTING, FRONT_DESK |
+| GET | `/finance/payments?page=&size=&invoice_id=&method=&type=&status=&from=&to=` | `FINANCE_READ`; truy vấn payment/refund toàn cục có filter và phân trang |
+| GET | `/finance/receipts?page=&size=&invoice_id=&method=&issued_by=&from=&to=` | `FINANCE_READ`; truy vấn receipt toàn cục có filter và phân trang |
 | GET/POST | `/services/{service_id}/inventory-movements` | ADMIN, DIRECTOR, MANAGER, ACCOUNTING, FRONT_DESK, HOUSEKEEPING, KITCHEN |
 | GET | `/services/{service_id}/inventory-movements/inventory-report?from=&to=` | `INVENTORY_READ`; tổng hợp RECEIVE/ISSUE/WASTE/RETURN/ADJUST theo ngày |
 | POST | `/services/{service_id}/price/submit` | KITCHEN tạo approval exact payload; Manager/Admin/Director phê duyệt |
@@ -114,12 +120,12 @@ client phải xử lý cả 401 và 403.
 | GET | `/services/{service_id}/price-history` | Có `SERVICE_READ`; lịch sử giá và actor/approval |
 | POST | `/finance/partner-debts/{id}/settle` | `FINANCE_WRITE`; tất toán một phần/toàn bộ, khóa dòng và không vượt dư nợ |
 | GET | `/finance/partner-debts/{id}/settlements`, `/finance/ledger` | `FINANCE_READ`; lịch sử tất toán và finalized ledger append-only có filter/pagination |
-| GET | `/finance/reconciliation?from=&to=` | `FINANCE_READ`; đối soát CASH/CARD/BANK_TRANSFER, payment/refund/net |
+| GET | `/finance/reconciliation?from=&to=` | `FINANCE_READ`; đối soát payment/refund/net, doanh thu ghi nhận, công nợ đối tác và variance giao ca |
 | GET | `/finance/cash-handovers?page=&size=`, `/finance/expenses?page=&size=`, `/finance/partner-debts?page=&size=` | `FINANCE_READ`; truyền page/size trả `items` và metadata, không truyền giữ response list tương thích |
 | POST | `/finance/cash-handovers`, `/finance/expenses`, `/finance/partner-debts` | MANAGER, ACCOUNTING, DIRECTOR; actor giao ca lấy từ JWT |
 | GET | `/governance/audit` | ADMIN, DIRECTOR, MANAGER, ACCOUNTING; scoped by actor for accounting |
 | GET | `/governance/audit?action=&entity_type=&entity_id=&correlation_key=&from=&to=&page=&size=` | Filter/pagination audit theo actor scope, action, entity, correlation và thời gian; trả metadata khi có query |
-| GET | `/governance/notifications/outbox?role=` | `NOTIFICATION_READ`; polling outbox pending theo recipient role |
+| GET | `/governance/notifications/outbox?role=` | `NOTIFICATION_READ`; role được giới hạn theo authority JWT, không đọc chéo department |
 | POST | `/governance/notifications/outbox/{id}/delivered` | `NOTIFICATION_WRITE`; đánh dấu event đã giao |
 | POST | `/auth/customers/register` | Public |
 | POST | `/auth/customers/login` | Public |

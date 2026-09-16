@@ -3,6 +3,7 @@ package com.hospitality.mis.service.room;
 import com.hospitality.mis.common.exception.DomainException;
 import com.hospitality.mis.dao.room.RoomTypeRepository;
 import com.hospitality.mis.dao.room.RoomTypePriceHistoryRepository;
+import com.hospitality.mis.dao.room.RoomRepository;
 import com.hospitality.mis.dto.governance.ApprovalDtos;
 import com.hospitality.mis.dto.room.RoomTypeAdminDtos;
 import com.hospitality.mis.entity.room.RoomType;
@@ -30,6 +31,7 @@ public class RoomTypeCatalogService {
     private final ApprovalService approvals;
     private final AuditService audit;
     private final DurableIdempotencyService durableIdempotency;
+    private RoomRepository rooms;
     private Clock clock;
 
     @Autowired
@@ -43,6 +45,9 @@ public class RoomTypeCatalogService {
         this.durableIdempotency = durableIdempotency;
         this.clock = clock;
     }
+
+    @Autowired
+    void setRoomRepository(RoomRepository rooms) { this.rooms = rooms; }
 
     @Transactional
     public RoomTypeAdminDtos.Response create(RoomTypeAdminDtos.Request request, String actor, String key) {
@@ -98,6 +103,7 @@ public class RoomTypeCatalogService {
                     if (types.existsById(revisionId)) throw error("ROOM_TYPE_EXISTS", "Mã revision đã tồn tại");
                     RoomType draft = new RoomType();
                     apply(draft, request, principal, false);
+                    draft.setRevisionOfId(source);
                     RoomType saved = types.saveAndFlush(draft);
                     audit.record(principal, "ROOM_TYPE_REVISION_CREATED", "ROOM_TYPE", saved.getId(),
                             source, saved.getCatalogStatus().name(), null);
@@ -125,7 +131,16 @@ public class RoomTypeCatalogService {
         String hash = fingerprint("ACTIVATE|" + type.getId() + "|" + payload);
         return durableIdempotency.execute("room-type-activate", key, principal, hash,
                 RoomTypeAdminDtos.Response.class, () -> {
-                    var approval = approvals.consumeApproved(APPROVAL_ACTION, type.getId(), payload, null, principal);
+                    var approval = approvals.consumeApprovedByApprover(APPROVAL_ACTION, type.getId(), payload, null, principal);
+                    if (type.getRevisionOfId() != null) {
+                        RoomType previous = locked(type.getRevisionOfId());
+                        if (previous.getCatalogStatus() != RoomTypeCatalogStatus.ACTIVE)
+                            throw error("ROOM_TYPE_REVISION_SOURCE_INVALID", "Bản gốc của revision không còn ACTIVE");
+                        previous.setCatalogStatus(RoomTypeCatalogStatus.RETIRED);
+                        previous.setSupersededById(type.getId());
+                        if (rooms != null) rooms.findAllByRoomTypeIdForUpdate(previous.getId())
+                                .forEach(room -> room.setRoomType(type));
+                    }
                     type.setCatalogStatus(RoomTypeCatalogStatus.ACTIVE);
                     type.setCatalogApprovedBy(approval.getApprover());
                     type.setCatalogApprovedAt(LocalDateTime.now(clock));

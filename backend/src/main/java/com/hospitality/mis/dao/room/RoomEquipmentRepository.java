@@ -9,5 +9,7 @@ import java.util.Optional;
 public interface RoomEquipmentRepository extends JpaRepository<RoomEquipment, Long> {
     /** Lấy thiết bị đang hoạt động của phòng, sắp xếp theo tên để hiển thị ổn định. */
     List<RoomEquipment> findByRoomIdAndActiveTrueOrderByNameAsc(String roomId);
+    List<RoomEquipment> findByRoomIdOrderByNameAsc(String roomId);
+    Optional<RoomEquipment> findByIdAndRoomId(Long id, String roomId);
     Optional<RoomEquipment> findByIdAndRoomIdAndActiveTrue(Long id, String roomId);
 }

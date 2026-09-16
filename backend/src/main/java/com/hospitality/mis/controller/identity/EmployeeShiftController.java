@@ -28,4 +28,8 @@ public class EmployeeShiftController {
     public EmployeeShiftDtos.Response status(@PathVariable Long id, @Valid @RequestBody EmployeeShiftDtos.StatusRequest request) {
         return service.status(id, request.status(), SecurityActor.currentActor());
     }
+    @PutMapping("/{id}") @PreAuthorize("@departmentAccess.allows(authentication, 'SHIFT_WRITE')")
+    public EmployeeShiftDtos.Response update(@PathVariable Long id, @Valid @RequestBody EmployeeShiftDtos.UpdateRequest request) {
+        return service.update(id, request, SecurityActor.currentActor());
+    }
 }

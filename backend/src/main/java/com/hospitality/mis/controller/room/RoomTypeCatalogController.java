@@ -61,7 +61,7 @@ public class RoomTypeCatalogController {
     }
 
     @PostMapping("/{id}/activate")
-    @PreAuthorize("@departmentAccess.allows(authentication, 'ROOM_CATALOG_WRITE')")
+    @PreAuthorize("@departmentAccess.allows(authentication, 'ROOM_CATALOG_WRITE') && hasAnyRole('ADMIN','DIRECTOR','MANAGER')")
     public RoomTypeAdminDtos.Response activate(@PathVariable String id,
                                                @RequestHeader("Idempotency-Key") String key) {
         return service.activate(id, SecurityActor.currentActor(), key);

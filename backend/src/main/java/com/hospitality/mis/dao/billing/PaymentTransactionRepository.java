@@ -7,6 +7,9 @@ import com.hospitality.mis.entity.billing.PaymentTransaction.TransactionType;
 import java.util.List;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import com.hospitality.mis.entity.billing.PaymentMethod;
 
 /** Kho sổ giao dịch thanh toán và các phép tổng hợp tiền mặt theo actor. */
 public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, Long> {
@@ -31,4 +34,13 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     BigDecimal netCashByActorBetween(@org.springframework.data.repository.query.Param("actor") String actor,
                                      @org.springframework.data.repository.query.Param("fromAt") LocalDateTime fromAt,
                                      @org.springframework.data.repository.query.Param("toAt") LocalDateTime toAt);
+
+    @org.springframework.data.jpa.repository.Query("select p from PaymentTransaction p where (:invoiceId is null or p.invoice.id = :invoiceId) and (:method is null or p.method = :method) and (:type is null or p.type = :type) and (:status is null or p.status = :status) and (:fromAt is null or p.occurredAt >= :fromAt) and (:toAt is null or p.occurredAt < :toAt)")
+    Page<PaymentTransaction> search(@org.springframework.data.repository.query.Param("invoiceId") Long invoiceId,
+                                    @org.springframework.data.repository.query.Param("method") PaymentMethod method,
+                                    @org.springframework.data.repository.query.Param("type") TransactionType type,
+                                    @org.springframework.data.repository.query.Param("status") TransactionStatus status,
+                                    @org.springframework.data.repository.query.Param("fromAt") LocalDateTime fromAt,
+                                    @org.springframework.data.repository.query.Param("toAt") LocalDateTime toAt,
+                                    Pageable pageable);
 }

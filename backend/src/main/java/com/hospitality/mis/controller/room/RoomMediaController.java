@@ -55,6 +55,17 @@ public class RoomMediaController {
         return service.createAmenity(request, SecurityActor.currentActor());
     }
 
+    @GetMapping("/amenities")
+    @PreAuthorize("@departmentAccess.allows(authentication, 'ROOM_CATALOG_WRITE')")
+    public java.util.List<RoomMediaDtos.AmenityResponse> listAmenities() { return service.listAmenities(); }
+
+    @PutMapping("/amenities/{id}")
+    @PreAuthorize("@departmentAccess.allows(authentication, 'ROOM_CATALOG_WRITE')")
+    public RoomMediaDtos.AmenityResponse updateAmenity(@PathVariable Long id,
+                                                       @RequestBody RoomMediaDtos.UpdateAmenityRequest request) {
+        return service.updateAmenity(id, request, SecurityActor.currentActor());
+    }
+
     @PutMapping("/room-types/{roomTypeId}/amenities")
     @PreAuthorize("@departmentAccess.allows(authentication, 'ROOM_CATALOG_WRITE')")
     public java.util.List<RoomMediaDtos.AmenityResponse> assignAmenities(

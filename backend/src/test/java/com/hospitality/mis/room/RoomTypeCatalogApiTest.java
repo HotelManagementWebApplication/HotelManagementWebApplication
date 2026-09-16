@@ -75,7 +75,7 @@ class RoomTypeCatalogApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APPROVED"));
 
-                mvc.perform(post("/api/room-types/DLX/activate").with(jwtAs("tech", "TECHNICAL"))
+                mvc.perform(post("/api/room-types/DLX/activate").with(jwtAs("manager", "MANAGER"))
                         .header("Idempotency-Key", "activate-dlx"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.catalog_status").value("ACTIVE"))

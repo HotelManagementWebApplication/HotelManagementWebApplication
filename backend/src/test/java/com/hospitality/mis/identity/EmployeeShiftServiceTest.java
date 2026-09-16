@@ -52,7 +52,8 @@ class EmployeeShiftServiceTest {
     @Test
     void coverageReportsMissingStaff() {
         LocalDate date = LocalDate.of(2026, 9, 14);
-        when(shifts.countByShiftDateAndShiftCodeAndStatusNot(date, "AM", EmployeeShift.Status.CANCELLED))
+        when(shifts.countAvailable(date, "AM", EmployeeShift.Status.CANCELLED,
+                Employee.EmploymentStatus.WORKING, Employee.EmploymentStatus.ON_LEAVE))
                 .thenReturn(2L);
 
         var coverage = service.coverage(date, "AM", 4);

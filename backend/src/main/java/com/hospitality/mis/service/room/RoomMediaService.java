@@ -100,6 +100,25 @@ public class RoomMediaService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public List<RoomMediaDtos.AmenityResponse> listAmenities() {
+        return amenities.findAllByOrderByNameAscIdAsc().stream()
+                .map(a -> new RoomMediaDtos.AmenityResponse(a.getId(), a.getName(), a.isActive())).toList();
+    }
+
+    @Transactional
+    public RoomMediaDtos.AmenityResponse updateAmenity(Long id, RoomMediaDtos.UpdateAmenityRequest request, String actor) {
+        Amenity amenity = amenities.findById(id)
+                .orElseThrow(() -> new DomainException("AMENITY_NOT_FOUND", "Không tìm thấy tiện nghi"));
+        if (request == null || request.name() == null || request.name().isBlank())
+            throw new DomainException("AMENITY_NAME_REQUIRED", "Tên tiện nghi là bắt buộc");
+        amenity.setName(request.name().trim());
+        if (request.active() != null) amenity.setActive(request.active());
+        Amenity saved = amenities.saveAndFlush(amenity);
+        audit.record(actor, "AMENITY_UPDATED", "AMENITY", String.valueOf(id), null, saved.getName(), null);
+        return new RoomMediaDtos.AmenityResponse(saved.getId(), saved.getName(), saved.isActive());
+    }
+
     @Transactional
     public List<RoomMediaDtos.AmenityResponse> assignAmenities(String roomTypeId,
                                                                 RoomMediaDtos.AssignAmenitiesRequest request,

@@ -79,6 +79,12 @@ public class RoomType {
     @Column(name = "catalog_approved_at")
     private java.time.LocalDateTime catalogApprovedAt;
 
+    @Column(name = "revision_of_id", length = 10)
+    private String revisionOfId;
+
+    @Column(name = "superseded_by_id", length = 10)
+    private String supersededById;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "room_type_amenities",
             joinColumns = @JoinColumn(name = "room_type_id"),
@@ -170,6 +176,10 @@ public class RoomType {
     public void setCatalogUpdatedAt(java.time.LocalDateTime catalogUpdatedAt) { this.catalogUpdatedAt = catalogUpdatedAt; }
     public java.time.LocalDateTime getCatalogApprovedAt() { return catalogApprovedAt; }
     public void setCatalogApprovedAt(java.time.LocalDateTime catalogApprovedAt) { this.catalogApprovedAt = catalogApprovedAt; }
+    public String getRevisionOfId() { return revisionOfId; }
+    public void setRevisionOfId(String value) { revisionOfId = value; }
+    public String getSupersededById() { return supersededById; }
+    public void setSupersededById(String value) { supersededById = value; }
 
     public Set<Amenity> getAmenities() { return amenities; }
 

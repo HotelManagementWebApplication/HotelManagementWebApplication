@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.hospitality.mis.entity.operations.InventoryMovement;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import java.time.LocalDateTime;
 
 /** DTO nhật ký nhập, xuất hoặc điều chỉnh tồn kho dịch vụ. */
@@ -19,8 +18,8 @@ public final class InventoryMovementDtos {
                                 @NotBlank String serviceId,
                                 /** Loại biến động theo enum miền. */
                                 @NotNull InventoryMovement.MovementType type,
-                                /** Số lượng biến động phải dương. */
-                                @Positive int quantity,
+                                /** Số lượng: ADJUST cho phép âm; các loại khác bắt buộc dương. */
+                                int quantity,
                                 /** Lý do để đối soát. */
                                 String reason) {}
     /** Biến động đã ghi nhận cùng tác nhân và thời điểm. */

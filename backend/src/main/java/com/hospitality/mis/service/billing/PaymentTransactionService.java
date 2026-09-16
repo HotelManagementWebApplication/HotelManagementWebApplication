@@ -129,6 +129,22 @@ public class PaymentTransactionService {
         return new PaymentTransactionDtos.PageResponse(all.subList(from, to), safePage, safeSize, all.size(), (all.size() + safeSize - 1) / safeSize);
     }
 
+    @Transactional(readOnly = true)
+    public PaymentTransactionDtos.PageResponse search(Long invoiceId,
+                                                       com.hospitality.mis.entity.billing.PaymentMethod method,
+                                                       PaymentTransaction.TransactionType type,
+                                                       PaymentTransaction.TransactionStatus status,
+                                                       java.time.LocalDate from, java.time.LocalDate to,
+                                                       int page, int size) {
+        int safePage = Math.max(0, page), safeSize = Math.max(1, Math.min(100, size));
+        var result = transactions.search(invoiceId, method, type, status,
+                from == null ? null : from.atStartOfDay(), to == null ? null : to.plusDays(1).atStartOfDay(),
+                org.springframework.data.domain.PageRequest.of(safePage, safeSize,
+                        org.springframework.data.domain.Sort.by("occurredAt").descending()));
+        return new PaymentTransactionDtos.PageResponse(result.getContent().stream().map(this::toResponse).toList(),
+                result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
+    }
+
     /** Chọn khoản thanh toán gốc còn đủ số dư để làm nguồn refund. */
     private PaymentTransaction sourceForRefund(Invoice invoice, BigDecimal amount) {
         return transactions.findByInvoiceIdAndStatus(invoice.getId(), PaymentTransaction.TransactionStatus.COMPLETED).stream()

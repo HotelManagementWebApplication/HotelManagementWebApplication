@@ -87,8 +87,8 @@ public class RoomEquipmentService {
     @Transactional
     public RoomEquipmentDtos.Response update(String roomId, Long equipmentId, RoomEquipmentDtos.UpdateRequest request, String actor) {
         String boundActor = authenticatedActor(actor);
-        RoomEquipment item = equipment.findByIdAndRoomIdAndActiveTrue(equipmentId, roomId)
-                .orElseThrow(() -> new DomainException("EQUIPMENT_NOT_FOUND", "Không tìm thấy thiết bị active trong phòng"));
+        RoomEquipment item = equipment.findByIdAndRoomId(equipmentId, roomId)
+                .orElseThrow(() -> new DomainException("EQUIPMENT_NOT_FOUND", "Không tìm thấy thiết bị trong phòng"));
         item.setName(request.name().trim()); item.setOriginalValue(request.originalValue());
         item.setPurchasedOn(request.purchasedOn()); item.setQuantity(request.quantity()); item.setActive(request.active());
         if (audit != null) audit.record(boundActor, "ROOM_EQUIPMENT_UPDATED", "ROOM_EQUIPMENT", String.valueOf(equipmentId), null, roomId, null);

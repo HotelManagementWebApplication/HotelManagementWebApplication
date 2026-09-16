@@ -402,6 +402,28 @@ pagination/query; hoàn thiện finance ledger/report/filter; hoàn thiện HR/A
 và catalog lifecycle; sau đó đồng bộ contract, bổ sung negative/concurrency
 test MySQL và chỉ đánh dấu P1 hoàn tất khi acceptance pass lại.
 
+#### Re-audit P1 — 16/09/2026
+
+Đã xử lý các gap nêu trên trong phần triển khai tiếp theo:
+
+- Technical chỉ release phòng qua work-order đã được Manager nghiệm thu; approval
+  giá và revision đều tách requester/approver.
+- Housekeeping, Technical và shift transition dùng row lock; assignee scope,
+  role ceiling và trạng thái lao động được kiểm tra tại service.
+- Dashboard dùng đúng danh sách phân trang; invoice/payment/receipt có filter
+  phân trang toàn cục; reconciliation bổ sung revenue, payment, refund, công nợ
+  và variance; finalized ledger chỉ append-only.
+- HR có employment/leave status, role reassignment, sửa/hủy ca và login history;
+  coverage loại nhân viên disabled/terminated/đang nghỉ.
+- Room type revision liên kết bản gốc, retire bản cũ và chuyển phòng khi active;
+  amenity/equipment có lifecycle update.
+- Notification role bị giới hạn theo JWT; inventory thống nhất RECEIVE/ADJUST,
+  hỗ trợ adjustment âm và boundary low-stock nhất quán.
+- API contract và authorization matrix đã cập nhật endpoint mới.
+
+Clean acceptance cần chạy với Flyway V1→V18, Hibernate validation và toàn bộ
+test H2/MySQL; chỉ đánh dấu P1 hoàn tất khi mọi nhóm MySQL đều pass.
+
 ## 5. Báo cáo điều hành P2
 
 Tạo read model/query service cho:

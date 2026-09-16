@@ -8,6 +8,7 @@ import com.hospitality.mis.common.exception.DomainException;
 import com.hospitality.mis.common.validation.PhoneNumberNormalizer;
 
 import com.hospitality.mis.dao.identity.EmployeeRepository;
+import com.hospitality.mis.dao.identity.EmployeeLoginEventRepository;
 import com.hospitality.mis.dao.auth.CustomerAccountRepository;
 import com.hospitality.mis.dao.auth.RefreshTokenRepository;
 import com.hospitality.mis.entity.auth.RefreshToken;
@@ -15,6 +16,7 @@ import com.hospitality.mis.entity.auth.RefreshToken;
 import com.hospitality.mis.entity.identity.Employee;
 
 import com.hospitality.mis.entity.identity.EmployeeRole;
+import com.hospitality.mis.entity.identity.EmployeeLoginEvent;
 import com.hospitality.mis.middleware.security.SecurityActor;
 import com.hospitality.mis.service.governance.AuditService;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -51,6 +53,8 @@ public class EmployeeService {
     /** Ghi audit đăng nhập nếu được cấu hình. */
     private final AuditService audit;
     private final RefreshTokenRepository refreshTokens;
+    private EmployeeLoginEventRepository loginEvents;
+    private java.time.Clock clock = java.time.Clock.systemUTC();
 
     public EmployeeService(EmployeeRepository employees, CustomerAccountRepository customerAccounts,
                            PasswordEncoder passwordEncoder, AuditService audit) {
@@ -64,6 +68,12 @@ public class EmployeeService {
         this.passwordEncoder = passwordEncoder;
         this.audit = audit;
         this.refreshTokens = refreshTokens;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setLoginHistory(EmployeeLoginEventRepository loginEvents, java.time.Clock clock) {
+        this.loginEvents = loginEvents;
+        this.clock = clock;
     }
 
 
@@ -164,7 +174,43 @@ public class EmployeeService {
 
     private EmployeeAdminDtos.Response toAdminResponse(Employee e) {
         return new EmployeeAdminDtos.Response(e.getEmployeeId(), e.getFullName(), e.getPhone(), e.getAddress(), e.getRole(),
-                e.isEnabled(), e.isAccountNonLocked(), e.getFailedLoginAttempts(), e.getLastLoginAt(), e.getLastFailedLoginAt());
+                e.isEnabled(), e.isAccountNonLocked(), e.getFailedLoginAttempts(), e.getLastLoginAt(), e.getLastFailedLoginAt(),
+                e.getEmploymentStatus(), e.getLeaveStart(), e.getLeaveEnd());
+    }
+
+    @Transactional
+    public EmployeeAdminDtos.Response setEmployment(String employeeId, EmployeeAdminDtos.EmploymentRequest request) {
+        Employee employee = employees.findForUpdateByEmployeeId(employeeId)
+                .orElseThrow(() -> new DomainException("EMPLOYEE_NOT_FOUND", "Không tìm thấy nhân viên"));
+        requireCurrentActorCanManage(employee.getRole());
+        if (request.status() == Employee.EmploymentStatus.ON_LEAVE) {
+            if (request.leaveStart() == null || request.leaveEnd() == null || request.leaveEnd().isBefore(request.leaveStart()))
+                throw new DomainException("INVALID_LEAVE_PERIOD", "Nghỉ phép phải có khoảng ngày hợp lệ");
+        } else if (request.leaveStart() != null || request.leaveEnd() != null) {
+            throw new DomainException("INVALID_LEAVE_PERIOD", "Chỉ trạng thái ON_LEAVE được khai báo ngày nghỉ");
+        }
+        Employee.EmploymentStatus before = employee.getEmploymentStatus();
+        employee.setEmploymentStatus(request.status());
+        employee.setLeaveStart(request.status() == Employee.EmploymentStatus.ON_LEAVE ? request.leaveStart() : null);
+        employee.setLeaveEnd(request.status() == Employee.EmploymentStatus.ON_LEAVE ? request.leaveEnd() : null);
+        if (request.status() == Employee.EmploymentStatus.TERMINATED) employee.setEnabled(false);
+        audit.record(SecurityActor.currentActor(), "EMPLOYEE_EMPLOYMENT_CHANGED", "EMPLOYEE", employeeId,
+                before.name(), request.status().name(), null);
+        return toAdminResponse(employees.save(employee));
+    }
+
+    @Transactional(readOnly = true)
+    public EmployeeAdminDtos.LoginHistoryResponse loginHistory(String employeeId, int page, int size) {
+        findRequired(employeeId);
+        int safePage = Math.max(0, page), safeSize = Math.max(1, Math.min(100, size));
+        if (loginEvents == null) return new EmployeeAdminDtos.LoginHistoryResponse(List.of(), safePage, safeSize, 0, 0);
+        var result = loginEvents.findByEmployeeEmployeeId(employeeId,
+                org.springframework.data.domain.PageRequest.of(safePage, safeSize,
+                        org.springframework.data.domain.Sort.by("occurredAt").descending()));
+        return new EmployeeAdminDtos.LoginHistoryResponse(result.getContent().stream().map(event ->
+                new EmployeeAdminDtos.LoginEventResponse(event.getId(), employeeId, event.getOccurredAt(),
+                        event.getOutcome().name())).toList(), result.getNumber(), result.getSize(),
+                result.getTotalElements(), result.getTotalPages());
     }
 
 
@@ -191,8 +237,10 @@ public class EmployeeService {
     /** Khóa bản ghi nhân viên, tăng bộ đếm lỗi và khóa khi đạt ngưỡng. */
     public void recordLoginFailure(String employeeId) {
         employees.findForUpdateByEmployeeId(employeeId).ifPresent(employee -> {
-            employee.recordLoginFailure(Instant.now(), MAX_FAILED_LOGIN_ATTEMPTS);
+            Instant occurredAt = clock.instant();
+            employee.recordLoginFailure(occurredAt, MAX_FAILED_LOGIN_ATTEMPTS);
             employees.save(employee);
+            appendLoginEvent(employee, occurredAt, EmployeeLoginEvent.Outcome.FAILED);
             if (audit != null) audit.record(employeeId, "LOGIN_FAILED", "EMPLOYEE", employeeId, null,
                     String.valueOf(employee.getFailedLoginAttempts()), "Invalid credentials");
         });
@@ -202,10 +250,19 @@ public class EmployeeService {
     /** Khóa bản ghi nhân viên, xóa bộ đếm lỗi và ghi nhận đăng nhập thành công. */
     public void recordLoginSuccess(String employeeId) {
         employees.findForUpdateByEmployeeId(employeeId).ifPresent(employee -> {
-            employee.recordLoginSuccess(Instant.now());
+            Instant occurredAt = clock.instant();
+            employee.recordLoginSuccess(occurredAt);
             employees.save(employee);
+            appendLoginEvent(employee, occurredAt, EmployeeLoginEvent.Outcome.SUCCEEDED);
             if (audit != null) audit.record(employeeId, "LOGIN_SUCCEEDED", "EMPLOYEE", employeeId, null, null, null);
         });
+    }
+
+    private void appendLoginEvent(Employee employee, Instant occurredAt, EmployeeLoginEvent.Outcome outcome) {
+        if (loginEvents == null) return;
+        EmployeeLoginEvent event = new EmployeeLoginEvent();
+        event.setEmployee(employee); event.setOccurredAt(occurredAt); event.setOutcome(outcome);
+        loginEvents.save(event);
     }
 
     /** Kiểm tra mật khẩu không trắng và nằm trong biên độ hệ thống. */

@@ -70,6 +70,9 @@ public class FinanceService {
         CashShiftHandover h = new CashShiftHandover(); h.setShiftCode(request.shiftCode()); h.setFromActor(request.fromActor()); h.setToActor(request.toActor());
         h.setExpectedAmount(expected); h.setActualAmount(request.actualAmount()); h.setVariance(request.actualAmount().subtract(expected));
         h.setHandedOverAt(handedOverAt); h.setNote(request.note()); h = handovers.save(h);
+        if (h.getVariance().signum() != 0) appendLedger("CASH_VARIANCE", "CASH_HANDOVER", String.valueOf(h.getId()),
+                h.getVariance().signum() > 0 ? FinancialLedgerEntry.Direction.DEBIT : FinancialLedgerEntry.Direction.CREDIT,
+                h.getVariance().abs(), actor, handedOverAt, request.note());
         audit.record(actor, "CASH_HANDOVER_RECORDED", "CASH_HANDOVER", String.valueOf(h.getId()), null, h.getActualAmount().toPlainString(), request.note());
         return toResponse(h);
     }
@@ -194,7 +197,19 @@ public class FinanceService {
             totals.merge(method, signed, BigDecimal::add);
             if (tx.getType() == PaymentTransaction.TransactionType.REFUND) refunds = refunds.add(tx.getAmount()); else payments = payments.add(tx.getAmount());
         }
-        return new FinanceDtos.ReconciliationResponse(start, end, totals, payments, refunds, payments.subtract(refunds));
+        BigDecimal revenue = BigDecimal.ZERO, variance = BigDecimal.ZERO;
+        if (ledger != null) for (FinancialLedgerEntry entry : ledger.findAll()) {
+            if (entry.getOccurredAt() == null || entry.getOccurredAt().toLocalDate().isBefore(start)
+                    || entry.getOccurredAt().toLocalDate().isAfter(end)) continue;
+            if ("REVENUE_RECOGNIZED".equals(entry.getEntryType())) revenue = revenue.add(entry.getAmount());
+            if ("CASH_VARIANCE".equals(entry.getEntryType())) variance = variance.add(
+                    entry.getDirection() == FinancialLedgerEntry.Direction.DEBIT ? entry.getAmount() : entry.getAmount().negate());
+        }
+        BigDecimal outstandingDebt = debts.findAll().stream()
+                .map(debt -> debt.getAmount().subtract(debt.getSettledAmount()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new FinanceDtos.ReconciliationResponse(start, end, totals, payments, refunds,
+                payments.subtract(refunds), revenue, outstandingDebt, variance);
     }
 
     /** Chuyển bản ghi bàn giao ca thành DTO. */

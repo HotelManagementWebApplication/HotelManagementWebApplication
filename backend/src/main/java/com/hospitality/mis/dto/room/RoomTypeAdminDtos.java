@@ -26,11 +26,13 @@ public final class RoomTypeAdminDtos {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Response(String id, String name, BigDecimal dailyPrice, String description,
                            RoomTypeCatalogStatus catalogStatus, String updatedBy, String approvedBy,
-                           LocalDateTime updatedAt, LocalDateTime approvedAt) {
+                           LocalDateTime updatedAt, LocalDateTime approvedAt,
+                           String revisionOfId, String supersededById) {
         public static Response from(RoomType type) {
             return new Response(type.getId(), type.getName(), type.getDailyPrice(), type.getDescription(),
                     type.getCatalogStatus(), type.getCatalogUpdatedBy(), type.getCatalogApprovedBy(),
-                    type.getCatalogUpdatedAt(), type.getCatalogApprovedAt());
+                    type.getCatalogUpdatedAt(), type.getCatalogApprovedAt(),
+                    type.getRevisionOfId(), type.getSupersededById());
         }
     }
 

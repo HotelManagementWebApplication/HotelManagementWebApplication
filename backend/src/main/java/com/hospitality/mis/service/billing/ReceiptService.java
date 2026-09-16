@@ -115,6 +115,20 @@ public class ReceiptService {
         return new ReceiptDtos.PageResponse(all.subList(from, to), safePage, safeSize, all.size(), (all.size() + safeSize - 1) / safeSize);
     }
 
+    @Transactional(readOnly = true)
+    public ReceiptDtos.PageResponse search(Long invoiceId, com.hospitality.mis.entity.billing.PaymentMethod method,
+                                           String issuedBy, java.time.LocalDate from, java.time.LocalDate to,
+                                           int page, int size) {
+        int safePage = Math.max(0, page), safeSize = Math.max(1, Math.min(100, size));
+        String actor = issuedBy == null || issuedBy.isBlank() ? null : issuedBy.trim();
+        var result = receipts.search(invoiceId, method, actor, from == null ? null : from.atStartOfDay(),
+                to == null ? null : to.plusDays(1).atStartOfDay(),
+                org.springframework.data.domain.PageRequest.of(safePage, safeSize,
+                        org.springframework.data.domain.Sort.by("issuedAt").descending()));
+        return new ReceiptDtos.PageResponse(result.getContent().stream().map(this::toResponse).toList(),
+                result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
+    }
+
     /** Kiểm tra actor có phạm vi trên booking của hóa đơn hoặc role toàn cục. */
     private void requireScope(com.hospitality.mis.entity.billing.Invoice invoice, String actor) {
         var reservation = invoice.getReservation();

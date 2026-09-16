@@ -44,6 +44,10 @@ public interface RoomRepository extends JpaRepository<Room, String> {
     @Query("select r from Room r join fetch r.roomType where r.id in :ids order by r.id")
     List<Room> findAllForUpdateOrdered(@Param("ids") List<String> ids);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from Room r where r.roomType.id = :roomTypeId order by r.id")
+    List<Room> findAllByRoomTypeIdForUpdate(@Param("roomTypeId") String roomTypeId);
+
 
     /** Tìm phòng theo loại và trạng thái tùy chọn, luôn sắp xếp theo ID để kết quả ổn định. */
     @Query("select r from Room r join fetch r.roomType where (:type is null or r.roomType.id = :type) and (:status is null or r.status = :status) order by r.id")

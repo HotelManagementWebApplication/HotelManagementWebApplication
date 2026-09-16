@@ -12,4 +12,5 @@ public interface AmenityRepository extends JpaRepository<Amenity, Long> {
     @Query(value = "select a.* from amenities a join room_type_amenities rta on rta.amenity_id = a.id "
             + "where rta.room_type_id = :roomTypeId and a.active = true order by a.name, a.id", nativeQuery = true)
     List<Amenity> findActiveByRoomTypeId(@Param("roomTypeId") String roomTypeId);
+    List<Amenity> findAllByOrderByNameAscIdAsc();
 }

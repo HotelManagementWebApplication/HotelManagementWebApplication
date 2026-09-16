@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import java.util.Set;
+import java.time.LocalDate;
 
 
 
@@ -43,6 +44,7 @@ import java.util.Set;
 @Entity
 @Table(name = "employees")
 public class Employee {
+    public enum EmploymentStatus { WORKING, ON_LEAVE, TERMINATED }
     @Id
 
     @Column(name = "id", length = 10, nullable = false)
@@ -81,6 +83,9 @@ public class Employee {
     /** Khớp với Reservation.employee; lược đồ có khóa ngoại hạn chế, nên không lan truyền. */
     @OneToMany(mappedBy = "employee", fetch = FetchType.LAZY)
     private List<Reservation> reservations = new ArrayList<>();
+
+    @OneToMany(mappedBy = "employee", fetch = FetchType.LAZY)
+    private List<EmployeeLoginEvent> loginEvents = new ArrayList<>();
 
 
     public Employee() {
@@ -240,6 +245,13 @@ public class Employee {
     /** Lần gần nhất đăng nhập thành công. */
     private java.time.Instant lastLoginAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "employment_status", nullable = false, length = 20)
+    private EmploymentStatus employmentStatus = EmploymentStatus.WORKING;
+
+    @Column(name = "leave_start") private LocalDate leaveStart;
+    @Column(name = "leave_end") private LocalDate leaveEnd;
+
     @Transient
     /** Quyền suy ra từ role, không nhận trực tiếp từ dữ liệu máy khách. */
     public Set<Permission> getPermissions() {
@@ -259,6 +271,12 @@ public class Employee {
     public int getFailedLoginAttempts() { return failedLoginAttempts; }
     public java.time.Instant getLastFailedLoginAt() { return lastFailedLoginAt; }
     public java.time.Instant getLastLoginAt() { return lastLoginAt; }
+    public EmploymentStatus getEmploymentStatus() { return employmentStatus; }
+    public void setEmploymentStatus(EmploymentStatus value) { employmentStatus = value; }
+    public LocalDate getLeaveStart() { return leaveStart; }
+    public void setLeaveStart(LocalDate value) { leaveStart = value; }
+    public LocalDate getLeaveEnd() { return leaveEnd; }
+    public void setLeaveEnd(LocalDate value) { leaveEnd = value; }
 
     /** Ghi nhận thất bại và khóa tài khoản khi chạm ngưỡng cấu hình. */
     public void recordLoginFailure(java.time.Instant at, int maxAttempts) {

@@ -4,5 +4,6 @@ package com.hospitality.mis.entity.room;
 public enum RoomTypeCatalogStatus {
     DRAFT,
     ACTIVE,
-    REJECTED
+    REJECTED,
+    RETIRED
 }

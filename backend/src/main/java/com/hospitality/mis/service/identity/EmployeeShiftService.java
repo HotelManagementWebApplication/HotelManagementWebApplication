@@ -45,22 +45,43 @@ public class EmployeeShiftService {
     public EmployeeShiftDtos.CoverageResponse coverage(LocalDate date, String shiftCode, int minimumStaff) {
         if (minimumStaff < 1 || minimumStaff > 100) throw new DomainException("INVALID_MINIMUM_STAFF", "minimum_staff phải từ 1 đến 100");
         LocalDate selected = date == null ? LocalDate.now(clock) : date;
-        long assigned = shifts.countByShiftDateAndShiftCodeAndStatusNot(selected, shiftCode, EmployeeShift.Status.CANCELLED);
+        long assigned = shifts.countAvailable(selected, shiftCode, EmployeeShift.Status.CANCELLED,
+                com.hospitality.mis.entity.identity.Employee.EmploymentStatus.WORKING,
+                com.hospitality.mis.entity.identity.Employee.EmploymentStatus.ON_LEAVE);
         long shortage = Math.max(0, minimumStaff - assigned);
         return new EmployeeShiftDtos.CoverageResponse(selected, shiftCode, minimumStaff, assigned, shortage, shortage > 0);
     }
     @Transactional
     public EmployeeShiftDtos.Response status(Long id, String rawStatus, String actor) {
-        var shift = shifts.findById(id).orElseThrow(() -> new DomainException("SHIFT_NOT_FOUND", "Không tìm thấy ca làm việc"));
+        var shift = shifts.findForUpdate(id).orElseThrow(() -> new DomainException("SHIFT_NOT_FOUND", "Không tìm thấy ca làm việc"));
         EmployeeShift.Status next;
         try { next = EmployeeShift.Status.valueOf(rawStatus.trim().toUpperCase()); }
         catch (IllegalArgumentException ex) { throw new DomainException("INVALID_SHIFT_STATUS", "Trạng thái ca không hợp lệ"); }
-        if (shift.getStatus() == EmployeeShift.Status.COMPLETED && next != EmployeeShift.Status.COMPLETED)
-            throw new DomainException("INVALID_SHIFT_STATUS_TRANSITION", "Ca đã hoàn tất không thể quay lại");
-        if (shift.getStatus() == EmployeeShift.Status.CANCELLED && next != EmployeeShift.Status.CANCELLED)
-            throw new DomainException("INVALID_SHIFT_STATUS_TRANSITION", "Ca đã hủy không thể khôi phục");
+        boolean allowed = next == shift.getStatus() || switch (shift.getStatus()) {
+            case ASSIGNED -> next == EmployeeShift.Status.STARTED || next == EmployeeShift.Status.CANCELLED;
+            case STARTED -> next == EmployeeShift.Status.COMPLETED || next == EmployeeShift.Status.CANCELLED;
+            case COMPLETED, CANCELLED -> false;
+        };
+        if (!allowed) throw new DomainException("INVALID_SHIFT_STATUS_TRANSITION", "Chuyển trạng thái ca không hợp lệ");
         shift.setStatus(next);
         audit.record(actor, "EMPLOYEE_SHIFT_STATUS_CHANGED", "EMPLOYEE_SHIFT", String.valueOf(id), null, next.name(), null);
+        return toResponse(shifts.save(shift));
+    }
+    @Transactional
+    public EmployeeShiftDtos.Response update(Long id, EmployeeShiftDtos.UpdateRequest request, String actor) {
+        if (!request.startsAt().isBefore(request.endsAt()) || !request.startsAt().toLocalDate().equals(request.shiftDate()))
+            throw new DomainException("INVALID_SHIFT_INTERVAL", "Khoảng ca hoặc shift_date không hợp lệ");
+        var shift = shifts.findForUpdate(id).orElseThrow(() -> new DomainException("SHIFT_NOT_FOUND", "Không tìm thấy ca làm việc"));
+        if (shift.getStatus() != EmployeeShift.Status.ASSIGNED)
+            throw new DomainException("SHIFT_NOT_EDITABLE", "Chỉ ca ASSIGNED mới được sửa");
+        String employeeId = shift.getEmployee().getEmployeeId();
+        employees.findForUpdateByEmployeeId(employeeId).orElseThrow(() -> new DomainException("EMPLOYEE_NOT_FOUND", "Không tìm thấy nhân viên"));
+        if (shifts.hasOverlapExcluding(employeeId, id, request.startsAt(), request.endsAt(), EmployeeShift.Status.CANCELLED))
+            throw new DomainException("SHIFT_OVERLAP", "Nhân viên đã có ca trùng thời gian");
+        shift.setShiftDate(request.shiftDate()); shift.setShiftCode(request.shiftCode().trim());
+        shift.setStartsAt(request.startsAt()); shift.setEndsAt(request.endsAt());
+        audit.record(actor, "EMPLOYEE_SHIFT_UPDATED", "EMPLOYEE_SHIFT", String.valueOf(id), null,
+                request.shiftCode(), null);
         return toResponse(shifts.save(shift));
     }
     private EmployeeShiftDtos.Response toResponse(EmployeeShift x) { return new EmployeeShiftDtos.Response(x.getId(), x.getEmployee().getEmployeeId(), x.getShiftDate(), x.getShiftCode(), x.getStartsAt(), x.getEndsAt(), x.getStatus().name(), x.getCreatedBy()); }
