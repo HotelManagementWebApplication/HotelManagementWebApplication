@@ -424,6 +424,11 @@ test MySQL và chỉ đánh dấu P1 hoàn tất khi acceptance pass lại.
 Clean acceptance cần chạy với Flyway V1→V18, Hibernate validation và toàn bộ
 test H2/MySQL; chỉ đánh dấu P1 hoàn tất khi mọi nhóm MySQL đều pass.
 
+**Kết quả nghiệm thu 16/09/2026:** đã chạy clean suite với database MySQL cấu
+hình từ `DB_URL`, gồm 1.775 test — 0 failure, 0 error, 0 skipped; các nhóm
+MySQL migration, billing workflow/concurrency và security smoke đều pass. P1
+backend được đánh dấu hoàn tất ở commit `c6aade0`.
+
 ## 5. Báo cáo điều hành P2
 
 Tạo read model/query service cho:
