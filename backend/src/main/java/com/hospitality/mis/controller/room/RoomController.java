@@ -60,16 +60,16 @@ public class RoomController {
 
     /**
      * Tìm phòng qua GET /api/rooms?type=...&status=...; type và status là query tùy chọn.
-     * status được chuyển đổi theo giá trị API, giá trị không hợp lệ tạo lỗi INVALID_ROOM_STATUS; trả danh sách phòng.
+     * status nhận đúng giá trị canonical lower_snake_case; giá trị không hợp lệ tạo lỗi INVALID_ROOM_STATUS; trả danh sách phòng.
      * Chỉ ROOM_READ được phép, thao tác đọc không có idempotency concern.
      */
     @GetMapping
 
 
     @PreAuthorize("@departmentAccess.allows(authentication, 'ROOM_READ')")
-    public List<RoomDtos.Response> search(@RequestParam(required = false) String type,
+    public List<RoomDtos.Response> search(@RequestParam(name = "type", required = false) String type,
 
-                                          @RequestParam(required = false) String status) {
+                                          @RequestParam(name = "status", required = false) String status) {
 
         return service.search(type, parseStatus(status));
 
@@ -88,11 +88,11 @@ public class RoomController {
     @PreAuthorize("@departmentAccess.allows(authentication, 'ROOM_READ')")
     public List<RoomDtos.Availability> availability(
 
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(name = "from") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
 
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @RequestParam(name = "to") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
 
-            @RequestParam(required = false) String type) {
+            @RequestParam(name = "type", required = false) String type) {
 
         return service.availability(from, to, type);
 
@@ -104,14 +104,14 @@ public class RoomController {
 
     /**
      * Cập nhật trạng thái phòng qua PATCH /api/rooms/{id}/status; id là path parameter và status là query bắt buộc.
-     * status được parse theo giá trị API, sai giá trị trả lỗi INVALID_ROOM_STATUS; response là phòng sau cập nhật.
+     * status được parse theo giá trị canonical API, sai giá trị trả lỗi INVALID_ROOM_STATUS; response là phòng sau cập nhật.
      * Chỉ ROOM_WRITE được phép, actor hiện tại được truyền; không có idempotency key và xung đột/trạng thái sai do service xử lý.
      */
     @PatchMapping("/{id}/status")
 
 
     @PreAuthorize("@departmentAccess.allows(authentication, 'ROOM_WRITE')")
-    public RoomDtos.Response updateStatus(@PathVariable String id, @RequestParam String status) {
+    public RoomDtos.Response updateStatus(@PathVariable String id, @RequestParam(name = "status") String status) {
 
         return service.updateStatus(id, parseStatus(status), SecurityActor.currentActor());
 

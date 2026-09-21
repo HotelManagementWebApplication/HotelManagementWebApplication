@@ -63,6 +63,47 @@ public class RoomType {
     /** Mô tả tiện nghi hoặc quy định của loại phòng. */
     private String description;
 
+    @Column(name = "area", precision = 8, scale = 2)
+    /** Diện tích loại phòng theo mét vuông. */
+    private BigDecimal area;
+
+    @Column(name = "room_view", length = 100)
+    /** Hướng nhìn chính dùng trên catalog khách hàng. */
+    private String view;
+
+    @Column(name = "hourly_price", nullable = false, precision = 12, scale = 2)
+    /** Giá cơ bản mỗi giờ cho hình thức thuê theo giờ. */
+    private BigDecimal hourlyPrice = BigDecimal.ZERO;
+
+    @Column(name = "bed_type", length = 100)
+    /** Mô tả cấu hình giường của loại phòng. */
+    private String bedType;
+
+    @Column(name = "room_type_code", nullable = false, length = 12)
+    private String roomTypeCode = "STD";
+
+    @Column(name = "max_occupancy", nullable = false)
+    private Integer maxOccupancy = 2;
+
+    @Column(name = "cover_image_url", length = 500)
+    private String coverImageUrl;
+
+    /** Câu giới thiệu marketing được quản trị cùng catalog loại phòng. */
+    @Column(name = "marketing_tagline", length = 500)
+    private String marketingTagline;
+
+    /** Tên thương mại hiển thị trên catalog khách hàng. */
+    @Column(name = "marketing_name", length = 200)
+    private String marketingName;
+
+    /** Mô tả quảng cáo hiển thị trên catalog khách hàng. */
+    @Column(name = "marketing_description", length = 1200)
+    private String marketingDescription;
+
+    /** Danh sách URL gallery, mỗi URL một dòng; dữ liệu public lấy từ database. */
+    @Column(name = "gallery_image_urls", columnDefinition = "TEXT")
+    private String galleryImageUrls;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "catalog_status", nullable = false, length = 20)
     private RoomTypeCatalogStatus catalogStatus = RoomTypeCatalogStatus.ACTIVE;
@@ -163,6 +204,29 @@ public class RoomType {
         this.description = description;
 
     }
+
+    public BigDecimal getArea() { return area; }
+    public void setArea(BigDecimal area) { this.area = area; }
+    public String getView() { return view; }
+    public void setView(String view) { this.view = view; }
+    public BigDecimal getHourlyPrice() { return hourlyPrice; }
+    public void setHourlyPrice(BigDecimal hourlyPrice) { this.hourlyPrice = hourlyPrice == null ? BigDecimal.ZERO : hourlyPrice; }
+    public String getBedType() { return bedType; }
+    public void setBedType(String bedType) { this.bedType = bedType; }
+    public String getRoomTypeCode() { return roomTypeCode; }
+    public void setRoomTypeCode(String roomTypeCode) { this.roomTypeCode = roomTypeCode == null || roomTypeCode.isBlank() ? "STD" : roomTypeCode; }
+    public Integer getMaxOccupancy() { return maxOccupancy; }
+    public void setMaxOccupancy(Integer maxOccupancy) { this.maxOccupancy = maxOccupancy == null ? 2 : maxOccupancy; }
+    public String getCoverImageUrl() { return coverImageUrl; }
+    public void setCoverImageUrl(String coverImageUrl) { this.coverImageUrl = coverImageUrl; }
+    public String getMarketingTagline() { return marketingTagline; }
+    public void setMarketingTagline(String marketingTagline) { this.marketingTagline = marketingTagline; }
+    public String getMarketingName() { return marketingName; }
+    public void setMarketingName(String marketingName) { this.marketingName = marketingName; }
+    public String getMarketingDescription() { return marketingDescription; }
+    public void setMarketingDescription(String marketingDescription) { this.marketingDescription = marketingDescription; }
+    public String getGalleryImageUrls() { return galleryImageUrls; }
+    public void setGalleryImageUrls(String galleryImageUrls) { this.galleryImageUrls = galleryImageUrls; }
 
     public RoomTypeCatalogStatus getCatalogStatus() { return catalogStatus; }
     public void setCatalogStatus(RoomTypeCatalogStatus catalogStatus) {

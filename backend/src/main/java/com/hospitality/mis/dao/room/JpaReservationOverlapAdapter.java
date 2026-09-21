@@ -52,7 +52,7 @@ public class JpaReservationOverlapAdapter implements ReservationOverlapPort {
                 join reservations r on r.id = rr.reservation_id
                 where rr.room_id = :roomId
                   and rr.check_in < :to and rr.check_out > :from
-                  and rr.status <> 'DA_HUY'
+                  and rr.status <> 'cancelled'
                   and r.status not in ('CANCELLED', 'NO_SHOW', 'CHECKED_OUT')
                 """)
                 .setParameter("roomId", roomId)

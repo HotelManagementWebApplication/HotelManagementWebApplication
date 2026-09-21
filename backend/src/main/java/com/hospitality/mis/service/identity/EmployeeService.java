@@ -28,8 +28,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Locale;
+import java.util.UUID;
 import java.util.List;
 import com.hospitality.mis.dto.auth.EmployeeAdminDtos;
+import com.hospitality.mis.dto.auth.AuthDtos;
 
 
 /** Các ca sử dụng của ứng dụng thuộc ranh giới danh tính. */
@@ -117,6 +120,40 @@ public class EmployeeService {
 
     }
 
+    @Transactional
+    public AuthDtos.AutoProvisionResponse provisionAuto(AuthDtos.AutoProvisionRequest request) {
+        requireCurrentActorCanManage(request.role());
+        String prefix = switch (request.role()) {
+            case HOUSEKEEPING -> "HK";
+            case KITCHEN -> "KT";
+            case TECHNICAL -> "TC";
+            case ACCOUNTING -> "KT";
+            case HR -> "HR";
+            case MANAGER, DIRECTOR, ADMIN -> "QL";
+            default -> "NV";
+        };
+        int next = employees.findAll().stream().map(Employee::getEmployeeId).filter(java.util.Objects::nonNull)
+                .filter(id -> id.startsWith(prefix)).map(id -> id.substring(prefix.length()))
+                .filter(part -> part.matches("\\d+")).mapToInt(Integer::parseInt).max().orElse(0) + 1;
+        String employeeId = prefix + String.format(Locale.ROOT, "%04d", next);
+        String temporaryPassword = "MAM#" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        Employee employee = provision(employeeId, request.fullName(), temporaryPassword, request.role(), request.phone(), request.address());
+        employee.setEmail(request.email().trim());
+        employee.setMustChangePassword(true);
+        employees.save(employee);
+        return new AuthDtos.AutoProvisionResponse(employeeId, employee.getFullName(), employee.getRole(), employee.getPhone(), employee.getEmail(), temporaryPassword, true);
+    }
+
+    @Transactional
+    public void changeOwnPassword(String employeeId, String rawPassword) {
+        if (!validPassword(rawPassword)) throw new DomainException("PASSWORD_REQUIRED", "Mật khẩu phải dài từ 8 đến 72 ký tự");
+        Employee employee = findRequired(employeeId);
+        employee.setPassword(passwordEncoder.encode(rawPassword));
+        employee.setMustChangePassword(false);
+        employee.unlockAfterPasswordReset();
+        employees.save(employee);
+    }
+
 
 
     @Transactional(readOnly = true)
@@ -140,11 +177,15 @@ public class EmployeeService {
 
     @Transactional
     public EmployeeAdminDtos.Response setEnabled(String employeeId, boolean enabled) {
-        Employee employee = findRequired(employeeId);
+        Employee employee = employees.findForUpdateByEmployeeId(employeeId)
+                .orElseThrow(() -> new DomainException("EMPLOYEE_NOT_FOUND", "Không tìm thấy nhân viên"));
+        requireNotSelf(employeeId, "SELF_ACCOUNT_STATUS_CHANGE_FORBIDDEN");
         requireCurrentActorCanManage(employee.getRole());
+        boolean before = employee.isEnabled();
         employee.setEnabled(enabled);
+        if (!enabled && refreshTokens != null) refreshTokens.revokeAllForEmployee(employeeId, Instant.now());
         audit.record(SecurityActor.currentActor(), enabled ? "EMPLOYEE_ENABLED" : "EMPLOYEE_DISABLED",
-                "EMPLOYEE", employeeId, String.valueOf(!enabled), String.valueOf(enabled), null);
+                "EMPLOYEE", employeeId, String.valueOf(before), String.valueOf(enabled), null);
         return toAdminResponse(employees.save(employee));
     }
 
@@ -158,6 +199,7 @@ public class EmployeeService {
     @Transactional
     public void revokeSession(String employeeId, Long sessionId) {
         Employee target = findRequired(employeeId);
+        requireNotSelf(employeeId, "SELF_SESSION_REVOKE_FORBIDDEN");
         requireCurrentActorCanManage(target.getRole());
         if (refreshTokens == null) return;
         RefreshToken token = refreshTokens.findById(sessionId)
@@ -175,13 +217,15 @@ public class EmployeeService {
     private EmployeeAdminDtos.Response toAdminResponse(Employee e) {
         return new EmployeeAdminDtos.Response(e.getEmployeeId(), e.getFullName(), e.getPhone(), e.getAddress(), e.getRole(),
                 e.isEnabled(), e.isAccountNonLocked(), e.getFailedLoginAttempts(), e.getLastLoginAt(), e.getLastFailedLoginAt(),
-                e.getEmploymentStatus(), e.getLeaveStart(), e.getLeaveEnd());
+                e.getEmploymentStatus(), e.getLeaveStart(), e.getLeaveEnd(), e.getEmail(), e.isMustChangePassword());
     }
 
     @Transactional
     public EmployeeAdminDtos.Response setEmployment(String employeeId, EmployeeAdminDtos.EmploymentRequest request) {
         Employee employee = employees.findForUpdateByEmployeeId(employeeId)
                 .orElseThrow(() -> new DomainException("EMPLOYEE_NOT_FOUND", "Không tìm thấy nhân viên"));
+        if (request.status() == Employee.EmploymentStatus.TERMINATED)
+            requireNotSelf(employeeId, "SELF_ACCOUNT_STATUS_CHANGE_FORBIDDEN");
         requireCurrentActorCanManage(employee.getRole());
         if (request.status() == Employee.EmploymentStatus.ON_LEAVE) {
             if (request.leaveStart() == null || request.leaveEnd() == null || request.leaveEnd().isBefore(request.leaveStart()))
@@ -193,7 +237,10 @@ public class EmployeeService {
         employee.setEmploymentStatus(request.status());
         employee.setLeaveStart(request.status() == Employee.EmploymentStatus.ON_LEAVE ? request.leaveStart() : null);
         employee.setLeaveEnd(request.status() == Employee.EmploymentStatus.ON_LEAVE ? request.leaveEnd() : null);
-        if (request.status() == Employee.EmploymentStatus.TERMINATED) employee.setEnabled(false);
+        if (request.status() == Employee.EmploymentStatus.TERMINATED) {
+            employee.setEnabled(false);
+            if (refreshTokens != null) refreshTokens.revokeAllForEmployee(employeeId, Instant.now());
+        }
         audit.record(SecurityActor.currentActor(), "EMPLOYEE_EMPLOYMENT_CHANGED", "EMPLOYEE", employeeId,
                 before.name(), request.status().name(), null);
         return toAdminResponse(employees.save(employee));
@@ -281,17 +328,20 @@ public class EmployeeService {
     /** Kiểm tra quyền reset theo chức vụ của nhân viên mục tiêu. */
     public boolean canResetEmployee(Authentication authentication, String employeeId) {
         Employee employee = employees.findById(employeeId).orElse(null);
-        return employee == null || canManageRole(authentication, employee.getRole());
+        return employee != null && canManageRole(authentication, employee.getRole());
     }
 
     public boolean canManageEmployeeRole(Authentication authentication, String employeeId, EmployeeRole targetRole) {
         Employee employee = employees.findById(employeeId).orElse(null);
-        return employee != null && canManageRole(authentication, employee.getRole()) && canManageRole(authentication, targetRole);
+        return employee != null && !isCurrentActor(employeeId)
+                && canManageRole(authentication, employee.getRole()) && canManageRole(authentication, targetRole);
     }
 
     @Transactional
     public EmployeeAdminDtos.Response setRole(String employeeId, EmployeeRole role) {
-        Employee employee = findRequired(employeeId);
+        Employee employee = employees.findForUpdateByEmployeeId(employeeId)
+                .orElseThrow(() -> new DomainException("EMPLOYEE_NOT_FOUND", "Không tìm thấy nhân viên"));
+        requireNotSelf(employeeId, "SELF_ROLE_CHANGE_FORBIDDEN");
         requireCurrentActorCanManage(employee.getRole());
         requireCurrentActorCanManage(role);
         EmployeeRole before = employee.getRole();
@@ -299,6 +349,18 @@ public class EmployeeService {
         audit.record(SecurityActor.currentActor(), "EMPLOYEE_ROLE_CHANGED", "EMPLOYEE", employeeId,
                 before.name(), role.name(), null);
         return toAdminResponse(employees.save(employee));
+    }
+
+    /** Không cho actor tự khóa tài khoản hoặc tự thay đổi role của chính mình. */
+    private void requireNotSelf(String employeeId, String code) {
+        if (isCurrentActor(employeeId))
+            throw new DomainException(code, "Không được tự thay đổi tài khoản của chính mình");
+    }
+
+    private boolean isCurrentActor(String employeeId) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.isAuthenticated()
+                && employeeId != null && employeeId.equals(authentication.getName());
     }
 
     /** Bắt buộc actor đã xác thực có quyền quản lý chức vụ mục tiêu. */

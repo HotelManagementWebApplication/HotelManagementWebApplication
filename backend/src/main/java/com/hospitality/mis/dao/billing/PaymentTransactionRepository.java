@@ -17,8 +17,30 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     /** Lấy sổ giao dịch của hóa đơn theo thứ tự thời gian phát sinh để dựng lịch sử thanh toán. */
     List<PaymentTransaction> findByInvoiceIdOrderByOccurredAtAsc(Long invoiceId);
 
+    /** Phân trang payment trong phạm vi một invoice tại DB. */
+    Page<PaymentTransaction> findByInvoiceIdOrderByOccurredAtAsc(Long invoiceId, Pageable pageable);
+
     /** Lọc các giao dịch của hóa đơn theo trạng thái xử lý hiện tại. */
     List<PaymentTransaction> findByInvoiceIdAndStatus(Long invoiceId, TransactionStatus status);
+
+    /** Tổng payment trừ refund của một invoice/tender, không tải toàn bộ ledger. */
+    @org.springframework.data.jpa.repository.Query("select coalesce(sum(case when p.type = :paymentType then p.amount else -p.amount end), 0) from PaymentTransaction p where p.invoice.id = :invoiceId and p.method = :method and p.status = :status")
+    BigDecimal netAmountByInvoiceAndMethod(@org.springframework.data.repository.query.Param("invoiceId") Long invoiceId,
+                                           @org.springframework.data.repository.query.Param("method") PaymentMethod method,
+                                           @org.springframework.data.repository.query.Param("paymentType") TransactionType paymentType,
+                                           @org.springframework.data.repository.query.Param("status") TransactionStatus status);
+
+    interface ReconciliationTotal {
+        PaymentMethod getMethod();
+        TransactionType getType();
+        BigDecimal getAmount();
+    }
+
+    /** Tổng hợp payment/refund theo tender trong DB cho báo cáo đối soát. */
+    @org.springframework.data.jpa.repository.Query("select p.method as method, p.type as type, coalesce(sum(p.amount), 0) as amount from PaymentTransaction p where p.status = :status and p.occurredAt >= :fromAt and p.occurredAt < :toAt group by p.method, p.type")
+    List<ReconciliationTotal> summarize(@org.springframework.data.repository.query.Param("status") TransactionStatus status,
+                                        @org.springframework.data.repository.query.Param("fromAt") LocalDateTime fromAt,
+                                        @org.springframework.data.repository.query.Param("toAt") LocalDateTime toAt);
 
     /** Tìm giao dịch theo tiền tố khóa chống lặp, bản ghi mới hơn đứng trước. */
     @org.springframework.data.jpa.repository.Query("select p from PaymentTransaction p where p.idempotencyKey like concat(:prefix, '%') order by p.id desc")

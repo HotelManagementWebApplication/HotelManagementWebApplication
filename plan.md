@@ -77,6 +77,16 @@ Các quyết định nền tảng đã được chốt trong `rule.md` và đư�
    invoice/maintenance sẽ bổ sung khi hoàn thiện các use case tương ứng.
 7. Phạm vi hiện tại là một khách sạn, timezone `Asia/Ho_Chi_Minh`, tiền tệ VND.
 8. Chỉ làm tròn tổng cuối hóa đơn đến 1.000 VND.
+9. Mô hình vận hành gồm bốn vùng: tầng 0–2 cho đối tác thương mại/F&B/retail;
+   tầng 3–4 cho spa, sauna và gym; tầng 5–20 là phòng nghỉ; tầng 21 là hồ bơi.
+10. Đối tác mặt bằng chịu tiền thuê cố định, phí dịch vụ và hoa hồng doanh thu.
+    Hoa hồng tháng bằng giá trị lớn hơn giữa 5% doanh thu voucher ghi nhận và
+    mức sàn cam kết; công nợ tháng được xuất từ màn hình kế toán.
+11. F&B/retail mở cho khách vãng lai; khu phòng nghỉ chỉ dành cho khách có
+    keycard; spa/gym dùng miễn phí cho khách lưu trú và hỗ trợ day-pass cho
+    khách vãng lai; hồ bơi tầng 21 chỉ dành cho khách thuê phòng ngày đêm.
+12. Voucher dịch vụ/bàn được phát hành qua backend, gắn với khách và mặt bằng;
+    khách VIP nhận nhãn Voucher VIP, khách thường nhận mã voucher thông thường.
 
 `NO_SHOW` đã được chốt: khách được check-in đến trước giờ trả; hết giờ trả mà
 chưa check-in thì chuyển `NO_SHOW` và mất cọc. Lượt VIP lấy theo thời lượng đặt
@@ -158,33 +168,25 @@ Proof bắt buộc:
 - Operations concurrency tests.
 - Regression tests ở API boundary, không test alias/tên đã retired.
 
-### Phase 4 — Frontend web production flow
+### Phase 4 — Frontend web production flow (Bảo tồn 100% Giao diện MAM Hotel)
 
-Phạm vi ưu tiên:
+> [!IMPORTANT]
+> **Quy định bất di bất dịch về Frontend**: Giữ nguyên vẹn 100% giao diện cao cấp MAM Hotel và toàn bộ 12 trạm màn hình tại `frontend/src/pages/` (`CustomerPortal`, `LoginPage`, `FrontDeskPMS`, `HousekeepingStation`, `MaintenanceStation`, `KitchenInventory`, `AccountingStation`, `HRStation`, `AdminStation`, `ManagerDashboard`, `StaffPortal`, `LandingPage`). Nghiêm cấm xóa bỏ, ghi đè hoặc thay thế bằng các component thô sơ.
 
-1. Login, session và xử lý account state.
-2. Dashboard theo role.
-3. Guest search/detail với PII masking theo quyền.
-4. Room type, room status và availability.
-5. Reservation create/detail/state transition.
-6. Check-in/check-out và multi-room operation.
-7. Billing, payment, refund/adjustment request và approval queue.
-8. Maintenance và room transfer.
-9. Audit/operations view cho role được cấp quyền.
+Nguyên tắc tích hợp Backend vào Giao diện hiện hành:
+- **Cơ chế Progressive Hydration / Graceful Fallback**: Frontend giữ nguyên layout, style Tailwind/CSS và tương tác phong phú. Logic state ưu tiên nạp dữ liệu từ backend Spring Boot qua `frontend/src/shared/api/*`; nếu backend offline hoặc dữ liệu rỗng, tự động fallback về mock data trong `data.ts`, đảm bảo giao diện luôn hiển thị hoàn hảo khi trình diễn cho khách.
+- **Nối ruột Backend dần dần từng trạm**:
+  1. Login & Auth: Nối `LoginPage.tsx` với `/api/auth/login` (nhân viên) và `/api/auth/customers/login` (khách), vẫn giữ 10 nút bấm tài khoản demo.
+  2. Cổng khách hàng: Nối `CustomerPortal.tsx` với `/api/public/rooms`, `/api/public/services` và tạo booking qua `/api/customer/reservations`.
+  3. Lễ tân PMS: Nối `FrontDeskPMS.tsx` với `/api/front-desk/dashboard`, nhận phòng (check-in), trả phòng (check-out), đổi phòng và folio thanh toán.
+  4. Buồng phòng & Kỹ thuật: Nối `HousekeepingStation.tsx` và `MaintenanceStation.tsx` với task dọn phòng, checklist và work order sự cố.
+  5. Kho bếp & Kế toán: Nối `KitchenInventory.tsx` và `AccountingStation.tsx` với tồn kho minibar, sổ quỹ thu chi và đối soát.
+  6. Nhân sự & Điều hành: Nối `HRStation.tsx` và `ManagerDashboard.tsx` với ca trực và phê duyệt approval.
 
-Yêu cầu frontend:
-
-- Dùng typed API client sinh hoặc viết theo contract hiện hành.
-- Không hard-code endpoint alias hoặc field compatibility.
-- Hiển thị lỗi nghiệp vụ từ error contract.
-- Chặn thao tác theo permission ở UI nhưng vẫn luôn kiểm tra lại ở backend.
-- Có loading, empty, error, retry và optimistic update policy rõ ràng.
-
-Proof:
-
-- Component/page tests cho trạng thái quan trọng.
-- End-to-end tests cho login, reservation, billing approval và room transfer.
-- Build production từ clean checkout.
+Yêu cầu chất lượng:
+- Dùng typed API client trong `frontend/src/shared/api/`.
+- Luôn hiển thị trơn tru, không vỡ layout khi mất mạng hoặc thiếu dữ liệu backend.
+- Build production từ clean checkout (`npm run build` pass 100%).
 
 ### Phase 5 — MySQL, release và CI hardening
 

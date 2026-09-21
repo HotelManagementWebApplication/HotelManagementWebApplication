@@ -1,6 +1,7 @@
 package com.hospitality.mis.dto.room;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -14,6 +15,7 @@ public final class RoomEquipmentDtos {
     private RoomEquipmentDtos() {}
     /** Request thêm thiết bị; giá trị và số lượng phải dương theo validation. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    @JsonIgnoreProperties(ignoreUnknown = false)
     public record CreateRequest(
                                 /** Phòng sở hữu thiết bị. */
                                 @NotBlank String roomId,
@@ -26,6 +28,7 @@ public final class RoomEquipmentDtos {
                                 /** Số lượng thiết bị dương. */
                                 @Positive int quantity) {}
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    @JsonIgnoreProperties(ignoreUnknown = false)
     public record UpdateRequest(@NotBlank String name, @NotNull @Positive BigDecimal originalValue,
                                 @NotNull LocalDate purchasedOn, @Positive int quantity, @NotNull Boolean active) {}
     /** Thiết bị đã ghi nhận cùng giá trị gốc, ngày mua, số lượng và cờ hoạt động. */

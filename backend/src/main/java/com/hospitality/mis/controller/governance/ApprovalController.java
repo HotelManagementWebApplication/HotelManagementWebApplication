@@ -93,13 +93,13 @@ class ApprovalController {
      */
     @GetMapping
     @PreAuthorize("@departmentAccess.allows(authentication, 'APPROVAL_APPROVE')")
-    public Object list(@RequestParam(required = false) String status, @RequestParam(required = false) String action,
+    public Object list(@RequestParam(name = "status", required = false) String status, @RequestParam(name = "action", required = false) String action,
                        @RequestParam(name = "target_id", required = false) String targetId,
-                       @RequestParam(required = false) String requester,
-                       @RequestParam(required = false) java.time.Instant from,
-                       @RequestParam(required = false) java.time.Instant to,
-                       @RequestParam(required = false) String risk,
-                       @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+                       @RequestParam(name = "requester", required = false) String requester,
+                       @RequestParam(name = "from", required = false) java.time.Instant from,
+                       @RequestParam(name = "to", required = false) java.time.Instant to,
+                       @RequestParam(name = "risk", required = false) String risk,
+                       @RequestParam(name = "page", required = false) Integer page, @RequestParam(name = "size", required = false) Integer size) {
         if (action == null && targetId == null && requester == null && from == null && to == null && risk == null && page == null && size == null)
             return service.list(status).stream().map(ApprovalDtos.Response::from).collect(Collectors.toList());
         var result = service.page(status, action, targetId, requester, risk, from, to, page == null ? 0 : page, size == null ? 20 : size);

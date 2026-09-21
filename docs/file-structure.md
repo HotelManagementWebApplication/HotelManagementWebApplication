@@ -17,7 +17,7 @@ web-hotel-mis/
 ├── frontend/
 │   └── src/
 │       ├── app/                    # bootstrap, routing, providers
-│       ├── features/               # UI theo capability nghiệp vụ
+│       ├── pages/               # UI theo capability nghiệp vụ
 │       ├── shared/                 # API client, types, components
 │       └── styles/
 ├── agent/

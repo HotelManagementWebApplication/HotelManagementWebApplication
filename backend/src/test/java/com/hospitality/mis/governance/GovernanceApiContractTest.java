@@ -15,6 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -131,6 +133,26 @@ class GovernanceApiContractTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].status").value("PENDING"))
                 .andExpect(jsonPath("$[0].payload").value("{\"price\":100}"));
+    }
+
+    @Test
+    void filteredApprovalListUsesPageWrapperWhileStatusOnlyListRemainsArray() throws Exception {
+        when(approvalService.page(eq("APPROVED"), eq("PRICE_OVERRIDE"), eq("room-1"), eq(null), eq(null),
+                eq(null), eq(null), eq(0), eq(20)))
+                .thenReturn(new PageImpl<>(List.of(pending), PageRequest.of(0, 20), 1));
+
+        mockMvc.perform(get("/api/governance/approvals")
+                        .param("status", "APPROVED")
+                        .param("action", "PRICE_OVERRIDE")
+                        .param("target_id", "room-1")
+                        .with(jwtAs("MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(42))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$[0]").doesNotExist());
     }
 
     /** Given audit row, When GET audit, Then snake_case và không serialize metadata của entity. */

@@ -152,7 +152,9 @@ public class ReservationService {
             throw error("INVALID_DEPOSIT", "Tiền đặt cọc phải bằng 50% tiền phòng dự kiến");
         Reservation reservation = new Reservation(); reservation.setGuest(guest); reservation.setEmployee(employee);
         reservation.setBookedAt(LocalDateTime.now(clock));
-        reservation.setDepositAmount(suppliedDeposit); reservation.setRentalType(request.rentalType().name()); reservation.setIdempotencyKey(key);
+        reservation.setDepositAmount(suppliedDeposit); reservation.setRentalType(request.rentalType().name());
+        reservation.setBookingSource(request.bookingSource());
+        reservation.setIdempotencyKey(key);
         reservation.setCanonicalRequestFingerprint(fingerprint);
         reservation.transitionTo(reservation.getDepositAmount().signum() > 0 ? ReservationStatus.DEPOSIT_PAID : ReservationStatus.CONFIRMED);
         request.rooms().forEach(line -> { ReservationRoom rr = new ReservationRoom(); rr.setRoom(locked.get(line.roomId())); rr.setCheckIn(line.expectedCheckIn()); rr.setCheckOut(line.expectedCheckOut()); rr.setStatus(RoomStatus.RESERVED); reservation.addRoom(rr); });
@@ -430,12 +432,10 @@ public class ReservationService {
             line.setQuantity(line.getQuantity() + request.quantity());
             serviceLines.save(line);
             service.setStockQuantity(service.getStockQuantity() - request.quantity());
-            if (inventoryMovements != null) {
-                InventoryMovement movement = new InventoryMovement(); movement.setService(service);
-                movement.setType(InventoryMovement.MovementType.ISSUE); movement.setQuantity(request.quantity());
-                movement.setActorId(actor); movement.setOccurredAt(LocalDateTime.now(clock));
-                movement.setReason("RESERVATION_SERVICE:" + id); inventoryMovements.save(movement);
-            }
+            InventoryMovement movement = new InventoryMovement(); movement.setService(service);
+            movement.setType(InventoryMovement.MovementType.ISSUE); movement.setQuantity(request.quantity());
+            movement.setActorId(actor); movement.setOccurredAt(LocalDateTime.now(clock));
+            movement.setReason("RESERVATION_SERVICE:" + id); inventoryMovements.save(movement);
             audit.record(actor, "SERVICE_ADDED", "RESERVATION", id.toString(), null, request.serviceId(), null);
             return toResponse(r);
         });
@@ -467,7 +467,7 @@ public class ReservationService {
                 .sorted().reduce((a, b) -> a + ";" + b).orElse("");
         return IdempotencySupport.fingerprint("CREATE|guest=" + request.guestId() + "|employee="
                 + request.employeeId().trim() + "|deposit=" + (request.deposit() == null ? BigDecimal.ZERO : request.deposit().stripTrailingZeros().toPlainString())
-                + "|rental=" + request.rentalType().name() + "|rooms=" + rooms);
+                + "|rental=" + request.rentalType().name() + "|source=" + (request.bookingSource() == null ? "DIRECT" : request.bookingSource().trim().toUpperCase()) + "|rooms=" + rooms);
     }
 
     /** Dựng lại fingerprint từ entity để kiểm tra retry sau khi đã lưu. */
@@ -480,7 +480,7 @@ public class ReservationService {
         return IdempotencySupport.fingerprint("CREATE|guest=" + reservation.getGuest().getId() + "|employee="
                 + (reservation.getEmployee() == null ? "" : reservation.getEmployee().getEmployeeId()) + "|deposit="
                 + (reservation.getDepositAmount() == null ? BigDecimal.ZERO : reservation.getDepositAmount().stripTrailingZeros().toPlainString())
-                + "|rental=" + reservation.getRentalType() + "|rooms=" + rooms);
+                + "|rental=" + reservation.getRentalType() + "|source=" + reservation.getBookingSource() + "|rooms=" + rooms);
     }
     /** Tính cọc 50% tiền phòng dự kiến, tối thiểu ba giờ với thuê theo giờ. */
     private BigDecimal requiredDeposit(ReservationDtos.CreateRequest request, Map<String, Room> locked) {
@@ -510,5 +510,5 @@ public class ReservationService {
     /** Tạo DomainException nhất quán cho validation của reservation boundary. */
     private DomainException error(String code,String message){return new DomainException(code,message);}
     /** Chuyển booking và các room line thành response, giữ cả lịch và thời điểm thực tế. */
-    public ReservationDtos.Response toResponse(Reservation r){return new ReservationDtos.Response(r.getId(),r.getGuest().getId(),r.getEmployee() == null ? null : r.getEmployee().getEmployeeId(),r.getStatus(),ReservationDtos.RentalType.valueOf(r.getRentalType()),r.getDepositAmount(),r.getBookedAt(),r.getActualCheckIn(),r.getActualCheckOut(),r.getRooms().stream().map(x->new ReservationDtos.RoomLine(x.getRoom().getId(),x.getCheckIn(),x.getCheckOut(),r.getActualCheckIn(),r.getActualCheckOut())).toList(),r.getCancellationReason(),r.getCancellationOutcome());}
+    public ReservationDtos.Response toResponse(Reservation r){return new ReservationDtos.Response(r.getId(),r.getGuest().getId(),r.getEmployee() == null ? null : r.getEmployee().getEmployeeId(),r.getStatus(),ReservationDtos.RentalType.valueOf(r.getRentalType()),r.getDepositAmount(),r.getBookedAt(),r.getActualCheckIn(),r.getActualCheckOut(),r.getRooms().stream().map(x->new ReservationDtos.RoomLine(x.getRoom().getId(),x.getCheckIn(),x.getCheckOut(),r.getActualCheckIn(),r.getActualCheckOut())).toList(),r.getCancellationReason(),r.getCancellationOutcome(),r.getBookingSource(),r.getOtaGrossRevenue(),r.getOtaCommission(),r.getOtaNetRevenue(),r.getOtaReconciliationStatus());}
 }

@@ -122,7 +122,7 @@ class RoomServiceTest {
         assertThat(response.status()).isEqualTo(RoomStatus.MAINTENANCE);
         verify(rooms).findForUpdate("R101");
         verify(audit).record("technical", "ROOM_STATUS_CHANGED", "ROOM", "R101",
-                "SAN_SANG", "BAO_TRI", null);
+                "available", "maintenance", null);
     }
 
     @Test

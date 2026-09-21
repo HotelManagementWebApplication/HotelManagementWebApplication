@@ -15,7 +15,17 @@ public final class EmployeeAdminDtos {
                            boolean enabled, boolean accountNonLocked, int failedLoginAttempts,
                            Instant lastLoginAt, Instant lastFailedLoginAt,
                            Employee.EmploymentStatus employmentStatus,
-                           java.time.LocalDate leaveStart, java.time.LocalDate leaveEnd) {}
+                           java.time.LocalDate leaveStart, java.time.LocalDate leaveEnd,
+                           String email, boolean mustChangePassword) {
+        public Response(String employeeId, String fullName, String phone, String address, EmployeeRole role,
+                        boolean enabled, boolean accountNonLocked, int failedLoginAttempts,
+                        Instant lastLoginAt, Instant lastFailedLoginAt,
+                        Employee.EmploymentStatus employmentStatus,
+                        java.time.LocalDate leaveStart, java.time.LocalDate leaveEnd) {
+            this(employeeId, fullName, phone, address, role, enabled, accountNonLocked, failedLoginAttempts,
+                    lastLoginAt, lastFailedLoginAt, employmentStatus, leaveStart, leaveEnd, null, false);
+        }
+    }
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record StatusRequest(@NotNull Boolean enabled) {}
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

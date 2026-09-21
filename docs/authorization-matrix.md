@@ -56,6 +56,9 @@ khác. HOUSEKEEPING, FRONT_DESK và STAFF chỉ có quyền đọc media qua `RO
   RESERVATION_CHECKOUT và RESERVATION_SERVICE_WRITE. Áp dụng ở HTTP và service.
 - FRONT_DESK được tìm, xem và xử lý đặt phòng liên ca; invoice/payment/receipt
   cũng cho phép lễ tân ca sau tiếp tục xử lý. Không cấp FINANCE_READ cho lễ tân.
+- FRONT_DESK được ghi nhận bàn giao ca bằng `CASH_HANDOVER_WRITE`; backend tự
+  tính `expected_amount` và `variance` từ `actual_amount`. Quyền này không mở
+  các endpoint expense, partner-debt hay finance read.
 - ACCOUNTING không được thay đổi reservation hay checkout, dù là người tạo đơn.
 - Không cho actor chưa xác thực gọi ReservationService. Quyền được kiểm tra
   trước cả kết quả idempotency đã lưu.

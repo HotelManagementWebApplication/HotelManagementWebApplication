@@ -1,0 +1,139 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+}
+
+:root {
+  --background: #F7F5F0;
+  --foreground: #0D1117;
+  --card: #FFFFFF;
+  --card-foreground: #0D1117;
+  --primary: #0D1117;
+  --primary-foreground: #F7F5F0;
+  --secondary: #EDEBE4;
+  --secondary-foreground: #374151;
+  --muted: #E8E4DC;
+  --muted-foreground: #6B7280;
+  --accent: #B8944A;
+  --accent-foreground: #0D1117;
+  --border: #E2DDD4;
+  --ring: #B8944A;
+  --gold: #B8944A;
+  --gold-light: #D4AF6E;
+  --navy: #0B1426;
+  --navy-mid: #162040;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: #080D18;
+  --foreground: #EDE9E0;
+  --card: #0F1A2E;
+  --card-foreground: #EDE9E0;
+  --primary: #B8944A;
+  --primary-foreground: #080D18;
+  --secondary: #162040;
+  --secondary-foreground: #C9C0B0;
+  --muted: #162040;
+  --muted-foreground: #8B9BAD;
+  --accent: #B8944A;
+  --accent-foreground: #080D18;
+  --border: #1E2D45;
+  --ring: #B8944A;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  margin: 0; padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display { font-family: 'Cormorant Garamond', Georgia, serif; }
+.font-mono-data { font-family: 'JetBrains Mono', monospace; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+
+/* Transitions */
+*, *::before, *::after {
+  transition-property: color, background-color, border-color, opacity, transform, box-shadow, backdrop-filter;
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Glass card */
+.glass {
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.glass-dark {
+  background: rgba(8,13,24,0.65);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* Gold gradient text */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #B8944A 0%, #E8C878 50%, #B8944A 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Animated underline */
+.hover-underline {
+  position: relative;
+}
+.hover-underline::after {
+  content: '';
+  position: absolute;
+  bottom: -2px; left: 0;
+  width: 0; height: 1px;
+  background: #B8944A;
+  transition: width 250ms ease;
+}
+.hover-underline:hover::after { width: 100%; }
+
+/* No transition utility */
+.no-tx, .no-tx * { transition: none !important; }
+
+@keyframes room-gallery-shift-next {
+  from { opacity: 0.72; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes room-gallery-shift-prev {
+  from { opacity: 0.72; transform: translateX(-18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.room-gallery-shift-next { animation: room-gallery-shift-next 320ms ease-out both; }
+.room-gallery-shift-prev { animation: room-gallery-shift-prev 320ms ease-out both; }

@@ -50,7 +50,7 @@ public class Room {
 
 
 
-    @Column(name = "description", length = 255)
+    @Column(name = "description", length = 1200)
     private String description;
 
 

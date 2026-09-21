@@ -1,6 +1,7 @@
 package com.hospitality.mis.dto.operations;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -12,6 +13,7 @@ public final class MaintenanceDtos {
     private MaintenanceDtos() {}
     /** Request lập lịch bảo trì cho một phòng; id, phòng, loại và ngày là bắt buộc. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    @JsonIgnoreProperties(ignoreUnknown = false)
     public record CreateRequest(
                                 /** Mã công việc bảo trì. */
                                 @NotBlank String id,
@@ -25,6 +27,7 @@ public final class MaintenanceDtos {
                                 String description) {}
     /** Request chuyển trạng thái công việc bảo trì. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    @JsonIgnoreProperties(ignoreUnknown = false)
     public record StatusRequest(
                                /** Trạng thái mới của công việc, không được trống. */
                                @NotBlank String status) {}

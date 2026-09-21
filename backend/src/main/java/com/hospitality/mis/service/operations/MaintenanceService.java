@@ -10,6 +10,9 @@ import com.hospitality.mis.dto.operations.MaintenanceDtos;
 import com.hospitality.mis.entity.operations.MaintenanceStatus;
 import com.hospitality.mis.entity.operations.MaintenanceWorkOrder;
 import com.hospitality.mis.dao.room.RoomRepository;
+import com.hospitality.mis.middleware.security.SecurityActor;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
@@ -30,6 +33,7 @@ public class MaintenanceService {
     /** Tạo phiếu, khóa phòng và chuyển phòng sang MAINTENANCE trong cùng giao dịch. */
     @Transactional
     public MaintenanceDtos.Response create(MaintenanceDtos.CreateRequest request, String actor) {
+        String boundActor = authenticatedActor(actor);
         // Không được tạo trùng mã phiếu bảo trì.
         if (orders.existsById(request.id())) throw new DomainException("MAINTENANCE_EXISTS", "Mã phiếu bảo trì đã tồn tại");
         // Khóa phòng trong giao dịch này để các thao tác đồng thời không thể thay đổi phòng cùng lúc.
@@ -41,15 +45,16 @@ public class MaintenanceService {
         order.setMaintenanceType(request.type()); order.setScheduledDate(request.scheduledDate()); order.setDescription(request.description());
         // Mở phiếu bảo trì sẽ khóa phòng, không cho phép đặt phòng mới cho đến khi hoàn tất.
         order.setStatus(MaintenanceStatus.CHUA_XU_LY); room.setStatus(com.hospitality.mis.entity.room.RoomStatus.MAINTENANCE); rooms.save(room); orders.save(order);
-        audit.record(actor, "MAINTENANCE_CREATED", "MAINTENANCE_WORK_ORDER", request.id(), null, request.roomId(), null);
+        audit.record(boundActor, "MAINTENANCE_CREATED", "MAINTENANCE_WORK_ORDER", request.id(), null, request.roomId(), null);
         return toResponse(order);
     }
 
     /** Kiểm tra transition tuần tự, khóa phòng và đồng bộ trạng thái phòng với phiếu. */
     @Transactional
     public MaintenanceDtos.Response updateStatus(String id, MaintenanceDtos.StatusRequest request, String actor) {
+        String boundActor = authenticatedActor(actor);
         // Cập nhật phiếu bảo trì hiện có và trả lỗi nghiệp vụ theo các mã chuẩn.
-        var order = orders.findById(id).orElseThrow(() -> new DomainException("MAINTENANCE_NOT_FOUND", "Không tìm thấy phiếu bảo trì"));
+        var order = orders.findForUpdateById(id).orElseThrow(() -> new DomainException("MAINTENANCE_NOT_FOUND", "Không tìm thấy phiếu bảo trì"));
         MaintenanceStatus next;
         try { next = MaintenanceStatus.valueOf(request.status().trim().toUpperCase()); }
         catch (IllegalArgumentException ex) { throw new DomainException("INVALID_MAINTENANCE_STATUS", "Trạng thái bảo trì không hợp lệ"); }
@@ -57,13 +62,14 @@ public class MaintenanceService {
         if (!allowedTransition(order.getStatus(), next))
             throw new DomainException("INVALID_MAINTENANCE_TRANSITION",
                     "Cannot move maintenance from " + order.getStatus() + " to " + next);
+        if (order.getStatus() == next) return toResponse(order);
         var before = order.getStatus().name(); order.setStatus(next);
         var room = rooms.findForUpdate(order.getRoom().getId()).orElseThrow(() -> new DomainException("ROOM_NOT_FOUND", "Room not found"));
         // Hoàn tất sẽ đưa phòng về trạng thái SẴN SÀNG; các trạng thái khác giữ phòng ở trạng thái BẢO TRÌ.
         room.setStatus(next == MaintenanceStatus.DA_HOAN_THANH
                 ? com.hospitality.mis.entity.room.RoomStatus.READY
                 : com.hospitality.mis.entity.room.RoomStatus.MAINTENANCE);
-        audit.record(actor, "MAINTENANCE_STATUS_CHANGED", "MAINTENANCE_WORK_ORDER", id, before, next.name(), null);
+        audit.record(boundActor, "MAINTENANCE_STATUS_CHANGED", "MAINTENANCE_WORK_ORDER", id, before, next.name(), null);
         return toResponse(order);
     }
 
@@ -80,5 +86,15 @@ public class MaintenanceService {
         if (current == next) return true;
         return (current == MaintenanceStatus.CHUA_XU_LY && next == MaintenanceStatus.DANG_BAO_TRI)
                 || (current == MaintenanceStatus.DANG_BAO_TRI && next == MaintenanceStatus.DA_HOAN_THANH);
+    }
+
+    private String authenticatedActor(String supplied) {
+        try {
+            return SecurityActor.requireBoundActor(supplied);
+        } catch (AuthenticationCredentialsNotFoundException exception) {
+            throw new DomainException("ACTOR_REQUIRED", "Thiếu actor đã xác thực");
+        } catch (AccessDeniedException exception) {
+            throw new DomainException("ACTOR_MISMATCH", "Actor không khớp principal hiện tại");
+        }
     }
 }

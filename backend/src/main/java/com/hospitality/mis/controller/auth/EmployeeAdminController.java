@@ -15,7 +15,7 @@ public class EmployeeAdminController {
 
     @GetMapping
     @PreAuthorize("@departmentAccess.allows(authentication, 'EMPLOYEE_READ')")
-    public List<EmployeeAdminDtos.Response> list(@RequestParam(defaultValue = "false") boolean includeInactive) {
+    public List<EmployeeAdminDtos.Response> list(@RequestParam(name = "includeInactive", defaultValue = "false") boolean includeInactive) {
         return service.list(includeInactive);
     }
 
@@ -30,8 +30,8 @@ public class EmployeeAdminController {
     @GetMapping("/{employeeId}/login-history")
     @PreAuthorize("@departmentAccess.allows(authentication, 'EMPLOYEE_READ')")
     public EmployeeAdminDtos.LoginHistoryResponse loginHistory(@PathVariable String employeeId,
-                                                                @RequestParam(defaultValue = "0") int page,
-                                                                @RequestParam(defaultValue = "20") int size) {
+                                                                @RequestParam(name = "page", defaultValue = "0") int page,
+                                                                @RequestParam(name = "size", defaultValue = "20") int size) {
         return service.loginHistory(employeeId, page, size);
     }
 
@@ -57,5 +57,13 @@ public class EmployeeAdminController {
     public EmployeeAdminDtos.Response employment(@PathVariable String employeeId,
                                                  @Valid @RequestBody EmployeeAdminDtos.EmploymentRequest request) {
         return service.setEmployment(employeeId, request);
+    }
+
+    @PostMapping("/auto-provision")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    @PreAuthorize("@departmentAccess.allows(authentication, 'EMPLOYEE_PROVISION') && @employeeService.canManageRole(authentication, #request.role())")
+    public com.hospitality.mis.dto.auth.AuthDtos.AutoProvisionResponse autoProvision(
+            @Valid @RequestBody com.hospitality.mis.dto.auth.AuthDtos.AutoProvisionRequest request) {
+        return service.provisionAuto(request);
     }
 }

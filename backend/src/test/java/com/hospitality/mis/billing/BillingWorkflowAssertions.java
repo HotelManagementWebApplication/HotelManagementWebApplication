@@ -52,6 +52,7 @@ public abstract class BillingWorkflowAssertions {
         mvc.perform(get("/api/invoices/reservation/{id}", invoice.getReservation().getId()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.payable").value(0));
         mvc.perform(post("/api/invoices/{id}/receipts", invoice.getId()).contentType(APPLICATION_JSON)
+                .header("Idempotency-Key", "receipt-test")
                 .content("{\"receipt_number\":\"TEST-RECEIPT\",\"amount\":1251000,\"method\":\"CASH\"}"))
                 .andExpect(status().isOk());
         approveRefund("251000", "refund");
@@ -76,13 +77,37 @@ public abstract class BillingWorkflowAssertions {
     @Test void missingIdempotencyKeyIsRejectedAtHttpBoundary() throws Exception {
         mvc.perform(post("/api/invoices/{id}/payments", invoice.getId()).contentType(APPLICATION_JSON)
                 .content("{\"amount\":1000,\"method\":\"CASH\",\"type\":\"PAYMENT\"}"))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    /** Cùng header nhưng khác payload không được replay thành một giao dịch khác. */
+    @Test void sameIdempotencyKeyWithDifferentPayloadIsRejected() throws Exception {
+        mvc.perform(post("/api/invoices/{id}/payments", invoice.getId()).contentType(APPLICATION_JSON)
+                .header("Idempotency-Key", "same-payload")
+                .content(body("1000", "PAYMENT", "same-payload")))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/invoices/{id}/payments", invoice.getId()).contentType(APPLICATION_JSON)
+                .header("Idempotency-Key", "same-payload")
+                .content(body("2000", "PAYMENT", "same-payload")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_MISMATCH"));
+        mvc.perform(get("/api/invoices/{id}/payments", invoice.getId()))
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    /** Refund không có approval exact payload phải bị chặn trước khi ghi tiền. */
+    @Test void refundWithoutApprovalIsRejected() throws Exception {
+        mvc.perform(post("/api/invoices/{id}/payments", invoice.getId()).contentType(APPLICATION_JSON)
+                .header("Idempotency-Key", "refund-without-approval")
+                .content(body("1000", "REFUND", "refund-without-approval")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("APPROVAL_REQUIRED"));
     }
 
     /** Given amount vượt payable, When ghi payment, Then trả lỗi nghiệp vụ và không tạo ledger row. */
     @Test void overpaymentIsRejectedWithoutRecordingMoney() throws Exception {
         mvc.perform(post("/api/invoices/{id}/payments", invoice.getId()).contentType(APPLICATION_JSON)
-                .content(body("1252000", "PAYMENT", "overpay")))
+                .header("Idempotency-Key", "overpay").content(body("1252000", "PAYMENT", "overpay")))
                 .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("PAYMENT_EXCEEDS_BALANCE"));
         mvc.perform(get("/api/invoices/{id}/payments", invoice.getId())).andExpect(jsonPath("$.length()").value(0));
     }
@@ -90,14 +115,14 @@ public abstract class BillingWorkflowAssertions {
     /** Gửi payment với amount/type/key để các test tập trung vào outcome của workflow. */
     private void payment(String amount, String type, String key) throws Exception {
         mvc.perform(post("/api/invoices/{id}/payments", invoice.getId()).contentType(APPLICATION_JSON)
-                .content(body(amount, type, key))).andExpect(status().isOk());
+                .header("Idempotency-Key", key).content(body(amount, type, key))).andExpect(status().isOk());
     }
 
     /** Tạo approval hợp lệ cho refund; fingerprint và amount phải khớp binding khi consume. */
     private void approveRefund(String amount, String key) throws Exception {
         var request = new PaymentTransactionDtos.CreateRequest(new BigDecimal(amount), PaymentMethod.CASH,
-                PaymentTransaction.TransactionType.REFUND, "guest request", key);
-        String payload = request.approvalPayload(invoice.getId());
+                PaymentTransaction.TransactionType.REFUND, "guest request");
+        String payload = request.approvalPayload(invoice.getId(), key);
         ApprovalRequest approval = new ApprovalRequest("clerk", "PAYMENT_REFUND", String.valueOf(invoice.getId()),
                 payload, ApprovalService.fingerprintFor(payload), new BigDecimal(amount), "approved refund",
                 Instant.now().plusSeconds(3600), "approval-" + key);
@@ -105,9 +130,9 @@ public abstract class BillingWorkflowAssertions {
         mvc.perform(post("/api/governance/approvals/{id}/approve", approval.getId())
                 .with(user("director").roles("DIRECTOR"))).andExpect(status().isOk());
     }
-    /** Tạo JSON snake_case theo đúng wire contract, bao gồm idempotency key bắt buộc. */
+    /** Tạo JSON snake_case theo đúng wire contract; khóa retry nằm ở HTTP header. */
     private String body(String amount, String type, String key) {
         return "{\"amount\":" + amount + ",\"method\":\"CASH\",\"type\":\"" + type
-                + "\",\"reference\":\"guest request\",\"idempotency_key\":\"" + key + "\"}";
+                + "\",\"reference\":\"guest request\"}";
     }
 }

@@ -23,7 +23,7 @@ public class EquipmentIncident {
     /** ID sự cố do cơ sở dữ liệu sinh. */
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "reservation_id") private Reservation reservation;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "reservation_id", nullable = true) private Reservation reservation;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "room_id") private Room room;
     @Column(name = "equipment_name", nullable = false, length = 100) private String equipmentName;
     /** Giá trị gốc của thiết bị tại thời điểm ghi nhận sự cố. */
@@ -53,6 +53,7 @@ public class EquipmentIncident {
 
     public Reservation getReservation() { return reservation; }
     public Room getRoom() { return room; }
+    public String getEquipmentName() { return equipmentName; }
 
     public BigDecimal getCompensation() { return compensation; }
     public IncidentSeverity getSeverity() { return severity; }

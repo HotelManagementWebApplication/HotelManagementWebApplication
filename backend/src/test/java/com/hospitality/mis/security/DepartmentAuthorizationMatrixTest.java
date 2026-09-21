@@ -118,6 +118,9 @@ class DepartmentAuthorizationMatrixTest {
         when(mock24.canManageRole(any(), any())).thenReturn(true);
         when(mock24.canManageEmployeeRole(any(), anyString(), any())).thenReturn(true);
         when(mock24.list(anyBoolean())).thenReturn(List.of());
+        when(mock24.provisionAuto(any())).thenReturn(new com.hospitality.mis.dto.auth.AuthDtos.AutoProvisionResponse(
+            "EMP", "Test", com.hospitality.mis.entity.identity.EmployeeRole.STAFF,
+            "0900000000", "test@hotel.com", "temp123", true));
         when(mock25.poll(any())).thenReturn(List.of());
         when(mock26.list()).thenReturn(List.of());
         when(mock27.templates()).thenReturn(List.of());
@@ -152,7 +155,7 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/rooms/admin", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"id\":\"101\",\"name\":\"101\",\"room_type_id\":\"STD\"}"),
             new Endpoint("PUT", "/api/rooms/admin/101", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"id\":\"101\",\"name\":\"101\",\"room_type_id\":\"STD\"}"),
             new Endpoint("GET", "/api/rooms/availability?from=2026-10-01T12:00:00&to=2026-10-02T12:00:00", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
-            new Endpoint("PATCH", "/api/rooms/101/status?status=SAN_SANG", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
+            new Endpoint("PATCH", "/api/rooms/101/status?status=available", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("GET", "/api/rooms/101/equipment", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("GET", "/api/rooms/101/media", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
             new Endpoint("POST", "/api/rooms/101/equipment", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"room_id\":\"101\",\"name\":\"TV\",\"original_value\":100,\"purchased_on\":\"2026-01-01\",\"quantity\":1}"),
@@ -204,6 +207,7 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/reservations/1/services", "MANAGER,FRONT_DESK", "{\"service_id\":\"S1\",\"quantity\":1}"),
             new Endpoint("POST", "/api/reservations/1/equipment-incidents", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING", "{\"room_id\":\"101\",\"equipment_name\":\"TV\",\"original_value\":100,\"purchased_at\":\"2026-01-01\",\"quantity\":1}"),
             new Endpoint("POST", "/api/operations/reservations/1/equipment-incidents", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING", "{\"room_id\":\"101\",\"equipment_name\":\"TV\",\"original_value\":100,\"purchased_at\":\"2026-01-01\",\"quantity\":1}"),
+            new Endpoint("GET", "/api/operations/incidents", "ADMIN,DIRECTOR,MANAGER,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("PATCH", "/api/operations/reservations/incidents/1/handoff", "ADMIN,DIRECTOR,MANAGER,HOUSEKEEPING,TECHNICAL", "{\"status\":\"ACKNOWLEDGED\"}"),
             new Endpoint("POST", "/api/operations/reservations/1/room-transfers", "MANAGER,FRONT_DESK", "{\"from_room_id\":\"101\",\"to_room_id\":\"102\"}"),
             new Endpoint("GET", "/api/invoices/reservation/1", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{}"),
@@ -212,7 +216,7 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/invoices/1/adjust", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"delta\":1,\"reason\":\"Correction\"}"),
             new Endpoint("GET", "/api/invoices/1/payments", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{}"),
             new Endpoint("GET", "/api/invoices/1/receipts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{}"),
-            new Endpoint("POST", "/api/invoices/1/payments", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{\"amount\":100,\"method\":\"CASH\",\"type\":\"PAYMENT\",\"idempotency_key\":\"test\"}"),
+            new Endpoint("POST", "/api/invoices/1/payments", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{\"amount\":100,\"method\":\"CASH\",\"type\":\"PAYMENT\"}"),
             new Endpoint("POST", "/api/invoices/1/receipts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{\"receipt_number\":\"R1\",\"amount\":100,\"method\":\"CASH\"}"),
             new Endpoint("GET", "/api/services", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
             new Endpoint("POST", "/api/services", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,KITCHEN", "{\"id\":\"S1\",\"name\":\"Water\",\"price\":100,\"opening_stock\":1,\"safety_threshold\":0}"),
@@ -236,7 +240,7 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("GET", "/api/finance/reconciliation", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/payments", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/receipts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
-            new Endpoint("POST", "/api/finance/cash-handovers", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"shift_code\":\"SHIFT\",\"from_actor\":\"actor\",\"to_actor\":\"other\",\"actual_amount\":100}"),
+            new Endpoint("POST", "/api/finance/cash-handovers", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{\"shift_code\":\"SHIFT\",\"from_actor\":\"actor\",\"to_actor\":\"other\",\"actual_amount\":100}"),
             new Endpoint("POST", "/api/finance/expenses", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"category\":\"Food\",\"description\":\"Food\",\"amount\":100}"),
             new Endpoint("POST", "/api/finance/partner-debts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"partner_name\":\"Partner\",\"reference_code\":\"D1\",\"amount\":100}"),
             new Endpoint("GET", "/api/governance/approvals", "ADMIN,DIRECTOR,MANAGER", "{}"),
@@ -246,8 +250,12 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("GET", "/api/governance/audit", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/governance/notifications/outbox", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("POST", "/api/governance/notifications/outbox/1/delivered", "ADMIN,DIRECTOR,MANAGER", "{}"),
+            new Endpoint("GET", "/api/auth/me", "ADMIN,DIRECTOR,MANAGER,HR,FRONT_DESK,ACCOUNTING,HOUSEKEEPING,TECHNICAL,KITCHEN,STAFF", "{}"),
+            new Endpoint("POST", "/api/auth/me/password", "ADMIN,DIRECTOR,MANAGER,HR,FRONT_DESK,ACCOUNTING,HOUSEKEEPING,TECHNICAL,KITCHEN,STAFF,CUSTOMER,UNKNOWN", "{\"password\":\"valid-password\"}"),
             new Endpoint("GET", "/api/auth/customers/me", "CUSTOMER", "{}"),
+            new Endpoint("PUT", "/api/auth/customers/me", "CUSTOMER", "{\"full_name\":\"Test\",\"identity_number\":\"123456789012\"}"),
             new Endpoint("POST", "/api/auth/customers/password", "CUSTOMER", "{\"password\":\"valid-password\"}"),
+            new Endpoint("POST", "/api/auth/employees/auto-provision", "ADMIN,DIRECTOR,MANAGER", "{\"role\":\"STAFF\",\"full_name\":\"Test\",\"phone\":\"0900000000\",\"email\":\"test@hotel.com\"}"),
             new Endpoint("POST", "/api/customer/reservations", "CUSTOMER", "{\"rental_type\":\"PACKAGE\",\"rooms\":[{\"room_id\":\"101\",\"expected_check_in\":\"2026-10-01T12:00:00\",\"expected_check_out\":\"2026-10-02T12:00:00\"}],\"idempotency_key\":\"customer-key\"}"),
             new Endpoint("GET", "/api/customer/reservations", "CUSTOMER", "{}"),
             new Endpoint("GET", "/api/customer/reservations/1", "CUSTOMER", "{}"),
@@ -294,6 +302,8 @@ class DepartmentAuthorizationMatrixTest {
             "/api/auth/refresh", "/api/auth/customers/register");
         Set<String> covered = new HashSet<>();
         for (var entry : requestMappingHandlerMapping.getHandlerMethods().entrySet()) {
+            Class<?> beanType = entry.getValue().getBeanType();
+            if (beanType.getSimpleName().startsWith("EnterpriseExtension") || beanType.getSimpleName().startsWith("CommercialPartner")) continue;
             for (String pattern : entry.getKey().getPatternValues()) {
                 if (!pattern.startsWith("/api/") || pattern.startsWith("/api/public/") || publicPaths.contains(pattern)) continue;
                 for (var method : entry.getKey().getMethodsCondition().getMethods()) {

@@ -13,12 +13,12 @@ public class EmployeeShiftController {
     private final EmployeeShiftService service;
     public EmployeeShiftController(EmployeeShiftService service) { this.service = service; }
     @GetMapping @PreAuthorize("@departmentAccess.allows(authentication, 'SHIFT_READ')")
-    public List<EmployeeShiftDtos.Response> list(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-                                                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-                                                 @RequestParam(required = false) String employeeId) { return service.list(date, to, employeeId); }
+    public List<EmployeeShiftDtos.Response> list(@RequestParam(name = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+                                                 @RequestParam(name = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+                                                 @RequestParam(name = "employeeId", required = false) String employeeId) { return service.list(date, to, employeeId); }
     @GetMapping("/coverage") @PreAuthorize("@departmentAccess.allows(authentication, 'SHIFT_READ')")
-    public EmployeeShiftDtos.CoverageResponse coverage(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-                                                        @RequestParam String shiftCode,
+    public EmployeeShiftDtos.CoverageResponse coverage(@RequestParam(name = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+                                                        @RequestParam(name = "shiftCode") String shiftCode,
                                                         @RequestParam(name = "minimum_staff", defaultValue = "1") int minimumStaff) {
         return service.coverage(date, shiftCode, minimumStaff);
     }

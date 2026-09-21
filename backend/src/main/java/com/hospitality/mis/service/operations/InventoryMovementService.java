@@ -22,35 +22,44 @@ public class InventoryMovementService {
     /** Audit số lượng tăng/giảm sau mỗi chuyển động. */
     private final AuditService audit;
     private Clock clock = Clock.system(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
-    private DurableIdempotencyService durableIdempotency;
-    public InventoryMovementService(InventoryMovementRepository movements, ServiceRepository services, AuditService audit) { this.movements = movements; this.services = services; this.audit = audit; }
+    private final DurableIdempotencyService durableIdempotency;
+    public InventoryMovementService(InventoryMovementRepository movements, ServiceRepository services, AuditService audit,
+                                    DurableIdempotencyService durableIdempotency) {
+        this.movements = movements; this.services = services; this.audit = audit; this.durableIdempotency = durableIdempotency;
+    }
     @org.springframework.beans.factory.annotation.Autowired
     void setBusinessClock(Clock clock) { this.clock = clock; }
-    @org.springframework.beans.factory.annotation.Autowired
-    void setDurableIdempotency(DurableIdempotencyService durableIdempotency) { this.durableIdempotency = durableIdempotency; }
     /** Khóa dịch vụ, kiểm tra không âm, cập nhật tồn và ghi chuyển động. */
     @Transactional
     public InventoryMovementDtos.Response record(InventoryMovementDtos.CreateRequest request, String actor) {
-        return record(request, actor, "direct-" + java.util.UUID.randomUUID());
+        return record(request, actor, null);
     }
 
     @Transactional
     public InventoryMovementDtos.Response record(InventoryMovementDtos.CreateRequest request, String actor, String key) {
         String boundActor = SecurityActor.requireBoundActor(actor);
+        validateRequest(request);
+        IdempotencySupport.requireKey(key);
+        // Lock the business aggregate before DurableIdempotencyService inserts its record.
+        // Every inventory command for one service therefore follows service -> idempotency,
+        // avoiding the inverse wait graph under InnoDB contention.
+        services.findWithLockById(request.serviceId())
+                .orElseThrow(() -> new DomainException("SERVICE_NOT_FOUND", "Không tìm thấy dịch vụ"));
         String fingerprint = IdempotencySupport.fingerprint("INVENTORY|" + request.serviceId() + "|" + request.type()
                 + "|" + request.quantity() + "|" + request.reason());
-        if (durableIdempotency != null) {
-            return durableIdempotency.execute("inventory-movement", key, boundActor, fingerprint,
-                    InventoryMovementDtos.Response.class, () -> recordOnce(request, boundActor));
-        }
-        IdempotencySupport.requireKey(key);
-        return recordOnce(request, boundActor);
+        return durableIdempotency.execute("inventory-movement", key, boundActor, fingerprint,
+                InventoryMovementDtos.Response.class, () -> recordOnce(request, boundActor));
+    }
+
+    private void validateRequest(InventoryMovementDtos.CreateRequest request) {
+        if (request == null || request.type() == null || request.serviceId() == null || request.serviceId().isBlank())
+            throw new DomainException("INVALID_INVENTORY_MOVEMENT", "Movement phải có service_id và type");
+        if (request.quantity() == 0 || (request.type() != InventoryMovement.MovementType.ADJUST && request.quantity() < 0))
+            throw new DomainException("INVALID_INVENTORY_QUANTITY", "Chỉ ADJUST được dùng số lượng âm và số lượng không được bằng 0");
     }
 
     private InventoryMovementDtos.Response recordOnce(InventoryMovementDtos.CreateRequest request, String actor) {
         if (actor == null || actor.isBlank()) throw new DomainException("ACTOR_REQUIRED", "Thiếu actor cập nhật tồn kho");
-        if (request.quantity() == 0 || (request.type() != InventoryMovement.MovementType.ADJUST && request.quantity() < 0))
-            throw new DomainException("INVALID_INVENTORY_QUANTITY", "Chỉ ADJUST được dùng số lượng âm và số lượng không được bằng 0");
         var service = services.findWithLockById(request.serviceId()).orElseThrow(() -> new DomainException("SERVICE_NOT_FOUND", "Không tìm thấy dịch vụ"));
         int signed = switch (request.type()) {
             case ISSUE, WASTE -> -request.quantity();
@@ -71,18 +80,15 @@ public class InventoryMovementService {
         if (!services.existsById(serviceId)) throw new DomainException("SERVICE_NOT_FOUND", "Không tìm thấy dịch vụ");
         java.time.LocalDate start = from == null ? java.time.LocalDate.now(clock).minusDays(30) : from;
         java.time.LocalDate end = to == null ? java.time.LocalDate.now(clock) : to;
-        int received = 0, issued = 0, wasted = 0, returned = 0, adjusted = 0;
-        for (var movement : movements.findByServiceIdOrderByOccurredAtDesc(serviceId)) {
-            if (movement.getOccurredAt() == null || movement.getOccurredAt().toLocalDate().isBefore(start) || movement.getOccurredAt().toLocalDate().isAfter(end)) continue;
-            switch (movement.getType()) {
-                case RECEIVE -> received += movement.getQuantity();
-                case ISSUE -> issued += movement.getQuantity();
-                case WASTE -> wasted += movement.getQuantity();
-                case RETURN -> returned += movement.getQuantity();
-                case ADJUST -> adjusted += movement.getQuantity();
-            }
-        }
+        if (start.isAfter(end)) throw new DomainException("INVALID_DATE_RANGE", "Khoảng ngày không hợp lệ");
+        java.util.List<Object[]> rows = movements.summarize(serviceId, start.atStartOfDay(), end.plusDays(1).atStartOfDay());
+        Object[] totals = rows == null || rows.isEmpty() ? null : rows.get(0);
+        int received = number(totals, 0), issued = number(totals, 1), wasted = number(totals, 2);
+        int returned = number(totals, 3), adjusted = number(totals, 4);
         return new InventoryMovementDtos.ReportResponse(serviceId, start.atStartOfDay(), end.plusDays(1).atStartOfDay(), received, issued, wasted, returned, adjusted, received + returned + adjusted - issued - wasted);
+    }
+    private int number(Object[] totals, int index) {
+        return totals == null || totals.length <= index || totals[index] == null ? 0 : ((Number) totals[index]).intValue();
     }
     /** Chuyển chuyển động tồn kho thành DTO audit-friendly. */
     private InventoryMovementDtos.Response toResponse(InventoryMovement m) { return new InventoryMovementDtos.Response(m.getId(), m.getService().getId(), m.getType(), m.getQuantity(), m.getActorId(), m.getOccurredAt(), m.getReason()); }

@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.List;
 
 /** DTO cho bàn giao tiền mặt, chi phí và công nợ đối tác của vận hành. */
 public final class FinanceDtos {
@@ -28,7 +29,15 @@ public final class FinanceDtos {
                                       /** Số tiền thực tế kiểm đếm. */
                                       @NotNull BigDecimal actualAmount,
                                       /** Ghi chú về bàn giao hoặc chênh lệch. */
-                                      String note) {}
+                                      String note,
+                                      List<DenominationLine> denominations) {
+        public CashHandoverRequest(String shiftCode, String fromActor, String toActor,
+                                   BigDecimal actualAmount, String note) {
+            this(shiftCode, fromActor, toActor, actualAmount, note, List.of());
+        }
+    }
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record DenominationLine(@NotNull BigDecimal denomination, int quantity) {}
     /** Kết quả bàn giao gồm số kỳ vọng, số thực tế và chênh lệch. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record CashHandoverResponse(
@@ -49,7 +58,14 @@ public final class FinanceDtos {
                                        /** Thời điểm bàn giao. */
                                        LocalDateTime handedOverAt,
                                        /** Ghi chú. */
-                                       String note) {}
+                                       String note,
+                                       List<DenominationLine> denominations) {
+        public CashHandoverResponse(Long id, String shiftCode, String fromActor, String toActor,
+                                    BigDecimal expectedAmount, BigDecimal actualAmount, BigDecimal variance,
+                                    LocalDateTime handedOverAt, String note) {
+            this(id, shiftCode, fromActor, toActor, expectedAmount, actualAmount, variance, handedOverAt, note, List.of());
+        }
+    }
     /** Request ghi nhận một khoản chi phí dương theo nhóm và mô tả. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record ExpenseRequest(

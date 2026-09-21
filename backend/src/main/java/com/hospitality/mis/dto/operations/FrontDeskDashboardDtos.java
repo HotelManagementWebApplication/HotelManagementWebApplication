@@ -22,7 +22,9 @@ public final class FrontDeskDashboardDtos {
                                   BigDecimal invoiceBalance) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record RoomSummary(String roomId, String name, RoomStatus status, String roomTypeId) {}
+    public record RoomSummary(String roomId, String name, RoomStatus status, String roomTypeId,
+                              String roomTypeName, Integer floor, BigDecimal dailyPrice,
+                              String bedType) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record IncidentItem(Long id, Long reservationId, String roomId, BigDecimal compensation) {}

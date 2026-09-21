@@ -92,4 +92,22 @@ public class CustomerAccountService {
         return new CustomerAccountDtos.Response(account.getId(), account.getGuest().getId(), account.getPhone(),
                 account.isEnabled(), account.isAccountNonLocked());
     }
+
+    /** Cập nhật thông tin hồ sơ khách lưu trú trong cơ sở dữ liệu thật. */
+    @Transactional
+    public CustomerAccountDtos.MeResponse updateProfile(Long customerAccountId, CustomerAccountDtos.UpdateProfileRequest request) {
+        CustomerAccount account = accounts.findById(customerAccountId)
+                .orElseThrow(() -> new DomainException("CUSTOMER_ACCOUNT_NOT_FOUND", "Không tìm thấy tài khoản khách hàng"));
+        Guest guest = account.getGuest();
+        guest.setFullName(request.fullName().trim());
+        guest.setIdentityNumber(request.identityNumber().trim());
+        if (request.email() != null) guest.setEmail(request.email().trim());
+        if (request.address() != null) guest.setAddress(request.address().trim());
+        if (request.birthYear() != null) guest.setBirthYear(request.birthYear());
+        Guest savedGuest = guests.save(guest);
+        GuestDtos.Response guestResponse = new GuestDtos.Response(savedGuest.getId(), savedGuest.getFullName(), savedGuest.getBirthYear(),
+                savedGuest.getIdentityNumber(), savedGuest.getPhone(), savedGuest.getEmail(), savedGuest.getAddress(), savedGuest.getMembershipTier(),
+                savedGuest.getTotalSpend(), savedGuest.getLateCancellationCount(), savedGuest.getLateCheckoutCount(), savedGuest.isBookingBlocked());
+        return new CustomerAccountDtos.MeResponse(toResponse(account), guestResponse);
+    }
 }

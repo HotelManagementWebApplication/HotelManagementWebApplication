@@ -65,7 +65,7 @@ public class GuestController {
      */
     @GetMapping
     @PreAuthorize("@departmentAccess.allows(authentication, 'GUEST_READ')")
-    public List<GuestDtos.Response> search(@RequestParam(required = false) String q) {
+    public List<GuestDtos.Response> search(@RequestParam(name = "q", required = false) String q) {
         return service.search(q);
     }
 

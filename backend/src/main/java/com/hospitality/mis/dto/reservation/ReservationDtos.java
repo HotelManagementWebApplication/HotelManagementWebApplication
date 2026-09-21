@@ -77,7 +77,14 @@ public final class ReservationDtos {
                                 /** Danh sách phòng và thời gian ở, bắt buộc không rỗng và validate lồng nhau. */
                                 @NotEmpty @Valid List<RoomStay> rooms,
                                 /** Khóa tùy chọn chống tạo trùng khi client retry. */
-                                String idempotencyKey) {}
+                                String idempotencyKey,
+                                /** Nguồn đặt phòng: DIRECT, BOOKING_COM, AGODA, EXPEDIA, AIRBNB... */
+                                String bookingSource) {
+        public CreateRequest(Long guestId, String employeeId, BigDecimal deposit, RentalType rentalType,
+                             List<RoomStay> rooms, String idempotencyKey) {
+            this(guestId, employeeId, deposit, rentalType, rooms, idempotencyKey, "DIRECT");
+        }
+    }
 
     /** Mốc thời gian dùng khi check-in; null cho phép service lấy giờ hiện tại. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
@@ -135,13 +142,24 @@ public final class ReservationDtos {
     public record Response(Long id, Long guestId, String employeeId, ReservationStatus status, RentalType rentalType,
                            BigDecimal deposit, LocalDateTime bookedAt, LocalDateTime actualCheckIn,
                            LocalDateTime actualCheckOut, List<RoomLine> rooms,
-                           String cancellationReason, CancellationOutcome cancellationOutcome) {
+                           String cancellationReason, CancellationOutcome cancellationOutcome,
+                           String bookingSource, BigDecimal otaGrossRevenue, BigDecimal otaCommission,
+                           BigDecimal otaNetRevenue, String otaReconciliationStatus) {
         /** Constructor dùng khi response chưa có thông tin hủy. */
         public Response(Long id, Long guestId, String employeeId, ReservationStatus status, RentalType rentalType,
                         BigDecimal deposit, LocalDateTime bookedAt, LocalDateTime actualCheckIn,
                         LocalDateTime actualCheckOut, List<RoomLine> rooms) {
             this(id, guestId, employeeId, status, rentalType, deposit, bookedAt, actualCheckIn,
-                    actualCheckOut, rooms, null, null);
+                    actualCheckOut, rooms, null, null, "DIRECT", BigDecimal.ZERO, BigDecimal.ZERO,
+                    BigDecimal.ZERO, "NOT_APPLICABLE");
+        }
+        public Response(Long id, Long guestId, String employeeId, ReservationStatus status, RentalType rentalType,
+                        BigDecimal deposit, LocalDateTime bookedAt, LocalDateTime actualCheckIn,
+                        LocalDateTime actualCheckOut, List<RoomLine> rooms, String cancellationReason,
+                        CancellationOutcome cancellationOutcome) {
+            this(id, guestId, employeeId, status, rentalType, deposit, bookedAt, actualCheckIn, actualCheckOut,
+                    rooms, cancellationReason, cancellationOutcome, "DIRECT", BigDecimal.ZERO, BigDecimal.ZERO,
+                    BigDecimal.ZERO, "NOT_APPLICABLE");
         }
     }
 

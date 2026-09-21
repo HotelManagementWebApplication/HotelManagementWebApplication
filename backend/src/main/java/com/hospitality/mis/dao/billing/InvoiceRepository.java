@@ -24,6 +24,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     /** Tìm hóa đơn gắn với một đặt phòng; mỗi đặt phòng chỉ có một hóa đơn hiện hành. */
     Optional<Invoice> findByReservationId(Long reservationId);
 
+    /** Phân trang invoice gắn trực tiếp với reservation query, không dựng page trong heap. */
+    Page<Invoice> findAllByReservationId(Long reservationId, Pageable pageable);
+
     /** Tải hóa đơn dưới khóa ghi để cập nhật số dư hoặc trạng thái mà không tranh chấp đồng thời. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select i from Invoice i where i.id = :id")

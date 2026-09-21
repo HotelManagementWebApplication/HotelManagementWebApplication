@@ -4,8 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hospitality.mis.common.exception.DomainException;
 import com.hospitality.mis.dao.governance.IdempotencyRecordRepository;
-import com.hospitality.mis.dao.governance.IdempotencyLockBucketRepository;
-import com.hospitality.mis.entity.governance.IdempotencyLockBucket;
 import com.hospitality.mis.entity.governance.IdempotencyRecord;
 import com.hospitality.mis.service.reservation.IdempotencySupport;
 import org.springframework.stereotype.Service;
@@ -17,18 +15,21 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.function.Supplier;
 
-/** Persists idempotency state and the response in the same transaction as the command. */
+/**
+ * Persists idempotency state and the response in the same transaction as the
+ * command. The lock order is always unique idempotency claim, row lock, then
+ * business command. A duplicate-key claim waits for the winner's transaction;
+ * it is never converted into a retry or swallowed exception.
+ */
 @Service
 public class DurableIdempotencyService {
     private final IdempotencyRecordRepository records;
-    private final IdempotencyLockBucketRepository lockBuckets;
     private final ObjectMapper objectMapper;
     private final Clock businessClock;
 
-    public DurableIdempotencyService(IdempotencyRecordRepository records, IdempotencyLockBucketRepository lockBuckets,
+    public DurableIdempotencyService(IdempotencyRecordRepository records,
                                      ObjectMapper objectMapper, Clock businessClock) {
         this.records = records;
-        this.lockBuckets = lockBuckets;
         this.objectMapper = objectMapper;
         this.businessClock = businessClock;
     }
@@ -38,14 +39,13 @@ public class DurableIdempotencyService {
                          Class<T> responseType, Supplier<T> command) {
         String normalizedKey = IdempotencySupport.requireKey(key);
         requireMetadata(scope, actor, requestHash, responseType, command);
-        lockKey(scope, normalizedKey);
-        var existing = records.findForUpdate(scope, normalizedKey);
-        if (existing.isPresent()) return replay(existing.get(), actor, requestHash, responseType);
-
-        IdempotencyRecord record = new IdempotencyRecord(scope, normalizedKey, actor, requestHash,
-                LocalDateTime.now(businessClock));
-        // Flush reserves the unique scope/key before any business side effect is executed.
-        records.saveAndFlush(record);
+        boolean existedBeforeClaim = records.existsByScopeAndKey(scope, normalizedKey);
+        claim(scope, normalizedKey, actor, requestHash);
+        IdempotencyRecord record = records.findForUpdate(scope, normalizedKey)
+                .orElseThrow(() -> new IllegalStateException("Idempotency claim không tạo hoặc đọc được bản ghi"));
+        if (existedBeforeClaim || record.getStatus() == IdempotencyRecord.Status.COMPLETED) {
+            return replay(record, actor, requestHash, responseType);
+        }
         T result = command.get();
         try {
             record.complete(responseType.getName(), objectMapper.writeValueAsString(result),
@@ -53,6 +53,11 @@ public class DurableIdempotencyService {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Không thể lưu kết quả idempotency", exception);
         }
+        // A command may execute a bulk update with clearAutomatically=true. That
+        // operation clears this transaction's persistence context and detaches
+        // the record loaded before the command. Reattach and flush so completion
+        // is durable for both managed and detached records.
+        records.saveAndFlush(record);
         return result;
     }
 
@@ -63,17 +68,17 @@ public class DurableIdempotencyService {
         String normalizedKey = IdempotencySupport.requireKey(key);
         requireMetadata(scope, actor, requestHash, Object.class, command);
         Objects.requireNonNull(replayLoader, "replayLoader");
-        lockKey(scope, normalizedKey);
-        var existing = records.findForUpdate(scope, normalizedKey);
-        if (existing.isPresent()) {
-            validateExisting(existing.get(), actor, requestHash);
+        boolean existedBeforeClaim = records.existsByScopeAndKey(scope, normalizedKey);
+        claim(scope, normalizedKey, actor, requestHash);
+        IdempotencyRecord record = records.findForUpdate(scope, normalizedKey)
+                .orElseThrow(() -> new IllegalStateException("Idempotency claim không tạo hoặc đọc được bản ghi"));
+        if (existedBeforeClaim || record.getStatus() == IdempotencyRecord.Status.COMPLETED) {
+            validateExisting(record, actor, requestHash);
             return replayLoader.get();
         }
-        IdempotencyRecord record = new IdempotencyRecord(scope, normalizedKey, actor, requestHash,
-                LocalDateTime.now(businessClock));
-        records.saveAndFlush(record);
         T result = command.get();
         record.complete("DB_REPLAY", "{}", LocalDateTime.now(businessClock));
+        records.saveAndFlush(record);
         return result;
     }
 
@@ -110,12 +115,7 @@ public class DurableIdempotencyService {
         Objects.requireNonNull(command, "command");
     }
 
-    private void lockKey(String scope, String key) {
-        short bucket = (short) Math.floorMod(Objects.hash(scope, key), 64);
-        if (lockBuckets.lock(bucket).isEmpty()) {
-            // Hibernate create-drop test databases do not execute Flyway seed data.
-            lockBuckets.saveAndFlush(new IdempotencyLockBucket(bucket));
-            lockBuckets.lock(bucket);
-        }
+    private void claim(String scope, String key, String actor, String requestHash) {
+        records.claim(scope, key, actor, requestHash, LocalDateTime.now(businessClock));
     }
 }

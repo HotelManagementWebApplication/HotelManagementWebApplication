@@ -23,11 +23,11 @@ public class FrontDeskDashboardController {
     @GetMapping("/dashboard")
     @PreAuthorize("@departmentAccess.allows(authentication, 'FRONT_DESK_DASHBOARD')")
     public FrontDeskDashboardDtos.Response dashboard(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) ReservationStatus status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(name = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(name = "q", required = false) String q,
+            @RequestParam(name = "status", required = false) ReservationStatus status,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
         return service.get(date, q, status, page, size);
     }
 }

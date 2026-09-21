@@ -32,6 +32,7 @@ import java.time.Clock;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -105,6 +106,7 @@ public class CustomerReservationService {
         reservation.setCustomerAccount(account);
         reservation.setDepositAmount(requiredDeposit(request, locked));
         reservation.setRentalType(request.rentalType().name());
+        reservation.setBookingSource(request.bookingSource());
         reservation.setIdempotencyKey(key);
         reservation.setCanonicalRequestFingerprint(fingerprint);
         reservation.setDepositPaymentCode(newPaymentCode());
@@ -175,11 +177,19 @@ public class CustomerReservationService {
             long units = request.rentalType() == ReservationDtos.RentalType.HOURLY
                     ? Math.max(3, (minutes + 59) / 60) : Math.max(1, (minutes + 1439) / 1440);
             BigDecimal charge = request.rentalType() == ReservationDtos.RentalType.HOURLY
-                    ? dailyPrice.divide(BigDecimal.valueOf(24), 2, java.math.RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(units))
+                    ? hourlyCharge(locked.get(line.roomId().trim()), dailyPrice, units)
                     : dailyPrice.multiply(BigDecimal.valueOf(units));
             total = total.add(charge);
         }
         return total.multiply(new BigDecimal("0.50")).setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    /** Tiền thuê theo giờ phải dùng đúng hourly_price đã công khai trong catalog. */
+    private BigDecimal hourlyCharge(Room room, BigDecimal dailyPrice, long units) {
+        BigDecimal hourlyPrice = room.getRoomType().getHourlyPrice();
+        if (hourlyPrice == null || hourlyPrice.signum() <= 0)
+            hourlyPrice = dailyPrice.divide(BigDecimal.valueOf(24), 2, java.math.RoundingMode.HALF_UP);
+        return hourlyPrice.multiply(BigDecimal.valueOf(units));
     }
 
     private String newPaymentCode() {
@@ -189,7 +199,12 @@ public class CustomerReservationService {
     private String fingerprint(CustomerReservationDtos.CreateRequest request) {
         String rooms = request.rooms().stream().map(x -> x.roomId().trim() + "@" + x.expectedCheckIn() + "/" + x.expectedCheckOut())
                 .sorted().reduce((a, b) -> a + ";" + b).orElse("");
-        return IdempotencySupport.fingerprint("CUSTOMER_CREATE|rental=" + request.rentalType().name() + "|rooms=" + rooms);
+        return IdempotencySupport.fingerprint("CUSTOMER_CREATE|rental=" + request.rentalType().name()
+                + "|source=" + normalizedBookingSource(request.bookingSource()) + "|rooms=" + rooms);
+    }
+
+    private String normalizedBookingSource(String source) {
+        return source == null || source.isBlank() ? "DIRECT" : source.trim().toUpperCase(Locale.ROOT);
     }
 
     private CustomerReservationDtos.Response toResponse(Reservation r) {
@@ -200,6 +215,7 @@ public class CustomerReservationService {
                 paymentStatus, r.getDepositPaymentExpiresAt(),
                 "Dùng mã này khi thanh toán tiền cọc tại kênh thanh toán của khách sạn.");
         return new CustomerReservationDtos.Response(r.getId(), r.getStatus(), ReservationDtos.RentalType.valueOf(r.getRentalType()),
+                r.getBookingSource(),
                 r.getDepositAmount(), r.getBookedAt(), r.getRooms().stream()
                 .map(x -> new CustomerReservationDtos.RoomLine(x.getRoom().getId(), x.getCheckIn(), x.getCheckOut())).toList(), payment);
     }

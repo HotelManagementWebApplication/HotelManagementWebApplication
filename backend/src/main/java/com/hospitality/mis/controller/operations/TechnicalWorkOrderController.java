@@ -15,14 +15,18 @@ public class TechnicalWorkOrderController {
     private final TechnicalWorkOrderService service;
     public TechnicalWorkOrderController(TechnicalWorkOrderService service) { this.service = service; }
     @GetMapping @PreAuthorize("@departmentAccess.allows(authentication, 'TECHNICAL_WORK_ORDER_READ')")
-    public List<TechnicalWorkOrderDtos.Response> list(@RequestParam(required = false) String roomId,
-                                                     @RequestParam(required = false) TechnicalWorkOrderStatus status) { return service.list(roomId, status); }
+    public List<TechnicalWorkOrderDtos.Response> list(@RequestParam(name = "roomId", required = false) String roomId,
+                                                     @RequestParam(name = "status", required = false) TechnicalWorkOrderStatus status) { return service.list(roomId, status, SecurityActor.currentActor()); }
     @PostMapping @PreAuthorize("@departmentAccess.allows(authentication, 'TECHNICAL_WORK_ORDER_WRITE')")
-    public TechnicalWorkOrderDtos.Response create(@Valid @RequestBody TechnicalWorkOrderDtos.CreateRequest request) { return service.create(request, SecurityActor.currentActor()); }
+    public TechnicalWorkOrderDtos.Response create(@Valid @RequestBody TechnicalWorkOrderDtos.CreateRequest request,
+                                                  @RequestHeader("Idempotency-Key") String idempotencyKey) { return service.create(request, SecurityActor.currentActor(), idempotencyKey); }
     @PatchMapping("/{id}") @PreAuthorize("@departmentAccess.allows(authentication, 'TECHNICAL_WORK_ORDER_WRITE')")
-    public TechnicalWorkOrderDtos.Response update(@PathVariable Long id, @Valid @RequestBody TechnicalWorkOrderDtos.UpdateRequest request) { return service.update(id, request, SecurityActor.currentActor()); }
+    public TechnicalWorkOrderDtos.Response update(@PathVariable Long id, @Valid @RequestBody TechnicalWorkOrderDtos.UpdateRequest request,
+                                                  @RequestHeader("Idempotency-Key") String idempotencyKey) { return service.update(id, request, SecurityActor.currentActor(), idempotencyKey); }
     @PostMapping("/{id}/accept") @PreAuthorize("@departmentAccess.allows(authentication, 'TECHNICAL_WORK_ORDER_ACCEPT')")
-    public TechnicalWorkOrderDtos.Response accept(@PathVariable Long id, @Valid @RequestBody TechnicalWorkOrderDtos.AcceptanceRequest request) { return service.accept(id, request, SecurityActor.currentActor()); }
+    public TechnicalWorkOrderDtos.Response accept(@PathVariable Long id, @Valid @RequestBody TechnicalWorkOrderDtos.AcceptanceRequest request,
+                                                  @RequestHeader("Idempotency-Key") String idempotencyKey) { return service.accept(id, request, SecurityActor.currentActor(), idempotencyKey); }
     @PostMapping("/{id}/release") @PreAuthorize("@departmentAccess.allows(authentication, 'TECHNICAL_WORK_ORDER_RELEASE')")
-    public TechnicalWorkOrderDtos.Response release(@PathVariable Long id) { return service.release(id, SecurityActor.currentActor()); }
+    public TechnicalWorkOrderDtos.Response release(@PathVariable Long id,
+                                                   @RequestHeader("Idempotency-Key") String idempotencyKey) { return service.release(id, SecurityActor.currentActor(), idempotencyKey); }
 }

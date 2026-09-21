@@ -54,8 +54,7 @@ public class ReceiptService {
     /** Phát hành biên lai nếu số tiền chưa vượt phần thanh toán còn lại theo phương thức. */
     @Transactional
     public ReceiptDtos.Response issue(Long invoiceId, ReceiptDtos.CreateRequest request, String actor) {
-        String fallbackKey = request == null ? null : "receipt-" + request.receiptNumber();
-        return issue(invoiceId, request, actor, fallbackKey);
+        return issue(invoiceId, request, actor, null);
     }
 
     @Transactional
@@ -80,13 +79,11 @@ public class ReceiptService {
         var invoice = invoices.findForUpdate(invoiceId)
                 .orElseThrow(() -> new DomainException("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn"));
         requireScope(invoice, boundActor);
-        BigDecimal paid = transactions.findByInvoiceIdAndStatus(invoiceId, PaymentTransaction.TransactionStatus.COMPLETED).stream()
-                .filter(x -> x.getMethod() == request.method())
-                .map(x -> x.getType() == PaymentTransaction.TransactionType.PAYMENT ? x.getAmount() : x.getAmount().negate())
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal issued = receipts.findByInvoiceIdOrderByIssuedAtAsc(invoiceId).stream()
-                .filter(x -> x.getMethod() == request.method()).map(Receipt::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal paid = transactions.netAmountByInvoiceAndMethod(invoiceId, request.method(),
+                PaymentTransaction.TransactionType.PAYMENT, PaymentTransaction.TransactionStatus.COMPLETED);
+        BigDecimal issued = receipts.sumAmountByInvoiceAndMethod(invoiceId, request.method());
+        if (paid == null) paid = BigDecimal.ZERO;
+        if (issued == null) issued = BigDecimal.ZERO;
         if (request.amount().compareTo(paid.subtract(issued)) > 0)
             throw new DomainException("RECEIPT_EXCEEDS_PAYMENT", "Biên lai vượt số tiền đã thu chưa lập biên lai");
         Receipt receipt = new Receipt(); receipt.setReceiptNumber(request.receiptNumber()); receipt.setInvoice(invoice);
@@ -110,9 +107,14 @@ public class ReceiptService {
     }
     @Transactional(readOnly = true)
     public ReceiptDtos.PageResponse pageByInvoice(Long invoiceId, int page, int size) {
-        var all = listByInvoice(invoiceId); int safePage = Math.max(0, page); int safeSize = Math.max(1, Math.min(100, size));
-        int from = Math.min(safePage * safeSize, all.size()); int to = Math.min(from + safeSize, all.size());
-        return new ReceiptDtos.PageResponse(all.subList(from, to), safePage, safeSize, all.size(), (all.size() + safeSize - 1) / safeSize);
+        var invoice = invoices.findById(invoiceId)
+                .orElseThrow(() -> new DomainException("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn"));
+        requireScope(invoice, SecurityActor.currentActor());
+        int safePage = Math.max(0, page), safeSize = Math.max(1, Math.min(100, size));
+        var result = receipts.findByInvoiceIdOrderByIssuedAtAsc(invoiceId,
+                org.springframework.data.domain.PageRequest.of(safePage, safeSize));
+        return new ReceiptDtos.PageResponse(result.getContent().stream().map(this::toResponse).toList(),
+                result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
     @Transactional(readOnly = true)

@@ -11,21 +11,6 @@
 - Public portal chỉ dùng public DTO; không tái sử dụng response nội bộ của nhân viên.
 - Các trạng thái phải có loading, empty, error, retry và thông báo thành công/thất bại rõ ràng.
 
-## Tiến độ triển khai ngày 13/09/2026
-
-Frontend hiện chỉ được xem là bản thử nghiệm kỹ thuật của public/customer slice;
-không tiếp tục mở rộng hoặc chốt UI cho đến khi chủ sở hữu hoàn thành Figma.
-Backend là ưu tiên triển khai hiện tại; mọi route, component, spacing, màu sắc
-và interaction trong tài liệu này phải được đối chiếu lại với Figma trước khi
-đưa vào frontend chính thức.
-
-Frontend được đóng băng trong giai đoạn này: chỉ tiếp tục triển khai sau khi
-Figma được chủ dự án xác nhận; các thay đổi hiện tại tập trung hoàn toàn vào backend.
-
-Còn lại trước khi coi portal production-ready: refresh token tự động, tích hợp
-provider/QR thanh toán thật, thời hạn giữ phòng và xử lý hết hạn, phân trang/rate limit/cache
-cho public API, sau đó mới nối AppShell và các workspace nhân viên theo permission.
-
 ## 2. Public portal dành cho khách
 
 ### Route
@@ -258,29 +243,223 @@ Ba kiểu hiển thị chính:
 
 ## 7. Cấu trúc mã nguồn
 
-```text
-frontend/src/
-├── app/
-│   ├── router/
-│   ├── layouts/
-│   └── permissions/
-├── features/
-│   ├── customer/
-│   ├── front-desk/
-│   ├── housekeeping/
-│   ├── kitchen/
-│   ├── accounting/
-│   ├── hr/
-│   ├── technical/
-│   ├── governance/
-│   └── agent/
-├── shared/
-│   ├── api/
-│   ├── components/
-│   ├── types/
-│   └── formatters/
-└── styles/
-```
+frontend/
+├── docs/                                          # [CHUYỂN RA NGOÀI SRC] Lưu tài liệu & ảnh tham khảo
+│   └── references/                                # (Chuyển toàn bộ ảnh & rule.md từ src/imports/ ra đây)
+│       ├── rule.md
+│       ├── hotel_pms_dashboard_*.jpg
+│       ├── reception_sidebar_final_*.jpg
+│       └── ... (các ảnh design mock khác)
+│
+├── e2e/                                           # Thư mục E2E test tập trung (ngoài src)
+│   └── live-contract.test.ts                      # (Chuyển từ src/e2e/live-contract.test.ts ra đây)
+│
+├── public/                                        # Static files cho trình duyệt
+│   └── favicon.ico
+│
+├── src/
+│   ├── app/                                       # Khởi tạo cốt lõi ứng dụng (App Core)
+│   │   ├── router/                                # Quản lý điều hướng (thay thế switch-case cũ ở App.tsx)
+│   │   │   ├── routes.tsx                         # Khai báo URL: /login, /pms, /housekeeping, /hr,...
+│   │   │   └── RoleGuard.tsx                      # Bảo vệ route dựa trên role & permissions
+│   │   ├── providers/
+│   │   │   └── QueryProvider.tsx                  # Bọc React Query Client
+│   │   ├── App.tsx                                # Root component (gọn gàng, chỉ bọc Provider + Router)
+│   │   ├── main.tsx                               # Điểm bắt đầu (render ReactDOM)
+│   │   └── index.css                              # Tailwind CSS v4 & theme tokens
+│   │
+│   ├── assets/                                    # Tài nguyên hình ảnh dùng trong code
+│   │   ├── hotel_logo.png                         # (Giữ từ src/assets/)
+│   │   └── rooftop_bar.png                        # (Giữ từ src/assets/)
+│   │
+│   ├── layouts/                                   # Các khung giao diện chung (Layout Shells)
+│   │   ├── DashboardLayout.tsx                    # Layout chung cho toàn bộ nhân viên (Sidebar + Topbar)
+│   │   ├── CustomerLayout.tsx                     # Layout dành cho cổng khách hàng (Header + Footer)
+│   │   └── components/
+│   │       ├── Sidebar.tsx                        # Menu chuyển trạm làm việc (Lễ tân, Buồng, Bếp,...)
+│   │       ├── TopNavbar.tsx                      # Thanh hiển thị tên nhân viên, ca làm việc, nút Logout
+│   │       └── Breadcrumbs.tsx                    # Điều hướng phân cấp trang
+│   │
+│   ├── shared/                                    # Các tài nguyên dùng chung xuyên suốt dự án
+│   │   ├── api/                                   # Tầng HTTP Client cốt lõi
+│   │   │   ├── client.ts                          # (Giữ từ shared/api/client.ts)
+│   │   │   └── client.test.ts
+│   │   ├── components/                            # UI Primitives dùng chung (không dính nghiệp vụ)
+│   │   │   ├── ui/
+│   │   │   │   ├── Button.tsx                     # Nút bấm chuẩn
+│   │   │   │   ├── Modal.tsx                      # Hộp thoại popup
+│   │   │   │   ├── Table.tsx                      # Bảng dữ liệu có phân trang
+│   │   │   │   ├── Badge.tsx                      # Tag hiển thị trạng thái phòng/đơn
+│   │   │   │   ├── Input.tsx                      # Ô nhập liệu
+│   │   │   │   ├── Select.tsx                     # Dropdown chọn
+│   │   │   │   └── Card.tsx                       # Khung thẻ nội dung
+│   │   │   └── feedback/
+│   │   │       ├── Spinner.tsx                    # Vòng xoay loading
+│   │   │       ├── Toast.tsx                      # Thông báo nổi
+│   │   │       └── EmptyState.tsx                 # Hiển thị khi không có dữ liệu
+│   │   ├── utils/
+│   │   │   ├── encoding.ts                        # (Giữ từ shared/utils/encoding.ts)
+│   │   │   ├── encoding.test.ts
+│   │   │   ├── formatCurrency.ts                  # Hàm format tiền VNĐ (đang bị viết lặp nhiều nơi)
+│   │   │   └── formatDate.ts                      # Hàm format ngày giờ check-in / check-out
+│   │   ├── constants/
+│   │   │   ├── roles.ts                           # Định nghĩa RoleId & thông tin Role
+│   │   │   └── roomProfiles.ts                    # (Chuyển từ shared/roomProfiles.ts)
+│   │   └── types/
+│   │       ├── api.ts                             # (Giữ từ shared/types/api.ts)
+│   │       ├── enterprise.ts                      # (Giữ từ shared/types/enterprise.ts)
+│   │       └── common.ts                          # Các type cơ bản (Pagination, Filter, ...)
+│   │
+│   ├── mocks/                                     # Mock data phục vụ chạy offline / demo
+│   │   └── data.ts                                # (Chuyển từ src/data.ts)
+│   │
+│   └── features/                                  # TẤT CẢ CÁC MODULE NGHIỆP VỤ (Vertical Slices)
+│       │
+│       ├── auth/                                  # Phân hệ: Xác thực & Tài khoản
+│       │   ├── api/
+│       │   │   ├── auth.ts                        # (Chuyển từ shared/api/auth.ts)
+│       │   │   └── auth.test.ts
+│       │   ├── hooks/
+│       │   │   ├── useAuth.ts                     # Quản lý đăng nhập, lưu token, lấy role hiện tại
+│       │   │   └── usePermissions.ts              # Hook kiểm tra quyền truy cập tính năng
+│       │   ├── config/
+│       │   │   └── permissions.ts                 # (Chuyển từ src/permissions.ts)
+│       │   ├── components/
+│       │   │   ├── LoginForm.tsx                  # Form đăng nhập
+│       │   │   └── QuickRoleSwitcher.tsx          # Thanh demo chuyển nhanh role (từ App.tsx)
+│       │   └── pages/
+│       │       └── LoginPage.tsx                  # (Chuyển từ src/pages/LoginPage.tsx)
+│       │
+│       ├── front-desk/                            # Phân hệ: Lễ tân & Quản lý phòng PMS
+│       │   ├── api/
+│       │   │   ├── frontDesk.ts                   # (Chuyển từ shared/api/frontDesk.ts)
+│       │   │   └── frontDesk.test.ts
+│       │   ├── types/
+│       │   │   └── frontDesk.ts                   # (Chuyển từ shared/types/frontDesk.ts)
+│       │   ├── components/                        # (Bóc tách từ file FrontDeskPMS.tsx 115KB)
+│       │   │   ├── RoomGrid/
+│       │   │   │   ├── RoomGrid.tsx               # Lưới phòng khách sạn
+│       │   │   │   ├── RoomCard.tsx               # Thẻ phòng (màu trạng thái, số phòng)
+│       │   │   │   └── RoomFilterBar.tsx          # Bộ lọc theo tầng, loại phòng
+│       │   │   ├── Modals/
+│       │   │   │   ├── CheckInModal.tsx           # Hộp thoại nhận phòng
+│       │   │   │   ├── CheckOutModal.tsx          # Hộp thoại trả phòng & thanh toán
+│       │   │   │   └── RoomChangeModal.tsx        # Hộp thoại đổi phòng
+│       │   │   └── ArrivalDeparture/
+│       │   │       ├── ExpectedArrivals.tsx       # Bảng danh sách khách sắp tới
+│       │   │       └── ExpectedDepartures.tsx     # Bảng danh sách khách sắp đi
+│       │   └── pages/
+│       │       └── FrontDeskPage.tsx              # (Thay thế FrontDeskPMS.tsx, chỉ còn ~150 dòng)
+│       │
+│       ├── housekeeping/                          # Phân hệ: Buồng phòng
+│       │   ├── api/
+│       │   │   ├── housekeeping.ts                # (Tách từ shared/api/housekeepingTechnical.ts)
+│       │   │   └── housekeeping.test.ts
+│       │   ├── types/
+│       │   │   └── housekeeping.ts                # (Tách từ shared/types/housekeepingTechnical.ts)
+│       │   ├── components/                        # (Bóc tách từ file HousekeepingStation.tsx 91KB)
+│       │   │   ├── CleaningTaskCard.tsx           # Thẻ trạng thái phòng cần dọn
+│       │   │   ├── MinibarConsumptionModal.tsx    # Modal ghi nhận đồ uống khách đã dùng
+│       │   │   └── IncidentReportModal.tsx        # Modal báo hỏng thiết bị gửi sang Kỹ thuật
+│       │   └── pages/
+│       │       └── HousekeepingPage.tsx           # (Thay thế HousekeepingStation.tsx)
+│       │
+│       ├── maintenance/                           # Phân hệ: Kỹ thuật & Bảo trì
+│       │   ├── api/
+│       │   │   └── maintenance.ts                 # (Tách từ shared/api/housekeepingTechnical.ts)
+│       │   ├── types/
+│       │   │   └── maintenance.ts
+│       │   ├── components/                        # (Bóc tách từ file MaintenanceStation.tsx 70KB)
+│       │   │   ├── TicketList.tsx                 # Danh sách sự cố cần sửa
+│       │   │   └── EquipmentCard.tsx              # Trạng thái thiết bị phòng
+│       │   └── pages/
+│       │       └── MaintenancePage.tsx            # (Thay thế MaintenanceStation.tsx)
+│       │
+│       ├── kitchen-inventory/                     # Phân hệ: Bếp, F&B & Kho Minibar
+│       │   ├── api/
+│       │   │   ├── kitchen.ts                     # (Tách từ shared/api/kitchenAccounting.ts)
+│       │   │   └── kitchen.test.ts
+│       │   ├── types/
+│       │   │   └── kitchen.ts                     # (Tách từ shared/types/kitchenAccounting.ts)
+│       │   ├── components/                        # (Bóc tách từ KitchenInventory.tsx 79KB)
+│       │   │   ├── InventoryTable.tsx             # Bảng tồn kho nguyên liệu / minibar
+│       │   │   ├── RecipeManager.tsx              # Quản lý định lượng món ăn
+│       │   │   └── KitchenOrderQueue.tsx          # Danh sách order cần chế biến
+│       │   └── pages/
+│       │       └── KitchenInventoryPage.tsx       # (Thay thế KitchenInventory.tsx)
+│       │
+│       ├── accounting/                            # Phân hệ: Kế toán & Tài chính
+│       │   ├── api/
+│       │   │   ├── accounting.ts                  # (Tách từ shared/api/kitchenAccounting.ts)
+│       │   │   └── accounting.test.ts
+│       │   ├── types/
+│       │   │   └── accounting.ts                  # (Tách từ shared/types/kitchenAccounting.ts)
+│       │   ├── components/                        # (Bóc tách từ AccountingStation.tsx 66KB)
+│       │   │   ├── InvoiceTable.tsx               # Bảng hóa đơn GTGT / VAT
+│       │   │   ├── ShiftHandoverModal.tsx         # Modal bàn giao két tiền cuối ca
+│       │   │   └── RevenueChart.tsx               # Biểu đồ doanh thu
+│       │   └── pages/
+│       │       └── AccountingPage.tsx             # (Thay thế AccountingStation.tsx)
+│       │
+│       ├── hr-governance/                         # Phân hệ: Nhân sự & Ca kíp
+│       │   ├── api/
+│       │   │   ├── hrGovernance.ts                # (Chuyển từ shared/api/hrGovernance.ts)
+│       │   │   └── hrGovernance.test.ts
+│       │   ├── types/
+│       │   │   └── hrGovernance.ts                # (Chuyển từ shared/types/hrGovernance.ts)
+│       │   ├── components/                        # (Bóc tách từ HRStation.tsx 137KB)
+│       │   │   ├── EmployeeList.tsx               # Danh sách nhân viên
+│       │   │   ├── ShiftScheduler.tsx             # Lịch xếp ca làm việc
+│       │   │   ├── AttendanceTable.tsx            # Bảng chấm công
+│       │   │   └── PayrollSummary.tsx             # Bảng tính lương
+│       │   └── pages/
+│       │       └── HRStationPage.tsx              # (Thay thế HRStation.tsx)
+│       │
+│       ├── manager/                               # Phân hệ: Báo cáo & Điều hành của Quản lý
+│       │   ├── components/                        # (Bóc tách từ ManagerDashboard.tsx 54KB)
+│       │   │   ├── KpiMetrics.tsx                 # Thẻ tỷ lệ lấp đầy phòng (Occupancy Rate), RevPAR
+│       │   │   └── ApprovalList.tsx               # Danh sách duyệt hoàn tiền / duyệt giảm giá
+│       │   └── pages/
+│       │       └── ManagerDashboardPage.tsx       # (Thay thế ManagerDashboard.tsx)
+│       │
+│       ├── admin/                                 # Phân hệ: Quản trị hệ thống & Cấu hình
+│       │   ├── api/
+│       │   │   └── adminCatalog.ts                # (Chuyển từ shared/api/adminCatalog.ts)
+│       │   ├── types/
+│       │   │   └── adminCatalog.ts                # (Chuyển từ shared/types/adminCatalog.ts)
+│       │   ├── components/                        # (Bóc tách từ AdminStation.tsx 85KB)
+│       │   │   ├── RoomTypeConfig.tsx             # Cài đặt giá và hạng phòng
+│       │   │   └── RoleMatrixConfig.tsx           # Cài đặt phân quyền các vai trò
+│       │   └── pages/
+│       │       └── AdminStationPage.tsx           # (Thay thế AdminStation.tsx)
+│       │
+│       ├── staff-portal/                          # Cổng dùng chung cho nhân viên tra cứu cá nhân
+│       │   ├── components/
+│       │   │   ├── MyShiftCalendar.tsx            # Lịch làm việc của riêng tôi
+│       │   │   └── MyPayslip.tsx                  # Phiếu lương cá nhân
+│       │   └── pages/
+│       │       └── StaffPortalPage.tsx            # (Thay thế StaffPortal.tsx 114KB)
+│       │
+│       └── customer/                              # Cổng Khách hàng & Đặt phòng trực tuyến
+│           ├── api/
+│           │   ├── customer.ts                    # (Chuyển từ shared/api/customer.ts)
+│           │   ├── public.ts                      # (Chuyển từ shared/api/public.ts)
+│           │   ├── customer.test.ts
+│           │   └── public.test.ts
+│           ├── types/
+│           │   ├── customer.ts                    # (Chuyển từ shared/types/customer.ts)
+│           │   └── public.ts                      # (Chuyển từ shared/types/public.ts)
+│           ├── components/                        # (Chuyển từ src/components/customer/)
+│           │   ├── LuxuryHero.tsx
+│           │   ├── RoomCardSection.tsx
+│           │   ├── LuxuryBookingModal.tsx
+│           │   ├── CuratedServicesSection.tsx
+│           │   ├── AmenitiesMosaic.tsx
+│           │   └── LuxuryFnBView.tsx
+│           └── pages/
+│               ├── LandingPage.tsx                # (Chuyển từ src/pages/LandingPage.tsx)
+│               ├── CustomerPortalPage.tsx         # (Chuyển từ src/pages/CustomerPortal.tsx)
+│               └── RoomDetailPage.tsx             # (Chuyển từ src/components/customer/RoomDetailPage.tsx)
 
 ## 8. Thứ tự triển khai
 

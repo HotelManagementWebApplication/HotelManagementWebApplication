@@ -28,13 +28,13 @@ public class InventoryMovementController {
     @GetMapping("/inventory-report")
     @PreAuthorize("@departmentAccess.allows(authentication, 'INVENTORY_READ')")
     public InventoryMovementDtos.ReportResponse report(@PathVariable String serviceId,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate from,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate to) { return service.report(serviceId, from, to); }
+            @RequestParam(name = "from", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate from,
+            @RequestParam(name = "to", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate to) { return service.report(serviceId, from, to); }
     /**
      * Ghi nhận biến động tồn kho qua POST /api/services/{serviceId}/inventory-movements.
      * serviceId là path parameter, body được {@code @Valid} kiểm tra và phải có service_id trùng path; sai khác bị từ chối
-     * trước khi gọi service. Chỉ INVENTORY_WRITE được phép, actor hiện tại được ghi nhận; không có idempotency key,
-     * nên lỗi trùng hoặc sai trạng thái tồn kho do dịch vụ xử lý.
+     * trước khi gọi service. Chỉ INVENTORY_WRITE được phép, actor hiện tại được ghi nhận; Idempotency-Key là bắt buộc
+     * để replay cùng một movement không tạo thêm bút toán.
      */
     @PostMapping 
     @PreAuthorize("@departmentAccess.allows(authentication, 'INVENTORY_WRITE')")

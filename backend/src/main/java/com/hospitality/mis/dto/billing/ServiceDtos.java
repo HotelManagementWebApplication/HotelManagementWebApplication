@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -36,7 +37,16 @@ public final class ServiceDtos {
                                 /** Tồn đầu kỳ không âm. */
                                 @PositiveOrZero int openingStock,
                                 /** Ngưỡng cảnh báo tồn thấp không âm. */
-                                @PositiveOrZero int safetyThreshold) {}
+                                @PositiveOrZero int safetyThreshold,
+                                @Size(max = 50) String category,
+                                @Size(max = 1000) String description,
+                                @Size(max = 500) String imageUrl) {
+        /** Giữ tương thích cho các caller nội bộ cũ; public metadata có thể bổ sung sau. */
+        public CreateRequest(String id, String name, BigDecimal price, String unit,
+                             int openingStock, int safetyThreshold) {
+            this(id, name, price, unit, openingStock, safetyThreshold, null, null, null);
+        }
+    }
 
     /** Request thay đổi tồn kho; quantity phải là số không âm và không được null. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
@@ -62,6 +72,9 @@ public final class ServiceDtos {
                            BigDecimal price,
                            /** Đơn vị tính. */
                            String unit,
+                           String category,
+                           String description,
+                           String imageUrl,
                            /** Tồn kho hiện tại. */
                            int stock,
                            /** Ngưỡng cảnh báo tồn thấp. */

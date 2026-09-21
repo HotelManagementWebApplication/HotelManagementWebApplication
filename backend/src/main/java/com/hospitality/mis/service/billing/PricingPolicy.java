@@ -56,8 +56,19 @@ public class PricingPolicy {
     /** Tính tiền phòng theo ngày hoặc theo giờ, áp dụng mức tối thiểu của thuê giờ. */
     public BigDecimal roomCharge(BigDecimal dailyPrice, LocalDateTime from, LocalDateTime to, boolean hourly) {
 
+        return roomCharge(dailyPrice, null, from, to, hourly);
+
+    }
+
+    /** Tính tiền với giá giờ cấu hình theo loại phòng; dữ liệu cũ vẫn fallback về giá ngày/24. */
+    public BigDecimal roomCharge(BigDecimal dailyPrice, BigDecimal configuredHourlyPrice,
+                                 LocalDateTime from, LocalDateTime to, boolean hourly) {
+
         if (dailyPrice == null || dailyPrice.signum() < 0 || from == null || to == null || !from.isBefore(to))
             throw new DomainException("INVALID_PRICING_INPUT", "Không thể tính tiền phòng với dữ liệu thời gian/giá không hợp lệ");
+
+        if (configuredHourlyPrice != null && configuredHourlyPrice.signum() < 0)
+            throw new DomainException("INVALID_PRICING_INPUT", "Không thể tính tiền phòng với giá giờ không hợp lệ");
 
         long minutes = Math.max(1, Duration.between(from, to).toMinutes());
 
@@ -71,7 +82,9 @@ public class PricingPolicy {
 
         long hours = Math.max(hourlyMinimum, (minutes + 59) / 60);
 
-        BigDecimal hourlyPrice = dailyPrice.divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
+        BigDecimal hourlyPrice = configuredHourlyPrice == null || configuredHourlyPrice.signum() == 0
+                ? dailyPrice.divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP)
+                : configuredHourlyPrice;
 
         return hourlyPrice.multiply(BigDecimal.valueOf(hours));
 

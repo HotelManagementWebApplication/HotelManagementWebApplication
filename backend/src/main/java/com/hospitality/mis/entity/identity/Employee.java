@@ -78,6 +78,12 @@ public class Employee {
     @Column(name = "phone", length = 15, unique = true, nullable = false)
     private String phone;
 
+    @Column(name = "email", length = 150)
+    private String email;
+
+    @Column(name = "must_change_password", nullable = false)
+    private boolean mustChangePassword;
+
 
 
     /** Khớp với Reservation.employee; lược đồ có khóa ngoại hạn chế, nên không lan truyền. */
@@ -191,6 +197,11 @@ public class Employee {
         return phone;
 
     }
+
+    public String getEmail() { return email; }
+    public void setEmail(String value) { email = value; }
+    public boolean isMustChangePassword() { return mustChangePassword; }
+    public void setMustChangePassword(boolean value) { mustChangePassword = value; }
 
 
 

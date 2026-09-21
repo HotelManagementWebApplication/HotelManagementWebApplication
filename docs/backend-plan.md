@@ -2,13 +2,20 @@
 
 > Cập nhật 14/09/2026. Đây là kế hoạch backend hợp nhất thay thế các gap plan, rule audit, migration plan và báo cáo review lịch sử trong `docs`. Phạm vi phát hành đầu tiên là **một khách sạn**, timezone `Asia/Ho_Chi_Minh`, tiền tệ VND.
 
-$env:DB_URL = "jdbc:mysql://localhost:3306/QLKS?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Ho_Chi_Minh"
-$env:DB_USERNAME = "<local-username>"
-$env:DB_PASSWORD = "<local-password>"
+docker start web-hotel-mis-mysql-3307
+cd C:\web-hotel-mis\backend
 
-$env:MIGRATION_TEST_DB_URL = $env:DB_URL
-$env:MIGRATION_TEST_DB_USERNAME = $env:DB_USERNAME
-$env:MIGRATION_TEST_DB_PASSWORD = $env:DB_PASSWORD
+$env:DB_URL="jdbc:mysql://127.0.0.1:3307/QLKS?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Ho_Chi_Minh"
+$env:DB_USERNAME="root"
+$env:DB_PASSWORD="hotel_mis_local"
+$env:SERVER_PORT="8080"
+$env:JWT_SECRET="local-demo-jwt-secret-change-me-32-bytes-minimum-2026"
+$env:CORS_ALLOWED_ORIGINS="http://127.0.0.1:5173,http://localhost:5173"
+
+java -jar target\web-hotel-mis-backend-0.1.0-SNAPSHOT.jar
+
+cd C:\web-hotel-mis\frontend
+npm run dev -- --host 127.0.0.1 --port 5173
 
 ## 1. Quyết định đã khóa
 

@@ -94,6 +94,39 @@ class CustomerAuthenticationIntegrationTest {
     }
 
     @Test
+    /** Employee profile is actor-bound and exposes current backend role/permissions. */
+    void employeeProfileUsesJwtActorAndBackendAuthorities() throws Exception {
+        JsonNode tokens = objectMapper.readTree(mockMvc.perform(post("/api/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new AuthDtos.LoginRequest("employee", "employee-password"))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header(AUTHORIZATION, bearer(tokens.get("access_token").asText())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.employee_id").value("employee"))
+                .andExpect(jsonPath("$.full_name").value("Employee"))
+                .andExpect(jsonPath("$.role").value("FRONT_DESK"))
+                .andExpect(jsonPath("$.permissions").isArray())
+                .andExpect(jsonPath("$.permissions").value(org.hamcrest.Matchers.hasItem("ROOM_READ")));
+    }
+
+    @Test
+    /** The employee profile rejects anonymous access and customer principals. */
+    void employeeProfileRejectsAnonymousAndCustomerPrincipal() throws Exception {
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+
+        registerCustomer();
+        JsonNode customer = customerLogin();
+        mockMvc.perform(get("/api/auth/me")
+                        .header(AUTHORIZATION, bearer(customer.get("access_token").asText())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
     /** Given employee/customer cùng hệ thống, When login/refresh, Then principal type và token rows không lẫn. */
     void employeeAndCustomerTokensAndRefreshRowsRemainDistinct() throws Exception {
         registerCustomer();

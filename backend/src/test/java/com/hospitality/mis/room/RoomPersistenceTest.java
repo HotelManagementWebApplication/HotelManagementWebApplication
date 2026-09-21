@@ -8,6 +8,7 @@ import com.hospitality.mis.entity.room.RoomType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 
@@ -25,6 +26,8 @@ class RoomPersistenceTest {
     @Autowired RoomRepository rooms;
     /** Repository type thật, persist trước room vì FK. */
     @Autowired RoomTypeRepository roomTypes;
+    /** JDBC assertion bảo vệ giá trị vật lý canonical do converter ghi xuống. */
+    @Autowired JdbcTemplate jdbc;
 
     @Test
     /** Given type STD và room READY, When save/reload khóa, Then liên kết và version 0 được giữ. */
@@ -40,6 +43,8 @@ class RoomPersistenceTest {
         Room reloaded = rooms.findForUpdate("R101").orElseThrow();
         assertThat(reloaded.getRoomType().getId()).isEqualTo("STD");
         assertThat(reloaded.getStatus()).isEqualTo(RoomStatus.READY);
+        assertThat(jdbc.queryForObject("select status from rooms where id = ?", String.class, "R101"))
+                .isEqualTo("available");
         assertThat(reloaded.getVersion()).isZero();
     }
 }

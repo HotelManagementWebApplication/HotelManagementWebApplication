@@ -57,4 +57,18 @@ public final class CustomerAccountDtos {
     public record PasswordResetRequest(
             /** Mật khẩu mới bắt buộc phải có giá trị. */
             @NotBlank String password) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    /** Request cập nhật thông tin cá nhân khách hàng. */
+    public record UpdateProfileRequest(
+            /** Họ tên khách. */
+            @NotBlank String fullName,
+            /** Số giấy tờ nhận diện khách. */
+            @NotBlank String identityNumber,
+            /** Email liên hệ. */
+            String email,
+            /** Địa chỉ liên hệ. */
+            String address,
+            /** Năm sinh. */
+            Integer birthYear) {}
 }

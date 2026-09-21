@@ -52,20 +52,24 @@ public class PaymentTransactionService {
 
     /** Ghi một khoản thu hoặc hoàn tiền, kiểm tra phạm vi, số dư, phê duyệt và idempotency. */
     @Transactional
-    public PaymentTransactionDtos.Response record(Long invoiceId, PaymentTransactionDtos.CreateRequest request, String actor) {
+    public PaymentTransactionDtos.Response record(Long invoiceId, PaymentTransactionDtos.CreateRequest request,
+                                                  String actor, String idempotencyKey) {
         if (request == null || request.amount() == null || request.amount().signum() <= 0 || request.method() == null
                 || request.type() == null) throw error("INVALID_TRANSACTION", "Giao dịch phải có số tiền, phương thức và loại");
         String boundActor = SecurityActor.requireBoundActor(actor);
-        if (request.idempotencyKey() == null || request.idempotencyKey().isBlank() || request.idempotencyKey().trim().length() > 35)
-            throw error("INVALID_IDEMPOTENCY_KEY", "idempotency_key phải có từ 1 đến 35 ký tự");
+        if (idempotencyKey == null || idempotencyKey.isBlank() || idempotencyKey.trim().length() > 35)
+            throw error("IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key phải có từ 1 đến 35 ký tự");
         Invoice invoice = invoices.findForUpdate(invoiceId)
                 .orElseThrow(() -> error("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn"));
         requireScope(invoice, boundActor);
 
-        String key = request.idempotencyKey() == null || request.idempotencyKey().isBlank()
-                ? null : request.idempotencyKey().trim();
+        String key = idempotencyKey.trim();
+        if (!key.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,34}"))
+            throw error("IDEMPOTENCY_KEY_INVALID", "Idempotency-Key chứa ký tự không hợp lệ");
+        String canonicalReference = "invoice:" + invoiceId + "|reference:"
+                + (request.reference() == null ? "" : request.reference());
         String storedKey = PaymentTransaction.storageIdempotencyKey(key, boundActor, request.amount(), request.method(),
-                request.type(), request.reference());
+                request.type(), canonicalReference);
         if (key != null) {
             List<PaymentTransaction> prior = transactions.findByIdempotencyKeyPrefix(key + ".");
             if (!prior.isEmpty()) {
@@ -77,8 +81,10 @@ public class PaymentTransactionService {
         }
 
         boolean needsApproval = request.type() == PaymentTransaction.TransactionType.REFUND;
+        if (needsApproval && (request.reference() == null || request.reference().isBlank()))
+            throw error("REFUND_REASON_REQUIRED", "Refund phải có lý do");
         // Liên kết việc phê duyệt với đúng yêu cầu, bao gồm khóa retry, số tiền và mã tham chiếu.
-        String approvalPayload = request.approvalPayload(invoiceId);
+        String approvalPayload = request.approvalPayload(invoiceId, key);
         if (needsApproval)
             approvals.requireApproved("PAYMENT_REFUND", String.valueOf(invoiceId), approvalPayload, request.amount(), boundActor);
         BigDecimal total = pricing.roundFinalTotal(invoice.getRoomTotal().add(invoice.getServiceTotal()).add(invoice.getSurcharge())
@@ -124,9 +130,13 @@ public class PaymentTransactionService {
     }
     @Transactional(readOnly = true)
     public PaymentTransactionDtos.PageResponse pageByInvoice(Long invoiceId, int page, int size) {
-        var all = listByInvoice(invoiceId); int safePage = Math.max(0, page); int safeSize = Math.max(1, Math.min(100, size));
-        int from = Math.min(safePage * safeSize, all.size()); int to = Math.min(from + safeSize, all.size());
-        return new PaymentTransactionDtos.PageResponse(all.subList(from, to), safePage, safeSize, all.size(), (all.size() + safeSize - 1) / safeSize);
+        Invoice invoice = invoices.findById(invoiceId).orElseThrow(() -> error("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn"));
+        requireScope(invoice, SecurityActor.currentActor());
+        int safePage = Math.max(0, page), safeSize = Math.max(1, Math.min(100, size));
+        var result = transactions.findByInvoiceIdOrderByOccurredAtAsc(invoiceId,
+                org.springframework.data.domain.PageRequest.of(safePage, safeSize));
+        return new PaymentTransactionDtos.PageResponse(result.getContent().stream().map(this::toResponse).toList(),
+                result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
     @Transactional(readOnly = true)

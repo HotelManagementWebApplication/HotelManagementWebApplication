@@ -43,6 +43,11 @@ public class Reservation {
     /** Trạng thái vòng đời; chỉ transitionTo được phép áp dụng chuyển trạng thái hợp lệ. */
     @Enumerated(EnumType.STRING) @Column(name = "status", nullable = false, length = 30) private ReservationStatus status = ReservationStatus.DRAFT;
     @Column(name = "rental_type", nullable = false, length = 20) private String rentalType = "PACKAGE";
+    @Column(name = "booking_source", nullable = false, length = 30) private String bookingSource = "DIRECT";
+    @Column(name = "ota_gross_revenue", nullable = false, precision = 14, scale = 2) private BigDecimal otaGrossRevenue = BigDecimal.ZERO;
+    @Column(name = "ota_commission", nullable = false, precision = 14, scale = 2) private BigDecimal otaCommission = BigDecimal.ZERO;
+    @Column(name = "ota_net_revenue", nullable = false, precision = 14, scale = 2) private BigDecimal otaNetRevenue = BigDecimal.ZERO;
+    @Column(name = "ota_reconciliation_status", nullable = false, length = 20) private String otaReconciliationStatus = "NOT_APPLICABLE";
     /** Thời điểm nhận phòng thực tế, null trước khi check-in. */
     @Column(name = "actual_check_in") private LocalDateTime actualCheckIn;
     /** Thời điểm trả phòng thực tế, null trước khi check-out. */
@@ -81,6 +86,11 @@ public class Reservation {
     public BigDecimal getDepositAmount() { return depositAmount; }
     public ReservationStatus getStatus() { return status; }
     public String getRentalType() { return rentalType; }
+    public String getBookingSource() { return bookingSource; }
+    public BigDecimal getOtaGrossRevenue() { return otaGrossRevenue; }
+    public BigDecimal getOtaCommission() { return otaCommission; }
+    public BigDecimal getOtaNetRevenue() { return otaNetRevenue; }
+    public String getOtaReconciliationStatus() { return otaReconciliationStatus; }
     public LocalDateTime getActualCheckIn() { return actualCheckIn; }
     public LocalDateTime getActualCheckOut() { return actualCheckOut; }
     public int getExtensionMinutes() { return extensionMinutes; }
@@ -100,6 +110,11 @@ public class Reservation {
     public void setCustomerAccount(CustomerAccount value) { customerAccount = value; }
     public void setDepositAmount(BigDecimal value) { depositAmount = value; }
     public void setRentalType(String value) { rentalType = value; }
+    public void setBookingSource(String value) { bookingSource = value == null || value.isBlank() ? "DIRECT" : value.trim().toUpperCase(); }
+    public void setOtaGrossRevenue(BigDecimal value) { otaGrossRevenue = value == null ? BigDecimal.ZERO : value; }
+    public void setOtaCommission(BigDecimal value) { otaCommission = value == null ? BigDecimal.ZERO : value; }
+    public void setOtaNetRevenue(BigDecimal value) { otaNetRevenue = value == null ? BigDecimal.ZERO : value; }
+    public void setOtaReconciliationStatus(String value) { otaReconciliationStatus = value == null || value.isBlank() ? "NOT_APPLICABLE" : value.trim().toUpperCase(); }
     public void setIdempotencyKey(String value) { idempotencyKey = value; }
     public void setDepositPaymentCode(String value) { depositPaymentCode = value; }
     public void setDepositPaymentExpiresAt(LocalDateTime value) { depositPaymentExpiresAt = value; }

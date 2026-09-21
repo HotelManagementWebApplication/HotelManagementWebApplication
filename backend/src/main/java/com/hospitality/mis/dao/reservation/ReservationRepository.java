@@ -16,6 +16,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import org.springframework.data.repository.query.Param;
 
@@ -60,6 +62,54 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     org.springframework.data.domain.Page<Long> searchIds(@Param("owner") String owner,
             @Param("status") ReservationStatus status, @Param("guestId") Long guestId,
             org.springframework.data.domain.Pageable pageable);
+
+    /** Dashboard read model: filter, stable sort and page are evaluated by the database. */
+    @Query(value = "select r.id from Reservation r "
+            + "left join r.rooms sortRoom left join r.invoice dashboardInvoice "
+            + "where (:status is null or r.status = :status) "
+            + "and (:query = '' or lower(str(r.id)) like concat('%', :query, '%') "
+            + "or lower(r.guest.fullName) like concat('%', :query, '%') "
+            + "or r.guest.phone like concat('%', :query, '%') "
+            + "or exists (select roomQuery from ReservationRoom roomQuery "
+            + "where roomQuery.reservation = r and lower(roomQuery.room.id) like concat('%', :query, '%'))) "
+            + "and (:bucket = 'ALL' "
+            + "or (:bucket = 'ARRIVALS' and r.status in (com.hospitality.mis.entity.reservation.ReservationStatus.CONFIRMED, com.hospitality.mis.entity.reservation.ReservationStatus.DEPOSIT_PAID) "
+            + "and exists (select arrivalRoom from ReservationRoom arrivalRoom where arrivalRoom.reservation = r and arrivalRoom.checkIn >= :fromAt and arrivalRoom.checkIn < :toAt) "
+            + "and not exists (select earlierArrivalRoom from ReservationRoom earlierArrivalRoom where earlierArrivalRoom.reservation = r and earlierArrivalRoom.checkIn < :fromAt)) "
+            + "or (:bucket = 'DEPARTURES' and r.status = com.hospitality.mis.entity.reservation.ReservationStatus.CHECKED_IN "
+            + "and exists (select departureRoom from ReservationRoom departureRoom where departureRoom.reservation = r and departureRoom.checkOut >= :fromAt and departureRoom.checkOut < :toAt) "
+            + "and not exists (select laterDepartureRoom from ReservationRoom laterDepartureRoom where laterDepartureRoom.reservation = r and laterDepartureRoom.checkOut >= :toAt)) "
+            + "or (:bucket = 'CURRENT' and r.status = com.hospitality.mis.entity.reservation.ReservationStatus.CHECKED_IN) "
+            + "or (:bucket = 'UNPAID_DEPOSITS' and (r.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING "
+            + "or (r.depositAmount > 0 and r.depositPaymentStatus <> com.hospitality.mis.entity.reservation.DepositPaymentStatus.PAID))) "
+            + "or (:bucket = 'INVOICE_BALANCES' and dashboardInvoice is not null and dashboardInvoice.amountDue > 0)) "
+            + "group by r.id order by min(sortRoom.checkIn) asc, r.id asc",
+            countQuery = "select count(r.id) from Reservation r left join r.invoice dashboardInvoice "
+                    + "where (:status is null or r.status = :status) "
+                    + "and (:query = '' or lower(str(r.id)) like concat('%', :query, '%') "
+                    + "or lower(r.guest.fullName) like concat('%', :query, '%') "
+                    + "or r.guest.phone like concat('%', :query, '%') "
+                    + "or exists (select roomQuery from ReservationRoom roomQuery "
+                    + "where roomQuery.reservation = r and lower(roomQuery.room.id) like concat('%', :query, '%'))) "
+                    + "and (:bucket = 'ALL' "
+                    + "or (:bucket = 'ARRIVALS' and r.status in (com.hospitality.mis.entity.reservation.ReservationStatus.CONFIRMED, com.hospitality.mis.entity.reservation.ReservationStatus.DEPOSIT_PAID) "
+                    + "and exists (select arrivalRoom from ReservationRoom arrivalRoom where arrivalRoom.reservation = r and arrivalRoom.checkIn >= :fromAt and arrivalRoom.checkIn < :toAt) "
+                    + "and not exists (select earlierArrivalRoom from ReservationRoom earlierArrivalRoom where earlierArrivalRoom.reservation = r and earlierArrivalRoom.checkIn < :fromAt)) "
+                    + "or (:bucket = 'DEPARTURES' and r.status = com.hospitality.mis.entity.reservation.ReservationStatus.CHECKED_IN "
+                    + "and exists (select departureRoom from ReservationRoom departureRoom where departureRoom.reservation = r and departureRoom.checkOut >= :fromAt and departureRoom.checkOut < :toAt) "
+                    + "and not exists (select laterDepartureRoom from ReservationRoom laterDepartureRoom where laterDepartureRoom.reservation = r and laterDepartureRoom.checkOut >= :toAt)) "
+                    + "or (:bucket = 'CURRENT' and r.status = com.hospitality.mis.entity.reservation.ReservationStatus.CHECKED_IN) "
+                    + "or (:bucket = 'UNPAID_DEPOSITS' and (r.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING "
+                    + "or (r.depositAmount > 0 and r.depositPaymentStatus <> com.hospitality.mis.entity.reservation.DepositPaymentStatus.PAID))) "
+                    + "or (:bucket = 'INVOICE_BALANCES' and dashboardInvoice is not null and dashboardInvoice.amountDue > 0))")
+    Page<Long> dashboardIds(@Param("query") String query, @Param("status") ReservationStatus status,
+                            @Param("bucket") String bucket, @Param("fromAt") LocalDateTime fromAt,
+                            @Param("toAt") LocalDateTime toAt, Pageable pageable);
+
+    /** Nạp bounded dashboard pages without changing the general reservation search contract. */
+    @EntityGraph(attributePaths = {"guest", "rooms", "rooms.room", "invoice"})
+    @Query("select distinct r from Reservation r where r.id in :ids")
+    List<Reservation> findDashboardDetails(@Param("ids") List<Long> ids);
 
     /**
      * Giai đoạn hai của phân trang: nạp đầy đủ các aggregate theo danh sách ID.

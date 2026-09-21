@@ -90,7 +90,7 @@ class PublicGuestApiContractTest {
                 .andExpect(jsonPath("$[0].room_name").value("Phòng 101"))
                 .andExpect(jsonPath("$[0].room_type_name").value("Standard"))
                 .andExpect(jsonPath("$[0].daily_price").value(2400000.00))
-                .andExpect(jsonPath("$[0].status").value("READY"))
+                .andExpect(jsonPath("$[0].status").value("available"))
                 .andExpect(jsonPath("$[0].guest").doesNotExist())
                 .andExpect(jsonPath("$[0].stock").doesNotExist());
 
@@ -130,7 +130,7 @@ class PublicGuestApiContractTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
                 .andExpect(jsonPath("$[0].room_id").value("R101"))
-                .andExpect(jsonPath("$[0].current_status").value("READY"))
+                .andExpect(jsonPath("$[0].current_status").value("available"))
                 .andExpect(jsonPath("$[0].available").value(true));
     }
 
@@ -139,5 +139,14 @@ class PublicGuestApiContractTest {
         mockMvc.perform(get("/api/public/rooms").param("page", "-1"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("INVALID_PAGINATION"));
+    }
+
+    @Test
+    void publicAvailabilityRejectsAnInvalidRange() throws Exception {
+        mockMvc.perform(get("/api/public/rooms/availability")
+                        .param("from", "2031-01-11T12:00:00")
+                        .param("to", "2031-01-10T14:00:00"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("INVALID_INTERVAL"));
     }
 }

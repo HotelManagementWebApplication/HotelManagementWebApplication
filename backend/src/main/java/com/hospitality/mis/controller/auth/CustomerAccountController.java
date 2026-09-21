@@ -40,4 +40,16 @@ public class CustomerAccountController {
         if (!actor.isCustomer()) throw new org.springframework.security.access.AccessDeniedException("Customer principal required");
         return service.me(Long.valueOf(actor.id()));
     }
+
+    /**
+     * Cập nhật thông tin hồ sơ khách hàng hiện tại qua PUT /api/auth/customers/me.
+     * Lưu trực tiếp vào cơ sở dữ liệu thật và trả về hồ sơ mới nhất.
+     */
+    @PutMapping("/me")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public CustomerAccountDtos.MeResponse updateProfile(@Valid @RequestBody CustomerAccountDtos.UpdateProfileRequest request) {
+        SecurityActor.Principal actor = SecurityActor.currentPrincipal();
+        if (!actor.isCustomer()) throw new org.springframework.security.access.AccessDeniedException("Customer principal required");
+        return service.updateProfile(Long.valueOf(actor.id()), request);
+    }
 }

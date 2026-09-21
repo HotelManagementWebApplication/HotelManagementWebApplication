@@ -8,8 +8,8 @@ import com.hospitality.mis.entity.billing.Invoice;
 import com.hospitality.mis.entity.reservation.Reservation;
 import com.hospitality.mis.entity.reservation.ReservationRoom;
 import com.hospitality.mis.entity.reservation.ReservationStatus;
-import com.hospitality.mis.entity.room.Room;
-import com.hospitality.mis.entity.room.RoomStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,60 +43,48 @@ public class FrontDeskDashboardService {
         int safePage = Math.max(0, page);
         int safeSize = Math.max(1, Math.min(100, size));
         String normalized = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        LocalDateTime fromAt = businessDate.atStartOfDay();
+        LocalDateTime toAt = businessDate.plusDays(1).atStartOfDay();
+        PageRequest pageRequest = PageRequest.of(safePage, safeSize);
 
-        List<Reservation> all = reservations.findAll();
-        List<FrontDeskDashboardDtos.ReservationItem> items = all.stream()
-                .map(this::toItem)
-                .filter(x -> status == null || x.status() == status)
-                .filter(x -> normalized.isBlank() || String.valueOf(x.reservationId()).contains(normalized)
-                        || (x.guestName() != null && x.guestName().toLowerCase(Locale.ROOT).contains(normalized))
-                        || (x.guestPhone() != null && x.guestPhone().contains(normalized))
-                        || x.roomIds().stream().anyMatch(r -> r.toLowerCase(Locale.ROOT).contains(normalized)))
-                .sorted(Comparator.comparing(FrontDeskDashboardDtos.ReservationItem::checkIn,
-                        Comparator.nullsLast(Comparator.naturalOrder())).thenComparing(FrontDeskDashboardDtos.ReservationItem::reservationId))
-                .toList();
-
-        List<FrontDeskDashboardDtos.ReservationItem> arrivals = items.stream()
-                .filter(x -> x.checkIn() != null && x.checkIn().toLocalDate().equals(businessDate)
-                        && (x.status() == ReservationStatus.CONFIRMED || x.status() == ReservationStatus.DEPOSIT_PAID))
-                .toList();
-        List<FrontDeskDashboardDtos.ReservationItem> departures = items.stream()
-                .filter(x -> x.checkOut() != null && x.checkOut().toLocalDate().equals(businessDate)
-                        && x.status() == ReservationStatus.CHECKED_IN).toList();
-        List<FrontDeskDashboardDtos.ReservationItem> current = items.stream()
-                .filter(x -> x.status() == ReservationStatus.CHECKED_IN).toList();
-        List<FrontDeskDashboardDtos.ReservationItem> unpaidDeposits = items.stream()
-                .filter(x -> "PENDING".equals(x.depositPaymentStatus())
-                        || (x.depositAmount() != null && x.depositAmount().signum() > 0
-                        && !"PAID".equals(x.depositPaymentStatus()))).toList();
-        List<FrontDeskDashboardDtos.ReservationItem> balances = items.stream()
-                .filter(x -> x.invoiceBalance() != null && x.invoiceBalance().signum() > 0).toList();
-
-        List<FrontDeskDashboardDtos.ReservationItem> paged = items.stream()
-                .skip((long) safePage * safeSize).limit(safeSize).toList();
+        Page<Long> allReservations = reservations.dashboardIds(normalized, status, "ALL", fromAt, toAt, pageRequest);
+        List<FrontDeskDashboardDtos.ReservationItem> arrivals = dashboardItems(
+                normalized, status, "ARRIVALS", fromAt, toAt, pageRequest);
+        List<FrontDeskDashboardDtos.ReservationItem> departures = dashboardItems(
+                normalized, status, "DEPARTURES", fromAt, toAt, pageRequest);
+        List<FrontDeskDashboardDtos.ReservationItem> current = dashboardItems(
+                normalized, status, "CURRENT", fromAt, toAt, pageRequest);
+        List<FrontDeskDashboardDtos.ReservationItem> unpaidDeposits = dashboardItems(
+                normalized, status, "UNPAID_DEPOSITS", fromAt, toAt, pageRequest);
+        List<FrontDeskDashboardDtos.ReservationItem> balances = dashboardItems(
+                normalized, status, "INVOICE_BALANCES", fromAt, toAt, pageRequest);
         List<FrontDeskDashboardDtos.RoomSummary> roomItems = rooms.search(null, null).stream()
-                .map(r -> new FrontDeskDashboardDtos.RoomSummary(r.getId(), r.getName(), r.getStatus(), r.getRoomType().getId()))
+                .map(r -> new FrontDeskDashboardDtos.RoomSummary(r.getId(), r.getName(), r.getStatus(),
+                        r.getRoomType().getId(), r.getRoomType().getName(), r.getFloor(),
+                        r.getRoomType().getDailyPrice(), r.getRoomType().getBedType()))
                 .toList();
         Map<String, Long> roomCounts = roomItems.stream().collect(Collectors.groupingBy(
                 x -> x.status().databaseCode(), TreeMap::new, Collectors.counting()));
-        List<FrontDeskDashboardDtos.IncidentItem> incidentItems = incidents.findAll().stream()
+        List<FrontDeskDashboardDtos.IncidentItem> incidentItems = incidents.dashboardPage(pageRequest).getContent().stream()
                 .map(i -> new FrontDeskDashboardDtos.IncidentItem(i.getId(),
                         i.getReservation() == null ? null : i.getReservation().getId(),
                         i.getRoom() == null ? null : i.getRoom().getId(), i.getCompensation()))
                 .toList();
 
-        int totalPages = (int) Math.ceil(items.size() / (double) safeSize);
+        int totalPages = allReservations.getTotalPages();
         return new FrontDeskDashboardDtos.Response(businessDate,
-                pageList(arrivals, safePage, safeSize), pageList(departures, safePage, safeSize),
-                pageList(current, safePage, safeSize), pageList(unpaidDeposits, safePage, safeSize),
-                pageList(balances, safePage, safeSize), roomItems, roomCounts, incidentItems,
-                safePage, safeSize, items.size(), totalPages);
+                arrivals, departures, current, unpaidDeposits, balances, roomItems, roomCounts, incidentItems,
+                safePage, safeSize, allReservations.getTotalElements(), totalPages);
     }
 
-    private <T> List<T> pageList(List<T> values, int page, int size) {
-        long from = (long) page * size;
-        if (from >= values.size()) return List.of();
-        return values.subList((int) from, Math.min(values.size(), (int) from + size));
+    private List<FrontDeskDashboardDtos.ReservationItem> dashboardItems(
+            String query, ReservationStatus status, String bucket, LocalDateTime fromAt,
+            LocalDateTime toAt, PageRequest pageRequest) {
+        Page<Long> ids = reservations.dashboardIds(query, status, bucket, fromAt, toAt, pageRequest);
+        if (ids.isEmpty()) return List.of();
+        Map<Long, Reservation> details = reservations.findDashboardDetails(ids.getContent()).stream()
+                .collect(Collectors.toMap(Reservation::getId, r -> r));
+        return ids.getContent().stream().map(details::get).filter(Objects::nonNull).map(this::toItem).toList();
     }
 
     private FrontDeskDashboardDtos.ReservationItem toItem(Reservation r) {

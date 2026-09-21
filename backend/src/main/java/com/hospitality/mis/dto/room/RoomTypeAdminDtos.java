@@ -21,15 +21,26 @@ public final class RoomTypeAdminDtos {
             @NotBlank @Size(max = 10) String id,
             @NotBlank @Size(max = 50) String name,
             @NotNull @DecimalMin("0.00") BigDecimal dailyPrice,
-            @Size(max = 500) String description) {}
+            @Size(max = 500) String description,
+            @DecimalMin("0.01") BigDecimal area,
+            @Size(max = 100) String view,
+            @DecimalMin("0.00") BigDecimal hourlyPrice,
+            @Size(max = 100) String bedType) {
+        /** Giữ tương thích cho các caller nội bộ cũ trong khi metadata mới là tùy chọn. */
+        public Request(String id, String name, BigDecimal dailyPrice, String description) {
+            this(id, name, dailyPrice, description, null, null, BigDecimal.ZERO, null);
+        }
+    }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Response(String id, String name, BigDecimal dailyPrice, String description,
+                           BigDecimal area, String view, BigDecimal hourlyPrice, String bedType,
                            RoomTypeCatalogStatus catalogStatus, String updatedBy, String approvedBy,
                            LocalDateTime updatedAt, LocalDateTime approvedAt,
                            String revisionOfId, String supersededById) {
         public static Response from(RoomType type) {
             return new Response(type.getId(), type.getName(), type.getDailyPrice(), type.getDescription(),
+                    type.getArea(), type.getView(), type.getHourlyPrice(), type.getBedType(),
                     type.getCatalogStatus(), type.getCatalogUpdatedBy(), type.getCatalogApprovedBy(),
                     type.getCatalogUpdatedAt(), type.getCatalogApprovedAt(),
                     type.getRevisionOfId(), type.getSupersededById());

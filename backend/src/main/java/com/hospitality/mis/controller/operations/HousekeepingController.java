@@ -26,13 +26,13 @@ public class HousekeepingController {
     @PostMapping("/checklist-templates") @PreAuthorize("@departmentAccess.allows(authentication, 'HOUSEKEEPING_TASK_WRITE')")
     public HousekeepingChecklistDtos.TemplateResponse createTemplate(@Valid @RequestBody HousekeepingChecklistDtos.TemplateRequest request) { return checklists.createTemplate(request, SecurityActor.currentActor()); }
     @GetMapping("/tasks/{id}/checklist-results") @PreAuthorize("@departmentAccess.allows(authentication, 'HOUSEKEEPING_TASK_READ')")
-    public List<HousekeepingChecklistDtos.ResultResponse> results(@PathVariable Long id) { return checklists.results(id); }
+    public List<HousekeepingChecklistDtos.ResultResponse> results(@PathVariable Long id) { return checklists.results(id, SecurityActor.currentActor()); }
     @PostMapping("/tasks/{id}/checklist-results") @PreAuthorize("@departmentAccess.allows(authentication, 'HOUSEKEEPING_TASK_WRITE')")
     public HousekeepingChecklistDtos.ResultResponse addResult(@PathVariable Long id, @Valid @RequestBody HousekeepingChecklistDtos.ResultRequest request) { return checklists.addResult(id, request, SecurityActor.currentActor()); }
 
     @GetMapping("/tasks/{id}/inspections")
     @PreAuthorize("@departmentAccess.allows(authentication, 'HOUSEKEEPING_TASK_READ')")
-    public List<HousekeepingInspectionDtos.Response> inspections(@PathVariable Long id) { return inspections.list(id); }
+    public List<HousekeepingInspectionDtos.Response> inspections(@PathVariable Long id) { return inspections.list(id, SecurityActor.currentActor()); }
 
     @PostMapping("/tasks/{id}/inspections")
     @PreAuthorize("@departmentAccess.allows(authentication, 'HOUSEKEEPING_TASK_WRITE')")
@@ -40,21 +40,23 @@ public class HousekeepingController {
 
     @GetMapping("/tasks")
     @PreAuthorize("@departmentAccess.allows(authentication, 'HOUSEKEEPING_TASK_READ')")
-    public List<HousekeepingDtos.Response> list(@RequestParam(required = false) String roomId,
-                                                @RequestParam(required = false) String assignee,
-                                                @RequestParam(required = false) HousekeepingTaskStatus status) {
-        return service.list(roomId, assignee, status);
+    public List<HousekeepingDtos.Response> list(@RequestParam(name = "roomId", required = false) String roomId,
+                                                @RequestParam(name = "assignee", required = false) String assignee,
+                                                @RequestParam(name = "status", required = false) HousekeepingTaskStatus status) {
+        return service.list(roomId, assignee, status, SecurityActor.currentActor());
     }
 
     @PostMapping("/tasks")
     @PreAuthorize("@departmentAccess.allows(authentication, 'HOUSEKEEPING_TASK_ASSIGN')")
-    public HousekeepingDtos.Response create(@Valid @RequestBody HousekeepingDtos.CreateRequest request) {
-        return service.create(request, SecurityActor.currentActor());
+    public HousekeepingDtos.Response create(@Valid @RequestBody HousekeepingDtos.CreateRequest request,
+                                            @RequestHeader("Idempotency-Key") String idempotencyKey) {
+        return service.create(request, SecurityActor.currentActor(), idempotencyKey);
     }
 
     @PatchMapping("/tasks/{id}")
     @PreAuthorize("@departmentAccess.allows(authentication, 'HOUSEKEEPING_TASK_WRITE')")
-    public HousekeepingDtos.Response update(@PathVariable Long id, @Valid @RequestBody HousekeepingDtos.UpdateRequest request) {
-        return service.update(id, request, SecurityActor.currentActor());
+    public HousekeepingDtos.Response update(@PathVariable Long id, @Valid @RequestBody HousekeepingDtos.UpdateRequest request,
+                                            @RequestHeader("Idempotency-Key") String idempotencyKey) {
+        return service.update(id, request, SecurityActor.currentActor(), idempotencyKey);
     }
 }

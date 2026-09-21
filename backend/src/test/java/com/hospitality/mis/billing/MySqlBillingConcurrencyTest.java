@@ -57,7 +57,7 @@ class MySqlBillingConcurrencyTest {
         jdbc.update("insert into guests(id, full_name, phone, identity_number) values (?,?,?,?)",
                 ID, "Concurrency Guest", "0999900002", "099900000001");
         jdbc.update("insert into room_types(id, name, daily_price) values (?,?,?)", "CTEST", "Concurrency", new BigDecimal("100000"));
-        jdbc.update("insert into rooms(id, room_type_id, status) values (?,?,?)", "C9001", "CTEST", "SAN_SANG");
+        jdbc.update("insert into rooms(id, room_type_id, status) values (?,?,?)", "C9001", "CTEST", "available");
         jdbc.update("insert into reservations(id, guest_id, employee_id, status, rental_type, idempotency_key) values (?,?,?,?,?,?)",
                 ID, ID, ACTOR, "CONFIRMED", "PACKAGE", "concurrency-reservation");
         jdbc.update("insert into invoices(id, reservation_id, room_total, amount_due, status) values (?,?,?,?,?)",
@@ -84,7 +84,7 @@ class MySqlBillingConcurrencyTest {
     @Test
     void simultaneousRetriesCreateOnePaymentAndReturnTheSameLedgerEntry() throws Exception {
         var request = new PaymentTransactionDtos.CreateRequest(new BigDecimal("10000"), PaymentMethod.CASH,
-                PaymentTransaction.TransactionType.PAYMENT, "concurrent retry", "same-payment");
+                PaymentTransaction.TransactionType.PAYMENT, "concurrent retry");
         var ready = new CountDownLatch(2);
         var start = new CountDownLatch(1);
         try (var executor = Executors.newFixedThreadPool(2)) {
@@ -130,7 +130,7 @@ class MySqlBillingConcurrencyTest {
         try {
             ready.countDown();
             assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
-            return payments.record(ID, request, ACTOR);
+            return payments.record(ID, request, ACTOR, "same-payment");
         } finally {
             SecurityContextHolder.clearContext();
         }

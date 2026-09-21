@@ -17,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 
 import org.springframework.web.bind.annotation.RequestBody;
 
@@ -107,6 +108,13 @@ public class AuthController {
 
     }
 
+    /** Lấy identity/role/permission snapshot của employee hiện tại từ JWT actor và authority backend. */
+    @GetMapping("/me")
+    @PreAuthorize("hasAnyRole('ADMIN','DIRECTOR','MANAGER','HR','FRONT_DESK','ACCOUNTING','HOUSEKEEPING','TECHNICAL','KITCHEN','STAFF')")
+    public AuthDtos.EmployeeProfileResponse me() {
+        return service.employeeMe(SecurityActor.currentPrincipal());
+    }
+
 
 
 
@@ -141,6 +149,13 @@ public class AuthController {
                               @Valid @RequestBody AuthDtos.PasswordResetRequest request) {
         service.resetPassword(employeeId, request, SecurityActor.currentPrincipal());
 
+    }
+
+    @PostMapping("/me/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("isAuthenticated()")
+    public void changeOwnPassword(@Valid @RequestBody AuthDtos.ChangeOwnPasswordRequest request) {
+        service.changeOwnPassword(SecurityActor.currentPrincipal(), request);
     }
 
     /**

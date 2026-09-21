@@ -19,6 +19,13 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Long> {
     /** Lấy các biên lai của hóa đơn theo thứ tự phát hành tăng dần. */
     List<Receipt> findByInvoiceIdOrderByIssuedAtAsc(Long invoiceId);
 
+    /** Phân trang receipt theo invoice ngay tại DB. */
+    Page<Receipt> findByInvoiceIdOrderByIssuedAtAsc(Long invoiceId, Pageable pageable);
+
+    /** Tổng receipt đã phát hành theo invoice/tender, dùng để chặn cấp vượt số đã thu. */
+    @Query("select coalesce(sum(r.amount), 0) from Receipt r where r.invoice.id = :invoiceId and r.method = :method")
+    java.math.BigDecimal sumAmountByInvoiceAndMethod(@Param("invoiceId") Long invoiceId, @Param("method") PaymentMethod method);
+
     @Query("select r from Receipt r where (:invoiceId is null or r.invoice.id = :invoiceId) and (:method is null or r.method = :method) and (:issuedBy is null or r.issuedBy = :issuedBy) and (:fromAt is null or r.issuedAt >= :fromAt) and (:toAt is null or r.issuedAt < :toAt)")
     Page<Receipt> search(@Param("invoiceId") Long invoiceId, @Param("method") PaymentMethod method,
                          @Param("issuedBy") String issuedBy, @Param("fromAt") LocalDateTime fromAt,

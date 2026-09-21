@@ -24,18 +24,17 @@ public class ReceiptController {
      */
     @GetMapping 
     @PreAuthorize("@departmentAccess.allows(authentication, 'BILLING_READ')")
-    public Object list(@PathVariable Long invoiceId, @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) { return page == null && size == null ? service.listByInvoice(invoiceId) : service.pageByInvoice(invoiceId, page == null ? 0 : page, size == null ? 20 : size); }
+    public Object list(@PathVariable Long invoiceId, @RequestParam(name = "page", required = false) Integer page, @RequestParam(name = "size", required = false) Integer size) { return page == null && size == null ? service.listByInvoice(invoiceId) : service.pageByInvoice(invoiceId, page == null ? 0 : page, size == null ? 20 : size); }
     /**
      * Phát hành biên lai qua POST /api/invoices/{invoiceId}/receipts.
      * invoiceId là path parameter, body tạo biên lai được {@code @Valid} kiểm tra, actor được lấy từ security context,
-     * response là biên lai mới. Chỉ PAYMENT_WRITE được phép; không có idempotency key, còn trùng hoặc trạng thái không hợp lệ
-     * do dịch vụ trả lỗi nghiệp vụ.
+     * response là biên lai mới. Chỉ PAYMENT_WRITE được phép; Idempotency-Key là bắt buộc để retry không phát hành trùng,
+     * còn trạng thái không hợp lệ do dịch vụ trả lỗi nghiệp vụ.
      */
     @PostMapping 
     @PreAuthorize("@departmentAccess.allows(authentication, 'PAYMENT_WRITE')")
     public ReceiptDtos.Response issue(@PathVariable Long invoiceId, @Valid @RequestBody ReceiptDtos.CreateRequest request,
-                                      @RequestHeader(value = "Idempotency-Key", required = false) String key) {
-        return service.issue(invoiceId, request, SecurityActor.currentActor(),
-                key == null || key.isBlank() ? "receipt-" + request.receiptNumber() : key);
+                                     @RequestHeader("Idempotency-Key") String key) {
+        return service.issue(invoiceId, request, SecurityActor.currentActor(), key);
     }
 }

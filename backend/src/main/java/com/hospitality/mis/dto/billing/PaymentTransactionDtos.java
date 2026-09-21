@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/** DTO cho giao dịch thu/hoàn tiền, có khóa idempotency để retry không ghi trùng. */
+/** DTO cho giao dịch thu/hoàn tiền; khóa retry đi qua HTTP header Idempotency-Key. */
 public final class PaymentTransactionDtos {
     /** Namespace của request và response thanh toán. */
     private PaymentTransactionDtos() {}
@@ -23,12 +23,10 @@ public final class PaymentTransactionDtos {
             @NotNull PaymentMethod method,
             /** Loại nghiệp vụ, ví dụ thanh toán hoặc hoàn tiền. */
             @NotNull PaymentTransaction.TransactionType type,
-            /** Mã tham chiếu từ hệ thống thanh toán bên ngoài, có thể bỏ trống. */
-            String reference,
-            /** Khóa chống ghi trùng, tối đa 35 ký tự và bắt buộc. */
-            @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 35) String idempotencyKey) {
+            /** Mã tham chiếu từ hệ thống thanh toán bên ngoài hoặc giao dịch hoàn tiền gốc, có thể bỏ trống. */
+            String reference) {
         /** Tạo payload ổn định để xin phê duyệt đúng giao dịch và đúng khóa retry. */
-        public String approvalPayload(Long invoiceId) {
+        public String approvalPayload(Long invoiceId, String idempotencyKey) {
             return com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode()
                     .put("invoice_id", invoiceId).put("idempotency_key", idempotencyKey.trim())
                     .put("method", method.name()).put("type", type.name())

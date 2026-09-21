@@ -3,66 +3,91 @@ package com.hospitality.mis.finance;
 import com.hospitality.mis.dao.billing.PaymentTransactionRepository;
 import com.hospitality.mis.dao.finance.*;
 import com.hospitality.mis.dto.finance.FinanceDtos;
-import com.hospitality.mis.entity.finance.*;
+import com.hospitality.mis.entity.finance.FinancialLedgerEntry;
+import com.hospitality.mis.entity.finance.PartnerDebt;
 import com.hospitality.mis.service.finance.FinanceService;
 import com.hospitality.mis.service.governance.AuditService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
+/** Positive contract test for immutable settlement history and its finalized ledger posting. */
 class FinanceSettlementLedgerTest {
-    @Mock CashShiftHandoverRepository handovers;
-    @Mock ExpenseRepository expenses;
-    @Mock PartnerDebtRepository debts;
-    @Mock AuditService audit;
-    @Mock PaymentTransactionRepository transactions;
-    @Mock PartnerDebtSettlementRepository settlements;
-    @Mock FinancialLedgerEntryRepository ledger;
+    private final PartnerDebtRepository debts = mock(PartnerDebtRepository.class);
+    private final PartnerDebtSettlementRepository settlements = mock(PartnerDebtSettlementRepository.class);
+    private final FinancialLedgerEntryRepository ledger = mock(FinancialLedgerEntryRepository.class);
+    private final AuditService audit = mock(AuditService.class);
     private FinanceService service;
 
     @BeforeEach
     void setUp() {
         SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken("accounting", "test", java.util.List.of()));
-        service = new FinanceService(handovers, expenses, debts, audit, transactions);
+                new TestingAuthenticationToken("accounting", "test", "ROLE_ACCOUNTING"));
+        service = new FinanceService(mock(CashShiftHandoverRepository.class), mock(ExpenseRepository.class),
+                debts, audit, mock(PaymentTransactionRepository.class));
         ReflectionTestUtils.setField(service, "debtSettlements", settlements);
         ReflectionTestUtils.setField(service, "ledger", ledger);
-        ReflectionTestUtils.setField(service, "clock",
-                Clock.fixed(Instant.parse("2026-09-14T03:00:00Z"), ZoneId.of("Asia/Ho_Chi_Minh")));
     }
 
-    @AfterEach void clearSecurity() { SecurityContextHolder.clearContext(); }
+    @AfterEach
+    void clearSecurity() { SecurityContextHolder.clearContext(); }
 
     @Test
-    void settlementCreatesImmutableHistoryAndFinalizedLedgerEntry() {
+    void settlementUpdatesDebtAndAppendsHistoryAndFinalizedLedgerEntry() {
         PartnerDebt debt = new PartnerDebt(); ReflectionTestUtils.setField(debt, "id", 8L);
         debt.setAmount(new BigDecimal("1000")); debt.setSettledAmount(BigDecimal.ZERO);
+        debt.setStatus(PartnerDebt.DebtStatus.OPEN);
         when(debts.findForUpdate(8L)).thenReturn(Optional.of(debt));
 
-        service.settleDebt(8L, new FinanceDtos.DebtSettlementRequest(new BigDecimal("250"), "bank"), "accounting");
+        service.settleDebt(8L, new FinanceDtos.DebtSettlementRequest(new BigDecimal("250"), "bank"),
+                "accounting", "settlement-1");
 
         assertThat(debt.getSettledAmount()).isEqualByComparingTo("250");
-        verify(settlements).save(argThat(x -> x.getAmount().compareTo(new BigDecimal("250")) == 0
-                && x.getSettledBy().equals("accounting")));
-        verify(ledger).save(argThat(x -> x.isFinalized()
-                && x.getEntryType().equals("PARTNER_DEBT_SETTLEMENT")
-                && x.getAmount().compareTo(new BigDecimal("250")) == 0));
+        assertThat(debt.getStatus()).isEqualTo(PartnerDebt.DebtStatus.PARTIALLY_SETTLED);
+        verify(settlements).save(argThat(row -> row.getPartnerDebt() == debt
+                && row.getAmount().compareTo(new BigDecimal("250")) == 0
+                && row.getSettledBy().equals("accounting")));
+        verify(ledger).save(argThat(row -> row.isFinalized()
+                && row.getEntryType().equals("PARTNER_DEBT_SETTLEMENT")
+                && row.getSourceType().equals("PARTNER_DEBT")
+                && row.getSourceId().equals("8")
+                && row.getDirection() == FinancialLedgerEntry.Direction.DEBIT
+                && row.getAmount().compareTo(new BigDecimal("250")) == 0
+                && row.getActorId().equals("accounting")));
+
+        service.settleDebt(8L, new FinanceDtos.DebtSettlementRequest(new BigDecimal("750"), "bank"),
+                "accounting", "settlement-2");
+
+        assertThat(debt.getSettledAmount()).isEqualByComparingTo("1000");
+        assertThat(debt.getStatus()).isEqualTo(PartnerDebt.DebtStatus.SETTLED);
+        verify(settlements, times(2)).save(any());
+        verify(ledger, times(2)).save(any());
+    }
+
+    @Test
+    void settlementRejectsAmountBeyondOutstandingBalance() {
+        PartnerDebt debt = new PartnerDebt(); ReflectionTestUtils.setField(debt, "id", 8L);
+        debt.setAmount(new BigDecimal("1000")); debt.setSettledAmount(new BigDecimal("900"));
+        debt.setStatus(PartnerDebt.DebtStatus.PARTIALLY_SETTLED);
+        when(debts.findForUpdate(8L)).thenReturn(Optional.of(debt));
+
+        assertThatThrownBy(() -> service.settleDebt(8L,
+                new FinanceDtos.DebtSettlementRequest(new BigDecimal("101"), "bank"),
+                "accounting", "settlement-over"))
+                .isInstanceOf(com.hospitality.mis.common.exception.DomainException.class)
+                .hasMessageContaining("vượt số dư");
+        assertThat(debt.getSettledAmount()).isEqualByComparingTo("900");
+        verifyNoInteractions(settlements, ledger);
     }
 }

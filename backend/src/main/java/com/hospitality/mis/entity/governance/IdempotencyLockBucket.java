@@ -5,7 +5,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/** One of a fixed set of database rows used to serialize creation of new command keys. */
+/**
+ * Fixed rows retained by the existing schema. Runtime claims use the unique
+ * idempotency record key directly, so missing bucket rows cannot participate in
+ * a command transaction or create an insert deadlock.
+ */
 @Entity
 @Table(name = "idempotency_lock_buckets")
 public class IdempotencyLockBucket {

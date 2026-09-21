@@ -10,8 +10,6 @@ import com.hospitality.mis.service.governance.AuditService;
 import com.hospitality.mis.service.governance.DurableIdempotencyService;
 import com.hospitality.mis.service.reservation.IdempotencySupport;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -87,7 +85,9 @@ public class RoomEquipmentService {
     @Transactional
     public RoomEquipmentDtos.Response update(String roomId, Long equipmentId, RoomEquipmentDtos.UpdateRequest request, String actor) {
         String boundActor = authenticatedActor(actor);
-        RoomEquipment item = equipment.findByIdAndRoomId(equipmentId, roomId)
+        if (request == null || request.active() == null)
+            throw new DomainException("INVALID_REQUEST", "Thiếu nội dung cập nhật thiết bị");
+        RoomEquipment item = equipment.findForUpdateByIdAndRoomId(equipmentId, roomId)
                 .orElseThrow(() -> new DomainException("EQUIPMENT_NOT_FOUND", "Không tìm thấy thiết bị trong phòng"));
         item.setName(request.name().trim()); item.setOriginalValue(request.originalValue());
         item.setPurchasedOn(request.purchasedOn()); item.setQuantity(request.quantity()); item.setActive(request.active());
@@ -111,11 +111,13 @@ public class RoomEquipmentService {
 
     /** Ràng buộc actor với principal khi có authentication, hỗ trợ caller test không có context. */
     private String authenticatedActor(String supplied) {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.isAuthenticated()
-                && !(authentication instanceof AnonymousAuthenticationToken)) return SecurityActor.requireBoundActor(supplied);
-        if (supplied == null || supplied.isBlank()) throw new DomainException("ACTOR_REQUIRED", "Thiếu actor đã xác thực");
-        return supplied;
+        try {
+            return SecurityActor.requireBoundActor(supplied);
+        } catch (org.springframework.security.authentication.AuthenticationCredentialsNotFoundException exception) {
+            throw new DomainException("ACTOR_REQUIRED", "Thiếu actor đã xác thực");
+        } catch (org.springframework.security.access.AccessDeniedException exception) {
+            throw new DomainException("ACTOR_MISMATCH", "Actor không khớp principal hiện tại");
+        }
     }
 
     /** Chuyển thiết bị và thông tin phòng thành DTO. */

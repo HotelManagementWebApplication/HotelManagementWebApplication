@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import java.time.LocalDate;
 import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -27,10 +29,19 @@ class MaintenanceServiceCorrectnessTest {
     @Mock RoomRepository rooms;
     @Mock AuditService audit;
 
+    @org.junit.jupiter.api.BeforeEach
+    void authenticate() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("tech", "", "ROLE_TECHNICAL"));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearAuthentication() { SecurityContextHolder.clearContext(); }
+
     /** Given state chưa xử lý, When skip/reverse, Then transition bị từ chối không audit. */
     @Test void maintenanceCannotSkipOrReverseStates() {
         MaintenanceWorkOrder order = order(MaintenanceStatus.CHUA_XU_LY);
-        when(orders.findById("M1")).thenReturn(Optional.of(order));
+        when(orders.findForUpdateById("M1")).thenReturn(Optional.of(order));
         MaintenanceService service = new MaintenanceService(orders, rooms, audit);
         assertThatThrownBy(() -> service.updateStatus("M1", new MaintenanceDtos.StatusRequest("DA_HOAN_THANH"), "tech"))
                 .extracting("code").isEqualTo("INVALID_MAINTENANCE_TRANSITION");
@@ -43,7 +54,7 @@ class MaintenanceServiceCorrectnessTest {
     /** Given order đang bảo trì, When complete, Then order hoàn tất và room trở lại READY. */
     @Test void completionReleasesRoomAndOnlyValidPathIsAccepted() {
         MaintenanceWorkOrder order = order(MaintenanceStatus.DANG_BAO_TRI);
-        when(orders.findById("M1")).thenReturn(Optional.of(order));
+        when(orders.findForUpdateById("M1")).thenReturn(Optional.of(order));
         when(rooms.findForUpdate("101")).thenReturn(Optional.of(order.getRoom()));
         new MaintenanceService(orders, rooms, audit).updateStatus("M1",
                 new MaintenanceDtos.StatusRequest("DA_HOAN_THANH"), "tech");

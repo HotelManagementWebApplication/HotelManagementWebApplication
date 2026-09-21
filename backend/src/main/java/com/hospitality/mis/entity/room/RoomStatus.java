@@ -5,50 +5,45 @@ package com.hospitality.mis.entity.room;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 
-import java.util.Locale;
 
 
 
 /**
 
- * Trạng thái phòng chuẩn. Cơ sở dữ liệu sử dụng các mã tiếng Việt hiện có;
-
- * các mã này được giữ nguyên ở ranh giới JSON để duy trì
-
- * hợp đồng API hiện có, trong khi mã ứng dụng sử dụng enum này.
+ * Trạng thái phòng chuẩn với một giá trị canonical dùng cho JSON và persistence.
 
  */
 
 public enum RoomStatus {
 
     /** Phòng sẵn sàng nhận khách. */
-    READY("SAN_SANG", false),
+    READY("available", false),
 
     /** Phòng đang có khách ở. */
-    OCCUPIED("DANG_O", false),
+    OCCUPIED("occupied", false),
 
     /** Phòng đang được dọn và tạm thời không phân bổ. */
-    CLEANING("DANG_DON_DEP", true),
+    CLEANING("cleaning", true),
 
     /** Phòng đang bảo trì và không phân bổ. */
-    MAINTENANCE("BAO_TRI", true),
+    MAINTENANCE("maintenance", true),
 
     /** Phòng ngừng sử dụng và không phân bổ. */
-    OUT_OF_SERVICE("NGUNG_SU_DUNG", true),
+    OUT_OF_SERVICE("out_of_service", true),
 
     /** Phòng đã được giữ cho một đặt phòng. */
-    RESERVED("DA_DAT", false),
+    RESERVED("reserved", false),
 
     /** Phòng đã trả theo trạng thái nghiệp vụ hiện tại. */
-    RETURNED("DA_TRA", false),
+    RETURNED("returned", false),
 
     /** Phòng/đặt phòng đã bị hủy. */
-    CANCELLED("DA_HUY", false);
+    CANCELLED("cancelled", false);
 
 
 
-    /** Mã tiếng Việt tương thích với dữ liệu lưu trữ/API hiện hành. */
-    private final String databaseCode;
+    /** Giá trị canonical lower_snake_case của trạng thái ở mọi boundary. */
+    private final String canonicalValue;
 
     /** Cho biết trạng thái có chặn phân bổ phòng hay không. */
     private final boolean blocksAvailability;
@@ -56,9 +51,9 @@ public enum RoomStatus {
 
 
     /** Gắn mã lưu trữ và cờ khả dụng cho từng trạng thái. */
-    RoomStatus(String databaseCode, boolean blocksAvailability) {
+    RoomStatus(String canonicalValue, boolean blocksAvailability) {
 
-        this.databaseCode = databaseCode;
+        this.canonicalValue = canonicalValue;
 
         this.blocksAvailability = blocksAvailability;
 
@@ -70,7 +65,7 @@ public enum RoomStatus {
 
     public String databaseCode() {
 
-        return databaseCode;
+        return canonicalValue;
 
     }
 
@@ -90,7 +85,7 @@ public enum RoomStatus {
 
 
 
-    /** Đổi mã DB/API hoặc tên enum sang trạng thái chuẩn, fail-fast nếu không hợp lệ. */
+    /** Đọc đúng giá trị canonical; mọi mã khác đều bị từ chối. */
     public static RoomStatus fromDatabaseCode(String value) {
 
         if (value == null) {
@@ -99,11 +94,9 @@ public enum RoomStatus {
 
         }
 
-        String normalized = value.trim().toUpperCase(Locale.ROOT);
-
         for (RoomStatus status : values()) {
 
-            if (status.databaseCode.equals(normalized) || status.name().equals(normalized)) {
+            if (status.canonicalValue.equals(value)) {
 
                 return status;
 

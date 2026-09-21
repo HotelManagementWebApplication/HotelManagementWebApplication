@@ -2,9 +2,9 @@ spring:
   application:
     name: web-hotel-mis-backend
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/QLKS?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Ho_Chi_Minh}
+    url: ${DB_URL:jdbc:mysql://localhost:3307/QLKS?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Ho_Chi_Minh}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:${MYSQL_ROOT_PASSWORD:}}
+    password: ${DB_PASSWORD:${MYSQL_ROOT_PASSWORD:hotel_mis_local}}
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:10}
   jpa:
@@ -45,6 +45,13 @@ management:
     web:
       exposure:
         include: health,info
+
+server:
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
 
 # Cơ sở dữ liệu và bảo mật đang được kích hoạt; sử dụng biến môi trường cho các giá trị tùy theo môi trường.
 # Không bao giờ commit thông tin xác thực tại đây; hãy sử dụng biến môi trường hoặc trình quản lý bí mật.

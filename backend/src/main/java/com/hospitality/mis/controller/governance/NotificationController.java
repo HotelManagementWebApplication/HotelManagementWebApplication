@@ -13,7 +13,7 @@ public class NotificationController {
     public NotificationController(NotificationOutboxService service) { this.service = service; }
     @GetMapping("/outbox")
     @PreAuthorize("@departmentAccess.allows(authentication, 'NOTIFICATION_READ')")
-    public List<NotificationDtos.Response> poll(@RequestParam(required = false) String role,
+    public List<NotificationDtos.Response> poll(@RequestParam(name = "role", required = false) String role,
                                                 org.springframework.security.core.Authentication authentication) {
         java.util.Set<String> allowed = authentication.getAuthorities().stream()
                 .map(a -> a.getAuthority().startsWith("ROLE_") ? a.getAuthority().substring(5) : a.getAuthority())

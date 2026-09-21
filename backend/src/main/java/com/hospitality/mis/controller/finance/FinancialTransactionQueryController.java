@@ -25,12 +25,12 @@ public class FinancialTransactionQueryController {
     @PreAuthorize("@departmentAccess.allows(authentication, 'FINANCE_READ')")
     public PaymentTransactionDtos.PageResponse payments(
             @RequestParam(name = "invoice_id", required = false) Long invoiceId,
-            @RequestParam(required = false) PaymentMethod method,
-            @RequestParam(required = false) PaymentTransaction.TransactionType type,
-            @RequestParam(required = false) PaymentTransaction.TransactionStatus status,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(name = "method", required = false) PaymentMethod method,
+            @RequestParam(name = "type", required = false) PaymentTransaction.TransactionType type,
+            @RequestParam(name = "status", required = false) PaymentTransaction.TransactionStatus status,
+            @RequestParam(name = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(name = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(name = "page", defaultValue = "0") int page, @RequestParam(name = "size", defaultValue = "20") int size) {
         return payments.search(invoiceId, method, type, status, from, to, page, size);
     }
 
@@ -38,11 +38,11 @@ public class FinancialTransactionQueryController {
     @PreAuthorize("@departmentAccess.allows(authentication, 'FINANCE_READ')")
     public ReceiptDtos.PageResponse receipts(
             @RequestParam(name = "invoice_id", required = false) Long invoiceId,
-            @RequestParam(required = false) PaymentMethod method,
+            @RequestParam(name = "method", required = false) PaymentMethod method,
             @RequestParam(name = "issued_by", required = false) String issuedBy,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(name = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(name = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(name = "page", defaultValue = "0") int page, @RequestParam(name = "size", defaultValue = "20") int size) {
         return receipts.search(invoiceId, method, issuedBy, from, to, page, size);
     }
 }

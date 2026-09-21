@@ -13,6 +13,12 @@ public class Service {
     @Column(name="price", nullable=false, precision=10, scale=2) private BigDecimal price;
     /** Đơn vị tính, mặc định một lần sử dụng. */
     @Column(name="unit", nullable=false, length=20) private String unit="TIME";
+    /** Nhóm hiển thị trên cổng khách hàng. */
+    @Column(name="category", nullable=false, length=50) private String category="other";
+    /** Mô tả công khai của dịch vụ. */
+    @Column(name="description", length=1000) private String description;
+    /** URL ảnh đại diện công khai của dịch vụ. */
+    @Column(name="image_url", length=500) private String imageUrl;
     /** Số lượng tồn kho hiện tại. */
     @Column(name="stock_quantity", nullable=false) private int stockQuantity;
     /** Ngưỡng cảnh báo khi tồn kho xuống thấp. */
@@ -23,6 +29,9 @@ public class Service {
     public String getName(){return name;} public void setName(String v){name=v;}
     public BigDecimal getPrice(){return price;} public void setPrice(BigDecimal v){price=v;}
     public String getUnit(){return unit;} public void setUnit(String v){unit=v;}
+    public String getCategory(){return category;} public void setCategory(String v){category=v;}
+    public String getDescription(){return description;} public void setDescription(String v){description=v;}
+    public String getImageUrl(){return imageUrl;} public void setImageUrl(String v){imageUrl=v;}
     public int getStockQuantity(){return stockQuantity;} public void setStockQuantity(int v){stockQuantity=v;}
     public int getSafetyThreshold(){return safetyThreshold;} public void setSafetyThreshold(int v){safetyThreshold=v;}
     public boolean isActive(){return active;} public void setActive(boolean v){active=v;}

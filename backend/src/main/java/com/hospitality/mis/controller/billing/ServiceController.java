@@ -96,9 +96,8 @@ public class ServiceController {
 
 
     /**
-     * Bổ sung tồn kho qua POST /api/services/{id}/stock; id là path parameter, body nhập kho được {@code @Valid} kiểm tra.
-     * Trả dịch vụ sau cập nhật; chỉ INVENTORY_WRITE được phép và actor hiện tại được ghi nhận. Không có idempotency key,
-     * nên lỗi số lượng/trạng thái hoặc yêu cầu lặp do dịch vụ xử lý.
+     * Bổ sung tồn kho qua canonical RECEIVE movement tại POST /api/services/{id}/stock.
+     * Idempotency-Key bắt buộc để retry không tạo thêm movement; actor hiện tại được ghi nhận.
      */
     @PostMapping("/{id}/stock")
 
@@ -106,9 +105,10 @@ public class ServiceController {
     @PreAuthorize("@departmentAccess.allows(authentication, 'INVENTORY_WRITE')")
     public ServiceDtos.Response restock(@PathVariable String id,
 
-                                        @Valid @RequestBody ServiceDtos.StockRequest request) {
+                                        @Valid @RequestBody ServiceDtos.StockRequest request,
+                                        @RequestHeader("Idempotency-Key") String idempotencyKey) {
 
-        return service.restock(id, request, SecurityActor.currentActor());
+        return service.restock(id, request, SecurityActor.currentActor(), idempotencyKey);
 
     }
 
@@ -127,8 +127,9 @@ public class ServiceController {
     @PostMapping("/{id}/price/activate")
     @PreAuthorize("@departmentAccess.allows(authentication, 'SERVICE_PRICE_ACTIVATE')")
     public ServiceDtos.Response activatePrice(@PathVariable String id,
-            @Valid @RequestBody ServiceDtos.PriceChangeRequest request) {
-        return service.activatePriceChange(id, request, SecurityActor.currentActor());
+            @Valid @RequestBody ServiceDtos.PriceChangeRequest request,
+            @RequestHeader("Idempotency-Key") String key) {
+        return service.activatePriceChange(id, request, SecurityActor.currentActor(), key);
     }
 
     @GetMapping("/{id}/price-history")

@@ -3,11 +3,14 @@ package com.hospitality.mis.dto.auth;
 
 
 import com.hospitality.mis.entity.identity.EmployeeRole;
+import com.hospitality.mis.entity.identity.Permission;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
+import java.util.List;
 
 
 
@@ -76,6 +79,22 @@ public final class AuthDtos {
             String address) {
     }
 
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record AutoProvisionRequest(
+            @NotBlank String fullName,
+            @NotNull EmployeeRole role,
+            @NotBlank String phone,
+            @NotBlank String email,
+            String address) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record AutoProvisionResponse(String employeeId, String fullName, EmployeeRole role,
+                                        String phone, String email, String temporaryPassword,
+                                        boolean mustChangePassword) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record ChangeOwnPasswordRequest(@NotBlank @Size(min = 8, max = 72) String password) {}
+
     /** Mật khẩu mới dùng trong luồng đặt lại mật khẩu. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record PasswordResetRequest(
@@ -95,6 +114,15 @@ public final class AuthDtos {
             String phone,
             /** Địa chỉ hồ sơ, có thể null. */
             String address) {
+    }
+
+    /** Hồ sơ employee hiện tại; role và permissions do backend suy ra từ actor/JWT. */
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record EmployeeProfileResponse(
+            String employeeId,
+            String fullName,
+            EmployeeRole role,
+            List<Permission> permissions) {
     }
 
 }

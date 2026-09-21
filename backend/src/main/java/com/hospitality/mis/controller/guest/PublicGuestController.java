@@ -27,8 +27,8 @@ public class PublicGuestController {
     }
 
     @GetMapping("/rooms")
-    public ResponseEntity<List<PublicGuestDtos.RoomSummary>> rooms(@RequestParam(required = false) String type,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+    public ResponseEntity<List<PublicGuestDtos.RoomSummary>> rooms(@RequestParam(name = "type", required = false) String type,
+            @RequestParam(name = "page", defaultValue = "0") int page, @RequestParam(name = "size", defaultValue = "20") int size) {
         return cachedPage(service.rooms(type), page, size);
     }
 
@@ -40,17 +40,17 @@ public class PublicGuestController {
 
     @GetMapping("/rooms/availability")
     public ResponseEntity<List<PublicGuestDtos.RoomAvailability>> availability(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
-            @RequestParam(required = false) String type,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(name = "from") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(name = "to") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @RequestParam(name = "type", required = false) String type,
+            @RequestParam(name = "page", defaultValue = "0") int page, @RequestParam(name = "size", defaultValue = "20") int size) {
         List<PublicGuestDtos.RoomAvailability> all = service.availability(from, to, type);
         return noStorePage(all, page, size);
     }
 
     @GetMapping("/services")
     public ResponseEntity<List<PublicGuestDtos.ServiceSummary>> services(
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(name = "page", defaultValue = "0") int page, @RequestParam(name = "size", defaultValue = "20") int size) {
         return cachedPage(service.services(), page, size);
     }
 

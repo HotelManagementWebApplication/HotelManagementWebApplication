@@ -123,6 +123,15 @@ public class AuthService {
                 tokenService.generateFamilyId());
     }
 
+    /** Trả snapshot hồ sơ của employee hiện tại từ principal đã được JWT xác thực. */
+    @Transactional(readOnly = true)
+    public AuthDtos.EmployeeProfileResponse employeeMe(SecurityActor.Principal actor) {
+        if (!actor.isEmployee()) throw new org.springframework.security.access.AccessDeniedException("Employee principal required");
+        Employee employee = employeeService.findRequired(actor.id());
+        return new AuthDtos.EmployeeProfileResponse(employee.getEmployeeId(), employee.getFullName(),
+                employee.getRole(), employee.getPermissions().stream().sorted().toList());
+    }
+
     /** Kiểm tra refresh token, phát hành token mới và thu hồi token cũ trong giao dịch. */
     @Transactional(noRollbackFor = AuthFailureException.class)
     public AuthDtos.TokenResponse refresh(String rawRefreshToken) {
@@ -217,9 +226,19 @@ public class AuthService {
     public void resetPassword(String employeeId, AuthDtos.PasswordResetRequest request,
                               SecurityActor.Principal actor) {
         if (!actor.isEmployee()) throw new AuthFailureException();
+        SecurityActor.requireBoundActor(actor.id());
         Employee employee = employeeService.resetPassword(employeeId, request == null ? null : request.password());
         refreshTokens.revokeAllForEmployee(employeeId, Instant.now());
         audit.record(actor.id(), "PASSWORD_RESET", "EMPLOYEE", employee.getEmployeeId(), null, null, null);
+    }
+
+    @Transactional
+    public void changeOwnPassword(SecurityActor.Principal actor, AuthDtos.ChangeOwnPasswordRequest request) {
+        if (!actor.isEmployee()) throw new AuthFailureException();
+        SecurityActor.requireBoundActor(actor.id());
+        employeeService.changeOwnPassword(actor.id(), request == null ? null : request.password());
+        refreshTokens.revokeAllForEmployee(actor.id(), Instant.now());
+        audit.record(actor.id(), "PASSWORD_CHANGED", "EMPLOYEE", actor.id(), null, null, null);
     }
 
     /** Đổi mật khẩu của chính khách đang đăng nhập và thu hồi token cũ của khách. */

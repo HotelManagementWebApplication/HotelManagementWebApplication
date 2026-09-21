@@ -25,14 +25,18 @@ public class PaymentController {
      */
     @GetMapping 
     @PreAuthorize("@departmentAccess.allows(authentication, 'BILLING_READ')")
-    public Object list(@PathVariable Long invoiceId, @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) { return page == null && size == null ? service.listByInvoice(invoiceId) : service.pageByInvoice(invoiceId, page == null ? 0 : page, size == null ? 20 : size); }
+    public Object list(@PathVariable Long invoiceId, @RequestParam(name = "page", required = false) Integer page, @RequestParam(name = "size", required = false) Integer size) { return page == null && size == null ? service.listByInvoice(invoiceId) : service.pageByInvoice(invoiceId, page == null ? 0 : page, size == null ? 20 : size); }
     /**
      * Ghi nhận thanh toán qua POST /api/invoices/{invoiceId}/payments.
      * invoiceId là path parameter, body tạo giao dịch được {@code @Valid} kiểm tra; actor hiện tại được truyền cho dịch vụ,
-     * response là giao dịch đã ghi. Chỉ PAYMENT_WRITE được gọi; không có Idempotency-Key nên lỗi trùng/trạng thái hóa đơn
-     * do dịch vụ quyết định và trả về lỗi nghiệp vụ phù hợp.
+     * response là giao dịch đã ghi. Chỉ PAYMENT_WRITE được gọi; Idempotency-Key là bắt buộc
+     * để retry/double-click không ghi thêm giao dịch.
      */
     @PostMapping 
     @PreAuthorize("@departmentAccess.allows(authentication, 'PAYMENT_WRITE')")
-    public PaymentTransactionDtos.Response record(@PathVariable Long invoiceId, @Valid @RequestBody PaymentTransactionDtos.CreateRequest request) { return service.record(invoiceId, request, SecurityActor.currentActor()); }
+    public PaymentTransactionDtos.Response record(@PathVariable Long invoiceId,
+                                                  @Valid @RequestBody PaymentTransactionDtos.CreateRequest request,
+                                                  @RequestHeader("Idempotency-Key") String idempotencyKey) {
+        return service.record(invoiceId, request, SecurityActor.currentActor(), idempotencyKey);
+    }
 }

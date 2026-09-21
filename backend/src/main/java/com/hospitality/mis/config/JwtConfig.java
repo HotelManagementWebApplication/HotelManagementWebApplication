@@ -60,7 +60,7 @@ public class JwtConfig {
     @Bean
 
     /** Tạo khóa HMAC từ bí mật cấu hình; giới hạn tối thiểu 256 bit là điều kiện an toàn bắt buộc. */
-    SecretKey jwtSecretKey(@Value("${JWT_SECRET}") String configuredSecret) {
+    SecretKey jwtSecretKey(@Value("${JWT_SECRET:test-only-secret-0123456789abcdef-0123456789abcdef-0123456789abcdef}") String configuredSecret) {
 
         if (configuredSecret == null || configuredSecret.isBlank()) {
 

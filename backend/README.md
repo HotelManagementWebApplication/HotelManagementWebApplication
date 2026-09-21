@@ -1,6 +1,6 @@
 # Hotel MIS backend
 
-Spring Boot 3.4 modular monolith (Java 21) for the Hotel MIS web system. The
+Spring Boot 3.4 modular monolith (Java 24) for the Hotel MIS web system. The
 canonical Java package is `com.hospitality.mis`; backend code is organized into
 `middleware`, `controller`, `service`, `dao`, `dto` and `entity` layers, grouped
 by business module.

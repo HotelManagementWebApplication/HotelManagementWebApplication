@@ -33,14 +33,14 @@ public class AuditController {
     @GetMapping
     
     @PreAuthorize("@departmentAccess.allows(authentication, 'AUDIT_READ')")
-    public Object list(@RequestParam(required = false) String action,
+    public Object list(@RequestParam(name = "action", required = false) String action,
                        @RequestParam(name = "entity_type", required = false) String entityType,
                        @RequestParam(name = "entity_id", required = false) String entityId,
                        @RequestParam(name = "correlation_key", required = false) String correlationKey,
-                       @RequestParam(required = false) java.time.Instant from,
-                       @RequestParam(required = false) java.time.Instant to,
-                       @RequestParam(required = false) Integer page,
-                       @RequestParam(required = false) Integer size) {
+                       @RequestParam(name = "from", required = false) java.time.Instant from,
+                       @RequestParam(name = "to", required = false) java.time.Instant to,
+                       @RequestParam(name = "page", required = false) Integer page,
+                       @RequestParam(name = "size", required = false) Integer size) {
         boolean global = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_DIRECTOR") || a.getAuthority().equals("ROLE_MANAGER"));
         if (action == null && entityType == null && entityId == null && correlationKey == null && from == null && to == null && page == null && size == null) return audit.list(SecurityActor.currentActor(), global).stream()

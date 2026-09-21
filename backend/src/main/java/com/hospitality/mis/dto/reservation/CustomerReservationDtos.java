@@ -19,8 +19,14 @@ public final class CustomerReservationDtos {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record CreateRequest(
             @NotNull ReservationDtos.RentalType rentalType,
+            String bookingSource,
             @NotEmpty @Valid List<RoomStay> rooms,
-            @NotBlank String idempotencyKey) {}
+            @NotBlank String idempotencyKey) {
+        /** Giữ tương thích với các caller Java cũ chưa truyền nguồn đặt phòng. */
+        public CreateRequest(ReservationDtos.RentalType rentalType, List<RoomStay> rooms, String idempotencyKey) {
+            this(rentalType, "DIRECT", rooms, idempotencyKey);
+        }
+    }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record RoomStay(
@@ -47,8 +53,16 @@ public final class CustomerReservationDtos {
             Long id,
             ReservationStatus status,
             ReservationDtos.RentalType rentalType,
+            String bookingSource,
             BigDecimal depositAmount,
             LocalDateTime bookedAt,
             List<RoomLine> rooms,
-            PaymentInstruction depositPayment) {}
+            PaymentInstruction depositPayment) {
+        /** Giữ tương thích với các caller Java cũ chưa có nguồn đặt phòng trong response. */
+        public Response(Long id, ReservationStatus status, ReservationDtos.RentalType rentalType,
+                        BigDecimal depositAmount, LocalDateTime bookedAt, List<RoomLine> rooms,
+                        PaymentInstruction depositPayment) {
+            this(id, status, rentalType, "DIRECT", depositAmount, bookedAt, rooms, depositPayment);
+        }
+    }
 }

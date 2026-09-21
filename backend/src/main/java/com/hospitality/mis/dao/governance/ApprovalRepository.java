@@ -4,6 +4,7 @@ import com.hospitality.mis.entity.governance.ApprovalRequest;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -60,19 +61,41 @@ public interface ApprovalRepository extends JpaRepository<ApprovalRequest, Long>
                                                               @Param("payloadFingerprint") String payloadFingerprint,
                                                               @Param("amount") BigDecimal amount);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    /** Tìm ID candidate activation không khóa; state transition sẽ là conditional update theo primary key. */
     @Query("""
-            select a from ApprovalRequest a
+            select a.id from ApprovalRequest a
             where a.action = :action and a.targetId = :targetId
               and a.status = 'APPROVED' and a.consumedAt is null
               and a.payloadFingerprint = :payloadFingerprint
               and ((:amount is null and a.amount is null) or a.amount = :amount)
             order by a.id desc
             """)
-    Optional<ApprovalRequest> findApprovedForActivationWithLock(@Param("action") String action,
-                                                                  @Param("targetId") String targetId,
-                                                                  @Param("payloadFingerprint") String payloadFingerprint,
-                                                                  @Param("amount") BigDecimal amount);
+    Optional<Long> findApprovedForActivationId(@Param("action") String action,
+                                                @Param("targetId") String targetId,
+                                                @Param("payloadFingerprint") String payloadFingerprint,
+                                                @Param("amount") BigDecimal amount);
+
+    /** Atomically consumes one exact approved activation; the affected-row count selects the sole winner. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update ApprovalRequest a
+               set a.status = 'CONSUMED', a.consumedAt = :consumedAt
+             where a.id = :id
+               and a.action = :action and a.targetId = :targetId
+               and a.status = 'APPROVED' and a.consumedAt is null
+               and a.payloadFingerprint = :payloadFingerprint
+               and ((:amount is null and a.amount is null) or a.amount = :amount)
+               and a.expiresAt > :now
+               and a.requester <> :approver
+            """)
+    int consumeApprovedForActivationIfCurrent(@Param("id") Long id,
+                                                @Param("action") String action,
+                                                @Param("targetId") String targetId,
+                                                @Param("payloadFingerprint") String payloadFingerprint,
+                                                @Param("amount") BigDecimal amount,
+                                                @Param("now") Instant now,
+                                                @Param("consumedAt") Instant consumedAt,
+                                                @Param("approver") String approver);
 
     /** Lấy các yêu cầu ở trạng thái đã chỉ định và đã hết hạn tại thời điểm now. */
     List<ApprovalRequest> findByStatusAndExpiresAtLessThanEqual(String status, Instant now);

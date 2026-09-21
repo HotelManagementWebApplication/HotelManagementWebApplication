@@ -33,12 +33,12 @@ public class InvoiceController {
 
     @GetMapping
     @PreAuthorize("@departmentAccess.allows(authentication, 'BILLING_READ')")
-    public InvoiceDtos.PageResponse list(@RequestParam(required = false) com.hospitality.mis.entity.billing.PaymentStatus status,
+    public InvoiceDtos.PageResponse list(@RequestParam(name = "status", required = false) com.hospitality.mis.entity.billing.PaymentStatus status,
                                          @RequestParam(name = "reservation_id", required = false) Long reservationId,
-                                         @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate from,
-                                         @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate to,
-                                         @RequestParam(defaultValue = "0") int page,
-                                         @RequestParam(defaultValue = "20") int size) {
+                                         @RequestParam(name = "from", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate from,
+                                         @RequestParam(name = "to", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate to,
+                                         @RequestParam(name = "page", defaultValue = "0") int page,
+                                         @RequestParam(name = "size", defaultValue = "20") int size) {
         return service.list(status, reservationId, from, to, page, size);
     }
 

@@ -13,6 +13,7 @@ import com.hospitality.mis.entity.billing.InvoiceAdjustment;
 import com.hospitality.mis.entity.billing.PaymentMethod;
 import com.hospitality.mis.entity.billing.PaymentStatus;
 import com.hospitality.mis.entity.billing.PaymentTransaction;
+import com.hospitality.mis.entity.billing.Receipt;
 import com.hospitality.mis.entity.guest.MembershipPolicy;
 import com.hospitality.mis.entity.reservation.Reservation;
 import com.hospitality.mis.entity.reservation.ReservationRoom;
@@ -105,11 +106,12 @@ public class BillingService {
         BigDecimal late = BigDecimal.ZERO;
         for (ReservationRoom line : reservation.getRooms()) {
             BigDecimal dailyPrice = line.getRoom().getRoomType().getDailyPrice();
+            BigDecimal hourlyPrice = line.getRoom().getRoomType().getHourlyPrice();
             LocalDateTime baseCheckout = line.getOriginalCheckOut();
             int extensionMinutes = (int) Math.max(0,
                     java.time.Duration.between(baseCheckout, line.getCheckOut()).toMinutes());
             if (baseCheckout.isAfter(line.getCheckIn())) {
-                room = room.add(pricing.roomCharge(dailyPrice, line.getCheckIn(), baseCheckout,
+                room = room.add(pricing.roomCharge(dailyPrice, hourlyPrice, line.getCheckIn(), baseCheckout,
                         "HOURLY".equals(reservation.getRentalType())));
             }
             extension = extension.add(pricing.extensionCharge(dailyPrice, extensionMinutes));
@@ -142,7 +144,7 @@ public class BillingService {
         audit.record(boundActor, "INVOICE_RECONCILED", "INVOICE", String.valueOf(invoice.getId()), null,
                 payable(invoice, subtotal.subtract(discount)).toPlainString(), null);
         if (ledger != null) ledger.record("REVENUE_RECOGNIZED", "INVOICE", String.valueOf(invoice.getId()),
-                FinancialLedgerEntry.Direction.CREDIT, payable(invoice, subtotal.subtract(discount)), boundActor,
+                FinancialLedgerEntry.Direction.CREDIT, invoiceChargeTotal(invoice), boundActor,
                 checkoutAt, "CHECKOUT");
         return toResponse(invoice);
     }
@@ -193,7 +195,10 @@ public class BillingService {
         com.hospitality.mis.entity.billing.Receipt receipt = new com.hospitality.mis.entity.billing.Receipt();
         receipt.setReceiptNumber("DEP-" + reservation.getId()); receipt.setInvoice(invoice); receipt.setAmount(deposit);
         receipt.setMethod(payment.getMethod()); receipt.setIssuedAt(payment.getOccurredAt()); receipt.setIssuedBy(actor);
-        receipts.save(receipt);
+        Receipt persistedReceipt = receipts.save(receipt);
+        if (persistedReceipt == null) persistedReceipt = receipt;
+        if (ledger != null) ledger.record("RECEIPT_ISSUED", "RECEIPT", String.valueOf(persistedReceipt.getId()),
+                FinancialLedgerEntry.Direction.DEBIT, persistedReceipt.getAmount(), actor, persistedReceipt.getIssuedAt(), persistedReceipt.getMethod().name());
         audit.record(actor, "DEPOSIT_PAYMENT_RECORDED", "PAYMENT_TRANSACTION", String.valueOf(payment.getId()), null,
                 deposit.toPlainString(), "DEPOSIT_RECEIPT:" + receipt.getReceiptNumber());
     }
@@ -281,6 +286,9 @@ public class BillingService {
         invoice.setAdjustmentTotal(invoice.getAdjustmentTotal().add(delta));
         reconcile(invoice);
         approvals.consumeApproved("BILLING_ADJUSTMENT", String.valueOf(id), payload, delta.abs(), boundActor);
+        if (ledger != null) ledger.record("INVOICE_ADJUSTMENT", "INVOICE_ADJUSTMENT", String.valueOf(adjustment.getId()),
+                delta.signum() > 0 ? FinancialLedgerEntry.Direction.CREDIT : FinancialLedgerEntry.Direction.DEBIT,
+                delta.abs(), boundActor, adjustment.getOccurredAt(), reason.trim());
         audit.record(boundActor, "INVOICE_ADJUSTED", "INVOICE", String.valueOf(id), before.toPlainString(),
                 invoiceChargeTotal(invoice).toPlainString(), reason.trim(), key);
         return toResponse(invoice);

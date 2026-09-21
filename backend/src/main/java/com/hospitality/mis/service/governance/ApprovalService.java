@@ -228,20 +228,45 @@ public class ApprovalService {
                                                      BigDecimal amount, String actor) {
         String principal = SecurityActor.requireBoundActor(actor);
         validateBinding(action, targetId, payload);
-        ApprovalRequest approval = approvals.findApprovedForActivationWithLock(action, targetId,
-                fingerprintFor(payload), amount)
+        String payloadFingerprint = fingerprintFor(payload);
+        Instant now = Instant.now(clock);
+        /*
+         * Find only the candidate ID without a lock.  The conditional UPDATE is
+         * the concurrency arbiter: InnoDB serializes the write and exactly one
+         * transaction can change APPROVED to CONSUMED.
+         */
+        Long candidateId = approvals.findApprovedForActivationId(action, targetId,
+                payloadFingerprint, amount)
                 .orElseThrow(() -> new DomainException("APPROVAL_REQUIRED", "Thao tác cần được phê duyệt trước: " + action));
-        if (approval.isExpired(Instant.now(clock))) {
+        int consumed = approvals.consumeApprovedForActivationIfCurrent(candidateId, action, targetId,
+                payloadFingerprint, amount, now, now, principal);
+        ApprovalRequest approval = approvals.findWithLockById(candidateId)
+                .orElseThrow(() -> new DomainException("APPROVAL_REQUIRED", "Thao tác cần được phê duyệt trước: " + action));
+        if (consumed == 0 && (!matchesActivationBinding(approval, action, targetId, payloadFingerprint, amount)
+                || !ApprovalRequest.APPROVED.equals(approval.getStatus())
+                || approval.getConsumedAt() != null))
+            throw new DomainException("APPROVAL_REQUIRED", "Thao tác cần được phê duyệt trước: " + action);
+        if (consumed == 0 && approval.isExpired(now)) {
             expireAndAudit(approval, principal);
             throw new DomainException("APPROVAL_EXPIRED", "Yêu cầu phê duyệt đã hết hạn");
         }
-        if (principal.equals(approval.getRequester()))
+        if (consumed == 0 && principal.equals(approval.getRequester()))
             throw new DomainException("SELF_APPROVAL_FORBIDDEN", "Requester không được tự kích hoạt thay đổi");
-        String before = approval.getStatus();
-        approval.consume(Instant.now(clock));
-        audit.record(principal, "APPROVAL_CONSUMED", "APPROVAL", String.valueOf(approval.getId()), before,
-                approval.getStatus(), approval.getReason(), approval.getCorrelationKey());
+        if (consumed == 0)
+            throw new DomainException("APPROVAL_REQUIRED", "Thao tác cần được phê duyệt trước: " + action);
+        audit.record(principal, "APPROVAL_CONSUMED", "APPROVAL", String.valueOf(approval.getId()),
+                ApprovalRequest.APPROVED, approval.getStatus(), approval.getReason(), approval.getCorrelationKey());
         return approval;
+    }
+
+    /** Xác nhận candidate vẫn đúng exact binding sau khi primary-key lock đã được lấy. */
+    private boolean matchesActivationBinding(ApprovalRequest approval, String action, String targetId,
+                                             String payloadFingerprint, BigDecimal amount) {
+        BigDecimal storedAmount = approval.getAmount();
+        boolean amountMatches = storedAmount == null ? amount == null
+                : amount != null && storedAmount.compareTo(amount) == 0;
+        return action.equals(approval.getAction()) && targetId.equals(approval.getTargetId())
+                && payloadFingerprint.equals(approval.getPayloadFingerprint()) && amountMatches;
     }
 
     /** Các luồng gọi thao tác thay đổi hiện có phải cung cấp ràng buộc trước khi tiêu thụ phê duyệt. */

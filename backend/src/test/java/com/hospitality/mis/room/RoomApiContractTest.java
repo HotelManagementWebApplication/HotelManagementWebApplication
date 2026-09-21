@@ -63,9 +63,9 @@ class RoomApiContractTest {
 
     @Test
     @WithMockUser(username = "frontdesk", roles = "FRONT_DESK")
-    /** Given room READY, When search type/status, Then response snake_case và giá 2400.00 giữ nguyên. */
+    /** Given room READY, When search canonical status, Then response dùng lower_snake_case. */
     void searchKeepsTheExistingRoomResponseShapeAndStatusCodes() throws Exception {
-        mockMvc.perform(get("/api/rooms").param("type", "STD").param("status", "SAN_SANG"))
+        mockMvc.perform(get("/api/rooms").param("type", "STD").param("status", "available"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value("R101"))
                 .andExpect(jsonPath("$[0].name").value("Room 101"))
@@ -73,17 +73,17 @@ class RoomApiContractTest {
                 .andExpect(jsonPath("$[0].room_type_name").value("Standard"))
                 .andExpect(jsonPath("$[0].daily_price").value(2400.00))
                 .andExpect(jsonPath("$[0].floor").value(1))
-                .andExpect(jsonPath("$[0].status").value("SAN_SANG"));
+                .andExpect(jsonPath("$[0].status").value("available"));
     }
 
     @Test
     @WithMockUser(username = "manager", roles = "MANAGER")
-    /** Given manager patch BAO_TRI, When update, Then route cũ trả status canonical hiện hành. */
-    void statusPatchUsesTheExistingRouteAndWritesCanonicalStatusAsTheLegacyCode() throws Exception {
-        mockMvc.perform(patch("/api/rooms/R101/status").param("status", "BAO_TRI"))
+    /** Given manager patch maintenance, When update, Then response dùng status canonical. */
+    void statusPatchUsesTheExistingRouteAndWritesCanonicalStatus() throws Exception {
+        mockMvc.perform(patch("/api/rooms/R101/status").param("status", "maintenance"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("R101"))
-                .andExpect(jsonPath("$.status").value("BAO_TRI"));
+                .andExpect(jsonPath("$.status").value("maintenance"));
     }
 
     @Test
@@ -94,7 +94,7 @@ class RoomApiContractTest {
         room.setStatus(RoomStatus.OCCUPIED);
         rooms.saveAndFlush(room);
 
-        mockMvc.perform(patch("/api/rooms/R101/status").param("status", "SAN_SANG"))
+        mockMvc.perform(patch("/api/rooms/R101/status").param("status", "available"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.status").value(422))
                 .andExpect(jsonPath("$.code").value("INVALID_ROOM_TRANSITION"))
@@ -109,7 +109,7 @@ class RoomApiContractTest {
         room.setStatus(RoomStatus.MAINTENANCE);
         rooms.saveAndFlush(room);
 
-        mockMvc.perform(patch("/api/rooms/R101/status").param("status", "SAN_SANG"))
+        mockMvc.perform(patch("/api/rooms/R101/status").param("status", "available"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("ROOM_STATUS_FORBIDDEN"));
     }
@@ -119,6 +119,15 @@ class RoomApiContractTest {
     /** Given status không thuộc enum, When search, Then trả INVALID_ROOM_STATUS. */
     void invalidRoomStatusIsRejectedByTheRoomContract() throws Exception {
         mockMvc.perform(get("/api/rooms").param("status", "NOT_A_STATUS"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("INVALID_ROOM_STATUS"));
+    }
+
+    @Test
+    @WithMockUser(username = "staff", roles = "STAFF")
+    /** Given legacy room code, When search, Then hard-cut rejects it without a compatibility read. */
+    void legacyRoomStatusCodeIsRejectedByTheRoomContract() throws Exception {
+        mockMvc.perform(get("/api/rooms").param("status", "SAN_SANG"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("INVALID_ROOM_STATUS"));
     }

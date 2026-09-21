@@ -1,14 +1,15 @@
 services:
   mysql:
+    container_name: web-hotel-mis-mysql-3307
     image: mysql:8.4
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-QLKS}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in your shell or local .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-hotel_mis_local}
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
-      - hotel-mis-mysql:/var/lib/mysql
+      - hotel-mysql:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 5s
@@ -16,4 +17,6 @@ services:
       retries: 20
 
 volumes:
-  hotel-mis-mysql:
+  hotel-mysql:
+    name: web-hotel-mis_hotel-mysql
+    external: true

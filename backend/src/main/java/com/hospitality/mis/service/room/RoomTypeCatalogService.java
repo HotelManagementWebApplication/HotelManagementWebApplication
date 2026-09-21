@@ -132,23 +132,27 @@ public class RoomTypeCatalogService {
         return durableIdempotency.execute("room-type-activate", key, principal, hash,
                 RoomTypeAdminDtos.Response.class, () -> {
                     var approval = approvals.consumeApprovedByApprover(APPROVAL_ACTION, type.getId(), payload, null, principal);
-                    if (type.getRevisionOfId() != null) {
-                        RoomType previous = locked(type.getRevisionOfId());
+                    // Approval consumption uses a bulk update with clearAutomatically=true;
+                    // reload the aggregate before mutating it so ACTIVE and revision changes
+                    // are applied to a managed entity and actually flushed by this transaction.
+                    RoomType activated = locked(id.trim());
+                    if (activated.getRevisionOfId() != null) {
+                        RoomType previous = locked(activated.getRevisionOfId());
                         if (previous.getCatalogStatus() != RoomTypeCatalogStatus.ACTIVE)
                             throw error("ROOM_TYPE_REVISION_SOURCE_INVALID", "Bản gốc của revision không còn ACTIVE");
                         previous.setCatalogStatus(RoomTypeCatalogStatus.RETIRED);
-                        previous.setSupersededById(type.getId());
+                        previous.setSupersededById(activated.getId());
                         if (rooms != null) rooms.findAllByRoomTypeIdForUpdate(previous.getId())
-                                .forEach(room -> room.setRoomType(type));
+                                .forEach(room -> room.setRoomType(activated));
                     }
-                    type.setCatalogStatus(RoomTypeCatalogStatus.ACTIVE);
-                    type.setCatalogApprovedBy(approval.getApprover());
-                    type.setCatalogApprovedAt(LocalDateTime.now(clock));
-                    priceHistory.save(new RoomTypePriceHistory(type, type.getDailyPrice(), approval.getApprover(),
+                    activated.setCatalogStatus(RoomTypeCatalogStatus.ACTIVE);
+                    activated.setCatalogApprovedBy(approval.getApprover());
+                    activated.setCatalogApprovedAt(LocalDateTime.now(clock));
+                    priceHistory.save(new RoomTypePriceHistory(activated, activated.getDailyPrice(), approval.getApprover(),
                             approval.getId(), LocalDateTime.now(clock)));
-                    audit.record(principal, "ROOM_TYPE_ACTIVATED", "ROOM_TYPE", type.getId(),
+                    audit.record(principal, "ROOM_TYPE_ACTIVATED", "ROOM_TYPE", activated.getId(),
                             RoomTypeCatalogStatus.DRAFT.name(), RoomTypeCatalogStatus.ACTIVE.name(), null);
-                    return RoomTypeAdminDtos.Response.from(type);
+                    return RoomTypeAdminDtos.Response.from(activated);
                 });
     }
 
@@ -186,6 +190,12 @@ public class RoomTypeCatalogService {
         type.setName(request.name().trim());
         type.setDailyPrice(request.dailyPrice());
         type.setDescription(request.description() == null ? null : request.description().trim());
+        type.setArea(request.area());
+        type.setView(trimToNull(request.view()));
+        type.setHourlyPrice(request.hourlyPrice() == null || request.hourlyPrice().signum() == 0
+                ? request.dailyPrice().divide(java.math.BigDecimal.valueOf(24), 2, java.math.RoundingMode.HALF_UP)
+                : request.hourlyPrice());
+        type.setBedType(trimToNull(request.bedType()));
         type.setCatalogStatus(active ? RoomTypeCatalogStatus.ACTIVE : RoomTypeCatalogStatus.DRAFT);
         type.setCatalogUpdatedBy(actor);
         type.setCatalogUpdatedAt(LocalDateTime.now(clock));
@@ -197,12 +207,25 @@ public class RoomTypeCatalogService {
 
     private static String canonical(RoomTypeAdminDtos.Request request) {
         return String.join("|", request.id().trim(), request.name().trim(), request.dailyPrice().toPlainString(),
-                request.description() == null ? "" : request.description().trim());
+                request.description() == null ? "" : request.description().trim(),
+                request.area() == null ? "" : request.area().stripTrailingZeros().toPlainString(),
+                request.view() == null ? "" : request.view().trim(),
+                request.hourlyPrice() == null ? "0" : request.hourlyPrice().stripTrailingZeros().toPlainString(),
+                request.bedType() == null ? "" : request.bedType().trim());
     }
 
     private static String canonical(RoomType type) {
         return String.join("|", type.getId(), type.getName(), type.getDailyPrice().toPlainString(),
-                type.getDescription() == null ? "" : type.getDescription());
+                type.getDescription() == null ? "" : type.getDescription(),
+                type.getArea() == null ? "" : type.getArea().stripTrailingZeros().toPlainString(),
+                type.getView() == null ? "" : type.getView(),
+                type.getHourlyPrice() == null ? "0" : type.getHourlyPrice().stripTrailingZeros().toPlainString(),
+                type.getBedType() == null ? "" : type.getBedType());
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value.trim();
     }
 
     private static String fingerprint(String value) { return IdempotencySupport.fingerprint(value); }

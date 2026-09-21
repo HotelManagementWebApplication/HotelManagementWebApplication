@@ -20,8 +20,11 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Clock;
+import java.util.List;
+import com.hospitality.mis.entity.operations.IncidentSeverity;
 
 /** Ghi sự cố thiết bị trong phòng đang có khách và tính khoản bồi thường. */
 @Service
@@ -39,6 +42,7 @@ public class EquipmentIncidentService {
     private final IdempotencySupport idempotency = new IdempotencySupport();
     private DurableIdempotencyService durableIdempotency;
     private NotificationOutboxService notifications;
+    private com.hospitality.mis.dao.room.RoomRepository rooms;
     private Clock clock = Clock.system(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
 
     public EquipmentIncidentService(EquipmentIncidentRepository incidents, ReservationRepository reservations,
@@ -59,6 +63,9 @@ public class EquipmentIncidentService {
     @org.springframework.beans.factory.annotation.Autowired
     void setNotifications(NotificationOutboxService notifications) { this.notifications = notifications; }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    void setRooms(com.hospitality.mis.dao.room.RoomRepository rooms) { this.rooms = rooms; }
+
     /** Khóa đặt phòng, xác nhận room occupied, tính bồi thường và ghi sự cố idempotent. */
     @Transactional
     public EquipmentIncidentDtos.Response record(Long reservationId, EquipmentIncidentDtos.CreateRequest request,
@@ -67,7 +74,7 @@ public class EquipmentIncidentService {
         if (request == null) throw new DomainException("INVALID_REQUEST", "Thiếu nội dung báo sự cố");
         String fingerprint = IdempotencySupport.fingerprint("EQUIPMENT_INCIDENT|" + reservationId + "|" + request.roomId()
                 + "|" + request.equipmentName() + "|" + request.equipmentId()
-                + "|" + request.quantity());
+                + "|" + request.quantity() + "|" + request.severity());
         return executeIdempotent("equipment-incident", key, actor, fingerprint, EquipmentIncidentDtos.Response.class, () -> {
             var reservation = reservations.findForUpdate(reservationId)
                     .orElseThrow(() -> new DomainException("RESERVATION_NOT_FOUND", "Không tìm thấy đặt phòng"));
@@ -102,8 +109,7 @@ public class EquipmentIncidentService {
                     notifications.enqueue("EQUIPMENT_INCIDENT", "MANAGER", payload, "equipment-incident-manager-" + incident.getId());
                 }
             }
-            return new EquipmentIncidentDtos.Response(incident.getId(), request.roomId(), equipment.getName(), amount,
-                    incident.getSeverity(), incident.getHandoffStatus(), incident.getHandoffNote());
+            return response(incident);
         });
     }
 
@@ -120,12 +126,104 @@ public class EquipmentIncidentService {
     }
 
     @Transactional
-    public EquipmentIncidentDtos.Response handoff(Long id, EquipmentIncidentDtos.HandoffRequest request, String suppliedActor) {
+    public EquipmentIncidentDtos.Response handoff(Long id, EquipmentIncidentDtos.HandoffRequest request,
+                                                  String suppliedActor, String key) {
+        final String actor = authenticatedActor(suppliedActor);
+        String fingerprint = IdempotencySupport.fingerprint("EQUIPMENT_INCIDENT_HANDOFF|" + id + "|" + request);
+        return executeIdempotent("equipment-incident-handoff", key, actor, fingerprint,
+                EquipmentIncidentDtos.Response.class, () -> {
+            var incident = incidents.findForUpdateById(id).orElseThrow(() -> new DomainException("INCIDENT_NOT_FOUND", "Không tìm thấy sự cố"));
+            if (!hasTechnicalOrManagementRole() && request.status() == IncidentHandoffStatus.RESOLVED)
+                throw new DomainException("INCIDENT_HANDOFF_FORBIDDEN", "Chỉ Technical hoặc Manager mới được resolve incident");
+            if (!allowedHandoff(incident.getHandoffStatus(), request.status()))
+                throw new DomainException("INVALID_INCIDENT_HANDOFF", "Chuyển trạng thái handoff không hợp lệ");
+            IncidentHandoffStatus before = incident.getHandoffStatus();
+            incident.setHandoffStatus(request.status()); incident.setHandoffNote(request.note());
+            audit.record(actor, "EQUIPMENT_INCIDENT_HANDOFF", "EQUIPMENT_INCIDENT", id.toString(), before.name(), request.status().name(), request.note());
+            return response(incident);
+        });
+    }
+
+    @Transactional
+    public EquipmentIncidentDtos.Response recordRoomIncident(EquipmentIncidentDtos.RoomIncidentRequest request,
+                                                             String suppliedActor, String key) {
         String actor = authenticatedActor(suppliedActor);
-        var incident = incidents.findById(id).orElseThrow(() -> new DomainException("INCIDENT_NOT_FOUND", "Không tìm thấy sự cố"));
-        incident.setHandoffStatus(request.status()); incident.setHandoffNote(request.note());
-        audit.record(actor, "EQUIPMENT_INCIDENT_HANDOFF", "EQUIPMENT_INCIDENT", id.toString(), null, request.status().name(), request.note());
-        return new EquipmentIncidentDtos.Response(id, incident.getRoom().getId(), "", incident.getCompensation(), incident.getSeverity(), incident.getHandoffStatus(), incident.getHandoffNote());
+        if (request == null) throw new DomainException("INVALID_REQUEST", "Thiếu nội dung báo sự cố");
+        int qty = request.resolvedQuantity();
+        String fingerprint = IdempotencySupport.fingerprint("ROOM_INCIDENT|" + request.roomId()
+                + "|" + request.equipmentName() + "|" + request.equipmentId()
+                + "|" + qty + "|" + request.severity() + "|" + request.description());
+        return executeIdempotent("room-incident", key, actor, fingerprint, EquipmentIncidentDtos.Response.class, () -> {
+            if (rooms == null) throw new DomainException("INTERNAL_ERROR", "Room repository unavailable");
+            var room = rooms.findForUpdate(request.roomId())
+                    .orElseThrow(() -> new DomainException("ROOM_NOT_FOUND", "Không tìm thấy phòng"));
+
+            BigDecimal origVal = BigDecimal.ZERO;
+            LocalDate purchasedOn = LocalDate.now(clock);
+            if (request.equipmentId() != null) {
+                var eq = equipmentRegistry.findByIdAndRoomIdAndActiveTrue(request.equipmentId(), request.roomId());
+                if (eq.isPresent()) {
+                    origVal = eq.get().getOriginalValue();
+                    purchasedOn = eq.get().getPurchasedOn();
+                }
+            } else {
+                var matches = equipmentRegistry.findByRoomIdAndActiveTrueOrderByNameAsc(request.roomId()).stream()
+                        .filter(item -> item.getName().equalsIgnoreCase(request.equipmentName().trim())).toList();
+                if (matches.size() == 1) {
+                    origVal = matches.get(0).getOriginalValue();
+                    purchasedOn = matches.get(0).getPurchasedOn();
+                }
+            }
+
+            IncidentSeverity sev = request.severity() != null ? request.severity() : IncidentSeverity.MEDIUM;
+            var incidentEntity = new EquipmentIncident(null, room, request.equipmentName().trim(),
+                    origVal, purchasedOn, qty, BigDecimal.ZERO);
+            incidentEntity.setSeverity(sev);
+            incidentEntity.setHandoffStatus(IncidentHandoffStatus.OPEN);
+            incidentEntity.setHandoffNote(request.description());
+            incidentEntity.setCreatedAt(java.time.LocalDateTime.now(clock));
+            var incident = incidents.save(incidentEntity);
+
+            audit.record(actor, "EQUIPMENT_INCIDENT_RECORDED", "ROOM", request.roomId(), null,
+                    request.equipmentName(), request.description());
+
+            if (notifications != null) {
+                String payload = "{\"room_id\":\"" + request.roomId()
+                        + "\",\"equipment_name\":\"" + request.equipmentName() + "\"}";
+                notifications.enqueue("EQUIPMENT_INCIDENT", "FRONT_DESK", payload, "room-incident-" + incident.getId());
+                notifications.enqueue("EQUIPMENT_INCIDENT", "TECHNICAL", payload, "room-incident-tech-" + incident.getId());
+                if (incident.getSeverity() == IncidentSeverity.HIGH || incident.getSeverity() == IncidentSeverity.CRITICAL) {
+                    notifications.enqueue("EQUIPMENT_INCIDENT", "MANAGER", payload, "room-incident-manager-" + incident.getId());
+                }
+            }
+            return response(incident);
+        });
+    }
+
+    @Transactional(readOnly = true)
+    public List<EquipmentIncidentDtos.Response> find(String roomId, Long reservationId,
+                                                     IncidentHandoffStatus handoffStatus) {
+        return incidents.findForOperations(roomId, reservationId, handoffStatus).stream().map(this::response).toList();
+    }
+
+    private EquipmentIncidentDtos.Response response(EquipmentIncident incident) {
+        return new EquipmentIncidentDtos.Response(incident.getId(),
+                incident.getReservation() != null ? incident.getReservation().getId() : null,
+                incident.getRoom().getId(), incident.getEquipmentName(), incident.getCompensation(),
+                incident.getSeverity(), incident.getHandoffStatus(), incident.getHandoffNote());
+    }
+
+    private boolean allowedHandoff(IncidentHandoffStatus current, IncidentHandoffStatus next) {
+        if (current == next) return true;
+        return (current == IncidentHandoffStatus.OPEN && next == IncidentHandoffStatus.ACKNOWLEDGED)
+                || (current == IncidentHandoffStatus.ACKNOWLEDGED && next == IncidentHandoffStatus.RESOLVED);
+    }
+
+    private boolean hasTechnicalOrManagementRole() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream().anyMatch(a ->
+                a.getAuthority().equals("ROLE_TECHNICAL") || a.getAuthority().equals("ROLE_ADMIN")
+                        || a.getAuthority().equals("ROLE_DIRECTOR") || a.getAuthority().equals("ROLE_MANAGER"));
     }
 
     private <T> T executeIdempotent(String scope, String key, String actor, String fingerprint,
