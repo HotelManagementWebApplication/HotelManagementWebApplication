@@ -1,0 +1,78 @@
+<mxfile host="app.diagrams.net" modified="2026-09-22T10:00:00.000Z" agent="HotelMS" version="21.0.0" type="device">
+  <diagram id="hotel-erd" name="Hotel Management ERD">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Table: USERS -->
+        <mxCell id="u1" value="&lt;b&gt;USERS&lt;/b&gt;&lt;hr&gt;+ id: BIGINT [PK]&lt;br&gt;+ username: VARCHAR(50) [UQ]&lt;br&gt;+ password: VARCHAR(255)&lt;br&gt;+ full_name: VARCHAR(100)&lt;br&gt;+ role: VARCHAR(20)&lt;br&gt;+ created_at: TIMESTAMP" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="200" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Table: CUSTOMERS -->
+        <mxCell id="c1" value="&lt;b&gt;CUSTOMERS&lt;/b&gt;&lt;hr&gt;+ id: BIGINT [PK]&lt;br&gt;+ full_name: VARCHAR(100)&lt;br&gt;+ identity_card: VARCHAR(20) [UQ]&lt;br&gt;+ phone: VARCHAR(15)&lt;br&gt;+ email: VARCHAR(100)&lt;br&gt;+ address: TEXT" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="320" y="40" width="220" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Table: ROOM_TYPES -->
+        <mxCell id="rt1" value="&lt;b&gt;ROOM_TYPES&lt;/b&gt;&lt;hr&gt;+ id: BIGINT [PK]&lt;br&gt;+ type_name: VARCHAR(50)&lt;br&gt;+ base_price: DECIMAL(12,2)&lt;br&gt;+ capacity: INT&lt;br&gt;+ description: TEXT" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="260" width="200" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- Table: ROOMS -->
+        <mxCell id="r1" value="&lt;b&gt;ROOMS&lt;/b&gt;&lt;hr&gt;+ id: BIGINT [PK]&lt;br&gt;+ room_number: VARCHAR(10) [UQ]&lt;br&gt;+ room_type_id: BIGINT [FK]&lt;br&gt;+ status: VARCHAR(20)&lt;br&gt;+ floor: INT" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="460" width="200" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- Table: BOOKINGS -->
+        <mxCell id="b1" value="&lt;b&gt;BOOKINGS&lt;/b&gt;&lt;hr&gt;+ id: BIGINT [PK]&lt;br&gt;+ customer_id: BIGINT [FK]&lt;br&gt;+ booking_date: TIMESTAMP&lt;br&gt;+ checkin_date: DATE&lt;br&gt;+ checkout_date: DATE&lt;br&gt;+ total_amount: DECIMAL(12,2)&lt;br&gt;+ status: VARCHAR(20)" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="320" y="260" width="220" height="170" as="geometry" />
+        </mxCell>
+
+        <!-- Table: BOOKING_ROOMS -->
+        <mxCell id="br1" value="&lt;b&gt;BOOKING_ROOMS&lt;/b&gt;&lt;hr&gt;+ id: BIGINT [PK]&lt;br&gt;+ booking_id: BIGINT [FK]&lt;br&gt;+ room_id: BIGINT [FK]&lt;br&gt;+ price: DECIMAL(12,2)" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="320" y="490" width="220" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- Table: SERVICES -->
+        <mxCell id="s1" value="&lt;b&gt;SERVICES&lt;/b&gt;&lt;hr&gt;+ id: BIGINT [PK]&lt;br&gt;+ service_name: VARCHAR(100)&lt;br&gt;+ price: DECIMAL(12,2)&lt;br&gt;+ unit: VARCHAR(20)" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="640" y="40" width="200" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- Table: SERVICE_ORDERS -->
+        <mxCell id="so1" value="&lt;b&gt;SERVICE_ORDERS&lt;/b&gt;&lt;hr&gt;+ id: BIGINT [PK]&lt;br&gt;+ booking_id: BIGINT [FK]&lt;br&gt;+ service_id: BIGINT [FK]&lt;br&gt;+ quantity: INT&lt;br&gt;+ order_time: TIMESTAMP&lt;br&gt;+ total_price: DECIMAL(12,2)" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="640" y="260" width="220" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Table: INVOICES -->
+        <mxCell id="inv1" value="&lt;b&gt;INVOICES&lt;/b&gt;&lt;hr&gt;+ id: BIGINT [PK]&lt;br&gt;+ invoice_code: VARCHAR(30) [UQ]&lt;br&gt;+ booking_id: BIGINT [FK]&lt;br&gt;+ total_room_amount: DECIMAL(12,2)&lt;br&gt;+ total_service_amount: DECIMAL(12,2)&lt;br&gt;+ discount: DECIMAL(12,2)&lt;br&gt;+ final_amount: DECIMAL(12,2)&lt;br&gt;+ payment_status: VARCHAR(20)&lt;br&gt;+ created_at: TIMESTAMP" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="920" y="260" width="240" height="200" as="geometry" />
+        </mxCell>
+
+        <!-- Relationships -->
+        <mxCell id="rel1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="c1" target="b1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="rt1" target="r1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="b1" target="br1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="r1" target="br1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="b1" target="so1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="s1" target="so1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="so1" target="inv1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
