@@ -16,8 +16,13 @@ import {
   Phone,
   CreditCard,
   ShieldCheck,
+  Mail,
+  KeyRound,
+  RotateCcw,
 } from "lucide-react";
 import { customerApi } from "../shared/api/customer";
+import { authApi } from "../shared/api/auth";
+import { classifyAccount, formatAuthError } from "../shared/utils/authValidation";
 
 interface LoginPageProps {
   onLogin: (identity: string, password: string) => Promise<string | null> | string | null;
@@ -26,15 +31,16 @@ interface LoginPageProps {
 
 const DEMO_ROLES = [
   { label: "Khách hàng", email: "0901234567", desc: "Tài khoản Khách (Nguyễn Văn An)" },
-  { label: "Lễ tân", email: "FRONTDESK", desc: "Front Desk PMS" },
+  { label: "Lễ tân", email: "FRONTDESK", desc: "Quầy lễ tân" },
   { label: "Quản lý", email: "MANAGER", desc: "Manager Dashboard" },
   { label: "Giám đốc", email: "DIRECTOR", desc: "Executive View" },
   { label: "Buồng phòng", email: "HOUSEKEEP", desc: "HK Station" },
   { label: "Kỹ thuật", email: "TECHNICAL", desc: "Maintenance" },
   { label: "Kế toán", email: "ACCOUNTING", desc: "Accounting" },
-  { label: "Bếp & F&B", email: "KITCHEN", desc: "Kitchen Inventory" },
+  { label: "Bếp & Nhà hàng", email: "KITCHEN", desc: "Điều phối nhà hàng & kho" },
   { label: "Nhân sự", email: "HR", desc: "HR Station" },
   { label: "Quản trị", email: "ADMIN", desc: "System Admin" },
+  { label: "Nhân viên vận hành", email: "STAFF", desc: "Cổng nhân viên" },
 ];
 
 export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
@@ -67,17 +73,82 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const [forgotOpen, setForgotOpen] = useState(false);
 
   // Register form state
+  const [regStep, setRegStep] = useState<"form" | "otp">("form");
   const [regFullName, setRegFullName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
   const [regPhone, setRegPhone] = useState("");
   const [regIdNumber, setRegIdNumber] = useState("");
   const [regPassword, setRegPassword] = useState("");
+  const [regOtp, setRegOtp] = useState("");
+  const [regCountdown, setRegCountdown] = useState(0);
+  const [regDevOtpHint, setRegDevOtpHint] = useState("");
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState("");
   const [regSuccess, setRegSuccess] = useState(false);
 
+  // Forgot password form state
+  const [forgotStep, setForgotStep] = useState<"request" | "otp" | "success">("request");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [forgotCountdown, setForgotCountdown] = useState(0);
+  const [forgotDevOtpHint, setForgotDevOtpHint] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+
+  // Countdown timers for OTP resend
+  useEffect(() => {
+    if (regCountdown > 0) {
+      const timer = setTimeout(() => setRegCountdown((c) => c - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [regCountdown]);
+
+  useEffect(() => {
+    if (forgotCountdown > 0) {
+      const timer = setTimeout(() => setForgotCountdown((c) => c - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [forgotCountdown]);
+
+  const resetRegisterModal = () => {
+    setRegisterOpen(false);
+    setRegStep("form");
+    setRegFullName("");
+    setRegEmail("");
+    setRegPhone("");
+    setRegIdNumber("");
+    setRegPassword("");
+    setRegOtp("");
+    setRegCountdown(0);
+    setRegDevOtpHint("");
+    setRegError("");
+    setRegSuccess(false);
+  };
+
+  const resetForgotModal = () => {
+    setForgotOpen(false);
+    setForgotStep("request");
+    setForgotEmail("");
+    setForgotOtp("");
+    setNewPassword("");
+    setConfirmNewPassword("");
+    setShowNewPw(false);
+    setForgotCountdown(0);
+    setForgotDevOtpHint("");
+    setForgotError("");
+  };
+
   const handleLogin = async () => {
     if (!username.trim() || !password) {
       setError("Vui lòng nhập đầy đủ thông tin đăng nhập.");
+      return;
+    }
+    const account = classifyAccount(username);
+    if (!account.valid) {
+      setError("Tài khoản không hợp lệ");
       return;
     }
     setError("");
@@ -88,7 +159,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
         setError(message);
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Đăng nhập thất bại.");
+      setError(formatAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -101,44 +172,178 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
     setError("");
   };
 
-  const handleCustomerRegister = async (e: React.FormEvent) => {
+  const handleSendRegisterOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regFullName.trim() || !regPhone.trim() || !regIdNumber.trim() || !regPassword) {
+    if (!regFullName.trim() || !regEmail.trim() || !regPhone.trim() || !regIdNumber.trim() || !regPassword) {
       setRegError("Vui lòng điền đầy đủ tất cả các trường.");
       return;
     }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(regEmail.trim())) {
+      setRegError("Email không hợp lệ. Vui lòng nhập đúng định dạng (ví dụ: name@gmail.com).");
+      return;
+    }
+    const phoneRegex = /^(0|\+84|84)[1-9]\d{8,9}$/;
+    if (!phoneRegex.test(regPhone.trim())) {
+      setRegError("Số điện thoại không hợp lệ. Vui lòng nhập 10 chữ số bắt đầu bằng số 0.");
+      return;
+    }
+    if (regPassword.length < 8) {
+      setRegError("Mật khẩu phải có tối thiểu 8 ký tự.");
+      return;
+    }
+
     setRegError("");
     setRegLoading(true);
     try {
-      await customerApi.register({
-        full_name: regFullName.trim(),
-        phone: regPhone.trim(),
-        identity_number: regIdNumber.trim(),
-        password: regPassword,
-      });
-      setRegSuccess(true);
-      const loginErr = await onLogin(regPhone.trim(), regPassword);
-      if (loginErr) {
-        setRegError(loginErr);
-        setRegSuccess(false);
-      } else {
-        setRegisterOpen(false);
-      }
-    } catch (err) {
-      setRegError(err instanceof Error ? err.message : "Đăng ký không thành công. Vui lòng thử lại.");
+      await authApi.sendRegistrationOtp(regEmail.trim());
+      setRegCountdown(60);
+      setRegStep("otp");
+    } catch (err: unknown) {
+      setRegError(err instanceof Error && err.message ? err.message : "Không thể gửi mã OTP. Vui lòng thử lại.");
     } finally {
       setRegLoading(false);
     }
   };
 
+  const handleResendRegisterOtp = async () => {
+    if (regCountdown > 0 || regLoading) return;
+    setRegError("");
+    setRegLoading(true);
+    try {
+      await authApi.sendRegistrationOtp(regEmail.trim());
+      setRegCountdown(60);
+    } catch (err: unknown) {
+      setRegError(err instanceof Error && err.message ? err.message : "Không thể gửi lại mã OTP. Vui lòng thử lại.");
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  const handleConfirmRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanOtp = regOtp.trim();
+    if (!cleanOtp || cleanOtp.length !== 6) {
+      setRegError("Vui lòng nhập đúng mã OTP gồm 6 chữ số.");
+      return;
+    }
+
+    setRegError("");
+    setRegLoading(true);
+    try {
+      await customerApi.register({
+        full_name: regFullName.trim(),
+        email: regEmail.trim(),
+        phone: regPhone.trim(),
+        identity_number: regIdNumber.trim(),
+        password: regPassword,
+        otp: cleanOtp,
+      });
+      setRegSuccess(true);
+      // Tự động đăng nhập
+      const loginErr = await onLogin(regPhone.trim(), regPassword);
+      if (loginErr) {
+        setRegError(loginErr);
+        setRegSuccess(false);
+      } else {
+        setTimeout(() => resetRegisterModal(), 1200);
+      }
+    } catch (err: unknown) {
+      setRegError(err instanceof Error && err.message ? err.message : "Đăng ký không thành công. Vui lòng kiểm tra mã OTP.");
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  const handleSendForgotOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = forgotEmail.trim();
+    if (!email) {
+      setForgotError("Vui lòng nhập địa chỉ email của bạn.");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setForgotError("Email không hợp lệ. Vui lòng nhập đúng định dạng email.");
+      return;
+    }
+
+    setForgotError("");
+    setForgotLoading(true);
+    try {
+      await authApi.sendForgotOtp(email);
+      setForgotCountdown(60);
+      setForgotStep("otp");
+    } catch (err: unknown) {
+      setForgotError(err instanceof Error && err.message ? err.message : "Không thể gửi mã OTP. Vui lòng thử lại.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResendForgotOtp = async () => {
+    if (forgotCountdown > 0 || forgotLoading) return;
+    setForgotError("");
+    setForgotLoading(true);
+    try {
+      await authApi.sendForgotOtp(forgotEmail.trim());
+      setForgotCountdown(60);
+    } catch (err: unknown) {
+      setForgotError(err instanceof Error && err.message ? err.message : "Không thể gửi lại mã OTP. Vui lòng thử lại.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanOtp = forgotOtp.trim();
+    if (!cleanOtp || cleanOtp.length !== 6) {
+      setForgotError("Vui lòng nhập đúng mã OTP gồm 6 chữ số.");
+      return;
+    }
+    if (!newPassword || newPassword.length < 8) {
+      setForgotError("Mật khẩu mới phải có tối thiểu 8 ký tự.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setForgotError("Xác nhận mật khẩu mới không khớp.");
+      return;
+    }
+
+    setForgotError("");
+    setForgotLoading(true);
+    try {
+      await authApi.resetPasswordWithOtp({
+        email: forgotEmail.trim(),
+        otp: cleanOtp,
+        new_password: newPassword,
+      });
+      setForgotStep("success");
+    } catch (err: unknown) {
+      setForgotError(err instanceof Error && err.message ? err.message : "Đặt lại mật khẩu thất bại. Mã OTP có thể đã hết hạn hoặc không đúng.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleFinishForgot = () => {
+    const savedEmail = forgotEmail.trim();
+    resetForgotModal();
+    if (savedEmail) {
+      setUsername(savedEmail);
+      setPassword("");
+    }
+  };
+
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row bg-[#FAF8F5] text-[#1C1917] font-sans antialiased selection:bg-[#B8944A]/25">
-      {/* ── Left Panel: Majestic Cinematic Heritage Resort ── */}
+      {/* ── Left Panel: Majestic Cinematic Heritage Hotel ── */}
       <div className="relative hidden md:flex flex-col justify-between w-[48%] lg:w-[54%] xl:w-[58%] min-h-screen overflow-hidden bg-[#0D1117]">
         {/* Background Image */}
         <img
           src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&h=1200&fit=crop&auto=format"
-          alt="MaM Luxury Resort Heritage Ambiance"
+          alt="MaM Hotel Heritage Ambiance"
           className="absolute inset-0 w-full h-full object-cover object-center scale-105 transition-transform duration-1000 ease-out"
         />
 
@@ -155,12 +360,12 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
           <div className="flex items-center gap-4">
             <img
               src="/hotel_logo.png"
-              alt="MaM Resort Crest"
+              alt="MaM Hotel Crest"
               className="w-12 lg:w-14 h-auto object-contain drop-shadow-[0_4px_16px_rgba(212,175,110,0.4)]"
             />
             <div>
               <span className="font-display text-xl lg:text-2xl text-white font-normal tracking-[0.2em] block leading-none">
-                MaM RESORT
+                MaM Hotel
               </span>
               <span className="text-[10px] uppercase tracking-[0.35em] text-[#E6CA85] font-semibold block mt-1.5">
                 Beachfront Retreat &amp; Spa · Biển Hội An
@@ -243,7 +448,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
           <div className="text-center mb-7">
             <img
               src="/hotel_logo.png"
-              alt="MaM Resort"
+              alt="MaM Hotel"
               className="w-12 h-auto mx-auto mb-3 object-contain drop-shadow-[0_4px_12px_rgba(184,148,74,0.35)]"
             />
             <h1 className="font-display text-3xl sm:text-4xl text-[#1C1917] font-normal tracking-tight">
@@ -329,7 +534,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
                   type="button"
                   onClick={() => setShowAllRoles(!showAllRoles)}
                   className="text-[#8C6D37] hover:text-[#1C1917] p-1 rounded transition cursor-pointer"
-                  title={showAllRoles ? "Thu gọn danh sách" : "Xem tất cả 9 vai trò"}
+                  title={showAllRoles ? "Thu gọn danh sách" : `Xem tất cả ${DEMO_ROLES.length} vai trò`}
                 >
                   {showAllRoles ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
@@ -365,7 +570,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
 
               {/* Hint bar */}
               <div className="px-3.5 py-1.5 bg-[#FAF8F5] text-[10px] text-[#8C827A] flex items-center justify-between">
-                <span>Mật khẩu mẫu dev: <strong className="text-[#8C6D37]">hotel123</strong></span>
+                <span>Mật khẩu mẫu: <strong className="text-[#8C6D37]">hotel123</strong></span>
                 {selectedRole && (
                   <span className="text-[#8C6D37] font-medium flex items-center gap-1">
                     ✓ Đã chọn: {selectedRole}
@@ -543,18 +748,18 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
         {/* Bottom Micro Footer */}
         <div className="w-full max-w-lg mx-auto text-center pt-4 border-t border-[#EDE6DC]">
           <p className="text-[11px] text-[#8C827A] font-light">
-            © 2026 MaM Resort &amp; Sanctuary · Beachfront Retreat &amp; Spa. Bảo mật thông tin chuẩn mực 5 sao.
+            © 2026 MaM Hotel &amp; Sanctuary · Beachfront Hotel &amp; Spa. Bảo mật thông tin chuẩn mực 5 sao.
           </p>
         </div>
       </div>
 
-      {/* ── Modal: Đăng ký thành viên khách hàng mới ── */}
+      {/* ── Modal: Đăng ký thành viên khách hàng mới với xác thực Email OTP ── */}
       {registerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-[#FAF8F5] rounded-3xl border border-[#E7E2D6] max-w-md w-full p-8 shadow-2xl relative">
+          <div className="bg-[#FAF8F5] rounded-3xl border border-[#E7E2D6] max-w-md w-full p-8 shadow-2xl relative max-h-[92vh] overflow-y-auto">
             <button
               type="button"
-              onClick={() => setRegisterOpen(false)}
+              onClick={resetRegisterModal}
               className="absolute top-6 right-6 text-[#78716C] hover:text-[#1C1917] cursor-pointer"
             >
               <X size={18} />
@@ -562,24 +767,26 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
 
             <div className="text-center mb-6">
               <span className="text-[10px] uppercase tracking-[0.3em] font-bold text-[#8C6D37] block mb-1">
-                GIA NHẬP CÂU LẠC BỘ
+                {regStep === "form" ? "GIA NHẬP CÂU LẠC BỘ" : "BƯỚC 2: XÁC THỰC EMAIL"}
               </span>
               <h3 className="font-display text-2xl text-[#1C1917] font-normal">
-                Đăng Ký Thành Viên Đặc Quyền
+                {regStep === "form" ? "Đăng Ký Thành Viên Đặc Quyền" : "Xác Thực Mã OTP"}
               </h3>
               <p className="text-xs text-[#78716C] mt-1">
-                Tận hưởng ưu đãi đặt phòng, tích lũy voucher &amp; dịch vụ spa trọn gói
+                {regStep === "form"
+                  ? "Đặt phòng và dịch vụ MaM Hotel trong cùng kỳ lưu trú"
+                  : `Mã xác nhận 6 số đã được gửi đến hộp thư ${regEmail}`}
               </p>
             </div>
 
             {regSuccess ? (
               <div className="p-6 rounded-2xl bg-[#F0FDF4] border border-[#BBF7D0] text-center">
-                <CheckCircle2 size={36} className="text-green-600 mx-auto mb-2" />
-                <h4 className="font-semibold text-green-800 text-sm">Đăng ký thành công!</h4>
-                <p className="text-xs text-green-700 mt-1">Hệ thống đang tự động đăng nhập cho bạn...</p>
+                <CheckCircle2 size={40} className="text-green-600 mx-auto mb-2" />
+                <h4 className="font-semibold text-green-800 text-base">Đăng ký thành công!</h4>
+                <p className="text-xs text-green-700 mt-1">Hệ thống đang tự động đăng nhập vào tài khoản của bạn...</p>
               </div>
-            ) : (
-              <form onSubmit={handleCustomerRegister} className="space-y-3.5">
+            ) : regStep === "form" ? (
+              <form onSubmit={handleSendRegisterOtp} className="space-y-3.5">
                 {regError && (
                   <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
                     <AlertCircle size={14} className="shrink-0" />
@@ -589,7 +796,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
 
                 <div>
                   <label className="block text-[10px] uppercase tracking-wider font-semibold text-[#8C6D37] mb-1">
-                    Họ và tên Quý khách
+                    Họ và tên Quý khách *
                   </label>
                   <div className="relative">
                     <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C6D37]" />
@@ -606,7 +813,27 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
 
                 <div>
                   <label className="block text-[10px] uppercase tracking-wider font-semibold text-[#8C6D37] mb-1">
-                    Số điện thoại liên hệ
+                    Email tài khoản (Nhận mã xác thực OTP) *
+                  </label>
+                  <div className="relative">
+                    <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C6D37]" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="Ví dụ: khachhang@gmail.com"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-[#DDD5C7] rounded-xl text-xs text-[#1C1917] focus:outline-none focus:border-[#8C6D37] focus:ring-1 focus:ring-[#8C6D37]"
+                    />
+                  </div>
+                  <span className="text-[10px] text-[#8C827A] mt-1 block">
+                    Bắt buộc nhập email để nhận mã OTP kích hoạt và xác nhận phòng.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider font-semibold text-[#8C6D37] mb-1">
+                    Số điện thoại liên hệ *
                   </label>
                   <div className="relative">
                     <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C6D37]" />
@@ -623,7 +850,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
 
                 <div>
                   <label className="block text-[10px] uppercase tracking-wider font-semibold text-[#8C6D37] mb-1">
-                    Số CCCD / Hộ chiếu
+                    Số CCCD / Hộ chiếu *
                   </label>
                   <div className="relative">
                     <CreditCard size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C6D37]" />
@@ -640,14 +867,14 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
 
                 <div>
                   <label className="block text-[10px] uppercase tracking-wider font-semibold text-[#8C6D37] mb-1">
-                    Mật khẩu truy cập
+                    Mật khẩu truy cập *
                   </label>
                   <div className="relative">
                     <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C6D37]" />
                     <input
                       type="password"
                       required
-                      placeholder="Nhập mật khẩu an toàn"
+                      placeholder="Tối thiểu 8 ký tự"
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
                       className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-[#DDD5C7] rounded-xl text-xs text-[#1C1917] focus:outline-none focus:border-[#8C6D37] focus:ring-1 focus:ring-[#8C6D37]"
@@ -658,53 +885,312 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
                 <button
                   type="submit"
                   disabled={regLoading}
-                  className="w-full mt-4 py-3 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs uppercase tracking-[0.2em] font-semibold rounded-xl transition cursor-pointer disabled:opacity-50"
+                  className="w-full mt-4 py-3 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs uppercase tracking-[0.2em] font-semibold rounded-xl transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {regLoading ? "Đang xử lý đăng ký..." : "Xác Nhận Đăng Ký"}
+                  {regLoading ? "Đang gửi mã OTP..." : "Tiếp Tục & Nhận Mã OTP"}
+                  <ArrowRight size={15} />
                 </button>
+              </form>
+            ) : (
+              <form onSubmit={handleConfirmRegister} className="space-y-4">
+                {regError && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span>{regError}</span>
+                  </div>
+                )}
+
+                <div className="p-3.5 bg-white border border-[#E7E2D6] rounded-2xl flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 text-[#57534E] truncate">
+                    <Mail size={15} className="text-[#8C6D37] shrink-0" />
+                    <span className="font-medium text-[#1C1917] truncate">{regEmail}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRegStep("form")}
+                    className="text-[#8C6D37] hover:underline text-[11px] font-medium shrink-0 ml-2 cursor-pointer"
+                  >
+                    Sửa email
+                  </button>
+                </div>
+
+                {regDevOtpHint && (
+                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] flex items-center justify-between">
+                    <span>Mã xác nhận tạm thời: <strong>{regDevOtpHint}</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => setRegOtp(regDevOtpHint)}
+                      className="text-[#8C6D37] underline font-semibold hover:text-[#1C1917] cursor-pointer"
+                    >
+                      Điền nhanh
+                    </button>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider font-semibold text-[#8C6D37] mb-2 text-center">
+                    Nhập mã xác thực OTP 6 chữ số *
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    autoFocus
+                    required
+                    placeholder="••••••"
+                    value={regOtp}
+                    onChange={(e) => setRegOtp(e.target.value.replace(/\D/g, ""))}
+                    className="w-full py-3 px-4 bg-white border-2 border-[#D4AF6E] rounded-2xl text-center font-mono text-2xl tracking-[0.4em] font-bold text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#8C6D37]/30 shadow-inner"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={regLoading}
+                  className="w-full py-3 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs uppercase tracking-[0.2em] font-semibold rounded-xl transition cursor-pointer disabled:opacity-50"
+                >
+                  {regLoading ? "Đang xác thực..." : "Xác Nhận & Hoàn Tất Đăng Ký"}
+                </button>
+
+                <div className="flex items-center justify-between pt-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setRegStep("form")}
+                    className="text-[#78716C] hover:text-[#1C1917] cursor-pointer"
+                  >
+                    ← Quay lại sửa thông tin
+                  </button>
+                  <button
+                    type="button"
+                    disabled={regCountdown > 0 || regLoading}
+                    onClick={handleResendRegisterOtp}
+                    className={`cursor-pointer font-medium ${
+                      regCountdown > 0 ? "text-gray-400 cursor-not-allowed" : "text-[#8C6D37] hover:underline"
+                    }`}
+                  >
+                    {regCountdown > 0 ? `Gửi lại mã sau (${regCountdown}s)` : "Gửi lại mã OTP"}
+                  </button>
+                </div>
               </form>
             )}
           </div>
         </div>
       )}
 
-      {/* ── Modal: Quên mật khẩu ── */}
+      {/* ── Modal: Quên mật khẩu & Khôi phục qua Email OTP ── */}
       {forgotOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-[#FAF8F5] rounded-3xl border border-[#E7E2D6] max-w-sm w-full p-8 shadow-2xl relative text-center">
+          <div className="bg-[#FAF8F5] rounded-3xl border border-[#E7E2D6] max-w-md w-full p-8 shadow-2xl relative">
             <button
               type="button"
-              onClick={() => setForgotOpen(false)}
+              onClick={resetForgotModal}
               className="absolute top-6 right-6 text-[#78716C] hover:text-[#1C1917] cursor-pointer"
             >
               <X size={18} />
             </button>
 
-            <ShieldCheck size={40} className="text-[#8C6D37] mx-auto mb-3" />
-            <h3 className="font-display text-2xl text-[#1C1917] font-normal mb-2">
-              Khôi Phục Mật Khẩu
-            </h3>
-            <p className="text-xs text-[#57534E] leading-relaxed mb-6 font-light">
-              Để bảo vệ thông tin lưu trú chuẩn 5 sao, Quý khách và nhân viên vui lòng liên hệ
-              Tổng đài Dịch vụ Khách hàng để được cấp lại mật khẩu ngay tức thì.
-            </p>
-
-            <div className="p-3.5 rounded-xl bg-white border border-[#E7E2D6] mb-6">
-              <span className="text-[10px] uppercase tracking-wider text-[#8C827A] block">
-                Hotline Dịch vụ Khách hàng 24/7
+            <div className="text-center mb-6">
+              <div className="w-12 h-12 rounded-full bg-[#FAF0DC] flex items-center justify-center mx-auto mb-3 text-[#8C6D37]">
+                <KeyRound size={22} />
+              </div>
+              <span className="text-[10px] uppercase tracking-[0.3em] font-bold text-[#8C6D37] block mb-1">
+                BẢO MẬT &amp; KHÔI PHỤC
               </span>
-              <span className="text-base font-semibold text-[#8C6D37] block mt-0.5">
-                1800 6868 · Nhánh 1
-              </span>
+              <h3 className="font-display text-2xl text-[#1C1917] font-normal">
+                {forgotStep === "request" && "Quên Mật Khẩu"}
+                {forgotStep === "otp" && "Thiết Lập Mật Khẩu Mới"}
+                {forgotStep === "success" && "Đổi Mật Khẩu Thành Công"}
+              </h3>
+              <p className="text-xs text-[#78716C] mt-1 max-w-sm mx-auto">
+                {forgotStep === "request" && "Nhập địa chỉ email tài khoản để nhận mã OTP xác thực khôi phục mật khẩu."}
+                {forgotStep === "otp" && `Nhập mã OTP đã gửi tới ${forgotEmail} và thiết lập mật khẩu mới.`}
+                {forgotStep === "success" && "Mật khẩu của bạn đã được cập nhật thành công. Vui lòng đăng nhập lại."}
+              </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setForgotOpen(false)}
-              className="w-full py-2.5 bg-[#1C1917] text-white text-xs uppercase tracking-wider font-semibold rounded-xl cursor-pointer"
-            >
-              Đã hiểu
-            </button>
+            {forgotStep === "success" ? (
+              <div className="text-center space-y-4">
+                <div className="p-6 rounded-2xl bg-[#F0FDF4] border border-[#BBF7D0]">
+                  <CheckCircle2 size={42} className="text-green-600 mx-auto mb-2" />
+                  <p className="text-xs text-green-800 font-medium">
+                    Mật khẩu tài khoản của bạn đã được cập nhật an toàn.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleFinishForgot}
+                  className="w-full py-3 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs uppercase tracking-wider font-semibold rounded-xl transition cursor-pointer"
+                >
+                  Đăng Nhập Ngay
+                </button>
+              </div>
+            ) : forgotStep === "request" ? (
+              <form onSubmit={handleSendForgotOtp} className="space-y-4">
+                {forgotError && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span>{forgotError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider font-semibold text-[#8C6D37] mb-1.5">
+                    Địa chỉ Email tài khoản *
+                  </label>
+                  <div className="relative">
+                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C6D37]" />
+                    <input
+                      type="email"
+                      required
+                      autoFocus
+                      placeholder="Ví dụ: khachhang@gmail.com"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#DDD5C7] rounded-xl text-sm text-[#1C1917] focus:outline-none focus:border-[#8C6D37] focus:ring-1 focus:ring-[#8C6D37]"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full py-3 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs uppercase tracking-wider font-semibold rounded-xl transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {forgotLoading ? "Đang gửi mã OTP..." : "Gửi Mã OTP Khôi Phục"}
+                  <ArrowRight size={15} />
+                </button>
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={resetForgotModal}
+                    className="text-xs text-[#78716C] hover:text-[#1C1917] cursor-pointer"
+                  >
+                    ← Quay lại đăng nhập
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPassword} className="space-y-3.5">
+                {forgotError && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span>{forgotError}</span>
+                  </div>
+                )}
+
+                <div className="p-3 bg-white border border-[#E7E2D6] rounded-xl flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <Mail size={14} className="text-[#8C6D37] shrink-0" />
+                    <span className="font-medium text-[#1C1917] truncate">{forgotEmail}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForgotStep("request")}
+                    className="text-[#8C6D37] hover:underline text-[11px] font-medium shrink-0 ml-2 cursor-pointer"
+                  >
+                    Đổi email
+                  </button>
+                </div>
+
+                {forgotDevOtpHint && (
+                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] flex items-center justify-between">
+                    <span>Mã xác nhận tạm thời: <strong>{forgotDevOtpHint}</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => setForgotOtp(forgotDevOtpHint)}
+                      className="text-[#8C6D37] underline font-semibold hover:text-[#1C1917] cursor-pointer"
+                    >
+                      Điền nhanh
+                    </button>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider font-semibold text-[#8C6D37] mb-1 text-center">
+                    Mã xác nhận OTP (6 số) *
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    autoFocus
+                    required
+                    placeholder="••••••"
+                    value={forgotOtp}
+                    onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, ""))}
+                    className="w-full py-2.5 px-4 bg-white border-2 border-[#D4AF6E] rounded-xl text-center font-mono text-xl tracking-[0.3em] font-bold text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#8C6D37]/30 shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider font-semibold text-[#8C6D37] mb-1">
+                    Mật khẩu mới *
+                  </label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C6D37]" />
+                    <input
+                      type={showNewPw ? "text" : "password"}
+                      required
+                      placeholder="Tối thiểu 8 ký tự"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full pl-9 pr-10 py-2.5 bg-white border border-[#DDD5C7] rounded-xl text-xs text-[#1C1917] focus:outline-none focus:border-[#8C6D37] focus:ring-1 focus:ring-[#8C6D37]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPw(!showNewPw)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 cursor-pointer"
+                    >
+                      {showNewPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider font-semibold text-[#8C6D37] mb-1">
+                    Nhập lại mật khẩu mới *
+                  </label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C6D37]" />
+                    <input
+                      type={showNewPw ? "text" : "password"}
+                      required
+                      placeholder="Xác nhận lại mật khẩu mới"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2.5 bg-white border border-[#DDD5C7] rounded-xl text-xs text-[#1C1917] focus:outline-none focus:border-[#8C6D37] focus:ring-1 focus:ring-[#8C6D37]"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full py-3 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs uppercase tracking-wider font-semibold rounded-xl transition cursor-pointer disabled:opacity-50"
+                >
+                  {forgotLoading ? "Đang xử lý..." : "Xác Nhận Đổi Mật Khẩu"}
+                </button>
+
+                <div className="flex items-center justify-between pt-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setForgotStep("request")}
+                    className="text-[#78716C] hover:text-[#1C1917] cursor-pointer"
+                  >
+                    ← Quay lại
+                  </button>
+                  <button
+                    type="button"
+                    disabled={forgotCountdown > 0 || forgotLoading}
+                    onClick={handleResendForgotOtp}
+                    className={`cursor-pointer font-medium ${
+                      forgotCountdown > 0 ? "text-gray-400 cursor-not-allowed" : "text-[#8C6D37] hover:underline"
+                    }`}
+                  >
+                    {forgotCountdown > 0 ? `Gửi lại mã sau (${forgotCountdown}s)` : "Gửi lại mã OTP"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

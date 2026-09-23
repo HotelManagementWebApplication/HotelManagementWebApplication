@@ -19,6 +19,12 @@ class RolePermissionTest {
                 .doesNotContain(Permission.EMPLOYEE_PROVISION, Permission.APPROVAL_APPROVE,
                         Permission.FINANCE_READ, Permission.FINANCE_WRITE);
         assertThat(EmployeeRole.STAFF.permissions()).contains(Permission.RESERVATION_READ);
+        assertThat(EmployeeRole.KITCHEN.permissions())
+                .contains(Permission.SERVICE_READ, Permission.SERVICE_WRITE,
+                        Permission.INVENTORY_READ, Permission.INVENTORY_WRITE,
+                        Permission.RESTAURANT_ORDER_READ, Permission.RESTAURANT_ORDER_WRITE)
+                .doesNotContain(Permission.RESERVATION_WRITE, Permission.PAYMENT_WRITE,
+                        Permission.FINANCE_WRITE);
         assertThat(EmployeeRole.HR.permissions())
                 .containsExactlyInAnyOrder(Permission.EMPLOYEE_READ, Permission.SHIFT_READ, Permission.SHIFT_WRITE)
                 .doesNotContain(Permission.EMPLOYEE_PROVISION, Permission.EMPLOYEE_PASSWORD_RESET,

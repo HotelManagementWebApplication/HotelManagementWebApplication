@@ -1,15 +1,23 @@
 import React from "react";
 import { ArrowUpRight } from "lucide-react";
+import type { FnbService } from "./LuxuryFnBView";
 
 interface CuratedServicesSectionProps {
   onBookSpa?: () => void;
   onExploreWellness?: () => void;
+  services: FnbService[];
 }
 
 export const CuratedServicesSection: React.FC<CuratedServicesSectionProps> = ({
   onBookSpa,
   onExploreWellness,
+  services,
 }) => {
+  const spaServices = services.filter(service => service.category === "spa");
+  const featured = spaServices[0];
+  const secondary = spaServices[1] ?? featured;
+  const title = featured?.title || "Dịch vụ spa";
+  const description = featured?.desc || "Thông tin dịch vụ spa đang được cập nhật trong hệ thống.";
   return (
     <section className="w-full bg-[#EFECE6] text-[#1A1A1A] py-20 px-4 sm:px-6 lg:px-12 transition-colors">
       <div className="max-w-7xl mx-auto">
@@ -17,15 +25,14 @@ export const CuratedServicesSection: React.FC<CuratedServicesSectionProps> = ({
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-12">
           <div>
             <div className="inline-flex items-center text-xs font-semibold uppercase tracking-[0.3em] text-[#8C6D37] mb-3">
-              <span>MaM Resort Wellness &amp; Mindful Living</span>
+              <span>MaM Hotel Wellness &amp; Mindful Living</span>
             </div>
             <h2 className="font-display text-3xl sm:text-4xl md:text-5xl font-light text-[#1F2421] tracking-tight">
-              Dịch vụ Dưỡng lành &amp; Trị liệu thư giãn
+              Dịch vụ Spa &amp; Trị liệu thư giãn
             </h2>
           </div>
           <p className="text-sm sm:text-base text-[#57534E] max-w-md font-light leading-relaxed">
-            Hành trình đánh thức giác quan qua dược liệu Đông y bản địa và những nghi thức tĩnh tại
-            giúp bạn tái tạo năng lượng nguyên bản.
+            Khám phá các liệu trình đang được MaM Hotel cung cấp.
           </p>
         </div>
 
@@ -35,15 +42,11 @@ export const CuratedServicesSection: React.FC<CuratedServicesSectionProps> = ({
           <div className="lg:col-span-7 flex flex-col gap-6">
             {/* Top Large Photo (Spa Massage / Herbal compress hands) */}
             <div className="relative w-full h-[360px] sm:h-[440px] rounded-2xl overflow-hidden shadow-sm group">
-              <img
-                src="https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?w=1200&h=900&fit=crop&auto=format"
-                alt="Mindful therapy hands"
-                className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-              />
+              {featured?.img && <img src={featured.img} alt={title} className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105" />}
               <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-60" />
               <div className="absolute bottom-6 left-6 text-white">
                 <span className="text-xs uppercase tracking-[0.2em] font-medium bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20">
-                  Liệu pháp Nam Y Cổ truyền
+                  {title}
                 </span>
               </div>
             </div>
@@ -52,17 +55,15 @@ export const CuratedServicesSection: React.FC<CuratedServicesSectionProps> = ({
             <div className="bg-[#FAF8F5] rounded-2xl p-8 sm:p-10 border border-[#DDD6C8] shadow-sm flex flex-col justify-between">
               <div>
                 <h3 className="font-display text-2xl sm:text-3xl uppercase tracking-wider text-[#1C1917] mb-4 font-normal">
-                  WELLNESS INCLUSIVE JOURNEYS
+                  {title}
                 </h3>
                 <p className="text-[#57534E] text-sm sm:text-base leading-relaxed font-light mb-6">
-                  Gói chăm sóc sức khỏe 90 phút trọn gói mỗi ngày được bao gồm cho mỗi khách lưu trú
-                  mỗi đêm tại khu nghỉ. Bao gồm 30 phút Thủy liệu pháp kết hợp thảo mộc bản địa hữu cơ
-                  và 60 phút trị liệu phục hồi thân thể chuyên sâu.
+                  {description}
                 </p>
               </div>
               <div className="pt-4 border-t border-[#E7E0D3] flex items-center justify-between">
                 <span className="text-xs uppercase tracking-[0.18em] font-semibold text-[#8C6D37]">
-                  Đã bao gồm trong giá phòng
+                  {featured ? `${featured.price.toLocaleString("vi-VN")} ₫ / ${featured.unit}` : "Đang cập nhật"}
                 </span>
                 <button
                   type="button"
@@ -82,12 +83,10 @@ export const CuratedServicesSection: React.FC<CuratedServicesSectionProps> = ({
             <div className="bg-[#FAF8F5] rounded-2xl p-8 sm:p-10 border border-[#DDD6C8] shadow-sm flex flex-col justify-between">
               <div>
                 <h3 className="font-display text-2xl sm:text-3xl uppercase tracking-wider text-[#1C1917] mb-4 font-normal">
-                  MINDFUL RITUALS
+                  KHÁM PHÁ DỊCH VỤ
                 </h3>
                 <p className="text-[#57534E] text-sm sm:text-base leading-relaxed font-light mb-8">
-                  Một không gian hoàn hảo để chậm lại và hiện diện trọn vẹn hơn. Bạn được chào đón tham
-                  gia các buổi vận động thở buổi sớm bên bờ biển hoặc trải nghiệm các nghi thức chánh niệm
-                  đưa tâm trí về trạng thái cân bằng lúc bình minh và hoàng hôn.
+                  Xem danh mục spa để chọn liệu trình và thời điểm phù hợp cho kỳ lưu trú của bạn.
                 </p>
               </div>
               <div>
@@ -101,24 +100,18 @@ export const CuratedServicesSection: React.FC<CuratedServicesSectionProps> = ({
               </div>
             </div>
 
-            {/* Bottom: LUMINA WELLBEING & SPA (Photo + Text) */}
+            {/* Bottom: second database-backed spa service */}
             <div className="bg-[#FAF8F5] rounded-2xl overflow-hidden border border-[#DDD6C8] shadow-sm flex flex-col flex-1">
               <div className="relative w-full h-[220px] sm:h-[260px] overflow-hidden group">
-                <img
-                  src="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=900&h=650&fit=crop&auto=format"
-                  alt="Lumina Wellbeing & Spa"
-                  className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-                />
+                {secondary?.img && <img src={secondary.img} alt={secondary?.title || "Dịch vụ spa"} className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105" />}
               </div>
               <div className="p-8 flex flex-col justify-between flex-1">
                 <div>
                   <h3 className="font-display text-2xl sm:text-3xl uppercase tracking-wider text-[#1C1917] mb-3 font-normal">
-                    LUMINA WELLBEING &amp; SPA
+                    {secondary?.title || "Dịch vụ spa"}
                   </h3>
                   <p className="text-[#57534E] text-sm sm:text-base leading-relaxed font-light mb-6">
-                    Một chốn trú ngụ bình yên tách biệt hoàn toàn khỏi nhịp sống phố thị. Với tầm nhìn
-                    hướng biển thoáng đạt, đội ngũ trị liệu Lumina Spa sẽ đồng hành cùng bạn bắt đầu từ
-                    góc thảo dược truyền thống, tự tay chọn vị thuốc xông hơi và đắm chìm vào liệu trình tái tạo.
+                    {secondary?.desc || "Thông tin dịch vụ spa đang được cập nhật trong hệ thống."}
                   </p>
                 </div>
                 <div className="pt-4 border-t border-[#E7E0D3]">

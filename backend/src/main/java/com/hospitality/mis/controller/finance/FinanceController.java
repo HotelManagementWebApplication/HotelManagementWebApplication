@@ -24,6 +24,15 @@ public class FinanceController {
      */
     @PostMapping("/cash-handovers") @PreAuthorize("@departmentAccess.allows(authentication, 'CASH_HANDOVER_WRITE')") public FinanceDtos.CashHandoverResponse handover(@Valid @RequestBody FinanceDtos.CashHandoverRequest request, @RequestHeader("Idempotency-Key") String key) { return service.handover(request, SecurityActor.currentActor(), key); }
     /**
+     * Lễ tân đọc lại các biên bản mà chính mình đã giao hoặc nhận, không mở quyền xem sổ tài chính chung.
+     */
+    @GetMapping("/cash-handovers/mine") @PreAuthorize("@departmentAccess.allows(authentication, 'CASH_HANDOVER_WRITE')")
+    public FinanceDtos.PageResponse<FinanceDtos.CashHandoverResponse> myHandovers(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size) {
+        return service.pageHandovers(null, SecurityActor.currentActor(), null, null, page, size);
+    }
+    /**
      * Ghi nhận chi phí qua POST /api/finance/expenses; body chi phí được {@code @Valid} kiểm tra và actor lấy từ security context.
      * Trả bản ghi chi phí, chỉ FINANCE_WRITE được gọi; Idempotency-Key bắt buộc.
      */

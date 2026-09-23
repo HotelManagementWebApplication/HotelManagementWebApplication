@@ -1098,7 +1098,7 @@ function IncidentsScreen({
         setSuccessMsg(null);
       }, 1500);
     } catch (err: any) {
-      setFormError(err instanceof Error ? err.message : "Không thể tạo sự cố trên hệ thống.");
+      setFormError("Không thể tạo sự cố trên hệ thống. Vui lòng thử lại.");
     } finally {
       setBusy(false);
     }
@@ -1329,7 +1329,7 @@ function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (ite
         setMovementSuccess(null);
       }, 1500);
     }
-    catch (error) { setMovementError(error instanceof Error ? error.message : "Không thể cập nhật tồn kho trên máy chủ."); }
+    catch (error) { setMovementError("Không thể cập nhật tồn kho. Vui lòng thử lại."); }
     finally { setMovementBusy(false); }
   };
 
@@ -1392,7 +1392,7 @@ function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (ite
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10 }}>
           {filtered.length === 0 && (
             <div style={{ gridColumn:"1 / -1",padding:"28px 16px",textAlign:"center",background:"#FFF",border:"1px dashed #CBD5E1",borderRadius:12,color:"#94A3B8",fontSize:12 }}>
-              Database chưa có dữ liệu tồn kho đồ vải/vật tư buồng phòng.
+              Chưa có dữ liệu tồn kho đồ vải/vật tư buồng phòng.
             </div>
           )}
           {filtered.map(item => {
@@ -1606,7 +1606,7 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
       } else if (err?.status === 403) {
         setError("Tài khoản không có quyền truy cập dữ liệu buồng phòng.");
       } else {
-        setError("Không thể tải dữ liệu từ máy chủ backend. Vui lòng thử lại.");
+        setError("Không thể tải dữ liệu vận hành. Vui lòng thử lại.");
       }
     } finally {
       setLoading(false);
@@ -1624,7 +1624,7 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
       await loadData();
     } catch (err) {
       console.error("Unable to start cleaning on backend:", err);
-      alert(err instanceof Error ? err.message : "Không thể bắt đầu dọn phòng.");
+      alert("Không thể bắt đầu dọn phòng. Vui lòng thử lại.");
       await loadData();
     }
   };
@@ -1655,7 +1655,7 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
       await loadData();
     } catch (err) {
       console.error("Unable to complete housekeeping task on backend:", err);
-      alert(err instanceof Error ? err.message : "Không thể hoàn tất vệ sinh trên hệ thống.");
+      alert("Không thể hoàn tất vệ sinh phòng. Vui lòng thử lại.");
       await loadData();
     }
   };
@@ -1667,7 +1667,7 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
       await loadData();
     } catch (err) {
       console.error("Unable to approve housekeeping task on backend:", err);
-      alert(err instanceof Error ? err.message : "Không thể nghiệm thu phòng.");
+      alert("Không thể nghiệm thu phòng. Vui lòng thử lại.");
       await loadData();
     }
   };
@@ -1726,11 +1726,11 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
           <div style={{ display:"flex",alignItems:"center",gap:10 }}>
             <img
               src="/hotel_logo.png"
-              alt="MAM Hotel Logo"
+              alt="MaM Hotel Logo"
               style={{ width:38,height:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 6px rgba(184,148,74,0.35))" }}
             />
             <div>
-              <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",lineHeight:1.1,fontFamily:"'Cormorant Garamond',Georgia,serif",letterSpacing:"0.05em",margin:0 }}>MAM HOTEL</p>
+              <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",lineHeight:1.1,fontFamily:"'Cormorant Garamond',Georgia,serif",letterSpacing:"0.05em",margin:0 }}>MaM Hotel</p>
               <p style={{ fontSize:9,color:"#16A34A",letterSpacing:"0.1em",textTransform:"uppercase",marginTop:2,marginBottom:0,fontWeight:600 }}>VẬN HÀNH BUỒNG PHÒNG</p>
             </div>
           </div>

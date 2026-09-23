@@ -6,7 +6,7 @@ import { authApi } from "../shared/api/auth";
 import { EmployeeProfileDropdown } from "../components/common/EmployeeProfileDropdown";
 import type { AuditEntry, EmployeeAdmin } from "../shared/types/hrGovernance";
 import type { ServiceCatalogItem } from "../shared/types/frontDesk";
-import type { EmployeeProfileDto } from "../shared/types/api";
+import { EMPLOYEE_ROLES, type EmployeeProfileDto, type EmployeeRole } from "../shared/types/api";
 import {
   LayoutDashboard,
   Users,
@@ -55,178 +55,54 @@ import {
    TYPES & INTERFACES
 ══════════════════════════════════════════════════════════ */
 type AdminTab = "dashboard" | "accounts" | "roles" | "audit" | "settings";
-type AccountSubTab = "list" | "roles" | "groups";
 
 interface AccountItem {
   id: string;
   name: string;
-  avatar: string;
-  email: string;
+  email: string | null;
   department: string;
-  roleCode: "FRONT_DESK" | "MANAGER" | "HOUSEKEEPING" | "FNB_STAFF" | "ENGINEERING" | "HR" | "SALES" | "ACCOUNTING" | "TECHNICAL" | "DIRECTOR" | "STAFF" | "ADMIN";
-  status: "Active" | "Locked";
-  lastLogin: string;
-  ip: string;
+  roleCode: EmployeeRole;
+  status: "Active" | "Locked" | "Disabled";
+  employmentStatus: EmployeeAdmin["employment_status"];
 }
 
 interface ActivityLogItem {
   id: string;
   time: string;
-  email: string;
+  actor: string;
   action: string;
-  ip?: string;
-  badge: "Đăng nhập" | "Cập nhật" | "Hệ thống" | "Cảnh báo" | "Tạo mới";
-  badgeColor: string;
-}
-
-interface ServiceStatusItem {
-  name: string;
-  statusText: string;
-  isOnline: boolean;
+  entity: string;
 }
 
 interface RolePermissionItem {
-  id: string;
   name: string;
   code: string;
-  badgeColor: string;
   usersCount: number;
-  permissions: {
-    roomAccess: boolean;
-    bookingManage: boolean;
-    checkoutFinance: boolean;
-    housekeepingOps: boolean;
-    inventoryEdit: boolean;
-    auditLogView: boolean;
-    userAdmin: boolean;
-  };
 }
 
-/* ══════════════════════════════════════════════════════════
-   ROLE DEFINITIONS SCHEMA
-══════════════════════════════════════════════════════════ */
-const ROLE_DEFINITIONS: Omit<RolePermissionItem, "usersCount">[] = [
-  {
-    id: "role-admin",
-    name: "Quản trị viên toàn quyền",
-    code: "ADMIN",
-    badgeColor: "bg-slate-100 text-slate-800 border-slate-300",
-    permissions: {
-      roomAccess: true,
-      bookingManage: true,
-      checkoutFinance: true,
-      housekeepingOps: true,
-      inventoryEdit: true,
-      auditLogView: true,
-      userAdmin: true
-    }
-  },
-  {
-    id: "role-manager",
-    name: "Quản lý khách sạn",
-    code: "MANAGER",
-    badgeColor: "bg-purple-100 text-purple-800 border-purple-300",
-    permissions: {
-      roomAccess: true,
-      bookingManage: true,
-      checkoutFinance: true,
-      housekeepingOps: true,
-      inventoryEdit: true,
-      auditLogView: true,
-      userAdmin: false
-    }
-  },
-  {
-    id: "role-frontdesk",
-    name: "Nhân viên Lễ tân",
-    code: "FRONT_DESK",
-    badgeColor: "bg-blue-100 text-blue-800 border-blue-300",
-    permissions: {
-      roomAccess: true,
-      bookingManage: true,
-      checkoutFinance: true,
-      housekeepingOps: false,
-      inventoryEdit: false,
-      auditLogView: false,
-      userAdmin: false
-    }
-  },
-  {
-    id: "role-housekeeping",
-    name: "Bộ phận Buồng phòng",
-    code: "HOUSEKEEPING",
-    badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-300",
-    permissions: {
-      roomAccess: true,
-      bookingManage: false,
-      checkoutFinance: false,
-      housekeepingOps: true,
-      inventoryEdit: false,
-      auditLogView: false,
-      userAdmin: false
-    }
-  },
-  {
-    id: "role-engineering",
-    name: "Bộ phận Kỹ thuật & Bảo trì",
-    code: "ENGINEERING",
-    badgeColor: "bg-orange-100 text-orange-800 border-orange-300",
-    permissions: {
-      roomAccess: true,
-      bookingManage: false,
-      checkoutFinance: false,
-      housekeepingOps: false,
-      inventoryEdit: true,
-      auditLogView: false,
-      userAdmin: false
-    }
-  },
-  {
-    id: "role-fnb",
-    name: "Nhân viên Bếp & F&B",
-    code: "FNB_STAFF",
-    badgeColor: "bg-amber-100 text-amber-800 border-amber-300",
-    permissions: {
-      roomAccess: false,
-      bookingManage: false,
-      checkoutFinance: false,
-      housekeepingOps: false,
-      inventoryEdit: true,
-      auditLogView: false,
-      userAdmin: false
-    }
-  },
-  {
-    id: "role-hr",
-    name: "Chuyên viên Nhân sự",
-    code: "HR",
-    badgeColor: "bg-pink-100 text-pink-800 border-pink-300",
-    permissions: {
-      roomAccess: false,
-      bookingManage: false,
-      checkoutFinance: false,
-      housekeepingOps: false,
-      inventoryEdit: false,
-      auditLogView: true,
-      userAdmin: true
-    }
-  },
-  {
-    id: "role-sales",
-    name: "Kinh doanh & Đặt phòng",
-    code: "SALES",
-    badgeColor: "bg-sky-100 text-sky-800 border-sky-300",
-    permissions: {
-      roomAccess: true,
-      bookingManage: true,
-      checkoutFinance: false,
-      housekeepingOps: false,
-      inventoryEdit: false,
-      auditLogView: false,
-      userAdmin: false
-    }
-  }
-];
+const ROLE_META: Record<EmployeeRole, { name: string; department: string; badgeColor: string }> = {
+  MANAGER: { name: "Quản lý", department: "Ban quản lý", badgeColor: "bg-violet-50 text-violet-700 border-violet-200" },
+  FRONT_DESK: { name: "Lễ tân", department: "Lễ tân", badgeColor: "bg-blue-50 text-blue-700 border-blue-200" },
+  HOUSEKEEPING: { name: "Buồng phòng", department: "Buồng phòng", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  TECHNICAL: { name: "Kỹ thuật", department: "Kỹ thuật", badgeColor: "bg-orange-50 text-orange-700 border-orange-200" },
+  KITCHEN: { name: "Bếp & F&B", department: "Bếp & F&B", badgeColor: "bg-amber-50 text-amber-700 border-amber-200" },
+  ACCOUNTING: { name: "Kế toán", department: "Kế toán", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+  DIRECTOR: { name: "Giám đốc", department: "Ban giám đốc", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  ADMIN: { name: "Quản trị hệ thống", department: "CNTT", badgeColor: "bg-slate-100 text-slate-700 border-slate-200" },
+  HR: { name: "Nhân sự", department: "Nhân sự", badgeColor: "bg-pink-50 text-pink-700 border-pink-200" },
+  STAFF: { name: "Nhân viên", department: "Vận hành", badgeColor: "bg-stone-100 text-stone-700 border-stone-200" },
+};
+
+type LoadState = "loading" | "ready" | "error";
+const toAccountItem = (employee: EmployeeAdmin): AccountItem => ({
+  id: employee.employee_id,
+  name: employee.full_name,
+  email: employee.email || null,
+  department: ROLE_META[employee.role].department,
+  roleCode: employee.role,
+  status: !employee.enabled ? "Disabled" : !employee.account_non_locked ? "Locked" : "Active",
+  employmentStatus: employee.employment_status,
+});
 
 /* ══════════════════════════════════════════════════════════
    PROPS
@@ -237,8 +113,7 @@ interface Props {
 
 export default function AdminStation({ onBack }: Props) {
   // Navigation states
-  const [currentTab, setCurrentTab] = useState<AdminTab>("accounts");
-  const [accountSubTab, setAccountSubTab] = useState<AccountSubTab>("list");
+  const [currentTab, setCurrentTab] = useState<AdminTab>("dashboard");
   const [topProfileOpen, setTopProfileOpen] = useState(false);
   const [sidebarProfileOpen, setSidebarProfileOpen] = useState(false);
 
@@ -252,14 +127,15 @@ export default function AdminStation({ onBack }: Props) {
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
   const [catalogServices, setCatalogServices] = useState<ServiceCatalogItem[]>([]);
-  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [userProfile, setUserProfile] = useState<EmployeeProfileDto | null>(null);
+  const [loadState, setLoadState] = useState({ employees: "loading" as LoadState, audit: "loading" as LoadState, services: "loading" as LoadState, profile: "loading" as LoadState });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const rolesList: RolePermissionItem[] = useMemo(() => {
-    return ROLE_DEFINITIONS.map(r => ({
-      ...r,
-      usersCount: accounts.filter(a => a.roleCode === r.code).length,
-    }));
+    const counts = new Map<EmployeeRole, number>();
+    accounts.forEach(account => counts.set(account.roleCode, (counts.get(account.roleCode) ?? 0) + 1));
+    return [...counts.entries()].map(([code, usersCount]) => ({ code, name: ROLE_META[code].name, usersCount }))
+      .sort((a, b) => a.name.localeCompare(b.name, "vi"));
   }, [accounts]);
 
   // Modals
@@ -271,18 +147,7 @@ export default function AdminStation({ onBack }: Props) {
     name: "",
     email: "",
     phone: "",
-    department: "Lễ tân",
-    roleCode: "FRONT_DESK" as AccountItem["roleCode"],
-    status: "Active" as "Active" | "Locked"
-  });
-
-  // Settings states
-  const [securitySettings, setSecuritySettings] = useState({
-    mfaRequired: true,
-    sessionTimeout: "30",
-    passwordExpiryDays: "90",
-    ipBruteforceLock: true,
-    maintenanceMode: false
+    roleCode: "FRONT_DESK" as EmployeeRole,
   });
 
   // Toast
@@ -293,86 +158,58 @@ export default function AdminStation({ onBack }: Props) {
   };
 
   const activeAccounts = accounts.filter(account => account.status === "Active").length;
+  const disabledAccounts = accounts.filter(account => account.status === "Disabled").length;
+  const lockedAccounts = accounts.filter(account => account.status === "Locked").length;
   const accountTotal = accounts.length;
   const accountPercent = accountTotal ? Math.round((activeAccounts / accountTotal) * 1000) / 10 : 0;
 
   useEffect(() => {
     let active = true;
-    const mapRole = (role: EmployeeAdmin["role"]): AccountItem["roleCode"] => {
-      if (role === "KITCHEN") return "FNB_STAFF";
-      if (role === "TECHNICAL") return "ENGINEERING";
-      if (role === "DIRECTOR" || role === "STAFF") return "ADMIN";
-      return role as AccountItem["roleCode"];
-    };
-    const departmentFor = (role: EmployeeAdmin["role"]) => ({
-      FRONT_DESK: "Lễ tân", HOUSEKEEPING: "Buồng phòng", KITCHEN: "Bếp & F&B", TECHNICAL: "Kỹ thuật",
-      ACCOUNTING: "Kế toán", HR: "Nhân sự", MANAGER: "Ban quản lý", DIRECTOR: "Ban giám đốc", ADMIN: "CNTT", STAFF: "Vận hành",
-    }[role] ?? "Vận hành");
     hrGovernanceApi.employees(true)
       .then(employees => {
         if (!active) return;
-        setAccounts(employees.map((employee: EmployeeAdmin, index): AccountItem => ({
-          id: employee.employee_id,
-          name: employee.full_name,
-          avatar: `https://images.unsplash.com/photo-${index % 2 === 0 ? "1534528741775-53994a69daeb" : "1507003211169-0a1dd7228f2d"}?w=150&auto=format&fit=crop&q=80`,
-          email: `${employee.employee_id.toLowerCase()}@hotel.com`,
-          department: departmentFor(employee.role),
-          roleCode: mapRole(employee.role),
-          status: employee.enabled && employee.account_non_locked ? "Active" : "Locked",
-          lastLogin: employee.last_login_at ? new Date(employee.last_login_at).toLocaleString("vi-VN") : "Chưa đăng nhập",
-          ip: "—",
-        })));
+        setAccounts(employees.map(toAccountItem));
+        setLoadState(current => ({ ...current, employees: "ready" }));
       })
-      .catch(err => { console.warn("Backend employee admin list unavailable:", err); if (active) setAccounts([]); });
+      .catch(err => { console.warn("Backend employee admin list unavailable:", err); if (active) { setAccounts([]); setLoadState(current => ({ ...current, employees: "error" })); } });
     hrGovernanceApi.audit({ page: 0, size: 20 })
       .then(value => {
         const auditRows = apiRows<AuditEntry>(value);
         if (active) {
-          setActivityLogs(auditRows.map((entry, index): ActivityLogItem => ({
-            id: String(entry.id), time: new Date(entry.created_at).toLocaleString("vi-VN"), email: entry.actor,
-            action: `${entry.action} · ${entry.entity_type}/${entry.entity_id}`,
-            ip: entry.correlation_key ?? undefined,
-            badge: index % 2 === 0 ? "Cập nhật" : "Hệ thống",
-            badgeColor: index % 2 === 0 ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-purple-50 text-purple-700 border-purple-200",
+          setActivityLogs(auditRows.map((entry): ActivityLogItem => ({
+            id: String(entry.id), time: new Date(entry.created_at).toLocaleString("vi-VN"), actor: entry.actor,
+            action: entry.action.replaceAll("_", " ").toLowerCase(),
+            entity: [entry.entity_type, entry.entity_id].filter(Boolean).join(" · ") || "—",
           })));
+          setLoadState(current => ({ ...current, audit: "ready" }));
         }
       })
-      .catch(err => { console.warn("Backend audit log unavailable:", err); if (active) setActivityLogs([]); });
+      .catch(err => { console.warn("Backend audit log unavailable:", err); if (active) { setActivityLogs([]); setLoadState(current => ({ ...current, audit: "error" })); } });
     frontDeskApi.services()
-      .then(services => { if (active) setCatalogServices(services); })
-      .catch(err => { console.warn("Backend service catalog unavailable:", err); if (active) setCatalogServices([]); });
+      .then(services => { if (active) { setCatalogServices(services); setLoadState(current => ({ ...current, services: "ready" })); } })
+      .catch(err => { console.warn("Backend service catalog unavailable:", err); if (active) { setCatalogServices([]); setLoadState(current => ({ ...current, services: "error" })); } });
     authApi.employeeProfile()
-      .then(p => { if (active) setUserProfile(p); })
-      .catch(() => {});
+      .then(p => { if (active) { setUserProfile(p); setLoadState(current => ({ ...current, profile: "ready" })); } })
+      .catch(() => { if (active) setLoadState(current => ({ ...current, profile: "error" })); });
     return () => { active = false; };
-  }, []);
+  }, [refreshKey]);
 
   /* ══════════════════════════════════════════════════════════
      HANDLERS
   ══════════════════════════════════════════════════════════ */
-  const handleToggleSelectAccount = (id: string) => {
-    setSelectedAccountIds(prev =>
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAllAccounts = () => {
-    if (selectedAccountIds.length === filteredAccounts.length) {
-      setSelectedAccountIds([]);
-    } else {
-      setSelectedAccountIds(filteredAccounts.map(a => a.id));
-    }
-  };
-
   const handleToggleAccountLock = async (account: AccountItem) => {
-    const newStatus = account.status === "Active" ? "Locked" : "Active";
+    if (account.status === "Locked") {
+      showToast("Tài khoản đang bị khóa sau lần đăng nhập thất bại; màn hình này chưa có API mở khóa an toàn.");
+      return;
+    }
+    const enabled = account.status === "Disabled";
     try {
-      await hrGovernanceApi.setStatus(account.id, newStatus === "Active");
-      setAccounts(prev => prev.map(a => (a.id === account.id ? { ...a, status: newStatus } : a)));
-      showToast(newStatus === "Locked" ? `Đã khóa tài khoản ${account.email}!` : `Đã mở khóa tài khoản ${account.email}!`);
+      const updated = await hrGovernanceApi.setStatus(account.id, enabled);
+      setAccounts(prev => prev.map(a => a.id === account.id ? toAccountItem(updated) : a));
+      showToast(enabled ? `Đã kích hoạt tài khoản ${account.id}.` : `Đã vô hiệu hóa tài khoản ${account.id}.`);
     } catch (error) {
       console.warn("Unable to update employee status:", error);
-      showToast("Không thể cập nhật trạng thái tài khoản trên backend.");
+      showToast("Không thể cập nhật trạng thái tài khoản. Vui lòng thử lại.");
     }
   };
 
@@ -382,33 +219,19 @@ export default function AdminStation({ onBack }: Props) {
       alert("Vui lòng điền họ tên, email và số điện thoại.");
       return;
     }
-    const roleMap: Record<AccountItem["roleCode"], string> = {
-      FRONT_DESK: "FRONT_DESK", MANAGER: "MANAGER", HOUSEKEEPING: "HOUSEKEEPING",
-      FNB_STAFF: "KITCHEN", ENGINEERING: "TECHNICAL", HR: "HR", SALES: "STAFF", ACCOUNTING: "ACCOUNTING", TECHNICAL: "TECHNICAL", DIRECTOR: "DIRECTOR", STAFF: "STAFF", ADMIN: "ADMIN",
-    };
     try {
       const created = await enterpriseApi.autoProvisionEmployee({
         full_name: newAccountForm.name,
-        role: roleMap[newAccountForm.roleCode] ?? "STAFF",
+        role: newAccountForm.roleCode,
         phone: newAccountForm.phone,
         email: newAccountForm.email,
       });
-      setAccounts(prev => [{
-        id: created.employee_id,
-        name: created.full_name,
-        avatar: "",
-        email: created.email,
-        department: newAccountForm.department,
-        roleCode: newAccountForm.roleCode,
-        status: "Active",
-        lastLogin: "Chưa đăng nhập",
-        ip: "—",
-      }, ...prev]);
+      setRefreshKey(key => key + 1);
       setIsAddAccountModalOpen(false);
-      setNewAccountForm({ name: "", email: "", phone: "", department: "Lễ tân", roleCode: "FRONT_DESK", status: "Active" });
+      setNewAccountForm({ name: "", email: "", phone: "", roleCode: "FRONT_DESK" });
       showToast(`Đã tạo ${created.employee_id}. Mật khẩu tạm đã được hệ thống tự sinh: ${created.temporary_password}`);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Không thể tạo tài khoản trên backend.");
+      showToast("Không thể tạo tài khoản. Vui lòng thử lại.");
     }
   };
 
@@ -416,45 +239,20 @@ export default function AdminStation({ onBack }: Props) {
     e.preventDefault();
     if (!editingAccount) return;
     try {
-      const roleMap: Record<AccountItem["roleCode"], EmployeeAdmin["role"]> = {
-        FRONT_DESK: "FRONT_DESK", MANAGER: "MANAGER", HOUSEKEEPING: "HOUSEKEEPING",
-        FNB_STAFF: "KITCHEN", ENGINEERING: "TECHNICAL", HR: "HR", SALES: "STAFF", ACCOUNTING: "ACCOUNTING", TECHNICAL: "TECHNICAL", DIRECTOR: "DIRECTOR", STAFF: "STAFF", ADMIN: "ADMIN",
-      };
-      const updated = await hrGovernanceApi.setRole(editingAccount.id, roleMap[editingAccount.roleCode]);
+      const updated = await hrGovernanceApi.setRole(editingAccount.id, editingAccount.roleCode);
       setAccounts(prev => prev.map(account => account.id === editingAccount.id ? {
-        ...account,
-        name: updated.full_name,
-        roleCode: editingAccount.roleCode,
-        status: updated.enabled && updated.account_non_locked ? "Active" : "Locked",
+        ...toAccountItem(updated),
       } : account));
       setEditingAccount(null);
-      showToast(`Đã cập nhật vai trò ${editingAccount.id} trên backend. Họ tên chỉ đọc theo hồ sơ nhân viên.`);
+      showToast(`Đã cập nhật vai trò ${editingAccount.id}.`);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Không thể cập nhật vai trò trên backend.");
+      showToast("Không thể cập nhật vai trò. Vui lòng thử lại.");
     }
   };
 
   // Helper for role badge colors
   const getRoleBadge = (code: AccountItem["roleCode"]) => {
-    switch (code) {
-      case "FRONT_DESK":
-        return { label: "FRONT_DESK", bg: "bg-blue-50 text-blue-700 border-blue-200" };
-      case "MANAGER":
-        return { label: "MANAGER", bg: "bg-purple-50 text-purple-700 border-purple-200" };
-      case "HOUSEKEEPING":
-        return { label: "HOUSEKEEPING", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" };
-      case "FNB_STAFF":
-        return { label: "FNB_STAFF", bg: "bg-amber-50 text-amber-700 border-amber-200" };
-      case "ENGINEERING":
-        return { label: "ENGINEERING", bg: "bg-orange-50 text-orange-700 border-orange-200" };
-      case "HR":
-        return { label: "HR", bg: "bg-pink-50 text-pink-700 border-pink-200" };
-      case "SALES":
-        return { label: "SALES", bg: "bg-sky-50 text-sky-700 border-sky-200" };
-      case "ADMIN":
-      default:
-        return { label: "ADMIN", bg: "bg-slate-100 text-slate-700 border-slate-200" };
-    }
+    return { label: ROLE_META[code].name, bg: ROLE_META[code].badgeColor };
   };
 
   // Filter accounts
@@ -467,7 +265,7 @@ export default function AdminStation({ onBack }: Props) {
         const q = searchQuery.toLowerCase();
         return (
           acc.name.toLowerCase().includes(q) ||
-          acc.email.toLowerCase().includes(q) ||
+          (acc.email ?? "").toLowerCase().includes(q) ||
           acc.department.toLowerCase().includes(q) ||
           acc.roleCode.toLowerCase().includes(q)
         );
@@ -492,7 +290,7 @@ export default function AdminStation({ onBack }: Props) {
             </svg>
           </div>
           <h2 className="font-serif font-bold text-base tracking-widest text-[#E5C178] uppercase">
-            GRAND HOTEL
+            MaM Hotel
           </h2>
           <p className="text-[10px] tracking-wider text-gray-400 mt-0.5 font-sans">
             System Administration
@@ -686,59 +484,40 @@ export default function AdminStation({ onBack }: Props) {
         </div>
       </div>
 
-      {/* 2. Phiên đăng nhập realtime */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex items-center justify-between">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-sky-50 flex items-center justify-center text-sky-600">
-            <Wifi className="w-6 h-6" />
+          <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-700">
+            <Lock className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium">Phiên đăng nhập realtime</p>
-            <p className="text-2xl font-bold text-gray-900 font-serif leading-tight">14</p>
-            <span className="text-xs font-semibold text-emerald-600 inline-flex items-center gap-1 mt-0.5">
-              ↑ 27%
-            </span>
-          </div>
-        </div>
-        {/* Sparkline curve */}
-        <div className="w-16 h-8 text-blue-500">
-          <svg viewBox="0 0 60 30" fill="none" className="w-full h-full stroke-current stroke-2">
-            <path d="M0 24 Q15 26, 25 18 T45 12 T60 5" strokeLinecap="round" />
-          </svg>
-        </div>
-      </div>
-
-      {/* 3. Sự cố bảo mật */}
-      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex items-center justify-between">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">Sự cố bảo mật</p>
-            <p className="text-2xl font-bold text-gray-900 font-serif leading-tight">0</p>
-            <p className="text-xs text-gray-400 mt-0.5">Không có cảnh báo</p>
+            <p className="text-xs text-gray-500 font-medium">Tài khoản bị khóa</p>
+            <p className="text-2xl font-bold text-gray-900 font-serif leading-tight">{lockedAccounts}</p>
           </div>
         </div>
       </div>
 
-      {/* 4. Uptime hệ thống */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex items-center justify-between">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
-            <Server className="w-6 h-6" />
+          <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+            <Unlock className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium">Uptime hệ thống</p>
-            <p className="text-2xl font-bold text-gray-900 font-serif leading-tight">—</p>
-            <p className="text-xs text-gray-400 font-medium mt-0.5">Theo dõi qua OS máy chủ</p>
+            <p className="text-xs text-gray-500 font-medium">Tài khoản đã vô hiệu hóa</p>
+            <p className="text-2xl font-bold text-gray-900 font-serif leading-tight">{disabledAccounts}</p>
           </div>
         </div>
-        {/* Sparkline curve */}
-        <div className="w-16 h-8 text-blue-500">
-          <svg viewBox="0 0 60 30" fill="none" className="w-full h-full stroke-current stroke-2">
-            <path d="M0 20 Q10 22, 20 15 T40 16 T60 8" strokeLinecap="round" />
-          </svg>
+      </div>
+
+      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex items-center justify-between">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center text-teal-700">
+            <FileText className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 font-medium">Sự kiện kiểm toán mới</p>
+            <p className="text-2xl font-bold text-gray-900 font-serif leading-tight">{loadState.audit === "ready" ? activityLogs.length : "—"}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{activityLogs.length === 20 ? "20 sự kiện gần nhất" : "Theo dữ liệu API"}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -750,47 +529,12 @@ export default function AdminStation({ onBack }: Props) {
       {/* Center Table Area (approx 8.5 cols) */}
       <div className="lg:col-span-8 xl:col-span-9 bg-white rounded-2xl border border-gray-100 shadow-xs p-5 flex flex-col justify-between">
         <div>
-          {/* Sub-tabs & Action button */}
+          {/* Account header and create action */}
           <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-            <div className="flex items-center gap-6 text-xs">
-              <button
-                onClick={() => setAccountSubTab("list")}
-                className={`pb-2.5 font-bold transition-all relative cursor-pointer ${
-                  accountSubTab === "list"
-                    ? "text-[#2563EB] border-b-2 border-[#2563EB]"
-                    : "text-gray-500 hover:text-gray-800"
-                }`}
-              >
-                Danh sách tài khoản
-              </button>
-
-              <button
-                onClick={() => {
-                  setAccountSubTab("roles");
-                  setCurrentTab("roles");
-                }}
-                className={`pb-2.5 font-medium transition-all relative cursor-pointer ${
-                  accountSubTab === "roles"
-                    ? "text-[#2563EB] border-b-2 border-[#2563EB]"
-                    : "text-gray-500 hover:text-gray-800"
-                }`}
-              >
-                Vai trò &amp; Quyền
-              </button>
-
-              <button
-                onClick={() => setAccountSubTab("groups")}
-                className={`pb-2.5 font-medium transition-all relative cursor-pointer ${
-                  accountSubTab === "groups"
-                    ? "text-[#2563EB] border-b-2 border-[#2563EB]"
-                    : "text-gray-500 hover:text-gray-800"
-                }`}
-              >
-                Nhóm người dùng
-              </button>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Danh sách tài khoản nhân viên</h2>
+              <p className="mt-1 text-xs text-slate-500">Thông tin lấy trực tiếp từ hồ sơ nhân viên.</p>
             </div>
-
-            {/* + Thêm tài khoản button */}
             <button
               onClick={() => setIsAddAccountModalOpen(true)}
               className="flex items-center gap-1.5 px-4 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-xs"
@@ -842,15 +586,7 @@ export default function AdminStation({ onBack }: Props) {
                 className="appearance-none bg-white border border-gray-200 text-xs font-medium text-gray-700 rounded-lg pl-3 pr-8 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer shadow-2xs"
               >
                 <option value="all">Tất cả vai trò</option>
-                <option value="FRONT_DESK">FRONT_DESK</option>
-                <option value="MANAGER">MANAGER</option>
-                <option value="HOUSEKEEPING">HOUSEKEEPING</option>
-                <option value="FNB_STAFF">FNB_STAFF</option>
-                <option value="ENGINEERING">ENGINEERING</option>
-                <option value="HR">HR</option>
-                <option value="ACCOUNTING">ACCOUNTING</option>
-                <option value="TECHNICAL">TECHNICAL</option>
-                <option value="ADMIN">ADMIN</option>
+                {EMPLOYEE_ROLES.map(role => <option key={role} value={role}>{role}</option>)}
               </select>
               <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
@@ -864,7 +600,8 @@ export default function AdminStation({ onBack }: Props) {
               >
                 <option value="all">Tất cả trạng thái</option>
                 <option value="Active">Active (Hoạt động)</option>
-                <option value="Locked">Locked (Đã khóa)</option>
+                <option value="Locked">Locked (Khóa do đăng nhập sai)</option>
+                <option value="Disabled">Disabled (Đã vô hiệu hóa)</option>
               </select>
               <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
@@ -890,17 +627,6 @@ export default function AdminStation({ onBack }: Props) {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#F8F9FA] text-[11px] font-semibold text-gray-600 border-b border-gray-100">
-                  <th className="py-2.5 px-3 w-8">
-                    <input
-                      type="checkbox"
-                      checked={
-                        filteredAccounts.length > 0 &&
-                        selectedAccountIds.length === filteredAccounts.length
-                      }
-                      onChange={handleSelectAllAccounts}
-                      className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    />
-                  </th>
                   <th className="py-2.5 px-3">Nhân viên</th>
                   <th className="py-2.5 px-3">Email / Tên đăng nhập</th>
                   <th className="py-2.5 px-3">Phòng ban</th>
@@ -912,41 +638,20 @@ export default function AdminStation({ onBack }: Props) {
               <tbody className="divide-y divide-gray-100 text-xs">
                 {filteredAccounts.map(account => {
                   const roleBadge = getRoleBadge(account.roleCode);
-                  const isSelected = selectedAccountIds.includes(account.id);
                   return (
-                    <tr
-                      key={account.id}
-                      className={`hover:bg-gray-50/70 transition-colors ${
-                        isSelected ? "bg-blue-50/30" : ""
-                      }`}
-                    >
-                      {/* Checkbox */}
-                      <td className="py-3 px-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelectAccount(account.id)}
-                          className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                        />
-                      </td>
+                    <tr key={account.id} className="hover:bg-gray-50/70 transition-colors">
 
                       {/* Nhân viên */}
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-2.5">
-                          <img
-                            src={account.avatar}
-                            alt={account.name}
-                            className="w-7 h-7 rounded-full object-cover ring-1 ring-gray-200"
-                          />
-                          <span className="font-semibold text-gray-900 whitespace-nowrap">
-                            {account.name}
-                          </span>
+                          <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold ring-1 ring-slate-200" aria-hidden="true">{account.name.trim().slice(0, 1).toLocaleUpperCase("vi-VN") || "?"}</span>
+                          <div className="min-w-0"><span className="block font-semibold text-gray-900 whitespace-nowrap">{account.name}</span><span className="block text-[10px] text-gray-400 font-mono">{account.id}</span></div>
                         </div>
                       </td>
 
                       {/* Email / Tên đăng nhập */}
                       <td className="py-3 px-3 font-mono text-[11px] text-gray-600">
-                        {account.email}
+                        {account.email || <span className="font-sans text-gray-400">Chưa có email</span>}
                       </td>
 
                       {/* Phòng ban */}
@@ -965,18 +670,15 @@ export default function AdminStation({ onBack }: Props) {
 
                       {/* Trạng thái */}
                       <td className="py-3 px-3">
-                        <span
-                          className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${
-                            account.status === "Active" ? "text-emerald-700" : "text-red-600"
-                          }`}
-                        >
+                        <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${account.status === "Active" ? "text-emerald-700" : account.status === "Disabled" ? "text-slate-500" : "text-red-600"}`}>
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${
-                              account.status === "Active" ? "bg-emerald-500" : "bg-red-500"
+                              account.status === "Active" ? "bg-emerald-500" : account.status === "Disabled" ? "bg-slate-400" : "bg-red-500"
                             }`}
                           />
-                          {account.status}
+                          {account.status === "Active" ? "Hoạt động" : account.status === "Locked" ? "Bị khóa" : "Vô hiệu hóa"}
                         </span>
+                        {account.employmentStatus !== "WORKING" && <span className="mt-1 block text-[10px] text-gray-500">{account.employmentStatus === "ON_LEAVE" ? "Tạm nghỉ" : "Đã nghỉ việc"}</span>}
                       </td>
 
                       {/* Thao tác */}
@@ -992,8 +694,9 @@ export default function AdminStation({ onBack }: Props) {
 
                           <button
                             onClick={() => handleToggleAccountLock(account)}
-                            title={account.status === "Active" ? "Khóa tài khoản" : "Mở khóa tài khoản"}
-                            className="p-1 text-gray-400 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-md transition-colors cursor-pointer shadow-2xs"
+                            title={account.status === "Active" ? "Vô hiệu hóa tài khoản" : account.status === "Disabled" ? "Kích hoạt tài khoản" : "Chưa có API mở khóa tài khoản"}
+                            disabled={account.status === "Locked"}
+                            className="p-1 text-gray-400 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
                           >
                             {account.status === "Active" ? (
                               <Lock className="w-3 h-3 text-amber-600" />
@@ -1002,19 +705,14 @@ export default function AdminStation({ onBack }: Props) {
                             )}
                           </button>
 
-                          <button
-                            onClick={() =>
-                              showToast(`Tùy chọn nâng cao cho tài khoản: ${account.email}`)
-                            }
-                            className="p-1 text-gray-400 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-md transition-colors cursor-pointer shadow-2xs"
-                          >
-                            <MoreHorizontal className="w-3 h-3" />
-                          </button>
                         </div>
                       </td>
                     </tr>
                   );
                 })}
+                {loadState.employees === "loading" && <tr><td colSpan={6} className="py-10 text-center text-gray-500">Đang tải danh sách nhân viên…</td></tr>}
+                {loadState.employees === "error" && <tr><td colSpan={6} className="py-10 text-center text-rose-700">Không tải được danh sách từ API. <button className="underline font-semibold" onClick={() => setRefreshKey(key => key + 1)}>Thử lại</button></td></tr>}
+                {loadState.employees === "ready" && filteredAccounts.length === 0 && <tr><td colSpan={6} className="py-10 text-center text-gray-500">Không có nhân viên khớp bộ lọc.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1022,44 +720,8 @@ export default function AdminStation({ onBack }: Props) {
 
         {/* Pagination Footer */}
         <div className="pt-4 mt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
-          <p>Hiển thị {accountTotal === 0 ? 0 : 1} - {Math.min(8, accountTotal)} của {accountTotal} tài khoản</p>
-
-          <div className="flex items-center gap-1">
-            <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 cursor-pointer">
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-            <button className="w-7 h-7 flex items-center justify-center rounded-lg bg-[#2563EB] text-white font-bold cursor-pointer">
-              1
-            </button>
-            <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700 cursor-pointer">
-              2
-            </button>
-            <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700 cursor-pointer">
-              3
-            </button>
-            <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700 cursor-pointer">
-              4
-            </button>
-            <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700 cursor-pointer">
-              5
-            </button>
-            <span className="px-1 text-gray-400">...</span>
-            <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700 cursor-pointer">
-              9
-            </button>
-            <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 cursor-pointer">
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="relative">
-            <select className="appearance-none bg-white border border-gray-200 rounded-lg pl-2.5 pr-6 py-1 text-xs text-gray-700 cursor-pointer focus:outline-none">
-              <option>10 / trang</option>
-              <option>20 / trang</option>
-              <option>50 / trang</option>
-            </select>
-            <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
+          <p>Đang hiển thị {filteredAccounts.length} trên {accountTotal} hồ sơ nhân viên.</p>
+          <p className="text-[11px]">Trạng thái tài khoản và trạng thái lao động được tách riêng.</p>
         </div>
       </div>
 
@@ -1088,46 +750,18 @@ export default function AdminStation({ onBack }: Props) {
                   <div className="absolute left-[7px] top-4 bottom-[-14px] w-0.5 bg-gray-100" />
                 )}
 
-                {/* Status Dot */}
-                <span
-                  className={`w-3.5 h-3.5 rounded-full mt-0.5 flex-shrink-0 z-10 flex items-center justify-center ${
-                    log.badge === "Cảnh báo"
-                      ? "bg-red-100 text-red-600"
-                      : log.badge === "Tạo mới"
-                      ? "bg-teal-100 text-teal-600"
-                      : "bg-emerald-100 text-emerald-600"
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      log.badge === "Cảnh báo"
-                        ? "bg-red-500"
-                        : log.badge === "Tạo mới"
-                        ? "bg-teal-500"
-                        : "bg-emerald-500"
-                    }`}
-                  />
-                </span>
+                <span className="w-3.5 h-3.5 rounded-full mt-0.5 bg-slate-100 text-slate-500 flex-shrink-0 z-10 flex items-center justify-center"><span className="w-1.5 h-1.5 rounded-full bg-slate-500" /></span>
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-[11px] font-mono text-gray-400">{log.time}</span>
-                    <span
-                      className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${log.badgeColor}`}
-                    >
-                      {log.badge}
-                    </span>
                   </div>
 
                   <p className="font-semibold text-gray-800 text-[11px] truncate mt-0.5">
-                    {log.email}
+                    {log.actor || "Không rõ tác nhân"}
                   </p>
-                  <p className="text-[11px] text-gray-500 leading-tight mt-0.5">{log.action}</p>
-
-                  {log.ip && (
-                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">IP: {log.ip}</p>
-                  )}
+                  <p className="text-[11px] text-gray-500 leading-tight mt-0.5">{log.action} · {log.entity}</p>
                 </div>
               </div>
             ))}
@@ -1149,19 +783,19 @@ export default function AdminStation({ onBack }: Props) {
             </button>
           </div>
 
-          <div className="mb-3.5 flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50/70 p-2 rounded-xl border border-emerald-100">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Tất cả dịch vụ đang hoạt động</span>
+          <div className={`mb-3.5 flex items-center gap-2 text-xs font-semibold p-2 rounded-xl border ${loadState.services === "ready" ? "text-slate-700 bg-slate-50 border-slate-200" : loadState.services === "loading" ? "text-blue-700 bg-blue-50 border-blue-100" : "text-rose-700 bg-rose-50 border-rose-100"}`}>
+            <span className={`w-2 h-2 rounded-full ${loadState.services === "ready" ? "bg-slate-500" : loadState.services === "loading" ? "bg-blue-500" : "bg-rose-500"}`} />
+            <span>{loadState.services === "ready" ? `${catalogServices.length} dịch vụ trong danh mục` : loadState.services === "loading" ? "Đang tải danh mục dịch vụ…" : "Không tải được danh mục dịch vụ"}</span>
           </div>
 
           <div className="space-y-2.5 text-xs">
-            {catalogServices.map(srv => (
+            {catalogServices.slice(0, 8).map(srv => (
               <div key={srv.id} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   <span className="text-gray-700 font-medium">{srv.name}</span>
                 </div>
-                <span className="text-emerald-600 font-medium text-[11px]">{srv.active === false ? "Tạm ngưng" : srv.stock <= 0 ? "Hết tồn kho" : "Đang hoạt động"}</span>
+                <span className={`${srv.active === false ? "text-slate-500" : srv.stock <= 0 ? "text-amber-700" : "text-emerald-700"} font-medium text-[11px]`}>{srv.active === false ? "Tạm ngưng" : srv.stock <= 0 ? "Hết tồn kho" : "Đang bán"}</span>
               </div>
             ))}
           </div>
@@ -1170,181 +804,60 @@ export default function AdminStation({ onBack }: Props) {
     </div>
   );
 
-  // ── 5. TAB 1: TỔNG QUAN HỆ THỐNG (SYSTEM OVERVIEW & TELEMETRY) ──
   const SystemOverviewView = (
-    <div className="space-y-6">
-      {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-2xl p-6 text-white relative overflow-hidden shadow-sm">
-        <div className="relative z-10 max-w-2xl">
-          <span className="inline-flex items-center gap-1.5 bg-blue-500/20 border border-blue-400/30 text-blue-300 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider mb-2">
-            ● Hệ thống lõi Grand Hotel MIS Online
-          </span>
-          <h2 className="text-2xl font-serif font-bold text-white mb-1">
-            Trung tâm kiểm soát &amp; Giám sát hạ tầng
-          </h2>
-          <p className="text-blue-100/80 text-xs leading-relaxed">
-            Hệ thống đang hoạt động với {accountTotal} tài khoản nhân sự ({activeAccounts} đang kích hoạt). Giám sát truy cập và phân quyền bảo mật thời gian thực.
-          </p>
+    <div className="space-y-5">
+      <section className="rounded-2xl bg-[#101827] p-6 text-white shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-300">MaM Hotel · Control room</p>
+            <h2 className="mt-2 text-2xl font-serif font-bold">Dữ liệu quản trị có nguồn gốc rõ ràng</h2>
+            <p className="mt-2 text-xs leading-5 text-slate-300">Trang này chỉ hiển thị số liệu nhận được từ API nhân viên, audit và danh mục dịch vụ. CPU, RAM, backup và phiên realtime đã được bỏ vì backend chưa cung cấp telemetry.</p>
+          </div>
+          <button onClick={() => setRefreshKey(key => key + 1)} className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold hover:bg-white/15"><RefreshCw className="h-4 w-4" /> Đồng bộ lại</button>
         </div>
-        <div className="absolute right-4 -bottom-6 w-48 h-48 rounded-full bg-blue-500/10 blur-2xl pointer-events-none" />
-      </div>
-
+      </section>
       {TopMetricCards}
-
-      {/* Server Telemetry Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-            <span className="font-semibold text-gray-700">CPU Usage</span>
-            <Cpu className="w-4 h-4 text-blue-600" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 font-serif">—</p>
-          <div className="w-full h-2 rounded-full bg-gray-100 mt-2 overflow-hidden">
-            <div className="h-full rounded-full bg-blue-600" style={{ width: "0%" }} />
-          </div>
-          <p className="text-[10px] text-gray-400 mt-1.5">Chưa cấu hình telemetry hạ tầng</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-            <span className="font-semibold text-gray-700">RAM Memory</span>
-            <Activity className="w-4 h-4 text-purple-600" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 font-serif">—</p>
-          <div className="w-full h-2 rounded-full bg-gray-100 mt-2 overflow-hidden">
-            <div className="h-full rounded-full bg-purple-600" style={{ width: "0%" }} />
-          </div>
-          <p className="text-[10px] text-gray-400 mt-1.5">Giám sát qua OS máy chủ</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-            <span className="font-semibold text-gray-700">NVMe SSD Storage</span>
-            <HardDrive className="w-4 h-4 text-emerald-600" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 font-serif">—</p>
-          <div className="w-full h-2 rounded-full bg-gray-100 mt-2 overflow-hidden">
-            <div className="h-full rounded-full bg-emerald-500" style={{ width: "0%" }} />
-          </div>
-          <p className="text-[10px] text-gray-400 mt-1.5">Lưu trữ backend CSDL</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-            <span className="font-semibold text-gray-700">Kết nối mạng</span>
-            <Radio className="w-4 h-4 text-sky-600" />
-          </div>
-          <p className="text-2xl font-bold text-emerald-600 font-serif">Online</p>
-          <div className="w-full h-2 rounded-full bg-gray-100 mt-2 overflow-hidden">
-            <div className="h-full rounded-full bg-emerald-500" style={{ width: "100%" }} />
-          </div>
-          <p className="text-[10px] text-emerald-600 font-medium mt-1.5">API Spring Boot hoạt động</p>
-        </div>
-      </div>
-
-      {/* Database Backup & Active Realtime Sessions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-serif font-bold text-gray-900 text-sm">
-              Sao lưu dữ liệu tự động (Backup Database)
-            </h3>
-            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-              Hoạt động tốt
-            </span>
-          </div>
-
-          <div className="space-y-3 text-xs">
-            <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-gray-800">Snapshot CSDL định kỳ</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">Quản lý trực tiếp qua máy chủ CSDL PostgreSQL</p>
-              </div>
-              <button
-                onClick={() => showToast("Đã kích hoạt sao lưu tức thì snapshot cơ sở dữ liệu!")}
-                className="px-3 py-1.5 bg-white hover:bg-gray-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold cursor-pointer shadow-2xs"
-              >
-                Sao lưu ngay
-              </button>
-            </div>
-
-            <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-gray-800">Khôi phục điểm phục hồi (Disaster Recovery)</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">RPO: 15 phút • RTO: 5 phút</p>
-              </div>
-              <span className="text-xs font-mono font-bold text-gray-600">Sẵn sàng</span>
-            </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <h3 className="font-serif text-sm font-bold text-slate-900">Kết nối dữ liệu</h3>
+          <div className="mt-4 space-y-3">
+            {([
+              ["Tài khoản nhân viên", loadState.employees, `${accountTotal} hồ sơ`],
+              ["Nhật ký kiểm toán", loadState.audit, `${activityLogs.length} sự kiện`],
+              ["Danh mục dịch vụ", loadState.services, `${catalogServices.length} dịch vụ`],
+              ["Hồ sơ đăng nhập", loadState.profile, userProfile?.employee_id || "—"],
+            ] as const).map(([label, state, detail]) => <div key={label} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 text-xs"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${state === "ready" ? "bg-emerald-500" : state === "loading" ? "bg-blue-500" : "bg-rose-500"}`} /><span className="font-medium text-slate-700">{label}</span></div><span className="text-slate-500">{state === "loading" ? "Đang tải" : state === "error" ? "Lỗi API" : detail}</span></div>)}
           </div>
         </div>
-
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-serif font-bold text-gray-900 text-sm">
-                Phân bố nhân sự theo phòng ban
-              </h3>
+              <h3 className="font-serif font-bold text-gray-900 text-sm">Phân bố nhân sự theo phòng ban</h3>
               <span className="text-xs text-blue-600 font-bold">{activeAccounts} Hoạt động</span>
             </div>
-
             <div className="space-y-2.5 text-xs">
-              {[
-                { name: "Bộ phận Lễ tân", dept: "Lễ tân", color: "bg-blue-500" },
-                { name: "Bộ phận Buồng phòng", dept: "Buồng phòng", color: "bg-emerald-500" },
-                { name: "Bộ phận Bếp & F&B", dept: "Bếp & F&B", color: "bg-amber-500" },
-                { name: "Ban quản lý & Giám đốc", dept: "Ban quản lý", color: "bg-purple-500" },
-                { name: "Bộ phận Kỹ thuật", dept: "Kỹ thuật", color: "bg-orange-500" },
-                { name: "Bộ phận Kế toán", dept: "Kế toán", color: "bg-emerald-600" },
-                { name: "Bộ phận Nhân sự", dept: "Nhân sự", color: "bg-pink-500" },
-                { name: "Quản trị viên CNTT", dept: "CNTT", color: "bg-slate-700" },
-              ].map(item => {
-                const count = accounts.filter(a => a.department === item.dept).length;
-                return (
-                  <div key={item.name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${item.color}`} />
-                      <span className="text-gray-700">{item.name}</span>
-                    </div>
-                    <span className="font-bold text-gray-900 font-mono">{count} tài khoản</span>
-                  </div>
-                );
-              })}
+              {[...new Set(accounts.map(account => account.department))].sort((a, b) => a.localeCompare(b, "vi")).map(department => <div key={department} className="flex items-center justify-between"><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-slate-400" /><span className="text-gray-700">{department}</span></div><span className="font-mono font-bold text-gray-900">{accounts.filter(account => account.department === department).length} tài khoản</span></div>)}
             </div>
           </div>
-
           <div className="pt-3 mt-3 border-t border-gray-100 text-right">
-            <button
-              onClick={() => setCurrentTab("accounts")}
-              className="text-xs font-semibold text-blue-600 hover:underline"
-            >
-              Quản lý chi tiết từng tài khoản →
-            </button>
+            <button onClick={() => setCurrentTab("accounts")} className="text-xs font-semibold text-blue-600 hover:underline">Quản lý tài khoản →</button>
           </div>
         </div>
       </div>
     </div>
   );
 
-  // ── 6. TAB 3: PHÂN QUYỀN ROLE (ROLE & PERMISSION MATRIX) ──
+  // The backend remains the single source of truth for role permissions. This screen
+  // deliberately shows only roles actually returned by the employee API.
   const RolesPermissionView = (
     <div className="space-y-5">
-      <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs">
         <div>
-          <h3 className="font-serif font-bold text-gray-900 text-base">
-            Ma trận phân quyền vai trò (Role-Based Access Control)
-          </h3>
+          <h3 className="font-serif font-bold text-gray-900 text-base">Vai trò đang sử dụng</h3>
           <p className="text-xs text-gray-400 mt-0.5">
-            Cấu hình quyền hạn chi tiết cho từng nhóm tài khoản theo đúng quy chế an ninh dữ liệu khách sạn
+            Số liệu lấy từ tài khoản nhân viên. Ma trận quyền do backend cấp qua JWT; giao diện không tự giả lập quyền.
           </p>
         </div>
-
-        <button
-          onClick={() => showToast("Chức năng thêm vai trò tùy chỉnh (Custom Role) sẵn sàng.")}
-          className="flex items-center gap-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-xs"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Thêm vai trò mới</span>
-        </button>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
@@ -1354,71 +867,24 @@ export default function AdminStation({ onBack }: Props) {
               <tr className="bg-[#F8F9FA] text-[11px] font-semibold text-gray-600 border-b border-gray-100 uppercase">
                 <th className="py-3 px-4">Mã Role</th>
                 <th className="py-3 px-4">Tên vai trò</th>
-                <th className="py-3 px-4 text-center">Số User</th>
-                <th className="py-3 px-4 text-center">Đặt phòng &amp; Check-in</th>
-                <th className="py-3 px-4 text-center">Thu ngân / Trả phòng</th>
-                <th className="py-3 px-4 text-center">Nhiệm vụ dọn phòng</th>
-                <th className="py-3 px-4 text-center">Kho &amp; Minibar</th>
-                <th className="py-3 px-4 text-center">Audit Logs</th>
-                <th className="py-3 px-4 text-center">Cấu hình hệ thống</th>
+                <th className="py-3 px-4">Bộ phận</th>
+                <th className="py-3 px-4 text-right">Tài khoản</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {rolesList.map(role => (
-                <tr key={role.id} className="hover:bg-gray-50/70 transition-colors">
+                <tr key={role.code} className="hover:bg-gray-50/70 transition-colors">
                   <td className="py-3.5 px-4 font-mono font-bold">
-                    <span className={`px-2 py-0.5 rounded border text-[10px] ${role.badgeColor}`}>
+                    <span className={`px-2 py-0.5 rounded border text-[10px] ${ROLE_META[role.code as EmployeeRole].badgeColor}`}>
                       {role.code}
                     </span>
                   </td>
                   <td className="py-3.5 px-4 font-semibold text-gray-900">{role.name}</td>
-                  <td className="py-3.5 px-4 text-center font-mono font-semibold text-gray-700">
-                    {role.usersCount}
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    {role.permissions.roomAccess ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 mx-auto" />
-                    ) : (
-                      <span className="text-gray-300">-</span>
-                    )}
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    {role.permissions.checkoutFinance ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 mx-auto" />
-                    ) : (
-                      <span className="text-gray-300">-</span>
-                    )}
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    {role.permissions.housekeepingOps ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 mx-auto" />
-                    ) : (
-                      <span className="text-gray-300">-</span>
-                    )}
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    {role.permissions.inventoryEdit ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 mx-auto" />
-                    ) : (
-                      <span className="text-gray-300">-</span>
-                    )}
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    {role.permissions.auditLogView ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 mx-auto" />
-                    ) : (
-                      <span className="text-gray-300">-</span>
-                    )}
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    {role.permissions.userAdmin ? (
-                      <CheckCircle2 className="w-4 h-4 text-purple-600 mx-auto" />
-                    ) : (
-                      <span className="text-gray-300">-</span>
-                    )}
-                  </td>
+                  <td className="py-3.5 px-4 text-gray-600">{ROLE_META[role.code as EmployeeRole].department}</td>
+                  <td className="py-3.5 px-4 text-right font-mono font-semibold text-gray-700">{role.usersCount}</td>
                 </tr>
               ))}
+              {loadState.employees === "ready" && rolesList.length === 0 && <tr><td colSpan={4} className="py-10 text-center text-gray-500">Chưa có vai trò nào được sử dụng.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1426,28 +892,14 @@ export default function AdminStation({ onBack }: Props) {
     </div>
   );
 
-  // ── 7. TAB 4: NHẬT KÝ AUDIT LOGS (SECURITY LOGS) ──
   const AuditLogsView = (
     <div className="space-y-5">
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-serif font-bold text-gray-900 text-sm">
-            Nhật ký truy vết bảo mật (System Audit Trail)
-          </h3>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Lưu vết tất cả thao tác nhạy cảm, đăng nhập và sửa đổi dữ liệu phòng/giá
-          </p>
+          <h3 className="font-serif font-bold text-gray-900 text-sm">Nhật ký truy vết hệ thống</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Dữ liệu do backend ghi nhận; không suy diễn IP hay loại sự kiện.</p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => showToast("Đang xuất nhật ký Audit Logs ra file CSV...")}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer shadow-2xs"
-          >
-            <Download className="w-3.5 h-3.5 text-gray-500" />
-            <span>Xuất Audit CSV</span>
-          </button>
-        </div>
+        <button onClick={() => setRefreshKey(key => key + 1)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"><RefreshCw className="w-3.5 h-3.5" /> Làm mới</button>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
@@ -1457,27 +909,22 @@ export default function AdminStation({ onBack }: Props) {
               <tr className="bg-[#F8F9FA] text-[11px] font-semibold text-gray-600 border-b border-gray-100 uppercase">
                 <th className="py-3 px-4">Thời gian</th>
                 <th className="py-3 px-4">Người thực hiện</th>
-                <th className="py-3 px-4">Hành động / Sự kiện</th>
-                <th className="py-3 px-4">Địa chỉ IP</th>
-                <th className="py-3 px-4 text-center">Phân loại</th>
+                <th className="py-3 px-4">Hành động</th>
+                <th className="py-3 px-4">Đối tượng</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {activityLogs.map(log => (
                 <tr key={log.id} className="hover:bg-gray-50/70">
                   <td className="py-3.5 px-4 font-mono text-[11px] text-gray-600">{log.time}</td>
-                  <td className="py-3.5 px-4 font-semibold text-gray-900">{log.email}</td>
+                  <td className="py-3.5 px-4 font-semibold text-gray-900">{log.actor || "Không rõ"}</td>
                   <td className="py-3.5 px-4 text-gray-700">{log.action}</td>
-                  <td className="py-3.5 px-4 font-mono text-[11px] text-gray-500">
-                    {log.ip || "192.168.1.1"}
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${log.badgeColor}`}>
-                      {log.badge}
-                    </span>
-                  </td>
+                  <td className="py-3.5 px-4 font-mono text-[11px] text-gray-500">{log.entity}</td>
                 </tr>
               ))}
+              {loadState.audit === "loading" && <tr><td colSpan={4} className="py-10 text-center text-gray-500">Đang tải nhật ký…</td></tr>}
+              {loadState.audit === "error" && <tr><td colSpan={4} className="py-10 text-center text-rose-700">Không tải được nhật ký kiểm toán.</td></tr>}
+              {loadState.audit === "ready" && activityLogs.length === 0 && <tr><td colSpan={4} className="py-10 text-center text-gray-500">Chưa có sự kiện nào.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1485,90 +932,13 @@ export default function AdminStation({ onBack }: Props) {
     </div>
   );
 
-  // ── 8. TAB 5: CẤU HÌNH HỆ THỐNG (SYSTEM CONFIGURATION) ──
   const SystemSettingsView = (
     <div className="space-y-5 max-w-4xl">
       <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs">
-        <h3 className="font-serif font-bold text-gray-900 text-base mb-1">
-          Chính sách bảo mật &amp; Đăng nhập
-        </h3>
-        <p className="text-xs text-gray-400 mb-5">
-          Quy định xác thực, thời gian phiên làm việc và bảo vệ mật khẩu cho toàn bộ khách sạn
-        </p>
-
-        <div className="space-y-4 text-xs">
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 border border-gray-100">
-            <div>
-              <p className="font-semibold text-gray-800">Bắt buộc xác thực 2 yếu tố (2FA / OTP)</p>
-              <p className="text-gray-400 text-[11px] mt-0.5">Áp dụng cho tài khoản Quản lý, Kế toán và CNTT</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={securitySettings.mfaRequired}
-              onChange={e => {
-                setSecuritySettings({ ...securitySettings, mfaRequired: e.target.checked });
-                showToast("Đã cập nhật chính sách 2FA.");
-              }}
-              className="w-4 h-4 text-blue-600 rounded cursor-pointer"
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 border border-gray-100">
-            <div>
-              <p className="font-semibold text-gray-800">Tự động đăng xuất phiên không hoạt động (Timeout)</p>
-              <p className="text-gray-400 text-[11px] mt-0.5">Khóa màn hình làm việc khi nhân viên rời quầy</p>
-            </div>
-            <select
-              value={securitySettings.sessionTimeout}
-              onChange={e => {
-                setSecuritySettings({ ...securitySettings, sessionTimeout: e.target.value });
-                showToast(`Đã đổi thời gian timeout thành ${e.target.value} phút.`);
-              }}
-              className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer"
-            >
-              <option value="15">15 phút</option>
-              <option value="30">30 phút (Khuyến nghị)</option>
-              <option value="60">60 phút</option>
-              <option value="120">2 giờ</option>
-            </select>
-          </div>
-
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 border border-gray-100">
-            <div>
-              <p className="font-semibold text-gray-800">Bảo vệ chống Brute-force mật khẩu</p>
-              <p className="text-gray-400 text-[11px] mt-0.5">Tự động khóa IP và tài khoản sau 5 lần nhập sai liên tiếp</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={securitySettings.ipBruteforceLock}
-              onChange={e => {
-                setSecuritySettings({ ...securitySettings, ipBruteforceLock: e.target.checked });
-                showToast("Đã cập nhật tính năng chống dò mật khẩu.");
-              }}
-              className="w-4 h-4 text-blue-600 rounded cursor-pointer"
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-red-50/60 border border-red-100">
-            <div>
-              <p className="font-semibold text-red-900">Chế độ bảo trì hệ thống (Maintenance Mode)</p>
-              <p className="text-red-600/80 text-[11px] mt-0.5">Tạm dừng truy cập toàn bộ ngoại trừ tài khoản Quản trị viên</p>
-            </div>
-            <button
-              onClick={() => {
-                const next = !securitySettings.maintenanceMode;
-                setSecuritySettings({ ...securitySettings, maintenanceMode: next });
-                showToast(next ? "ĐÃ BẬT CHẾ ĐỘ BẢO TRÌ HỆ THỐNG!" : "Đã tắt chế độ bảo trì.");
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                securitySettings.maintenanceMode
-                  ? "bg-red-600 text-white"
-                  : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"
-              }`}
-            >
-              {securitySettings.maintenanceMode ? "Đang bật bảo trì" : "Bật bảo trì"}
-            </button>
-          </div>
+        <h3 className="font-serif font-bold text-gray-900 text-base mb-1">Cấu hình hệ thống</h3>
+        <p className="text-xs text-gray-500 mb-5">Chưa có API backend để lưu cấu hình bảo mật toàn cục. Các công tắc giả đã được gỡ để tránh quản trị viên tưởng rằng thay đổi đã có hiệu lực.</p>
+        <div className="grid gap-3 sm:grid-cols-2 text-xs">
+          {["Xác thực hai bước", "Thời gian hết hạn phiên", "Chống brute-force theo IP", "Chế độ bảo trì"].map(item => <div key={item} className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4"><p className="font-semibold text-slate-800">{item}</p><p className="mt-1 text-[11px] text-slate-500">Chưa được backend hỗ trợ cấu hình động.</p></div>)}
         </div>
       </div>
     </div>
@@ -1632,43 +1002,12 @@ export default function AdminStation({ onBack }: Props) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Phòng ban</label>
-              <select
-                value={newAccountForm.department}
-                onChange={e => setNewAccountForm({ ...newAccountForm, department: e.target.value })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
-              >
-                <option value="Lễ tân">Lễ tân</option>
-                <option value="Ban quản lý">Ban quản lý</option>
-                <option value="Buồng phòng">Buồng phòng</option>
-                <option value="Bếp & F&B">Bếp & F&B</option>
-                <option value="Kỹ thuật">Kỹ thuật</option>
-                <option value="Nhân sự">Nhân sự</option>
-                <option value="Kinh doanh">Kinh doanh</option>
-                <option value="CNTT">CNTT</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Vai trò hệ thống</label>
-              <select
-                value={newAccountForm.roleCode}
-                onChange={e => setNewAccountForm({ ...newAccountForm, roleCode: e.target.value as any })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
-              >
-                <option value="FRONT_DESK">FRONT_DESK</option>
-                <option value="MANAGER">MANAGER</option>
-                <option value="HOUSEKEEPING">HOUSEKEEPING</option>
-                <option value="FNB_STAFF">FNB_STAFF</option>
-                <option value="ENGINEERING">ENGINEERING</option>
-                <option value="HR">HR</option>
-                <option value="ACCOUNTING">ACCOUNTING</option>
-                <option value="TECHNICAL">TECHNICAL</option>
-                <option value="ADMIN">ADMIN</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Vai trò hệ thống</label>
+            <select value={newAccountForm.roleCode} onChange={e => setNewAccountForm({ ...newAccountForm, roleCode: e.target.value as EmployeeRole })} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 cursor-pointer">
+              {EMPLOYEE_ROLES.map(role => <option key={role} value={role}>{role} — {ROLE_META[role].name}</option>)}
+            </select>
+            <p className="mt-1 text-[11px] text-gray-400">Phòng ban được suy ra từ vai trò và không lưu riêng trên hồ sơ nhân viên.</p>
           </div>
 
           <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-[11px] text-blue-800">
@@ -1714,70 +1053,25 @@ export default function AdminStation({ onBack }: Props) {
 
         <form onSubmit={handleUpdateAccount} className="space-y-3.5 text-xs">
           <div>
-            <label className="block text-gray-700 font-semibold mb-1">Họ và tên</label>
+            <label className="block text-gray-700 font-semibold mb-1">Họ và tên (chỉ đọc)</label>
             <input
               type="text"
-              required
               value={editingAccount.name}
-              onChange={e => setEditingAccount({ ...editingAccount, name: e.target.value })}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
+              readOnly
+              className="w-full bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-500"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Phòng ban</label>
-              <input
-                type="text"
-                value={editingAccount.department}
-                onChange={e => setEditingAccount({ ...editingAccount, department: e.target.value })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Vai trò</label>
-              <select
-                value={editingAccount.roleCode}
-                onChange={e => setEditingAccount({ ...editingAccount, roleCode: e.target.value as any })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
-              >
-                <option value="FRONT_DESK">FRONT_DESK</option>
-                <option value="MANAGER">MANAGER</option>
-                <option value="HOUSEKEEPING">HOUSEKEEPING</option>
-                <option value="FNB_STAFF">FNB_STAFF</option>
-                <option value="ENGINEERING">ENGINEERING</option>
-                <option value="HR">HR</option>
-                <option value="ACCOUNTING">ACCOUNTING</option>
-                <option value="TECHNICAL">TECHNICAL</option>
-                <option value="ADMIN">ADMIN</option>
-              </select>
-            </div>
-          </div>
-
           <div>
-            <label className="block text-gray-700 font-semibold mb-1">Trạng thái tài khoản</label>
-            <select
-              value={editingAccount.status}
-              onChange={e => setEditingAccount({ ...editingAccount, status: e.target.value as any })}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
-            >
-              <option value="Active">Active (Hoạt động bình thường)</option>
-              <option value="Locked">Locked (Khóa đăng nhập)</option>
+            <label className="block text-gray-700 font-semibold mb-1">Vai trò</label>
+            <select value={editingAccount.roleCode} onChange={e => setEditingAccount({ ...editingAccount, roleCode: e.target.value as EmployeeRole })} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 cursor-pointer">
+              {EMPLOYEE_ROLES.map(role => <option key={role} value={role}>{role} — {ROLE_META[role].name}</option>)}
             </select>
           </div>
 
-          <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => {
-                showToast(`Đã gửi email khôi phục mật khẩu tới ${editingAccount.email}!`);
-              }}
-              className="text-xs text-blue-600 font-semibold hover:underline cursor-pointer"
-            >
-              Reset mật khẩu
-            </button>
+          <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-[11px] text-slate-600">Trạng thái hiện tại: <strong>{editingAccount.status}</strong>. Dùng nút khóa/kích hoạt ở danh sách để thay đổi trạng thái qua API.</div>
 
+          <div className="pt-3 border-t border-gray-100 flex items-center justify-end">
             <div className="flex gap-2">
               <button
                 type="button"
@@ -1826,7 +1120,7 @@ export default function AdminStation({ onBack }: Props) {
               </h1>
               <p className="text-xs text-gray-500 mt-0.5">
                 {currentTab === "accounts" && "Quản trị người dùng, phân quyền và bảo mật hệ thống khách sạn."}
-                {currentTab === "dashboard" && "Giám sát hiệu năng máy chủ, phiên hoạt động và tính khả dụng của dịch vụ."}
+                {currentTab === "dashboard" && "Theo dõi hoạt động hệ thống, phiên làm việc và các dịch vụ đang phục vụ."}
                 {currentTab === "roles" && "Cấu hình ma trận phân quyền chi tiết cho từng vai trò nhân sự."}
                 {currentTab === "audit" && "Truy vết nhật ký hoạt động người dùng và cảnh báo an ninh."}
                 {currentTab === "settings" && "Chính sách mật khẩu, thời gian timeout phiên và bảo vệ chống xâm nhập."}

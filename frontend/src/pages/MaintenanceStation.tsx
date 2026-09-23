@@ -196,7 +196,7 @@ function CreatePanel({
         priority,
         slaDueHours: slaHours,
       });
-      if (!ok) throw new Error("Backend không lưu được phiếu công việc.");
+      if (!ok) throw new Error("Không thể lưu phiếu công việc.");
       setCreated(true);
       setDesc("");
       setTimeout(() => {
@@ -204,7 +204,7 @@ function CreatePanel({
         onClose();
       }, 1200);
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Không thể lưu phiếu công việc.");
+      setError("Không thể lưu phiếu công việc. Vui lòng thử lại.");
     }
   };
 
@@ -234,7 +234,7 @@ function CreatePanel({
         {/* Real Room Selection */}
         <div>
           <label htmlFor="room-select" style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 5, display: "block" }}>
-            Vị trí phòng (Dữ liệu CSDL) <span style={{ color: "#EF4444" }}>*</span>
+            Vị trí phòng <span style={{ color: "#EF4444" }}>*</span>
           </label>
           <div style={{ position: "relative" }}>
             <select
@@ -348,7 +348,7 @@ function CreatePanel({
         {/* SLA Due */}
         <div>
           <label style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 5, display: "block" }}>
-            Thời hạn hoàn thành (SLA)
+            Thời hạn hoàn thành
           </label>
           <div style={{ display: "flex", gap: 6 }}>
             {[
@@ -387,7 +387,7 @@ function CreatePanel({
         <button disabled={!canCreate} onClick={handleCreate} style={{ width: "100%", height: 38, borderRadius: 8, border: "none",
           background: canCreate ? "#0F172A" : "#CBD5E1", color: "#FFF", fontSize: 12, fontWeight: 700, cursor: canCreate ? "pointer" : "not-allowed",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
-          <Send size={13} /> Tạo &amp; Phân công phiếu vào CSDL
+          <Send size={13} /> Tạo &amp; phân công phiếu
         </button>
       </div>
     </div>
@@ -475,7 +475,7 @@ function TechnicalCatalogPanel() {
       setNewLoc("");
       setNewModel("");
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Không thể lưu tài sản.");
+      window.alert("Không thể lưu tài sản. Vui lòng thử lại.");
     }
   };
 
@@ -485,7 +485,7 @@ function TechnicalCatalogPanel() {
       await enterpriseApi.updateAssetStatus(item.id, nextStatus);
       setAssets(rows => rows.map(row => row.id === item.id ? { ...row, status: nextStatus === "GOOD" ? "good" : "maintenance-needed" } : row));
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Không thể cập nhật trạng thái tài sản.");
+      window.alert("Không thể cập nhật trạng thái tài sản. Vui lòng thử lại.");
     }
   };
 
@@ -508,7 +508,7 @@ function TechnicalCatalogPanel() {
             Danh mục thiết bị &amp; Tài sản kỹ thuật
           </h1>
           <p style={{ fontSize: 12, color: "#64748B" }}>
-            Dữ liệu tài sản thực tế từ CSDL, hồ sơ máy móc và chu kỳ bảo dưỡng định kỳ
+            Dữ liệu tài sản thực tế, hồ sơ máy móc và chu kỳ bảo dưỡng định kỳ
           </p>
         </div>
         <button
@@ -528,7 +528,7 @@ function TechnicalCatalogPanel() {
         <div style={{ background: "#FFF", borderRadius: 12, border: "1px solid #E2E8F0", padding: "14px 16px" }}>
           <p style={{ fontSize: 11, color: "#64748B", marginBottom: 2 }}>Tổng số thiết bị</p>
           <p style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 22, fontWeight: 800, color: "#0F172A" }}>{assets.length}</p>
-          <p style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Tài sản theo dõi trong CSDL</p>
+          <p style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Tài sản đang theo dõi</p>
         </div>
         <div style={{ background: "#FFF", borderRadius: 12, border: "1px solid #E2E8F0", padding: "14px 16px" }}>
           <p style={{ fontSize: 11, color: "#64748B", marginBottom: 2 }}>Vận hành ổn định</p>
@@ -609,7 +609,7 @@ function TechnicalCatalogPanel() {
               {filteredAssets.length === 0 ? (
                 <tr>
                   <td colSpan={8} style={{ padding: "32px 16px", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
-                    Không có thiết bị kỹ thuật nào trong CSDL phù hợp với tìm kiếm.
+                    Không có thiết bị kỹ thuật nào phù hợp với tìm kiếm.
                   </td>
                 </tr>
               ) : (
@@ -734,7 +734,7 @@ function TechnicalCatalogPanel() {
                   type="submit"
                   style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: "#0F172A", color: "#FFF", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
                 >
-                  Lưu vào CSDL
+                  Lưu thông tin
                 </button>
               </div>
             </form>
@@ -850,7 +850,7 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
       .catch(err => {
         console.warn("Backend technician profile unavailable:", err);
         setCurrentEmployee(null);
-        setProfileError(err instanceof Error ? err.message : "Không thể tải hồ sơ kỹ thuật viên từ máy chủ.");
+        setProfileError("Không thể tải hồ sơ kỹ thuật viên lúc này. Vui lòng thử lại.");
       })
       .finally(() => {
         setProfileLoading(false);
@@ -877,7 +877,7 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
       })
       .catch(err => {
         console.warn("Backend technical data unavailable:", err);
-        setLoadError(err instanceof Error ? err.message : "Không thể tải danh sách phiếu kỹ thuật và phòng từ CSDL.");
+        setLoadError("Không thể tải danh sách phiếu kỹ thuật và phòng. Vui lòng thử lại.");
       })
       .finally(() => {
         setLoadingData(false);
@@ -931,7 +931,7 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
       });
       setOrders(prev => prev.map(o => o.rawId === order.rawId ? mapWorkOrder(updated) : o));
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Không thể tiếp nhận phiếu.");
+      window.alert("Không thể tiếp nhận phiếu. Vui lòng thử lại.");
     }
   };
 
@@ -942,7 +942,7 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
       });
       setOrders(prev => prev.map(o => o.rawId === order.rawId ? mapWorkOrder(updated) : o));
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Không thể chuyển trạng thái đang xử lý.");
+      window.alert("Không thể chuyển phiếu sang trạng thái đang xử lý. Vui lòng thử lại.");
     }
   };
 
@@ -966,18 +966,18 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
       setOrders(prev => prev.map(o => o.rawId === resultModalOrder.rawId ? mapWorkOrder(updated) : o));
       setResultModalOrder(null);
     } catch (err) {
-      setResultModalError(err instanceof Error ? err.message : "Lỗi khi báo hoàn thành.");
+      setResultModalError("Không thể ghi nhận hoàn thành phiếu. Vui lòng thử lại.");
     }
   };
 
   const handleReleaseRoom = async (order: WorkOrder) => {
-    if (!window.confirm(`Xác nhận mở khóa phòng ${order.roomId} trên hệ thống PMS để đón khách?`)) return;
+    if (!window.confirm(`Xác nhận mở khóa phòng ${order.roomId} trên hệ thống khách sạn để đón khách?`)) return;
     try {
       const released = await housekeepingTechnicalApi.release(order.rawId);
       const mapped = mapWorkOrder(released);
       setOrders(prev => prev.map(o => o.rawId === order.rawId ? mapped : o));
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Không thể mở khóa phòng trên backend.");
+      window.alert("Không thể mở khóa phòng. Vui lòng thử lại.");
     }
   };
 
@@ -1047,11 +1047,11 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <img
               src="/hotel_logo.png"
-              alt="MAM Hotel Logo"
+              alt="MaM Hotel Logo"
               style={{ width: 36, height: "auto", objectFit: "contain", flexShrink: 0, filter: "drop-shadow(0 2px 6px rgba(184,148,74,0.35))" }}
             />
             <div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", lineHeight: 1.1, fontFamily: "'Cormorant Garamond',Georgia,serif", letterSpacing: "0.05em" }}>MAM HOTEL</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", lineHeight: 1.1, fontFamily: "'Cormorant Garamond',Georgia,serif", letterSpacing: "0.05em" }}>MaM Hotel</p>
               <p style={{ fontSize: 9, color: "#EA580C", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2, fontWeight: 600 }}>KỸ THUẬT &amp; BẢO TRÌ</p>
             </div>
           </div>
@@ -1186,10 +1186,10 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
               <div>
                 <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", marginBottom: 3 }}>Trung tâm Kỹ thuật &amp; Bảo trì</h1>
                 <p style={{ fontSize: 12, color: "#64748B" }}>
-                  Đồng bộ thời gian thực với backend Spring Boot: Tiếp nhận sự cố, xử lý phiếu công việc và mở khóa phòng PMS sau nghiệm thu
+                  Cập nhật theo thời gian thực: tiếp nhận sự cố, xử lý phiếu công việc và mở khóa phòng sau nghiệm thu
                 </p>
               </div>
-              <button onClick={loadData} title="Làm mới dữ liệu từ server"
+              <button onClick={loadData} title="Làm mới thông tin"
                 style={{ display: "flex", alignItems: "center", gap: 6, background: "#FFF", border: "1px solid #CBD5E1", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: "#334155", cursor: "pointer" }}>
                 Cập nhật dữ liệu
               </button>
@@ -1273,7 +1273,7 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#F8FAFC" }}>
-                      {["Mã phiếu", "Vị trí / Khu vực", "Mô tả sự cố & Kết quả", "Mức ưu tiên", "Kỹ thuật viên", "Khóa phòng PMS", "Hạn SLA", "Trạng thái", "Thao tác"].map(h => (
+                      {["Mã phiếu", "Vị trí / Khu vực", "Mô tả sự cố & Kết quả", "Mức ưu tiên", "Kỹ thuật viên", "Khóa phòng", "Hạn hoàn thành", "Trạng thái", "Thao tác"].map(h => (
                         <th key={h} style={{ padding: "10px 14px", fontSize: 11, fontWeight: 700, color: "#64748B",
                           textAlign: "left", letterSpacing: "0.03em", textTransform: "uppercase",
                           whiteSpace: "nowrap" }}>{h}</th>
@@ -1284,7 +1284,7 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
                     {loadingData ? (
                       <tr>
                         <td colSpan={9} style={{ padding: "36px 16px", textAlign: "center", color: "#64748B", fontSize: 13 }}>
-                          Đang tải dữ liệu phiếu kỹ thuật từ CSDL...
+                          Đang tải dữ liệu phiếu kỹ thuật...
                         </td>
                       </tr>
                     ) : loadError ? (
@@ -1302,7 +1302,7 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
                     ) : filtered.length === 0 ? (
                       <tr>
                         <td colSpan={9} style={{ padding: "36px 16px", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
-                          Không có phiếu công việc nào trong CSDL phù hợp với bộ lọc hiện tại.
+                          Không có phiếu công việc nào phù hợp với bộ lọc hiện tại.
                         </td>
                       </tr>
                     ) : (
@@ -1383,7 +1383,7 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
                                 </button>
                               ) : (
                                 <div style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 99, background: "#FEE2E2", color: "#991B1B", fontSize: 11, fontWeight: 600 }}>
-                                  <Lock size={11} /> Đang khóa (PMS)
+                                  <Lock size={11} /> Đang khóa
                                 </div>
                               )}
                             </td>
@@ -1463,7 +1463,7 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
               {/* Pagination */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "11px 18px", borderTop: "1px solid #E2E8F0", background: "#F8FAFC" }}>
-                <span style={{ fontSize: 12, color: "#64748B" }}>Hiển thị {filtered.length} trên tổng số {orders.length} phiếu công việc CSDL</span>
+                <span style={{ fontSize: 12, color: "#64748B" }}>Hiển thị {filtered.length} trên tổng số {orders.length} phiếu công việc</span>
                 <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                   <button style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid #E2E8F0", background: "#FFF",
                     cursor: "pointer", color: "#94A3B8", display: "flex", alignItems: "center", justifyContent: "center" }}>

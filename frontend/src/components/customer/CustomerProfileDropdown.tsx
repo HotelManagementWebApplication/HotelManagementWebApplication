@@ -19,6 +19,15 @@ import {
   Clock,
   Edit3,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Check,
+  UtensilsCrossed,
+  Users,
+  Layers,
+  ArrowRight,
+  Info,
 } from "lucide-react";
 import { customerApi } from "../../shared/api/customer";
 import { authApi } from "../../shared/api/auth";
@@ -30,17 +39,165 @@ interface CustomerProfileDropdownProps {
   onClose: () => void;
   onLogout: () => void;
   onProfileUpdated?: (name: string) => void;
+  onNavigateToServices?: () => void;
 }
 
 type TabType = "overview" | "edit" | "password" | "bookings";
 
-const fmtVND = (n: number) => n.toLocaleString("vi-VN") + " ₫";
+const fmtVND = (n: number) => (n ?? 0).toLocaleString("vi-VN") + " ₫";
+
+const formatDateTimeVi = (isoString?: string) => {
+  if (!isoString) return "—";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString.replace("T", " ").slice(0, 16);
+    const hours = String(d.getHours()).padStart(2, "0");
+    const mins = String(d.getMinutes()).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${hours}:${mins}, ${day}/${month}/${year}`;
+  } catch {
+    return isoString.replace("T", " ").slice(0, 16);
+  }
+};
+
+const formatDateVi = (isoString?: string) => {
+  if (!isoString) return "—";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString.slice(0, 10);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return isoString.slice(0, 10);
+  }
+};
+
+const getReservationStatusMeta = (status: string) => {
+  switch (status?.toUpperCase()) {
+    case "DRAFT":
+      return {
+        label: "Chờ thanh toán cọc",
+        badgeClass: "bg-amber-50 text-amber-800 border-amber-300",
+        dotClass: "bg-amber-500",
+        desc: "Đơn đang giữ phòng, vui lòng hoàn tất chuyển khoản tiền cọc.",
+      };
+    case "DEPOSIT_PAID":
+      return {
+        label: "Đã cọc · Chờ nhận phòng",
+        badgeClass: "bg-sky-50 text-sky-800 border-sky-300",
+        dotClass: "bg-sky-500",
+        desc: "Tiền cọc đã được ghi nhận. Phòng đã sẵn sàng đón tiếp quý khách.",
+      };
+    case "CONFIRMED":
+      return {
+        label: "Đã xác nhận phòng",
+        badgeClass: "bg-emerald-50 text-emerald-800 border-emerald-300",
+        dotClass: "bg-emerald-500",
+        desc: "Đơn đặt phòng đã được xác nhận chính thức.",
+      };
+    case "CHECKED_IN":
+      return {
+        label: "Đang lưu trú",
+        badgeClass: "bg-purple-50 text-purple-800 border-purple-300",
+        dotClass: "bg-purple-500",
+        desc: "Quý khách đang nhận phòng và lưu trú tại khách sạn.",
+      };
+    case "CHECKED_OUT":
+      return {
+        label: "Đã trả phòng (Check-out)",
+        badgeClass: "bg-stone-100 text-stone-700 border-stone-300",
+        dotClass: "bg-stone-400",
+        desc: "Kỳ nghỉ đã kết thúc. Cảm ơn quý khách đã đồng hành cùng MaM Hotel.",
+      };
+    case "CANCELLED":
+      return {
+        label: "Đã hủy đơn",
+        badgeClass: "bg-rose-50 text-rose-700 border-rose-300",
+        dotClass: "bg-rose-500",
+        desc: "Đơn đặt phòng đã được hủy.",
+      };
+    case "NO_SHOW":
+      return {
+        label: "Không đến (No Show)",
+        badgeClass: "bg-stone-100 text-stone-600 border-stone-300",
+        dotClass: "bg-stone-400",
+        desc: "Quá hạn nhận phòng.",
+      };
+    default:
+      return {
+        label: status || "Đang xử lý",
+        badgeClass: "bg-stone-100 text-stone-700 border-stone-300",
+        dotClass: "bg-stone-400",
+        desc: "",
+      };
+  }
+};
+
+const getServiceStatusMeta = (status: string) => {
+  switch (status?.toUpperCase()) {
+    case "CONFIRMED":
+      return {
+        label: "Đã đặt trước",
+        badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      };
+    case "USED":
+      return {
+        label: "Đã phục vụ tại KS",
+        badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
+      };
+    case "CANCELLED":
+      return {
+        label: "Đã hủy",
+        badgeClass: "bg-stone-100 text-stone-500 border-stone-200",
+      };
+    default:
+      return {
+        label: status || "Đã ghi nhận",
+        badgeClass: "bg-stone-100 text-stone-600 border-stone-200",
+      };
+  }
+};
+
+const calculateStaySummary = (checkInStr?: string, checkOutStr?: string, rentalType?: string) => {
+  if (!checkInStr || !checkOutStr) return "";
+  try {
+    const tIn = new Date(checkInStr).getTime();
+    const tOut = new Date(checkOutStr).getTime();
+    if (isNaN(tIn) || isNaN(tOut)) return "";
+    const diffMs = Math.max(0, tOut - tIn);
+    if (rentalType === "HOURLY") {
+      const hours = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)));
+      return `${hours} giờ`;
+    } else {
+      const nights = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+      return `${nights} đêm`;
+    }
+  } catch {
+    return "";
+  }
+};
+
+const cancellationPolicy = (reservation: CustomerReservation) => {
+  const checkIn = reservation.rooms?.[0]?.expected_check_in;
+  const hours = checkIn ? (new Date(checkIn).getTime() - Date.now()) / 3_600_000 : 0;
+  if (reservation.deposit_payment?.status !== "PAID") {
+    return { refund: false, label: "Hủy đặt phòng", note: "Chưa thanh toán cọc nên không phát sinh hoàn tiền." };
+  }
+  return hours > 48
+    ? { refund: true, label: "Hủy miễn phí", note: "Hủy trước giờ nhận phòng hơn 48 giờ: hoàn toàn bộ tiền cọc." }
+    : { refund: false, label: "Hủy phòng · Mất cọc", note: "Hủy trong vòng 48 giờ, kể cả đúng mốc 48 giờ: tiền cọc không được hoàn." };
+};
 
 export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = ({
   isOpen,
   onClose,
   onLogout,
   onProfileUpdated,
+  onNavigateToServices,
 }) => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<TabType>("overview");
@@ -71,6 +228,41 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
   // Bookings state
   const [reservations, setReservations] = useState<CustomerReservation[]>([]);
   const [loadingReservations, setLoadingReservations] = useState(false);
+  const [bookingFilter, setBookingFilter] = useState<"all" | "active" | "past">("all");
+  const [expandedResId, setExpandedResId] = useState<number | null>(null);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [cancellingReservationId, setCancellingReservationId] = useState<number | null>(null);
+  const [cancelError, setCancelError] = useState("");
+
+  const handleCopyCode = (code: string) => {
+    try {
+      navigator.clipboard?.writeText(code);
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleCancelReservation = async (reservation: CustomerReservation) => {
+    const policy = cancellationPolicy(reservation);
+    const accepted = window.confirm(`${policy.note}\n\nBạn chắc chắn muốn hủy booking #BK-${reservation.id}?`);
+    if (!accepted) return;
+    setCancellingReservationId(reservation.id);
+    setCancelError("");
+    try {
+      const updated = await customerApi.cancelReservation(
+        reservation.id,
+        "Khách hàng tự hủy trên website",
+        `customer-cancel-${crypto.randomUUID()}`,
+      );
+      setReservations(rows => rows.map(row => row.id === updated.id ? updated : row));
+    } catch (error) {
+      setCancelError(error instanceof Error ? error.message : "Không thể hủy booking. Vui lòng thử lại.");
+    } finally {
+      setCancellingReservationId(null);
+    }
+  };
 
   // Handle click outside & Esc key
   useEffect(() => {
@@ -122,7 +314,12 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
     customerApi
       .reservations()
       .then((resList) => {
-        if (Array.isArray(resList)) setReservations(resList);
+        if (Array.isArray(resList)) {
+          setReservations(resList);
+          if (resList.length > 0) {
+            setExpandedResId((prev) => prev ?? resList[0].id);
+          }
+        }
       })
       .catch((err) => console.warn("Failed to load reservations:", err))
       .finally(() => setLoadingReservations(false));
@@ -155,14 +352,14 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
       const updated = await customerApi.updateProfile(payload);
       setProfile(updated);
       onProfileUpdated?.(updated.guest.full_name || editFullName.trim());
-      setEditSuccess("Cập nhật thông tin vào cơ sở dữ liệu thành công!");
+      setEditSuccess("Cập nhật thông tin thành công!");
       setTimeout(() => {
         setEditSuccess("");
         setActiveTab("overview");
       }, 1200);
     } catch (err: unknown) {
       const apiErr = err as { message?: string };
-      setEditError(apiErr?.message || "Không thể lưu thông tin vào cơ sở dữ liệu. Vui lòng thử lại.");
+      setEditError("Không thể lưu thông tin. Vui lòng thử lại.");
     } finally {
       setSavingEdit(false);
     }
@@ -198,7 +395,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
       }, 1500);
     } catch (err: unknown) {
       const apiErr = err as { message?: string };
-      setPwError(apiErr?.message || "Đổi mật khẩu thất bại. Vui lòng thử lại.");
+      setPwError("Đổi mật khẩu thất bại. Vui lòng thử lại.");
     } finally {
       setSavingPw(false);
     }
@@ -220,7 +417,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
   return (
     <div
       ref={dropdownRef}
-      className="absolute right-0 top-full mt-2.5 w-[340px] sm:w-[410px] bg-[#FAF8F5] rounded-2xl shadow-2xl border border-[#E7E2D6] z-50 overflow-hidden flex flex-col text-[#1C1917] animate-in fade-in slide-in-from-top-2 duration-150"
+      className="absolute right-0 top-full mt-2.5 w-[360px] sm:w-[500px] md:w-[540px] max-w-[95vw] bg-[#FAF8F5] rounded-2xl shadow-2xl border border-[#E7E2D6] z-50 overflow-hidden flex flex-col text-[#1C1917] animate-in fade-in slide-in-from-top-2 duration-150"
       style={{
         boxShadow: "0 20px 45px -10px rgba(28, 25, 23, 0.22), 0 0 0 1px rgba(140, 109, 55, 0.15)",
       }}
@@ -327,7 +524,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
       </div>
 
       {/* DROPDOWN CONTENT BODY */}
-      <div className="p-4 max-h-[380px] overflow-y-auto space-y-3">
+      <div className="p-3.5 sm:p-4 max-h-[460px] sm:max-h-[520px] overflow-y-auto space-y-3">
         {loadingProfile && activeTab === "overview" ? (
           <div className="py-8 flex flex-col items-center justify-center text-center">
             <div className="w-6 h-6 border-2 border-[#8C6D37] border-t-transparent rounded-full animate-spin mb-2" />
@@ -605,52 +802,478 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
 
         {/* TAB 4: BOOKINGS HISTORY */}
         {activeTab === "bookings" && (
-          <div className="space-y-2">
+          <div className="space-y-3">
+            {/* Filter pills */}
+            <div className="flex items-center gap-1.5 pb-1 border-b border-[#E7E2D6] text-[11px] overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setBookingFilter("all")}
+                className={`px-2.5 py-1 rounded-full font-medium transition cursor-pointer shrink-0 ${
+                  bookingFilter === "all"
+                    ? "bg-[#1C1917] text-white shadow-xs"
+                    : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200"
+                }`}
+              >
+                Tất cả ({reservations.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setBookingFilter("active")}
+                className={`px-2.5 py-1 rounded-full font-medium transition cursor-pointer shrink-0 ${
+                  bookingFilter === "active"
+                    ? "bg-[#8C6D37] text-white shadow-xs"
+                    : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200"
+                }`}
+              >
+                Hiện tại / Sắp tới (
+                {
+                  reservations.filter((r) =>
+                    ["DRAFT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(r.status)
+                  ).length
+                }
+                )
+              </button>
+              <button
+                type="button"
+                onClick={() => setBookingFilter("past")}
+                className={`px-2.5 py-1 rounded-full font-medium transition cursor-pointer shrink-0 ${
+                  bookingFilter === "past"
+                    ? "bg-[#57534E] text-white shadow-xs"
+                    : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200"
+                }`}
+              >
+                Lịch sử (
+                {
+                  reservations.filter((r) =>
+                    ["CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(r.status)
+                  ).length
+                }
+                )
+              </button>
+            </div>
+
             {loadingReservations ? (
-              <div className="py-6 flex flex-col items-center justify-center text-center">
-                <div className="w-6 h-6 border-2 border-[#8C6D37] border-t-transparent rounded-full animate-spin mb-2" />
-                <p className="text-xs text-[#78716C]">Đang tải danh sách đặt phòng...</p>
+              <div className="py-10 flex flex-col items-center justify-center text-center">
+                <div className="w-7 h-7 border-2 border-[#8C6D37] border-t-transparent rounded-full animate-spin mb-2.5" />
+                <p className="text-xs text-[#78716C]">Đang tải danh sách đặt phòng & dịch vụ...</p>
               </div>
-            ) : reservations.length === 0 ? (
-              <div className="py-8 text-center bg-white rounded-xl border border-stone-200 p-4">
-                <BedDouble size={24} className="text-stone-300 mx-auto mb-2" />
-                <p className="text-xs font-medium text-stone-600">Chưa có đơn đặt phòng nào</p>
-                <p className="text-[11px] text-stone-400 mt-0.5">
-                  Các phòng quý khách đặt sẽ hiển thị tại đây.
+            ) : reservations.filter((r) => {
+                if (bookingFilter === "active") {
+                  return ["DRAFT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(r.status);
+                }
+                if (bookingFilter === "past") {
+                  return ["CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(r.status);
+                }
+                return true;
+              }).length === 0 ? (
+              <div className="py-10 text-center bg-white rounded-2xl border border-stone-200 p-6 space-y-2">
+                <div className="w-12 h-12 rounded-full bg-[#FAF5EB] text-[#8C6D37] flex items-center justify-center mx-auto mb-1 border border-[#8C6D37]/20">
+                  <BedDouble size={24} />
+                </div>
+                <p className="text-sm font-semibold text-[#1C1917]">
+                  {bookingFilter === "all"
+                    ? "Chưa có đơn đặt phòng nào"
+                    : bookingFilter === "active"
+                    ? "Không có đơn đặt phòng nào đang hoạt động"
+                    : "Chưa có lịch sử lưu trú"}
+                </p>
+                <p className="text-xs text-stone-500 max-w-xs mx-auto">
+                  Các kỳ nghỉ và dịch vụ ẩm thực, tiện ích bạn đặt tại khách sạn sẽ được cập nhật đầy đủ tại đây.
                 </p>
               </div>
             ) : (
-              reservations.map((res) => (
-                <div
-                  key={res.id}
-                  className="bg-white p-3 rounded-xl border border-[#E7E2D6] space-y-1.5 text-xs hover:border-[#8C6D37]/40 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-[#1C1917]">Mã #{res.id}</span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        res.status === "CONFIRMED" || res.status === "CHECKED_IN"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : res.status === "CANCELLED"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-amber-100 text-amber-800"
+              reservations
+                .filter((r) => {
+                  if (bookingFilter === "active") {
+                    return ["DRAFT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(r.status);
+                  }
+                  if (bookingFilter === "past") {
+                    return ["CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(r.status);
+                  }
+                  return true;
+                })
+                .map((res) => {
+                  const isExpanded = expandedResId === res.id;
+                  const statusMeta = getReservationStatusMeta(res.status);
+                  const primaryRoom = res.rooms?.[0];
+                  const totalRooms = res.rooms?.length || 1;
+                  const totalAmount =
+                    res.total_amount && res.total_amount > 0
+                      ? res.total_amount
+                      : res.deposit_amount
+                      ? res.deposit_amount * 2
+                      : 0;
+                  const staySummary = calculateStaySummary(
+                    primaryRoom?.expected_check_in,
+                    primaryRoom?.expected_check_out,
+                    res.rental_type
+                  );
+                  const servicesCount = res.services?.length || 0;
+
+                  return (
+                    <div
+                      key={res.id}
+                      className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden shadow-2xs ${
+                        isExpanded
+                          ? "border-[#8C6D37]/60 ring-1 ring-[#8C6D37]/20"
+                          : "border-[#E7E2D6] hover:border-[#8C6D37]/40"
                       }`}
                     >
-                      {res.status}
-                    </span>
-                  </div>
+                      {/* CARD HEADER (Clickable to toggle) */}
+                      <div
+                        onClick={() => setExpandedResId(isExpanded ? null : res.id)}
+                        className="p-3.5 cursor-pointer hover:bg-stone-50/60 transition select-none space-y-2"
+                      >
+                        {/* Line 1: Code, Rental type & Status badge */}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm font-bold text-[#1C1917] tracking-tight">
+                              #BK-{res.id}
+                            </span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#FAF5EB] text-[#8C6D37] border border-[#8C6D37]/20">
+                              {res.rental_type === "HOURLY" ? "Thuê theo giờ" : "Thuê theo đêm"}
+                            </span>
+                          </div>
 
-                  <div className="text-[11px] text-stone-500 flex items-center justify-between">
-                    <span>
-                      {res.rooms?.[0]?.expected_check_in ? res.rooms[0].expected_check_in.slice(0, 10) : (res.booked_at ? res.booked_at.slice(0, 10) : "—")}
-                      {res.rooms?.[0]?.expected_check_out ? ` đến ${res.rooms[0].expected_check_out.slice(0, 10)}` : ""}
-                    </span>
-                    <span className="font-semibold text-[#8C6D37]">
-                      {fmtVND(res.deposit_amount || 0)}
-                    </span>
-                  </div>
-                </div>
-              ))
+                          {/* Status Badge */}
+                          <div
+                            className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${statusMeta.badgeClass}`}
+                            title={statusMeta.desc}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${statusMeta.dotClass}`} />
+                            <span>{statusMeta.label}</span>
+                          </div>
+                        </div>
+
+                        {/* Line 2: Room info & Total Amount */}
+                        <div className="flex items-start justify-between gap-2 pt-0.5">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-[#1C1917]">
+                              <BedDouble size={14} className="text-[#8C6D37] shrink-0" />
+                              <span className="truncate">
+                                {res.rooms?.map((r) => r.room_name || `Phòng ${r.room_id}`).join(", ") ||
+                                  `Phòng ${primaryRoom?.room_id || "—"}`}
+                              </span>
+                              {totalRooms > 1 && (
+                                <span className="text-[10px] text-stone-500 font-normal">
+                                  ({totalRooms} phòng)
+                                </span>
+                              )}
+                            </div>
+                            {primaryRoom?.room_type_name && (
+                              <p className="text-[11px] text-stone-500 pl-5 truncate">
+                                Hạng phòng: {primaryRoom.room_type_name}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="text-[10px] text-stone-400 block uppercase font-medium">Tổng tiền</span>
+                            <span className="text-sm font-bold text-[#8C6D37] font-mono">
+                              {fmtVND(totalAmount)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Line 3: Dates + Services indicator + Expand button */}
+                        <div className="flex items-center justify-between text-[11px] text-stone-500 pt-1 border-t border-stone-100">
+                          <div className="flex items-center gap-1.5">
+                            <Clock size={12} className="text-stone-400 shrink-0" />
+                            <span>
+                              {primaryRoom?.expected_check_in
+                                ? `${formatDateVi(primaryRoom.expected_check_in)} → ${formatDateVi(primaryRoom.expected_check_out)}`
+                                : formatDateVi(res.booked_at)}
+                              {staySummary ? ` (${staySummary})` : ""}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {servicesCount > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                <UtensilsCrossed size={10} />
+                                <span>{servicesCount} dịch vụ</span>
+                              </span>
+                            )}
+                            <span className="text-stone-400 hover:text-[#8C6D37] transition flex items-center gap-0.5 text-[11px] font-medium">
+                              <span>{isExpanded ? "Thu gọn" : "Chi tiết"}</span>
+                              {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* EXPANDED DETAILS ACCORDION */}
+                      {isExpanded && (
+                        <div className="p-3.5 bg-[#FAF8F5] border-t border-[#E7E2D6] space-y-3 text-xs animate-in fade-in duration-150">
+                          {cancelError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-[11px] text-red-700">{cancelError}</p>}
+                          {/* Status detail callout */}
+                          {statusMeta.desc && (
+                            <div className={`p-2.5 rounded-xl border text-[11px] flex items-start gap-2 ${statusMeta.badgeClass}`}>
+                              <Info size={13} className="shrink-0 mt-0.5" />
+                              <span>{statusMeta.desc}</span>
+                            </div>
+                          )}
+                          {res.status === "CANCELLED" && res.cancellation_outcome && (
+                            <div className={`rounded-xl border p-2.5 text-[11px] ${res.cancellation_outcome === "REFUND" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}>
+                              <strong>{res.cancellation_outcome === "REFUND" ? "Được hoàn toàn bộ tiền cọc" : res.cancellation_outcome === "FORFEIT" ? "Tiền cọc không được hoàn" : "Không phát sinh hoàn tiền"}</strong>
+                              {res.cancellation_reason ? <span className="mt-1 block">Lý do: {res.cancellation_reason}</span> : null}
+                            </div>
+                          )}
+
+                          {/* General info */}
+                          <div className="flex items-center justify-between text-[11px] text-stone-500 bg-white p-2.5 rounded-xl border border-stone-200/80">
+                            <span>
+                              Ngày tạo đơn: <strong className="text-stone-800">{formatDateTimeVi(res.booked_at)}</strong>
+                            </span>
+                            <span>
+                              Kênh đặt: <strong className="text-stone-800">{res.booking_source || "Website"}</strong>
+                            </span>
+                          </div>
+
+                          {/* SECTION 1: ROOMS BREAKDOWN */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-[#1C1917]">
+                              <BedDouble size={13} className="text-[#8C6D37]" />
+                              <span>Phòng đã đặt ({res.rooms?.length || 0})</span>
+                            </div>
+
+                            {res.rooms?.map((room, idx) => (
+                              <div
+                                key={room.room_id || idx}
+                                className="bg-white rounded-xl p-3 border border-[#E7E2D6] space-y-2"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <h4 className="font-semibold text-xs text-[#1C1917]">
+                                      {room.room_name || `Phòng ${room.room_id}`}
+                                    </h4>
+                                    {room.room_type_name && (
+                                      <p className="text-[11px] text-stone-500">
+                                        Loại phòng: {room.room_type_name}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-stone-600 bg-stone-100 px-2 py-0.5 rounded-md">
+                                    <Users size={11} />
+                                    <span>{room.guest_count || 1} khách</span>
+                                  </span>
+                                </div>
+
+                                {/* Check-in / Check-out Schedule Grid */}
+                                <div className="grid grid-cols-2 gap-2 bg-[#FAF8F5] p-2.5 rounded-lg border border-[#EBE5DA] text-[11px]">
+                                  <div>
+                                    <span className="text-stone-400 block text-[10px] uppercase font-semibold">
+                                      Giờ nhận phòng (Check-in)
+                                    </span>
+                                    <span className="font-semibold text-[#1C1917] mt-0.5 block">
+                                      {formatDateTimeVi(room.expected_check_in)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-stone-400 block text-[10px] uppercase font-semibold">
+                                      Giờ trả phòng (Check-out)
+                                    </span>
+                                    <span className="font-semibold text-[#1C1917] mt-0.5 block">
+                                      {formatDateTimeVi(room.expected_check_out)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Room Pricing */}
+                                <div className="flex items-center justify-between text-[11px] pt-1 border-t border-stone-100">
+                                  <span className="text-stone-500">
+                                    Thời gian: {calculateStaySummary(room.expected_check_in, room.expected_check_out, res.rental_type)}
+                                    {room.unit_price ? ` · ${fmtVND(room.unit_price)}/${res.rental_type === "HOURLY" ? "giờ" : "đêm"}` : ""}
+                                  </span>
+                                  {room.total_price ? (
+                                    <span className="font-semibold text-[#8C6D37]">
+                                      {fmtVND(room.total_price)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* SECTION 2: SERVICES BOOKED */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-[#1C1917]">
+                                <UtensilsCrossed size={13} className="text-[#8C6D37]" />
+                                <span>Dịch vụ & Trải nghiệm đã đặt ({servicesCount})</span>
+                              </div>
+
+                              {onNavigateToServices && ["DRAFT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(res.status) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onClose();
+                                    onNavigateToServices();
+                                  }}
+                                  className="text-[11px] text-[#8C6D37] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                                >
+                                  <span>Đặt thêm dịch vụ</span>
+                                  <ArrowRight size={11} />
+                                </button>
+                              )}
+                            </div>
+
+                            {servicesCount > 0 ? (
+                              <div className="space-y-2">
+                                {res.services?.map((svc) => {
+                                  const svcMeta = getServiceStatusMeta(svc.status);
+                                  return (
+                                    <div
+                                      key={svc.id}
+                                      className="bg-white rounded-xl p-3 border border-[#E7E2D6] space-y-1.5"
+                                    >
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                          <h5 className="font-semibold text-xs text-[#1C1917] truncate">
+                                            {svc.service_name || svc.service_id}
+                                          </h5>
+                                          <p className="text-[11px] text-stone-500">
+                                            Phục vụ tại: <strong>Phòng {svc.room_id}</strong>
+                                            {svc.meal_period ? ` · ${svc.meal_period === "LUNCH" ? "Bữa trưa" : "Bữa tối"}` : ""}
+                                          </p>
+                                        </div>
+                                        <span
+                                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0 ${svcMeta.badgeClass}`}
+                                        >
+                                          {svcMeta.label}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-stone-100 text-stone-600">
+                                        <span>
+                                          Thời gian: <strong>{formatDateTimeVi(svc.scheduled_at)}</strong> · {svc.quantity} suất
+                                          {svc.free_quantity > 0 ? ` (Miễn phí ${svc.free_quantity})` : ""}
+                                        </span>
+                                        <span className="font-semibold text-[#8C6D37] shrink-0 font-mono">
+                                          {svc.amount_due > 0 ? fmtVND(svc.amount_due) : "Miễn phí"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="bg-white/80 rounded-xl p-3 border border-dashed border-[#DDD6C8] text-center space-y-1.5">
+                                <p className="text-[11px] text-stone-500">
+                                  Quý khách chưa đặt dịch vụ ẩm thực hoặc trải nghiệm kèm theo đơn này.
+                                </p>
+                                {onNavigateToServices && ["DRAFT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(res.status) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      onClose();
+                                      onNavigateToServices();
+                                    }}
+                                    className="px-3 py-1.5 bg-[#FAF5EB] hover:bg-[#F2E8D3] text-[#8C6D37] rounded-lg text-xs font-semibold border border-[#8C6D37]/30 transition cursor-pointer inline-flex items-center gap-1.5"
+                                  >
+                                    <UtensilsCrossed size={12} />
+                                    <span>Xem thực đơn F&B & Đặt dịch vụ</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* SECTION 3: BILLING & DEPOSIT PAYMENT */}
+                          <div className="bg-[#FAF5EB] rounded-xl p-3 border border-[#E8DFC9] space-y-2.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-stone-600">Tổng chi phí dự kiến:</span>
+                              <span className="font-bold text-sm text-[#1C1917] font-mono">
+                                {fmtVND(totalAmount)}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs pt-1.5 border-t border-[#E8DFC9]">
+                              <span className="text-stone-600">Tiền đặt cọc phòng:</span>
+                              <div className="text-right">
+                                <span className="font-bold text-xs text-[#8C6D37] font-mono">
+                                  {fmtVND(res.deposit_amount || 0)}
+                                </span>
+                                <span className="block text-[10px] text-stone-500">
+                                  {res.deposit_payment?.status === "PAID"
+                                    ? "✓ Đã thanh toán cọc"
+                                    : res.deposit_payment?.status === "PENDING"
+                                    ? "⏳ Chờ thanh toán cọc"
+                                    : "Không yêu cầu cọc"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Payment Instruction box if PENDING / DRAFT */}
+                            {(res.status === "DRAFT" || res.deposit_payment?.status === "PENDING") && res.deposit_payment?.payment_code && (
+                              <div className="mt-2 p-2.5 bg-white rounded-lg border border-amber-200 text-[11px] space-y-1.5 text-amber-900">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-amber-800 flex items-center gap-1">
+                                    <AlertCircle size={12} className="text-amber-600" />
+                                    Nội dung chuyển khoản cọc:
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCopyCode(res.deposit_payment.payment_code);
+                                    }}
+                                    className="text-[10px] font-semibold text-[#8C6D37] hover:underline flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-300/60 cursor-pointer"
+                                  >
+                                    {copiedCode === res.deposit_payment.payment_code ? (
+                                      <>
+                                        <Check size={11} className="text-emerald-600" />
+                                        <span className="text-emerald-700">Đã chép</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy size={11} />
+                                        <span>Sao chép</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+
+                                <div className="font-mono text-xs font-bold text-[#1C1917] bg-[#FAF8F5] p-1.5 rounded border border-stone-200 text-center tracking-wider select-all">
+                                  {res.deposit_payment.payment_code}
+                                </div>
+
+                                <div className="flex justify-between items-center text-[10px] text-stone-500 pt-0.5">
+                                  <span>Số tiền cọc cần chuyển:</span>
+                                  <strong className="text-[#8C6D37]">{fmtVND(res.deposit_amount || 0)}</strong>
+                                </div>
+
+                                {res.deposit_payment?.expires_at && (
+                                  <p className="text-[10px] text-amber-700">
+                                    Hạn chuyển cọc: {formatDateTimeVi(res.deposit_payment.expires_at)}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {["DRAFT", "DEPOSIT_PAID", "CONFIRMED"].includes(res.status) && (() => {
+                            const policy = cancellationPolicy(res);
+                            return (
+                              <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-3">
+                                <p className="text-[11px] leading-relaxed text-rose-800">{policy.note}</p>
+                                <button
+                                  type="button"
+                                  disabled={cancellingReservationId === res.id}
+                                  onClick={() => void handleCancelReservation(res)}
+                                  className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-2 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-wait disabled:opacity-60"
+                                >
+                                  <X size={12} />
+                                  {cancellingReservationId === res.id ? "Đang hủy booking…" : policy.label}
+                                </button>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
             )}
           </div>
         )}

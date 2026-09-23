@@ -3,8 +3,9 @@ import { kitchenAccountingApi, newKitchenIdempotencyKey } from "../shared/api/ki
 import { authApi } from "../shared/api/auth";
 import { ApiError } from "../shared/api/client";
 import { EmployeeProfileDropdown } from "../components/common/EmployeeProfileDropdown";
-import type { Approval, Service, InventoryMovement } from "../shared/types/kitchenAccounting";
+import type { Approval, Service, InventoryMovement, RestaurantBooking } from "../shared/types/kitchenAccounting";
 import type { EmployeeProfileDto } from "../shared/types/api";
+import { localDateValue } from "../shared/utils/localDate";
 import {
   Package, ArrowLeftRight, Tag, BarChart2,
   Search, Bell, ChevronDown, Plus,
@@ -12,12 +13,13 @@ import {
   MoreVertical, ArrowUpRight, ArrowDownRight, LogOut,
   CheckSquare, Calendar, Upload, TrendingUp, Download,
   Clock, CheckCircle2, X, Send,
+  Utensils, RefreshCw,
 } from "lucide-react";
 
 /* ══════════════════════════════════════════════════════════
    TYPES
 ══════════════════════════════════════════════════════════ */
-type NavPage   = "inventory" | "transactions" | "pricing" | "reports";
+type NavPage   = "restaurant" | "inventory" | "transactions" | "pricing" | "reports";
 type StockStatus = "in-stock" | "low-stock" | "out-of-stock";
 type TxType    = "import" | "export";
 type PriceStatus = "pending" | "approved" | "rejected";
@@ -109,7 +111,7 @@ function KpiBar({ items, transactions, priceRequests }: { items: InventoryItem[]
     <div style={{ display:"flex",gap:16,padding:"16px 24px",background:"#F8FAFC",flexShrink:0,
       borderBottom:"1px solid #E2E8F0" }}>
       {[
-        { label:"Tổng mặt hàng",   val:String(items.length),       sub:"Theo danh mục dịch vụ backend", up:false,  iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:Package },
+        { label:"Tổng mặt hàng",   val:String(items.length),       sub:"Theo danh mục dịch vụ", up:false,  iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:Package },
         { label:"Cảnh báo sắp hết",val:`${lowStock} món`,     sub:"Theo ngưỡng tồn kho",up:false, iconBg:"#FEF3C7",iconColor:"#F59E0B",Icon:AlertTriangle },
         { label:"Tiêu thụ hôm nay",val:fmtVNDFull(consumedToday),sub:"Theo phiếu xuất kho đã ghi nhận", up:false,  iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:ShoppingCart },
         { label:"Chờ cấp phát",    val:String(pendingRequests),         sub:"Đề xuất giá đang chờ duyệt",   up:false, iconBg:"#FFE4E6",iconColor:"#DC2626",Icon:FileText },
@@ -1056,7 +1058,43 @@ function ReportsScreen({ items, transactions }: { items: InventoryItem[]; transa
 /* ══════════════════════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════ */
+function RestaurantScreen({ bookings, date, loading, error, busyId, onDateChange, onRefresh, onMarkUsed }: {
+  bookings: RestaurantBooking[];
+  date: string;
+  loading: boolean;
+  error: string | null;
+  busyId: number | null;
+  onDateChange: (date: string) => void;
+  onRefresh: () => void;
+  onMarkUsed: (booking: RestaurantBooking) => void;
+}) {
+  const confirmed = bookings.filter(booking => booking.status === "CONFIRMED").length;
+  const used = bookings.filter(booking => booking.status === "USED").length;
+  const cancelled = bookings.filter(booking => booking.status === "CANCELLED").length;
+  const mealLabel = (value: string | null) => value === "LUNCH" ? "Bữa trưa" : value === "DINNER" ? "Bữa tối" : "Dịch vụ ăn uống";
+  return (
+    <div style={{ flex:1,overflowY:"auto",padding:"20px 24px",background:"#F8FAFC" }}>
+      <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,marginBottom:18,flexWrap:"wrap" }}>
+        <div><p style={{ fontSize:11,color:"#D97706",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em" }}>Vận hành F&amp;B</p><h2 style={{ fontSize:22,fontWeight:800,color:"#0F172A",marginTop:3 }}>Điều phối nhà hàng</h2><p style={{ fontSize:12,color:"#64748B",marginTop:3 }}>Đơn ăn do khách đặt được lấy trực tiếp từ backend. Xác nhận phục vụ sẽ trừ tồn và ghi nhận vào hóa đơn.</p></div>
+        <div style={{ display:"flex",gap:8,alignItems:"center" }}><input type="date" value={date} onChange={event => onDateChange(event.target.value)} style={{ height:36,border:"1px solid #CBD5E1",borderRadius:8,padding:"0 10px",fontSize:12,background:"#FFF" }} /><button onClick={onRefresh} disabled={loading} style={{ height:36,padding:"0 13px",display:"flex",alignItems:"center",gap:6,border:"1px solid #CBD5E1",borderRadius:8,background:"#FFF",fontSize:12,fontWeight:600,cursor:loading?"wait":"pointer" }}><RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Làm mới</button></div>
+      </div>
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:12,marginBottom:16 }}>
+        {[["Chờ phục vụ",confirmed,"#FEF3C7","#92400E"],["Đã phục vụ",used,"#DCFCE7","#166534"],["Đã hủy",cancelled,"#F1F5F9","#475569"]].map(([label,value,bg,color]) => <div key={String(label)} style={{ background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,padding:15 }}><p style={{ fontSize:11,color:"#64748B" }}>{label}</p><div style={{ display:"flex",alignItems:"center",gap:8,marginTop:6 }}><strong style={{ fontSize:24,color:String(color) }}>{value}</strong><span style={{ fontSize:10,fontWeight:700,color:String(color),background:String(bg),padding:"2px 7px",borderRadius:99 }}>đơn</span></div></div>)}
+      </div>
+      {error && <div role="alert" style={{ marginBottom:14,padding:"10px 12px",borderRadius:9,background:"#FFF1F2",border:"1px solid #FECDD3",color:"#BE123C",fontSize:12 }}>{error}</div>}
+      <div style={{ background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,overflow:"hidden" }}>
+        <div style={{ overflowX:"auto" }}><table style={{ width:"100%",borderCollapse:"collapse",minWidth:780 }}><thead><tr style={{ background:"#F8FAFC" }}>{["Giờ phục vụ","Phòng / Booking","Dịch vụ","Số lượng","Ghi chú","Trạng thái","Thao tác"].map(label => <th key={label} style={{ padding:"10px 13px",textAlign:"left",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:"0.05em" }}>{label}</th>)}</tr></thead><tbody>
+          {bookings.map(booking => { const due = new Date(booking.scheduled_at).getTime() <= Date.now(); const canUse = booking.status === "CONFIRMED" && due; return <tr key={booking.id} style={{ borderTop:"1px solid #F1F5F9" }}><td style={{ padding:"12px 13px",fontSize:12,fontWeight:700,color:"#0F172A" }}>{new Date(booking.scheduled_at).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})}<p style={{ marginTop:2,fontSize:10,color:"#64748B",fontWeight:500 }}>{mealLabel(booking.meal_period)}</p></td><td style={{ padding:"12px 13px",fontSize:12,color:"#334155" }}><strong>Phòng {booking.room_id}</strong><p style={{ marginTop:2,fontSize:10,color:"#94A3B8" }}>BK-{booking.reservation_id}</p></td><td style={{ padding:"12px 13px",fontSize:12,color:"#334155" }}>{booking.service_name}</td><td style={{ padding:"12px 13px",fontSize:13,fontWeight:700,color:"#0F172A" }}>{booking.quantity}<p style={{ marginTop:2,fontSize:10,color:"#64748B",fontWeight:400 }}>miễn phí {booking.free_quantity}</p></td><td style={{ padding:"12px 13px",fontSize:11,color:"#64748B",maxWidth:220 }}>{booking.note || "—"}</td><td style={{ padding:"12px 13px" }}><span style={{ fontSize:10,fontWeight:700,borderRadius:99,padding:"3px 8px",background:booking.status==="USED"?"#DCFCE7":booking.status==="CANCELLED"?"#F1F5F9":"#FEF3C7",color:booking.status==="USED"?"#166534":booking.status==="CANCELLED"?"#475569":"#92400E" }}>{booking.status === "USED" ? "Đã phục vụ" : booking.status === "CANCELLED" ? "Đã hủy" : "Đã xác nhận"}</span></td><td style={{ padding:"12px 13px" }}><button onClick={() => onMarkUsed(booking)} disabled={!canUse || busyId === booking.id} title={!due && booking.status === "CONFIRMED" ? "Chưa đến giờ phục vụ" : undefined} style={{ border:0,borderRadius:7,padding:"7px 10px",background:canUse?"#0F172A":"#E2E8F0",color:canUse?"#FFF":"#94A3B8",fontSize:11,fontWeight:700,cursor:canUse?"pointer":"not-allowed" }}>{busyId === booking.id ? "Đang lưu…" : booking.status === "USED" ? "Đã hoàn tất" : "Xác nhận phục vụ"}</button></td></tr>; })}
+          {!loading && bookings.length === 0 && <tr><td colSpan={7} style={{ padding:38,textAlign:"center",fontSize:12,color:"#64748B" }}>Không có đơn nhà hàng trong ngày đã chọn.</td></tr>}
+          {loading && <tr><td colSpan={7} style={{ padding:38,textAlign:"center",fontSize:12,color:"#64748B" }}>Đang tải đơn nhà hàng…</td></tr>}
+        </tbody></table></div>
+      </div>
+    </div>
+  );
+}
+
 const NAV: { id: NavPage; label: string; Icon: React.ElementType }[] = [
+  { id:"restaurant",   label:"Điều phối nhà hàng",  Icon:Utensils },
   { id:"inventory",    label:"Kho & Minibar",       Icon:Package },
   { id:"transactions", label:"Nhập – Xuất kho",     Icon:ArrowLeftRight },
   { id:"pricing",      label:"Đề xuất giá dịch vụ", Icon:Tag },
@@ -1064,6 +1102,7 @@ const NAV: { id: NavPage; label: string; Icon: React.ElementType }[] = [
 ];
 
 const NAV_LABELS: Record<NavPage, string> = {
+  restaurant:   "Điều phối nhà hàng",
   inventory:    "Kho & Minibar",
   transactions: "Nhập – Xuất kho",
   pricing:      "Đề xuất giá dịch vụ",
@@ -1071,13 +1110,19 @@ const NAV_LABELS: Record<NavPage, string> = {
 };
 
 export default function KitchenInventory({ onBack }: { onBack: () => void }) {
-  const [page, setPage] = useState<NavPage>("inventory");
+  const [page, setPage] = useState<NavPage>("restaurant");
   const [priceRequests, setPriceRequests] = useState<PriceRequest[]>([]);
   const [liveItems, setLiveItems] = useState<InventoryItem[]>([]);
   const [liveTransactions, setLiveTransactions] = useState<Transaction[]>([]);
   const [userProfile, setUserProfile] = useState<EmployeeProfileDto | null>(null);
   const [topProfileOpen, setTopProfileOpen] = useState(false);
   const [sidebarProfileOpen, setSidebarProfileOpen] = useState(false);
+  const [restaurantDate, setRestaurantDate] = useState(() => localDateValue());
+  const [restaurantBookings, setRestaurantBookings] = useState<RestaurantBooking[]>([]);
+  const [restaurantLoading, setRestaurantLoading] = useState(false);
+  const [restaurantError, setRestaurantError] = useState<string | null>(null);
+  const [restaurantBusyId, setRestaurantBusyId] = useState<number | null>(null);
+  const [restaurantRefreshKey, setRestaurantRefreshKey] = useState(0);
 
   const todayLabel = useMemo(() => new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" }), []);
 
@@ -1187,6 +1232,33 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
     }
   };
 
+  useEffect(() => {
+    let active = true;
+    setRestaurantLoading(true);
+    setRestaurantError(null);
+    kitchenAccountingApi.restaurantBookings({ date: restaurantDate })
+      .then(rows => { if (active) setRestaurantBookings(rows); })
+      .catch(error => {
+        console.warn("Backend restaurant bookings unavailable:", error);
+        if (active) { setRestaurantBookings([]); setRestaurantError(error instanceof Error ? error.message : "Không tải được đơn nhà hàng."); }
+      })
+      .finally(() => { if (active) setRestaurantLoading(false); });
+    return () => { active = false; };
+  }, [restaurantDate, restaurantRefreshKey]);
+
+  const handleMarkRestaurantUsed = async (booking: RestaurantBooking) => {
+    setRestaurantBusyId(booking.id);
+    setRestaurantError(null);
+    try {
+      const updated = await kitchenAccountingApi.markRestaurantBookingUsed(booking.id);
+      setRestaurantBookings(rows => rows.map(row => row.id === booking.id ? updated : row));
+    } catch (error) {
+      setRestaurantError(error instanceof Error ? error.message : "Không thể xác nhận phục vụ.");
+    } finally {
+      setRestaurantBusyId(null);
+    }
+  };
+
   return (
     <div style={{ display:"flex",height:"100vh",overflow:"hidden",
       background:"#F8FAFC",fontFamily:"'Inter',system-ui,sans-serif" }}>
@@ -1199,11 +1271,11 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
           <div style={{ display:"flex",alignItems:"center",gap:9 }}>
             <img
               src="/hotel_logo.png"
-              alt="MAM Hotel Logo"
+              alt="MaM Hotel Logo"
               style={{ width:36,height:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 6px rgba(184,148,74,0.35))" }}
             />
             <div>
-              <p style={{ fontSize:13,fontWeight:700,color:"#0F172A",lineHeight:1.1,fontFamily:"'Cormorant Garamond',Georgia,serif",letterSpacing:"0.05em" }}>MAM HOTEL</p>
+              <p style={{ fontSize:13,fontWeight:700,color:"#0F172A",lineHeight:1.1,fontFamily:"'Cormorant Garamond',Georgia,serif",letterSpacing:"0.05em" }}>MaM Hotel</p>
               <p style={{ fontSize:9,color:"#D97706",letterSpacing:"0.08em",textTransform:"uppercase",marginTop:2,fontWeight:600 }}>BẾP &amp; DỊCH VỤ ĂN UỐNG</p>
             </div>
           </div>
@@ -1243,7 +1315,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
             </div>
             <div>
               <p style={{ fontSize:11,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || "Bếp trưởng & Quản lý Kho"}</p>
-              <p style={{ fontSize:10,color:"#94A3B8" }}>{userProfile?.role || "Bộ phận Bếp & Minibar"}</p>
+              <p style={{ fontSize:10,color:"#94A3B8" }}>{userProfile?.role || "Bộ phận Bếp & Nhà hàng"}</p>
             </div>
           </div>
           <button onClick={onBack}
@@ -1256,7 +1328,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
             onLogout={onBack}
             align="bottom-left"
             currentRoleLabel={userProfile?.role || "Bếp trưởng & F&B"}
-            departmentName="Bộ phận Bếp & Minibar"
+            departmentName="Bộ phận Bếp & Nhà hàng"
           />
         </div>
       </aside>
@@ -1297,7 +1369,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
               </div>
               <div>
                 <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || "Quản lý bếp & dịch vụ"}</p>
-                <p style={{ fontSize:10,color:"#94A3B8" }}>{userProfile?.role || "Bộ phận Bếp & Minibar"}</p>
+                <p style={{ fontSize:10,color:"#94A3B8" }}>{userProfile?.role || "Bộ phận Bếp & Nhà hàng"}</p>
               </div>
               <ChevronDown size={12} style={{ color:"#94A3B8" }} />
             </div>
@@ -1307,7 +1379,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
               onLogout={onBack}
               align="top-right"
               currentRoleLabel={userProfile?.role || "Bếp trưởng & F&B"}
-              departmentName="Bộ phận Bếp & Minibar"
+              departmentName="Bộ phận Bếp & Nhà hàng"
             />
           </div>
         </header>
@@ -1333,10 +1405,11 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
         )}
 
         {/* KPI */}
-          <KpiBar items={liveItems} transactions={liveTransactions} priceRequests={priceRequests} />
+          {page !== "restaurant" && <KpiBar items={liveItems} transactions={liveTransactions} priceRequests={priceRequests} />}
 
         {/* CONTENT */}
         <div style={{ flex:1,display:"flex",overflow:"hidden" }}>
+          {page === "restaurant" && <RestaurantScreen bookings={restaurantBookings} date={restaurantDate} loading={restaurantLoading} error={restaurantError} busyId={restaurantBusyId} onDateChange={setRestaurantDate} onRefresh={() => setRestaurantRefreshKey(key => key + 1)} onMarkUsed={booking => void handleMarkRestaurantUsed(booking)} />}
           {page === "inventory"    && (
             <InventoryScreen
               items={liveItems}

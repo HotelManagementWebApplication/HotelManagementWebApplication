@@ -5,8 +5,8 @@ import { publicApi } from "../shared/api/public";
 import { customerApi } from "../shared/api/customer";
 import { authApi } from "../shared/api/auth";
 import { ApiError } from "../shared/api/client";
-import type { PublicRoomAvailability, PublicRoomDetail, PublicRoomSummary, PublicRoomStatus, CommercialSpace } from "../shared/types/public";
-import type { CustomerReservation, CustomerVoucher } from "../shared/types/customer";
+import type { PublicRoomAvailability, PublicRoomDetail, PublicRoomSummary, PublicRoomStatus } from "../shared/types/public";
+import type { CustomerReservation, HotelServiceBooking, HotelServiceBookingRequest } from "../shared/types/customer";
 import {
   Search, MapPin, Calendar, Users, Star, Wifi, Coffee, Car, Dumbbell,
   ChevronLeft, ChevronRight, ChevronDown, X, Heart, BedDouble, Maximize2, Eye,
@@ -22,6 +22,7 @@ import { RoomDetailPage } from "../components/customer/RoomDetailPage";
 import { LuxuryBookingModal } from "../components/customer/LuxuryBookingModal";
 import { LuxuryFnBView, type FnbService } from "../components/customer/LuxuryFnBView";
 import { CustomerProfileDropdown } from "../components/customer/CustomerProfileDropdown";
+import { localDateValue } from "../shared/utils/localDate";
 
 interface CustomerPortalProps {
   onBack: () => void;
@@ -34,7 +35,7 @@ const fmtVND = (n: number) => n.toLocaleString("vi-VN") + " ₫";
 const dateInputValue = (offsetDays: number) => {
   const date = new Date();
   date.setDate(date.getDate() + offsetDays);
-  return date.toISOString().slice(0, 10);
+  return localDateValue(date);
 };
 
 const displayRoomType = (value: string): Room["type"] => {
@@ -154,12 +155,13 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
   const [servicesLoading, setServicesLoading] = useState(true);
   const [servicesError, setServicesError] = useState<string | null>(null);
 
-  const [commercialSpaces, setCommercialSpaces] = useState<CommercialSpace[]>([]);
+  const [customerReservations, setCustomerReservations] = useState<CustomerReservation[]>([]);
   const [bookingLoading, setBookingLoading] = useState(false);
 
   // References for smooth scrolling
   const roomsRef = useRef<HTMLDivElement>(null);
   const wellnessRef = useRef<HTMLDivElement>(null);
+  const serviceRequestRef = useRef<{ body: string; key: string } | null>(null);
 
   // Scroll spy to switch underline when user scrolls to Accommodation section
   useEffect(() => {
@@ -194,7 +196,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
       })
       .catch(err => {
         console.warn("Backend public rooms query failed:", err);
-        setRoomsError("Không thể kết nối máy chủ để tải danh mục phòng lưu trú.");
+        setRoomsError("Không thể tải danh sách phòng lưu trú. Vui lòng thử lại.");
         setRoomList([]);
       })
       .finally(() => {
@@ -218,7 +220,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             unit: service.unit,
             desc: service.description ?? "",
             img: service.image_url || "",
-            tag: service.price === 0 ? "Miễn phí" : service.unit || "Dịch vụ",
+            tag: service.price === 0 ? "Chưa niêm yết" : service.unit || "Dịch vụ",
             tagColor: serviceTagColor[service.category] ?? "#B8944A",
           };
         });
@@ -226,7 +228,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
       })
       .catch(err => {
         console.warn("Backend public services query failed:", err);
-        setServicesError("Không thể kết nối máy chủ để tải danh mục dịch vụ & trải nghiệm.");
+        setServicesError("Không thể tải danh sách dịch vụ & trải nghiệm. Vui lòng thử lại.");
         setServiceList([]);
       })
       .finally(() => {
@@ -243,17 +245,13 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
   }, [fetchServices]);
 
   useEffect(() => {
+    if (!isAuthenticated) { setCustomerReservations([]); return; }
     let active = true;
-    publicApi.commercialSpaces()
-      .then(spaces => {
-        if (active && Array.isArray(spaces)) setCommercialSpaces(spaces);
-      })
-      .catch(err => {
-        console.warn("Backend commercial spaces query failed:", err);
-        if (active) setCommercialSpaces([]);
-      });
+    customerApi.reservations()
+      .then(rows => { if (active) setCustomerReservations(Array.isArray(rows) ? rows : []); })
+      .catch(err => { console.warn("Unable to load stays for service booking:", err); if (active) setCustomerReservations([]); });
     return () => { active = false; };
-  }, []);
+  }, [isAuthenticated]);
 
   const handleSearch = async () => {
     if (!checkIn || !checkOut || new Date(checkIn) >= new Date(checkOut)) {
@@ -283,26 +281,6 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         setSelectedRoom(current => current?.id === room.id ? mapPublicRoom(detail) : current);
       })
       .catch(err => console.warn("Backend room detail query failed:", err));
-  };
-
-  const resolveCommercialSpaceId = (service: FnbService | null): string | null => {
-    const byService = service
-      ? commercialSpaces.find(space => space.service_id === service.id)
-      : undefined;
-    if (byService) return byService.id;
-
-    const category = service?.category;
-    const byBrand = category === "spa"
-      ? commercialSpaces.find(space => /sen|lavie|spa|wellness/i.test(space.name))
-      : category === "recreation" && /gym/i.test(service?.title ?? "")
-      ? commercialSpaces.find(space => /gym/i.test(space.name))
-      : category === "recreation" && /pool|hồ bơi/i.test(service?.title ?? "")
-      ? commercialSpaces.find(space => /pool|hồ bơi/i.test(space.name))
-      : category === "fine-dining" && /brasserie/i.test(service?.title ?? "")
-      ? commercialSpaces.find(space => /brasserie/i.test(space.name))
-      : undefined;
-
-    return byBrand?.id ?? null;
   };
 
   const handleOpenBooking = (room: Room) => {
@@ -388,11 +366,12 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             room_id: bookingData.room.id,
             expected_check_in: startDateTime,
             expected_check_out: endDateTime,
+            guest_count: bookingData.guests,
           }],
           idempotency_key: `book-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       });
 
-      if (!res?.id) throw new Error("Backend không trả về mã đặt phòng.");
+      if (!res?.id) throw new Error("Không thể hoàn tất đặt phòng. Vui lòng thử lại.");
       const confirmId = `BK-${res.id}`;
       setBookingConfirmation({
         code: confirmId,
@@ -422,32 +401,26 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         onLogin();
         return;
       }
-      window.alert(e instanceof Error ? e.message : "Không thể tạo đặt phòng.");
+      window.alert("Không thể tạo đặt phòng. Vui lòng thử lại.");
     } finally {
       setBookingLoading(false);
     }
   };
 
-  const handleIssueVoucher = async (spaceId: string, visitAt: string): Promise<CustomerVoucher | null> => {
+  const handleBookService = async (request: HotelServiceBookingRequest): Promise<HotelServiceBooking | null> => {
     if (!isAuthenticated) {
       setTableModal(false);
       onLogin();
       return null;
     }
     try {
-      const space = commercialSpaces.find(item => item.id === spaceId);
-      let reservationId: number | undefined;
-      if (space?.access_policy === "GUEST_ONLY") {
-        const reservations = await customerApi.reservations();
-        const eligibleStay = (Array.isArray(reservations) ? reservations : []).find((reservation: CustomerReservation) =>
-          reservation.rental_type === "PACKAGE" && ["DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(reservation.status)
-        );
-        if (!eligibleStay) {
-          throw new Error("Hồ bơi tầng 21 chỉ dành cho khách đang có booking thuê phòng theo đêm đã xác nhận cọc.");
-        }
-        reservationId = eligibleStay.id;
+      const body = JSON.stringify(request);
+      if (serviceRequestRef.current?.body !== body) {
+        serviceRequestRef.current = { body, key: `service-${crypto.randomUUID()}` };
       }
-      return await customerApi.issueVoucher({ space_id: spaceId, visit_at: visitAt, reservation_id: reservationId });
+      const result = await customerApi.bookService(request, serviceRequestRef.current.key);
+      serviceRequestRef.current = null;
+      return result;
     } catch (error) {
       if (
         (error instanceof ApiError && error.isUnauthorized) ||
@@ -457,10 +430,13 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         onLogin();
         return null;
       }
-      window.alert(error instanceof Error ? error.message : "Không thể phát hành voucher.");
+      window.alert(error instanceof ApiError ? error.message : "Không thể đặt dịch vụ. Vui lòng kiểm tra booking và thời gian sử dụng.");
       return null;
     }
   };
+
+  const loadServiceBookings = useCallback((reservationId: number) => customerApi.serviceBookings(reservationId), []);
+  const cancelServiceBooking = useCallback((bookingId: number) => customerApi.cancelServiceBooking(bookingId), []);
 
   // 1. Success confirmation screen
   if (bookingConfirmation) {
@@ -478,7 +454,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             Hân hạnh Đón tiếp Quý khách
           </h2>
           <p className="text-sm text-[#78716C] mb-8 font-light">
-            Booking đã được ghi vào database và đang chờ thanh toán tiền cọc.
+            Đặt phòng đã được tạo và đang chờ thanh toán tiền cọc.
             Sau khi cổng thanh toán xác nhận cọc, booking mới xuất hiện trong danh sách “Khách đến hôm nay” của lễ tân.
           </p>
 
@@ -562,8 +538,8 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             </button>
             <div className="h-4 w-px bg-[#DDD6C8] hidden sm:block" />
             <div className="flex items-center gap-2">
-              <img src="/hotel_logo.png" alt="MaM Resort" className="w-7 h-auto object-contain" />
-              <span className="font-display text-lg text-[#0D1117]">MaM Resort</span>
+              <img src="/hotel_logo.png" alt="MaM Hotel" className="w-7 h-auto object-contain" />
+              <span className="font-display text-lg text-[#0D1117]">MaM Hotel</span>
             </div>
           </div>
 
@@ -595,6 +571,11 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
                   }}
                   onProfileUpdated={(updatedName) => {
                     setCustomerDisplayName(updatedName);
+                  }}
+                  onNavigateToServices={() => {
+                    setProfileDropdownOpen(false);
+                    setPortalView("fnb");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
                 />
               </div>
@@ -657,7 +638,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
     setTimeout(performScroll, 60);
   };
 
-  // 3. Main Resort Customer Portal
+  // 3. Main Hotel Customer Portal
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1C1917] font-sans antialiased selection:bg-[#B8944A]/20">
       {/* Top Navigation */}
@@ -668,10 +649,10 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           </button>
 
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => setPortalView("sanctuary")}>
-            <img src="/hotel_logo.png" alt="MaM Resort Logo" className="w-8 h-auto object-contain drop-shadow" />
+            <img src="/hotel_logo.png" alt="MaM Hotel Logo" className="w-8 h-auto object-contain drop-shadow" />
             <div>
-              <span className="font-display text-xl leading-none text-[#0D1117] tracking-tight block">MaM Resort</span>
-              <span className="text-[10px] uppercase tracking-[0.25em] text-[#8C6D37] font-semibold block mt-0.5">Beach Resort &amp; Spa</span>
+              <span className="font-display text-xl leading-none text-[#0D1117] tracking-tight block">MaM Hotel</span>
+              <span className="text-[10px] uppercase tracking-[0.25em] text-[#8C6D37] font-semibold block mt-0.5">Beach Hotel &amp; Spa</span>
             </div>
           </div>
         </div>
@@ -753,6 +734,11 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
                   onProfileUpdated={(updatedName) => {
                     setCustomerDisplayName(updatedName);
                   }}
+                  onNavigateToServices={() => {
+                    setProfileDropdownOpen(false);
+                    setPortalView("fnb");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
                 />
               </div>
 
@@ -784,9 +770,10 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           services={serviceList}
           selectedService={selectedService}
           onSelectService={setSelectedService}
-          onIssueVoucher={handleIssueVoucher}
-          commercialSpaces={commercialSpaces}
-          resolveSpaceId={resolveCommercialSpaceId}
+          onBookService={handleBookService}
+          onLoadBookings={loadServiceBookings}
+          onCancelBooking={cancelServiceBooking}
+          reservations={customerReservations}
           isAuthenticated={isAuthenticated}
           onLogin={onLogin}
           loading={servicesLoading}
@@ -795,7 +782,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         />
       )}
 
-      {/* VIEW 2: The Complete 5-Star Resort Landing Flow */}
+      {/* VIEW 2: The Complete 5-Star Hotel Landing Flow */}
       {portalView === "sanctuary" && (
         <>
           {/* SECTION 1: High-Resolution Cinematic Hero with User's Video & Scroll Prompt */}
@@ -808,6 +795,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           {/* SECTION 2: Hotel Amenities Mosaic / Layout (Figure 2 / Hình 2) */}
           <div id="amenities">
             <AmenitiesMosaic
+              services={serviceList}
               onSelectCategory={(cat, itemId) => {
                 if (cat === "rooms") {
                   roomsRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -821,6 +809,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           {/* SECTION 3: Curated Mindful Services & Spa (Figure 3 / Hình 3) */}
           <div ref={wellnessRef} id="wellness">
             <CuratedServicesSection
+              services={serviceList}
               onBookSpa={() => {
                 if (!isAuthenticated) {
                   sessionStorage.setItem("pending_booking_category", "spa");
@@ -899,21 +888,21 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
       <footer className="py-14 px-6 bg-[#0B0F17] text-white border-t border-white/10">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="flex items-center gap-3">
-            <img src="/hotel_logo.png" alt="MaM Resort" className="w-10 h-auto object-contain drop-shadow" />
+            <img src="/hotel_logo.png" alt="MaM Hotel" className="w-10 h-auto object-contain drop-shadow" />
             <div>
-              <p className="font-display text-xl text-white">MaM Resort</p>
+              <p className="font-display text-xl text-white">MaM Hotel</p>
               <p className="text-xs text-[#D4AF6E] tracking-widest uppercase">Hội An, Việt Nam</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-white/60">
             <span className="flex items-center gap-1.5"><Phone size={13} className="text-[#D4AF6E]" /> Hotline: 1900 6789</span>
-            <span className="flex items-center gap-1.5"><Mail size={13} className="text-[#D4AF6E]" /> retreat@mamresort.vn</span>
+          <span className="flex items-center gap-1.5"><Mail size={13} className="text-[#D4AF6E]" /> retreat@mamresort.vn</span>
             <span className="flex items-center gap-1.5"><Globe size={13} className="text-[#D4AF6E]" /> www.mamresort.vn</span>
           </div>
 
           <p className="text-xs text-white/40">
-            © 2026 MaM Resort · All Rights Reserved.
+          © 2026 MaM Hotel · All Rights Reserved.
           </p>
         </div>
       </footer>

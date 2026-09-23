@@ -64,10 +64,10 @@ public class Reservation {
     /** Phiên bản lạc quan, bảo vệ đặt phòng trước cập nhật đồng thời. */
     @Version @Column(name = "version", nullable = false) private long version;
 
-    /** Thông tin hủy được ghi nhận trong nhật ký kiểm toán của lệnh khi lược đồ hiện tại
-     * không thể được di trú trong phạm vi thay đổi này. */
-    @Transient private String cancellationReason;
-    @Transient private CancellationOutcome cancellationOutcome;
+    /** Lý do và kết quả quyết toán hủy phải tồn tại sau khi tải lại booking. */
+    @Column(name = "cancellation_reason", length = 500) private String cancellationReason;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancellation_outcome", length = 20) private CancellationOutcome cancellationOutcome;
     @Transient private String canonicalRequestFingerprint;
 
     @OneToMany(mappedBy = "reservation", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)

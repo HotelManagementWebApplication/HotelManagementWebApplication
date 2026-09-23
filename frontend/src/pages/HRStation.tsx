@@ -7,6 +7,7 @@ import { EmployeeProfileDropdown } from "../components/common/EmployeeProfileDro
 import type { AttendanceRecord as ApiAttendanceRecord, LeaveRequest as ApiLeaveRequest } from "../shared/types/enterprise";
 import type { Approval, EmployeeAdmin, Shift } from "../shared/types/hrGovernance";
 import type { EmployeeProfileDto } from "../shared/types/api";
+import { localDateValue } from "../shared/utils/localDate";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -110,7 +111,7 @@ interface PendingApprovalItem {
 interface EmployeeProfile {
   id: string;
   name: string;
-  gender: "Nam" | "Nữ";
+  gender: "Nam" | "Nữ" | "—";
   dob: string;
   avatar: string;
   department: string;
@@ -120,9 +121,9 @@ interface EmployeeProfile {
   phone: string;
   idCard: string;
   joinDate: string;
-  contractType: "Chính thức" | "Thử việc" | "Thời vụ";
+  contractType: "Chính thức" | "Thử việc" | "Thời vụ" | "—";
   salaryGrade: string;
-  leaveBalance: number; // days left
+  leaveBalance: number | null; // null khi backend chưa cung cấp
   status: "Đang làm việc" | "Thử việc" | "Tạm hoãn" | "Đã nghỉ việc";
 }
 
@@ -162,6 +163,12 @@ interface LeaveRequest {
 interface Props {
   onBack: () => void;
 }
+
+const employeeAvatar = (name: string) => {
+  const initials = name.trim().split(/\s+/).slice(-2).map(part => part[0] ?? "").join("").toUpperCase() || "NV";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" rx="48" fill="#E8F5EE"/><text x="48" y="57" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" font-weight="700" fill="#087443">${initials}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+};
 
 export default function HRStation({ onBack }: Props) {
   // Navigation
@@ -216,7 +223,7 @@ export default function HRStation({ onBack }: Props) {
     email: "",
     phone: "",
     idCard: "",
-    joinDate: new Date().toISOString().slice(0, 10),
+    joinDate: localDateValue(),
     contractType: "Thử việc" as "Chính thức" | "Thử việc" | "Thời vụ",
     salaryGrade: "Bậc 1 (8,500,000 ₫)",
     leaveBalance: 12
@@ -225,7 +232,7 @@ export default function HRStation({ onBack }: Props) {
   // ── Tab 4 (Chấm công) states ──
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [attendanceViewMode, setAttendanceViewMode] = useState<"daily" | "monthly">("daily");
-  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [attendanceDate, setAttendanceDate] = useState(localDateValue());
   const [isSyncingBiometrics, setIsSyncingBiometrics] = useState(false);
 
   // ── Tab 5 (Đơn nghỉ phép) states ──
@@ -252,10 +259,10 @@ export default function HRStation({ onBack }: Props) {
     const mapEmployee = (employee: EmployeeAdmin): EmployeeProfile => {
       const [department, departmentId] = departmentFor(employee.role);
       return {
-        id: employee.employee_id, name: employee.full_name, gender: "Nữ", dob: "—",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-        department, departmentId, role: employee.role, email: employee.email ?? `${employee.employee_id.toLowerCase()}@hotel.com`, phone: employee.phone,
-        idCard: "—", joinDate: "—", contractType: "Chính thức", salaryGrade: "Theo hợp đồng", leaveBalance: 0,
+        id: employee.employee_id, name: employee.full_name, gender: "—", dob: "—",
+        avatar: employeeAvatar(employee.full_name),
+        department, departmentId, role: employee.role, email: employee.email ?? "—", phone: employee.phone,
+        idCard: "—", joinDate: "—", contractType: "—", salaryGrade: "Chưa có dữ liệu backend", leaveBalance: null,
         status: employee.employment_status === "TERMINATED" ? "Đã nghỉ việc" : employee.employment_status === "ON_LEAVE" ? "Tạm hoãn" : "Đang làm việc",
       };
     };
@@ -269,7 +276,7 @@ export default function HRStation({ onBack }: Props) {
       value.setDate(monday.getDate() + index);
       return value;
     });
-    const dateKey = (value: Date) => value.toISOString().slice(0, 10);
+    const dateKey = (value: Date) => localDateValue(value);
     const shiftName = (shift?: Shift): ShiftType => {
       if (!shift || shift.status === "CANCELLED") return "off";
       const code = shift.shift_code.toLowerCase();
@@ -319,7 +326,7 @@ export default function HRStation({ onBack }: Props) {
         const inAt = row.clock_in ? new Date(row.clock_in) : null;
         const outAt = row.clock_out ? new Date(row.clock_out) : null;
         const hours = inAt && outAt ? Math.max(0, (outAt.getTime() - inAt.getTime()) / 3600000) : 0;
-        return { id: String(row.id), employeeId: row.employee_id, employeeName: employee?.name ?? row.employee_id, avatar: employee?.avatar ?? "", department: employee?.department ?? "—", shiftName: "Theo dữ liệu import", checkIn: inAt ? inAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", checkOut: outAt ? outAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", workHours: hours ? `${hours.toFixed(1)} giờ` : "—", lateMinutes: 0, earlyMinutes: 0, otHours: 0, status: row.status === "ABSENT" ? "Vắng" : row.status === "ON_LEAVE" ? "Có phép" : "Đúng giờ" };
+        return { id: String(row.id), employeeId: row.employee_id, employeeName: employee?.name ?? row.employee_id, avatar: employee?.avatar ?? "", department: employee?.department ?? "—", shiftName: "Theo dữ liệu chấm công", checkIn: inAt ? inAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", checkOut: outAt ? outAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", workHours: hours ? `${hours.toFixed(1)} giờ` : "—", lateMinutes: 0, earlyMinutes: 0, otHours: 0, status: row.status === "ABSENT" ? "Vắng" : row.status === "ON_LEAVE" ? "Có phép" : row.status === "LATE" ? "Đi muộn" : "Đúng giờ" };
       }));
       setLeaveRequests(leaveRows.map((row: ApiLeaveRequest): LeaveRequest => {
         const employee = profileById.get(row.employee_id);
@@ -353,7 +360,7 @@ export default function HRStation({ onBack }: Props) {
         if (active) {
           setPendingApprovals(approvals.map(approval => ({
             id: String(approval.id), name: approval.requester, department: approval.action,
-            avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+            avatar: employeeAvatar(approval.requester),
             type: approval.action.toLowerCase().includes("shift") ? "swap" : "leave",
             typeLabel: approval.action, date: approval.expires_at, reason: approval.reason,
           })));
@@ -366,7 +373,7 @@ export default function HRStation({ onBack }: Props) {
       .catch(err => console.warn("Backend HR profile unavailable:", err));
 
     return () => { active = false; };
-  }, []);
+  }, [attendanceDate]);
 
   const today = useMemo(() => new Date(), []);
   const todayLabel = useMemo(() => {
@@ -385,9 +392,16 @@ export default function HRStation({ onBack }: Props) {
   }, [today]);
   const pendingLeaves = useMemo(() => leaveRequests.filter(l => l.status === "pending"), [leaveRequests]);
   const totalUnreadNotifs = pendingLeaves.length + pendingApprovals.length;
+  const attendanceSummary = useMemo(() => {
+    const onTime = attendanceRecords.filter(record => record.status === "Đúng giờ").length;
+    const late = attendanceRecords.filter(record => record.status === "Đi muộn").length;
+    const absent = attendanceRecords.filter(record => record.status === "Vắng").length;
+    const incomplete = attendanceRecords.filter(record => record.checkIn !== "—" && record.checkOut === "—").length;
+    return { onTime, late, absent, incomplete, total: attendanceRecords.length, rate: attendanceRecords.length ? Math.round(onTime / attendanceRecords.length * 100) : 0 };
+  }, [attendanceRecords]);
 
   const shiftCounts = useMemo(() => {
-    const todayIso = today.toISOString().slice(0, 10);
+    const todayIso = localDateValue(today);
     let morning = 0;
     let afternoon = 0;
     let night = 0;
@@ -438,7 +452,7 @@ export default function HRStation({ onBack }: Props) {
     if (!editingShift) return;
     const cell = scheduleData.flatMap(group => group.employees).find(employee => employee.id === editingShift.employeeId)?.shifts[editingShift.dayIndex];
     if (!cell?.isoDate || newShift === "off") {
-      showToast("Backend chưa hỗ trợ xóa ca từ biểu mẫu này.");
+      showToast("Không thể xóa ca từ biểu mẫu này.");
       return;
     }
     const ranges: Record<Exclude<ShiftType, "off">, { code: string; start: string; end: string }> = {
@@ -455,7 +469,7 @@ export default function HRStation({ onBack }: Props) {
       }
     } catch (error) {
       console.warn("Unable to persist shift:", error);
-      showToast("Không thể lưu ca trực vào backend.");
+      showToast("Không thể lưu ca trực. Vui lòng thử lại.");
       return;
     }
     setScheduleData(prev =>
@@ -489,16 +503,16 @@ export default function HRStation({ onBack }: Props) {
       const result = await enterpriseApi.autoProvisionEmployee({ full_name: newEmpForm.name, role: roleMap[newEmpForm.departmentId] ?? "STAFF", phone: newEmpForm.phone, email: newEmpForm.email || `${newEmpForm.name.replace(/\s+/g, ".").toLowerCase()}@hotel.com` });
       showToast(`Đã tạo ${result.employee_id}. Mật khẩu tạm: ${result.temporary_password}`);
       setIsAddEmployeeModalOpen(false);
-    } catch (error) { showToast(error instanceof Error ? error.message : "Không thể tạo tài khoản nhân viên."); }
+    } catch (error) { showToast("Không thể tạo tài khoản nhân viên. Vui lòng thử lại."); }
   };
 
   const handleSyncBiometrics = async () => {
     setIsSyncingBiometrics(true);
     try {
       const rows = await enterpriseApi.attendance(attendanceDate);
-      setAttendanceRecords(rows.map(row => ({ id: String(row.id), employeeId: row.employee_id, employeeName: row.employee_id, avatar: "", department: "—", shiftName: row.source === "BIOMETRIC_IMPORT" ? "Import máy vân tay" : "Nhập thủ công", checkIn: row.clock_in ? new Date(row.clock_in).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", checkOut: row.clock_out ? new Date(row.clock_out).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", workHours: "—", lateMinutes: 0, earlyMinutes: 0, otHours: 0, status: row.status === "ABSENT" ? "Vắng" : row.status === "ON_LEAVE" ? "Có phép" : "Đúng giờ" })));
-      showToast("Đã tải dữ liệu chấm công đã import từ backend. Chưa cần phần cứng để test.");
-    } catch (error) { showToast(error instanceof Error ? error.message : "Không thể tải dữ liệu chấm công."); }
+        setAttendanceRecords(rows.map(row => ({ id: String(row.id), employeeId: row.employee_id, employeeName: row.employee_id, avatar: "", department: "—", shiftName: row.source === "BIOMETRIC_IMPORT" ? "Dữ liệu máy vân tay" : "Nhập thủ công", checkIn: row.clock_in ? new Date(row.clock_in).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", checkOut: row.clock_out ? new Date(row.clock_out).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", workHours: "—", lateMinutes: 0, earlyMinutes: 0, otHours: 0, status: row.status === "ABSENT" ? "Vắng" : row.status === "ON_LEAVE" ? "Có phép" : row.status === "LATE" ? "Đi muộn" : "Đúng giờ" })));
+      showToast("Đã tải dữ liệu chấm công thành công.");
+    } catch (error) { showToast("Không thể tải dữ liệu chấm công. Vui lòng thử lại."); }
     finally { setIsSyncingBiometrics(false); }
   };
 
@@ -529,7 +543,7 @@ export default function HRStation({ onBack }: Props) {
         status: record.status || "PRESENT",
         source: "BIOMETRIC_IMPORT",
         device_event_id: record.device_event_id || record.deviceEventId || `FILE-${Date.now()}`,
-        note: record.note || `Import từ ${file.name}`,
+        note: record.note || `Nhập từ ${file.name}`,
       })).filter(record => Boolean(record.employee_id));
       if (imported.length === 0) throw new Error("File chưa có dòng chấm công hợp lệ.");
       const rows = await enterpriseApi.importAttendance(imported);
@@ -539,10 +553,10 @@ export default function HRStation({ onBack }: Props) {
         const inAt = row.clock_in ? new Date(row.clock_in) : null;
         const outAt = row.clock_out ? new Date(row.clock_out) : null;
         const hours = inAt && outAt ? Math.max(0, (outAt.getTime() - inAt.getTime()) / 3600000) : 0;
-        return { id: String(row.id), employeeId: row.employee_id, employeeName: employee?.name ?? row.employee_id, avatar: employee?.avatar ?? "", department: employee?.department ?? "—", shiftName: "Import máy vân tay", checkIn: inAt ? inAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", checkOut: outAt ? outAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", workHours: hours ? `${hours.toFixed(1)} giờ` : "—", lateMinutes: 0, earlyMinutes: 0, otHours: 0, status: row.status === "ABSENT" ? "Vắng" : row.status === "ON_LEAVE" ? "Có phép" : "Đúng giờ" };
+        return { id: String(row.id), employeeId: row.employee_id, employeeName: employee?.name ?? row.employee_id, avatar: employee?.avatar ?? "", department: employee?.department ?? "—", shiftName: "Dữ liệu máy vân tay", checkIn: inAt ? inAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", checkOut: outAt ? outAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—", workHours: hours ? `${hours.toFixed(1)} giờ` : "—", lateMinutes: 0, earlyMinutes: 0, otHours: 0, status: row.status === "ABSENT" ? "Vắng" : row.status === "ON_LEAVE" ? "Có phép" : "Đúng giờ" };
       }));
-      showToast(`Đã import ${imported.length} dòng chấm công vào backend.`);
-    } catch (error) { showToast(error instanceof Error ? error.message : "Không thể import file chấm công."); }
+      showToast(`Đã nhập ${imported.length} dòng chấm công.`);
+    } catch (error) { showToast("Không thể nhập file chấm công. Vui lòng thử lại."); }
     finally { setIsSyncingBiometrics(false); }
   };
 
@@ -556,8 +570,8 @@ export default function HRStation({ onBack }: Props) {
     try {
       const row = await enterpriseApi.createLeave({ employee_id: employee.id, leave_type: typeMap[newLeaveForm.type] ?? "UNPAID", start_date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, end_date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, reason: newLeaveForm.reason || "Không ghi chú" });
       setLeaveRequests(prev => [{ id: String(row.id), employeeName: employee.name, avatar: employee.avatar, department: employee.department, type: newLeaveForm.type, dateRange: `${row.start_date} – ${row.end_date}`, totalDays: "1 ngày", reason: row.reason, submittedAt: row.created_at, status: "pending" }, ...prev]);
-      setIsCreateLeaveModalOpen(false); showToast("Đã lưu đơn nghỉ vào backend, chờ quản lý duyệt.");
-    } catch (error) { showToast(error instanceof Error ? error.message : "Không thể tạo đơn nghỉ."); }
+      setIsCreateLeaveModalOpen(false); showToast("Đã gửi đơn nghỉ, chờ quản lý duyệt.");
+    } catch (error) { showToast("Không thể tạo đơn nghỉ. Vui lòng thử lại."); }
   };
 
   const decideLeave = async (request: LeaveRequest, approve: boolean) => {
@@ -566,7 +580,7 @@ export default function HRStation({ onBack }: Props) {
       setLeaveRequests(prev => prev.map(item => item.id === request.id ? { ...item, status: approve ? "approved" : "rejected", approver: row.approver ?? "Quản lý" } : item));
       setPendingApprovals(prev => prev.filter(item => item.name !== request.employeeName));
       showToast(approve ? `Đã phê duyệt đơn ${request.id}.` : `Đã từ chối đơn ${request.id}.`);
-    } catch (error) { showToast(error instanceof Error ? error.message : "Không thể cập nhật đơn nghỉ."); }
+    } catch (error) { showToast("Không thể cập nhật đơn nghỉ. Vui lòng thử lại."); }
   };
 
   // Helper render for Shift Badge
@@ -634,7 +648,7 @@ export default function HRStation({ onBack }: Props) {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="font-serif font-bold text-gray-900 text-lg tracking-wide">
-              Grand Hotel <span className="font-sans font-normal text-gray-400">-</span> Human Resources
+              MaM Hotel <span className="font-sans font-normal text-gray-400">-</span> Human Resources
             </h1>
           </div>
           <p className="text-[10px] tracking-widest text-gray-400 uppercase font-medium">
@@ -1142,7 +1156,7 @@ export default function HRStation({ onBack }: Props) {
             </div>
 
             <div className="space-y-3">
-              {leaveTodayList.length === 0 && <p className="text-xs text-gray-400 italic py-3 text-center">Backend chưa có dữ liệu nghỉ phép hôm nay.</p>}
+              {leaveTodayList.length === 0 && <p className="text-xs text-gray-400 italic py-3 text-center">Hôm nay chưa có nhân viên nghỉ phép.</p>}
               {leaveTodayList.map(item => (
                 <div key={item.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
@@ -1636,8 +1650,8 @@ export default function HRStation({ onBack }: Props) {
         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 font-medium">Đúng giờ hôm nay</p>
-            <p className="text-2xl font-serif font-bold text-gray-900 mt-1">46 / 48</p>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Tỷ lệ: 96%</p>
+            <p className="text-2xl font-serif font-bold text-gray-900 mt-1">{attendanceSummary.onTime} / {attendanceSummary.total}</p>
+            <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Tỷ lệ: {attendanceSummary.total ? `${attendanceSummary.rate}%` : "—"}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <CheckCircle2 className="w-5 h-5" />
@@ -1647,8 +1661,8 @@ export default function HRStation({ onBack }: Props) {
         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 font-medium">Đi muộn hôm nay</p>
-            <p className="text-2xl font-serif font-bold text-amber-700 mt-1">2</p>
-            <p className="text-[11px] text-amber-600 font-semibold mt-0.5">Phạm Thị Mai (12p), KTV Hưng (15p)</p>
+            <p className="text-2xl font-serif font-bold text-amber-700 mt-1">{attendanceSummary.late}</p>
+            <p className="text-[11px] text-amber-600 font-semibold mt-0.5">Theo trạng thái máy chấm công</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <Clock className="w-5 h-5" />
@@ -1658,8 +1672,8 @@ export default function HRStation({ onBack }: Props) {
         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 font-medium">Vắng mặt không phép</p>
-            <p className="text-2xl font-serif font-bold text-gray-900 mt-1">0</p>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">Tuyệt đối an toàn</p>
+            <p className="text-2xl font-serif font-bold text-gray-900 mt-1">{attendanceSummary.absent}</p>
+            <p className="text-[11px] text-gray-500 font-semibold mt-0.5">Theo ngày đã chọn</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
             <ShieldCheck className="w-5 h-5" />
@@ -1668,9 +1682,9 @@ export default function HRStation({ onBack }: Props) {
 
         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs text-gray-500 font-medium">Tăng ca tích lũy tháng</p>
-            <p className="text-2xl font-serif font-bold text-blue-700 mt-1">38.5h</p>
-            <p className="text-[11px] text-blue-600 font-semibold mt-0.5">Bộ phận F&B & Kỹ thuật</p>
+            <p className="text-xs text-gray-500 font-medium">Chưa chấm ra</p>
+            <p className="text-2xl font-serif font-bold text-blue-700 mt-1">{attendanceSummary.incomplete}</p>
+            <p className="text-[11px] text-blue-600 font-semibold mt-0.5">Có giờ vào nhưng chưa có giờ ra</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
             <TrendingUp className="w-5 h-5" />
@@ -1727,7 +1741,7 @@ export default function HRStation({ onBack }: Props) {
 
           <label htmlFor="biometric-file-import" className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer shadow-2xs">
             <Download className="w-3.5 h-3.5 text-gray-500" />
-            <span>Import CSV/JSON</span>
+            <span>Nhập file chấm công</span>
             <input id="biometric-file-import" type="file" accept=".csv,.json,application/json,text/csv" onChange={handleImportAttendanceFile} className="hidden" />
           </label>
 
@@ -1761,7 +1775,7 @@ export default function HRStation({ onBack }: Props) {
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs">
                 {attendanceRecords.length === 0 && (
-                  <tr><td colSpan={9} className="py-8 px-4 text-center text-xs text-gray-400">Chưa có dữ liệu chấm công cho ngày đang chọn. Có thể import file máy vân tay để ghi vào database.</td></tr>
+                  <tr><td colSpan={9} className="py-8 px-4 text-center text-xs text-gray-400">Chưa có dữ liệu chấm công cho ngày đang chọn. Có thể nhập file máy vân tay để ghi nhận vào hệ thống.</td></tr>
                 )}
                 {attendanceRecords.map(rec => (
                   <tr key={rec.id} className="hover:bg-gray-50/70 transition-colors">
@@ -1911,7 +1925,7 @@ export default function HRStation({ onBack }: Props) {
       {/* Requests list */}
       <div className="space-y-3">
         {filteredLeaveRequests.length === 0 && (
-          <p className="bg-white rounded-2xl border border-gray-100 p-6 text-center text-xs text-gray-400">Chưa có đơn nghỉ phép hoặc đổi ca trong database.</p>
+          <p className="bg-white rounded-2xl border border-gray-100 p-6 text-center text-xs text-gray-400">Chưa có đơn nghỉ phép hoặc đổi ca.</p>
         )}
         {filteredLeaveRequests.map(req => (
           <div
@@ -2068,7 +2082,7 @@ export default function HRStation({ onBack }: Props) {
         <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
           <div>
             <h3 className="font-serif font-bold text-gray-900 text-base">Thêm hồ sơ nhân viên mới</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Nhập đầy đủ thông tin nhân sự và lưu vào cơ sở dữ liệu khách sạn</p>
+            <p className="text-xs text-gray-400 mt-0.5">Nhập đầy đủ thông tin nhân sự để lưu vào hệ thống khách sạn</p>
           </div>
           <button
             onClick={() => setIsAddEmployeeModalOpen(false)}
@@ -2122,7 +2136,7 @@ export default function HRStation({ onBack }: Props) {
                 type="email"
                 value={newEmpForm.email}
                 onChange={e => setNewEmpForm({ ...newEmpForm, email: e.target.value })}
-                placeholder="hoang.nguyen@grandhotel.com"
+                placeholder="hoang.nguyen@hotel.com"
                 className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
@@ -2265,7 +2279,7 @@ export default function HRStation({ onBack }: Props) {
             </div>
             <div className="p-2.5 rounded-lg bg-gray-50">
               <span className="text-gray-400 block text-[10px]">Quỹ phép năm còn lại:</span>
-              <span className="font-semibold text-emerald-700">{selectedEmployee.leaveBalance} / 12 ngày</span>
+              <span className="font-semibold text-emerald-700">{selectedEmployee.leaveBalance == null ? "Chưa có dữ liệu backend" : `${selectedEmployee.leaveBalance} / 12 ngày`}</span>
             </div>
           </div>
 
@@ -2275,7 +2289,7 @@ export default function HRStation({ onBack }: Props) {
               <span className="text-emerald-800 font-medium">{selectedEmployee.salaryGrade}</span>
             </div>
             <span className="text-[10px] bg-emerald-200/60 text-emerald-900 font-semibold px-2 py-0.5 rounded-full">
-              Hệ số A1
+              Dữ liệu hợp đồng
             </span>
           </div>
         </div>

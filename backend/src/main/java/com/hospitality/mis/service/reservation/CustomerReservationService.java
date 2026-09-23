@@ -51,16 +51,29 @@ public class CustomerReservationService {
     private final BookingPolicy bookingPolicy = BookingPolicy.defaults();
     private final long depositHoldMinutes;
     private Clock clock = Clock.system(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private final ReservationService reservationCommands;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public CustomerReservationService(CustomerAccountRepository accounts, ReservationRepository reservations,
                                       RoomRepository rooms, AuditService audit,
+                                      org.springframework.jdbc.core.JdbcTemplate jdbc,
+                                      ReservationService reservationCommands,
                                       @Value("${hotel.booking.deposit-hold-minutes:15}") long depositHoldMinutes) {
         this.accounts = accounts;
         this.reservations = reservations;
         this.rooms = rooms;
         this.audit = audit;
+        this.jdbc = jdbc;
+        this.reservationCommands = reservationCommands;
         if (depositHoldMinutes <= 0) throw new IllegalArgumentException("deposit hold minutes must be positive");
         this.depositHoldMinutes = depositHoldMinutes;
+    }
+
+    public CustomerReservationService(CustomerAccountRepository accounts, ReservationRepository reservations,
+                                      RoomRepository rooms, AuditService audit,
+                                      long depositHoldMinutes) {
+        this(accounts, reservations, rooms, audit, null, null, depositHoldMinutes);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -84,13 +97,19 @@ public class CustomerReservationService {
         Guest guest = account.getGuest();
         if (!bookingPolicy.allows(guest)) throw error("GUEST_BOOKING_BLOCKED", "Tài khoản không được phép đặt phòng");
         Set<String> ids = new HashSet<>();
+        LocalDateTime now = LocalDateTime.now(clock);
         for (var line : request.rooms()) {
             if (!line.expectedCheckIn().isBefore(line.expectedCheckOut())) throw error("INVALID_INTERVAL", "Thời gian nhận phải trước thời gian trả");
+            if (!line.expectedCheckIn().isAfter(now))
+                throw error("CHECK_IN_MUST_BE_FUTURE", "Thời gian nhận phòng phải ở tương lai");
             if (!ids.add(line.roomId().trim())) throw error("DUPLICATE_ROOM", "Không được lặp phòng trong một booking");
         }
         Map<String, Room> locked = lockRooms(ids);
         for (var line : request.rooms()) {
             Room room = locked.get(line.roomId().trim());
+            int guestCount = line.guestCount() == null ? 1 : line.guestCount();
+            if (guestCount < 1 || guestCount > room.getRoomType().getMaxOccupancy())
+                throw error("INVALID_GUEST_COUNT", "Số khách vượt sức chứa của phòng " + room.getId());
             if (room.getRoomType().getCatalogStatus() != RoomTypeCatalogStatus.ACTIVE)
                 throw error("ROOM_TYPE_NOT_ACTIVE", "Loại phòng chưa được phê duyệt: " + room.getRoomType().getId());
             if (room.getStatus().blocksAvailability()) throw error("ROOM_NOT_AVAILABLE", "Phòng không sẵn sàng: " + room.getId());
@@ -118,6 +137,7 @@ public class CustomerReservationService {
             rr.setCheckIn(line.expectedCheckIn());
             rr.setCheckOut(line.expectedCheckOut());
             rr.setStatus(RoomStatus.RESERVED);
+            rr.setGuestCount(line.guestCount() == null ? 1 : line.guestCount());
             reservation.addRoom(rr);
         });
         try {
@@ -147,6 +167,18 @@ public class CustomerReservationService {
     @Transactional(readOnly = true)
     public CustomerReservationDtos.PaymentInstruction payment(Long id, String actor) {
         return get(id, actor).depositPayment();
+    }
+
+    /** Hủy booking online của chính khách và trả response customer đã cập nhật. */
+    @Transactional
+    public CustomerReservationDtos.Response cancel(Long id, ReservationDtos.CancelRequest request,
+                                                    String actor, String idempotencyKey) {
+        long accountId = customerAccountId(actor);
+        if (reservationCommands == null)
+            throw error("CANCELLATION_UNAVAILABLE", "Chức năng hủy phòng chưa sẵn sàng");
+        reservationCommands.cancelForCustomer(id, request, actor, idempotencyKey);
+        return toResponse(reservations.findCustomerDetails(id, accountId)
+                .orElseThrow(() -> error("RESERVATION_NOT_FOUND", "Không tìm thấy booking")));
     }
 
     private long customerAccountId(String actor) {
@@ -197,7 +229,7 @@ public class CustomerReservationService {
     }
 
     private String fingerprint(CustomerReservationDtos.CreateRequest request) {
-        String rooms = request.rooms().stream().map(x -> x.roomId().trim() + "@" + x.expectedCheckIn() + "/" + x.expectedCheckOut())
+        String rooms = request.rooms().stream().map(x -> x.roomId().trim() + "@" + x.expectedCheckIn() + "/" + x.expectedCheckOut() + "/" + (x.guestCount() == null ? 1 : x.guestCount()))
                 .sorted().reduce((a, b) -> a + ";" + b).orElse("");
         return IdempotencySupport.fingerprint("CUSTOMER_CREATE|rental=" + request.rentalType().name()
                 + "|source=" + normalizedBookingSource(request.bookingSource()) + "|rooms=" + rooms);
@@ -207,6 +239,43 @@ public class CustomerReservationService {
         return source == null || source.isBlank() ? "DIRECT" : source.trim().toUpperCase(Locale.ROOT);
     }
 
+    private List<com.hospitality.mis.service.reservation.HotelServiceBookingService.Response> loadServices(Long reservationId) {
+        if (jdbc == null || reservationId == null) return List.of();
+        try {
+            return jdbc.query("""
+                SELECT b.id, b.reservation_id, b.room_id, b.service_id, COALESCE(s.name, b.service_id) AS service_name,
+                       b.scheduled_at, b.quantity, b.free_quantity, b.unit_price, b.meal_period, b.status, b.note
+                FROM hotel_service_bookings b
+                LEFT JOIN services s ON b.service_id = s.id
+                WHERE b.reservation_id = ?
+                ORDER BY b.scheduled_at ASC, b.id ASC
+                """, (rs, n) -> {
+                BigDecimal price = rs.getBigDecimal("unit_price");
+                int quantity = rs.getInt("quantity");
+                int free = rs.getInt("free_quantity");
+                String name = rs.getString("service_name");
+                if (name == null || name.isBlank()) name = rs.getString("service_id");
+                return new com.hospitality.mis.service.reservation.HotelServiceBookingService.Response(
+                        rs.getLong("id"),
+                        rs.getLong("reservation_id"),
+                        rs.getString("room_id"),
+                        rs.getString("service_id"),
+                        name,
+                        rs.getTimestamp("scheduled_at").toLocalDateTime(),
+                        quantity,
+                        free,
+                        price,
+                        price.multiply(BigDecimal.valueOf(quantity - free)),
+                        rs.getString("meal_period"),
+                        rs.getString("status"),
+                        rs.getString("note")
+                );
+            }, reservationId);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
     private CustomerReservationDtos.Response toResponse(Reservation r) {
         DepositPaymentStatus paymentStatus = r.getDepositPaymentStatus();
         if (paymentStatus == DepositPaymentStatus.PENDING && r.getDepositPaymentExpiresAt() != null
@@ -214,10 +283,68 @@ public class CustomerReservationService {
         var payment = new CustomerReservationDtos.PaymentInstruction(r.getDepositPaymentCode(), r.getDepositAmount(),
                 paymentStatus, r.getDepositPaymentExpiresAt(),
                 "Dùng mã này khi thanh toán tiền cọc tại kênh thanh toán của khách sạn.");
-        return new CustomerReservationDtos.Response(r.getId(), r.getStatus(), ReservationDtos.RentalType.valueOf(r.getRentalType()),
+
+        BigDecimal totalRoomsAmount = BigDecimal.ZERO;
+        List<CustomerReservationDtos.RoomLine> roomLines = new java.util.ArrayList<>();
+        boolean isHourly = "HOURLY".equalsIgnoreCase(r.getRentalType());
+
+        for (ReservationRoom x : r.getRooms()) {
+            Room room = x.getRoom();
+            String roomName = (room != null && room.getName() != null && !room.getName().isBlank())
+                    ? room.getName() : ("Phòng " + (room != null ? room.getId() : x.getRoom().getId()));
+            String roomTypeName = (room != null && room.getRoomType() != null)
+                    ? room.getRoomType().getName() : null;
+
+            BigDecimal dailyPrice = (room != null && room.getRoomType() != null && room.getRoomType().getDailyPrice() != null)
+                    ? room.getRoomType().getDailyPrice() : BigDecimal.ZERO;
+            BigDecimal hourlyPrice = (room != null && room.getRoomType() != null && room.getRoomType().getHourlyPrice() != null)
+                    ? room.getRoomType().getHourlyPrice() : dailyPrice.divide(BigDecimal.valueOf(24), 2, java.math.RoundingMode.HALF_UP);
+
+            long minutes = Math.max(1, Duration.between(x.getCheckIn(), x.getCheckOut()).toMinutes());
+            long units = isHourly ? Math.max(3, (minutes + 59) / 60) : Math.max(1, (minutes + 1439) / 1440);
+            BigDecimal unitPrice = isHourly ? hourlyPrice : dailyPrice;
+            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(units));
+            totalRoomsAmount = totalRoomsAmount.add(lineTotal);
+
+            roomLines.add(new CustomerReservationDtos.RoomLine(
+                    room != null ? room.getId() : x.getRoom().getId(),
+                    roomName,
+                    roomTypeName,
+                    unitPrice,
+                    lineTotal,
+                    x.getCheckIn(),
+                    x.getCheckOut(),
+                    x.getGuestCount()
+            ));
+        }
+
+        List<com.hospitality.mis.service.reservation.HotelServiceBookingService.Response> services = loadServices(r.getId());
+        BigDecimal totalServicesAmount = BigDecimal.ZERO;
+        for (var s : services) {
+            if (!"CANCELLED".equals(s.status()) && s.amountDue() != null) {
+                totalServicesAmount = totalServicesAmount.add(s.amountDue());
+            }
+        }
+
+        BigDecimal totalAmount = totalRoomsAmount.add(totalServicesAmount);
+        if (totalAmount.signum() == 0 && r.getDepositAmount() != null && r.getDepositAmount().signum() > 0) {
+            totalAmount = r.getDepositAmount().multiply(BigDecimal.valueOf(2));
+        }
+
+        return new CustomerReservationDtos.Response(
+                r.getId(),
+                r.getStatus(),
+                ReservationDtos.RentalType.valueOf(r.getRentalType()),
                 r.getBookingSource(),
-                r.getDepositAmount(), r.getBookedAt(), r.getRooms().stream()
-                .map(x -> new CustomerReservationDtos.RoomLine(x.getRoom().getId(), x.getCheckIn(), x.getCheckOut())).toList(), payment);
+                r.getDepositAmount(),
+                totalAmount,
+                r.getBookedAt(),
+                roomLines,
+                payment,
+                services,
+                r.getCancellationReason(),
+                r.getCancellationOutcome()
+        );
     }
 
     private DomainException error(String code, String message) { return new DomainException(code, message); }

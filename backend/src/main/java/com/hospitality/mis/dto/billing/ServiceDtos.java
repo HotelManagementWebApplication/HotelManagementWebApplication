@@ -81,6 +81,7 @@ public final class ServiceDtos {
                            int safetyThreshold,
 
                            /** Có đang ở dưới hoặc bằng ngưỡng cảnh báo hay không. */
-                           boolean lowStock) {}
+                           boolean lowStock,
+                           boolean active) {}
 
 }

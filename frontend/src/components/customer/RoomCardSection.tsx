@@ -402,7 +402,7 @@ export const RoomCardSection: React.FC<RoomCardSectionProps> = ({
               Bộ sưu tập không gian lưu trú ({baseRooms.length} phòng)
             </p>
             <h2 className="font-display text-3xl sm:text-4xl md:text-5xl font-light text-[#1F2421] tracking-tight">
-              Accommodation &amp; Villas
+              Accommodation
             </h2>
           </div>
 

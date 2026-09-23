@@ -44,14 +44,3 @@ export interface PublicService {
   description: string | null;
   image_url: string | null;
 }
-
-export interface CommercialSpace {
-  id: string;
-  partner_id: string;
-  partner_name: string;
-  name: string;
-  floor: number;
-  zone: string;
-  access_policy: string;
-  service_id: string | null;
-}

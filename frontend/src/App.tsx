@@ -14,6 +14,7 @@ import AdminStation from "./pages/AdminStation";
 import { authApi } from "./shared/api/auth";
 import { customerApi } from "./shared/api/customer";
 import { apiClient } from "./shared/api/client";
+import { classifyAccount, formatAuthError } from "./shared/utils/authValidation";
 
 type View =
   | "login"
@@ -34,7 +35,7 @@ export const staffAccounts: Record<string, { employeeId: string; role: RoleId; v
   "housekeep": { employeeId: "HOUSEKEEP", role: "housekeeping", view: "housekeeping", label: "Buồng phòng" },
   "technical": { employeeId: "TECHNICAL", role: "maintenance", view: "maintenance", label: "Kỹ thuật" },
   "accounting": { employeeId: "ACCOUNTING", role: "accounting", view: "accounting", label: "Kế toán" },
-  "kitchen": { employeeId: "KITCHEN", role: "fnb", view: "kitchen", label: "Bếp & Minibar" },
+  "kitchen": { employeeId: "KITCHEN", role: "fnb", view: "kitchen", label: "Bếp & Nhà hàng" },
   "manager": { employeeId: "MANAGER", role: "manager", view: "manager", label: "Quản lý" },
   "director": { employeeId: "DIRECTOR", role: "director", view: "manager", label: "Giám đốc" },
   "admin": { employeeId: "ADMIN", role: "admin", view: "admin", label: "Quản trị hệ thống" },
@@ -45,7 +46,7 @@ export const staffAccounts: Record<string, { employeeId: string; role: RoleId; v
   "housekeeping@hotel.com": { employeeId: "HOUSEKEEP", role: "housekeeping", view: "housekeeping", label: "Buồng phòng" },
   "technical@hotel.com": { employeeId: "TECHNICAL", role: "maintenance", view: "maintenance", label: "Kỹ thuật" },
   "accounting@hotel.com": { employeeId: "ACCOUNTING", role: "accounting", view: "accounting", label: "Kế toán" },
-  "kitchen@hotel.com": { employeeId: "KITCHEN", role: "fnb", view: "kitchen", label: "Bếp & Minibar" },
+  "kitchen@hotel.com": { employeeId: "KITCHEN", role: "fnb", view: "kitchen", label: "Bếp & Nhà hàng" },
   "manager@hotel.com": { employeeId: "MANAGER", role: "manager", view: "manager", label: "Quản lý" },
   "director@hotel.com": { employeeId: "DIRECTOR", role: "director", view: "manager", label: "Giám đốc" },
   "admin@hotel.com": { employeeId: "ADMIN", role: "admin", view: "admin", label: "Quản trị hệ thống" },
@@ -81,9 +82,13 @@ export default function App() {
     const normalized = trimmed.toLowerCase();
     if (!trimmed || !password) return "Vui lòng nhập đầy đủ thông tin đăng nhập.";
 
+    const account = classifyAccount(trimmed);
+    if (!account.valid) {
+      return "Tài khoản không hợp lệ";
+    }
+
     // 1. Khách hàng: số điện thoại thật trong cơ sở dữ liệu
-    const isPhone = /^(0|\+84)\d{8,11}$/.test(trimmed) || /^\d{9,11}$/.test(trimmed);
-    if (isPhone) {
+    if (account.type === "phone") {
       try {
         const tokenRes = await authApi.customerLogin({ phone: trimmed, password });
         if (tokenRes?.access_token) {
@@ -95,14 +100,14 @@ export default function App() {
         }
       } catch (backendError) {
         console.warn("Backend customer login failed:", backendError);
-        return backendError instanceof Error ? backendError.message : "Số điện thoại hoặc mật khẩu không chính xác.";
+        return formatAuthError(backendError);
       }
-      return "Số điện thoại hoặc mật khẩu không chính xác.";
+      return "Sai tài khoản hoặc mật khẩu";
     }
 
     // 2. Nhân viên: Mã nhân viên (FRONTDESK, MANAGER, ADMIN...) hoặc email trong CSDL
-    const account = staffAccounts[normalized];
-    const employeeId = account?.employeeId ?? trimmed.toUpperCase();
+    const staffAccount = staffAccounts[normalized];
+    const employeeId = staffAccount?.employeeId ?? trimmed.toUpperCase();
 
     try {
       const tokenRes = await authApi.employeeLogin({ employee_id: employeeId, password });
@@ -124,7 +129,7 @@ export default function App() {
               HR: { role: "hr", view: "hr" },
               STAFF: { role: "staff", view: "staff" },
             };
-            const mapped = roleMap[profile.role] ?? account ?? { role: "staff", view: "staff" };
+            const mapped = roleMap[profile.role] ?? staffAccount ?? { role: "staff", view: "staff" };
             setRole(mapped.role);
             setView(mapped.view);
             return null;
@@ -136,10 +141,10 @@ export default function App() {
       }
     } catch (backendError) {
       console.warn("Backend employee login failed:", backendError);
-      return backendError instanceof Error ? backendError.message : "Mã nhân viên hoặc mật khẩu không chính xác.";
+      return formatAuthError(backendError);
     }
 
-    return "Thông tin đăng nhập không chính xác.";
+    return "Sai tài khoản hoặc mật khẩu";
   };
 
   const logoutToCustomer = async () => {

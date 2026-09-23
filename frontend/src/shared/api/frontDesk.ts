@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { CashHandover, CashHandoverCreate, CheckInRequest, CheckOutRequest, Dashboard, EquipmentIncident, EquipmentIncidentCreate, Guest, GuestCreate, Invoice, MembershipHistoryEntry, Page, Payment, PaymentCreate, Receipt, ReceiptCreate, Reservation, ReservationCreate, ReservationUpdate, RoomSummary, RoomTransfer, RoomTransferCreate, ServiceCatalogItem, TimelineEvent } from "../types/frontDesk";
+import type { CashHandover, CashHandoverCreate, CheckInRequest, CheckOutRequest, Dashboard, EquipmentIncident, EquipmentIncidentCreate, Guest, GuestCreate, HotelServiceBooking, Invoice, MembershipHistoryEntry, Page, Payment, PaymentCreate, Receipt, ReceiptCreate, Reservation, ReservationCreate, ReservationUpdate, RoomAvailability, RoomEquipment, RoomSummary, RoomTransfer, RoomTransferCreate, ServiceCatalogItem, TimelineEvent } from "../types/frontDesk";
 
 const key = (): string => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const requireIdempotencyKey = (idempotencyKey: string) => {
@@ -33,9 +33,13 @@ export const frontDeskApi = {
   checkOut: (id: number, body: CheckOutRequest, idempotencyKey?: string) => mutate<Invoice>(`/api/reservations/${id}/check-out`, body, "POST", idempotencyKey),
   extend: (id: number, new_expected_check_out: string, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/extend`, { new_expected_check_out }, "POST", idempotencyKey),
   transfer: (id: number, body: RoomTransferCreate, idempotencyKey?: string) => mutate<RoomTransfer>(`/api/operations/reservations/${id}/room-transfers`, body, "POST", idempotencyKey),
-  addService: (id: number, body: { service_id: string; quantity: number; used_at?: string }, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/services`, body, "POST", idempotencyKey),
+  roomAvailability: (from: string, to: string) => apiClient.request<RoomAvailability[]>(`/api/rooms/availability${query({ from, to })}`),
+  addService: (id: number, body: { service_id: string; quantity: number; used_at?: string; room_id?: string; meal_period?: "LUNCH" | "DINNER" }, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/services`, body, "POST", idempotencyKey),
+  serviceBookings: (reservationId: number) => apiClient.request<HotelServiceBooking[]>(`/api/reservations/${reservationId}/service-bookings`),
+  useServiceBooking: (reservationId: number, bookingId: number) => mutate<HotelServiceBooking>(`/api/reservations/${reservationId}/service-bookings/${bookingId}/use`),
   services: () => apiClient.request<ServiceCatalogItem[]>("/api/services"),
   updateRoomStatus: (roomId: string, status: string) => apiClient.request<RoomSummary>(`/api/rooms/${encodeURIComponent(roomId)}/status?status=${encodeURIComponent(status)}`, { method: "PATCH" }),
+  roomEquipment: (roomId: string) => apiClient.request<RoomEquipment[]>(`/api/rooms/${encodeURIComponent(roomId)}/equipment`),
   recordEquipmentIncident: (reservationId: number, body: EquipmentIncidentCreate, idempotencyKey?: string) => mutate<EquipmentIncident>(`/api/reservations/${reservationId}/equipment-incidents`, body, "POST", idempotencyKey),
   invoices: (params: { reservation_id?: number; page?: number; size?: number } = {}) => apiClient.request<Page<Invoice>>(`/api/invoices?${new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined).map(([name, value]) => [name, String(value)])).toString()}`),
   invoice: (reservationId: number) => apiClient.request<Invoice>(`/api/invoices/reservation/${reservationId}`),
@@ -45,6 +49,7 @@ export const frontDeskApi = {
   issueReceipt: (invoiceId: number, body: ReceiptCreate, idempotencyKey = key()) => apiClient.request<Receipt>(`/api/invoices/${invoiceId}/receipts`, { method: "POST", body, idempotencyKey }),
   timeline: (id: number) => apiClient.request<TimelineEvent[]>(`/api/reservations/${id}/timeline`),
   cashHandover: (body: CashHandoverCreate, idempotencyKey: string) => apiClient.request<CashHandover>("/api/finance/cash-handovers", { method: "POST", body, idempotencyKey: requireIdempotencyKey(idempotencyKey) }),
+  myCashHandovers: (params: { page?: number; size?: number } = {}) => apiClient.request<Page<CashHandover>>(`/api/finance/cash-handovers/mine${query(params)}`),
 };
 
 export const newMutationKey = key;

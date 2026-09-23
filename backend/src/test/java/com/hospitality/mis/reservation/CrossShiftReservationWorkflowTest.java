@@ -118,6 +118,8 @@ class CrossShiftReservationWorkflowTest {
                 ZoneId.of("Asia/Ho_Chi_Minh")));
         var response = service.markNoShow(reservation.getId(), "next-shift", UUID.randomUUID().toString());
         assertThat(response.status()).isEqualTo(ReservationStatus.NO_SHOW);
+        assertThat(response.cancellationOutcome()).isEqualTo(com.hospitality.mis.entity.reservation.CancellationOutcome.FORFEIT);
+        assertThat(response.cancellationReason()).contains("Khách không đến");
         assertThat(response.deposit()).isEqualByComparingTo("500000");
         assertThat(reservation.getRooms().get(0).getStatus()).isEqualTo(RoomStatus.CANCELLED);
     }

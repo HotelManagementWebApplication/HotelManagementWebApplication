@@ -132,7 +132,7 @@ public class ServiceCatalogService {
 
     /** Chuyển dịch vụ thành DTO và tính cờ tồn kho dưới ngưỡng an toàn. */
     /** Chuyển dịch vụ thành DTO và tính cờ cảnh báo dưới safety threshold. */
-    public ServiceDtos.Response toResponse(Service s) { return new ServiceDtos.Response(s.getId(), s.getName(), s.getPrice(), s.getUnit(), s.getCategory(), s.getDescription(), s.getImageUrl(), s.getStockQuantity(), s.getSafetyThreshold(), s.getStockQuantity() <= s.getSafetyThreshold()); }
+    public ServiceDtos.Response toResponse(Service s) { return new ServiceDtos.Response(s.getId(), s.getName(), s.getPrice(), s.getUnit(), s.getCategory(), s.getDescription(), s.getImageUrl(), s.getStockQuantity(), s.getSafetyThreshold(), s.getStockQuantity() <= s.getSafetyThreshold(), s.isActive()); }
 
     private static String trimToNull(String value) {
         if (value == null || value.isBlank()) return null;

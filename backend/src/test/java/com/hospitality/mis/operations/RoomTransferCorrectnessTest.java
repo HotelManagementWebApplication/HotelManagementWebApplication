@@ -72,7 +72,9 @@ class RoomTransferCorrectnessTest {
         reservation.addRoom(assignment);
         when(reservations.findForUpdate(9L)).thenReturn(Optional.of(reservation));
         when(rooms.findAllForUpdateOrdered(List.of("101", "102"))).thenReturn(List.of(from, to));
-        when(reservations.hasOverlapExcludingReservation(eq(9L), eq("102"), any(), any(), any(), anyList())).thenReturn(false);
+        when(reservations.hasOverlapExcludingReservation(eq(9L), eq("102"),
+                eq(LocalDateTime.of(2031, 1, 2, 10, 30)), eq(LocalDateTime.of(2031, 1, 5, 12, 0)),
+                eq(RoomStatus.CANCELLED), anyList())).thenReturn(false);
         when(transfers.save(any(RoomTransfer.class))).thenAnswer(invocation -> {
             RoomTransfer saved = invocation.getArgument(0);
             saved.setTransferredAt(LocalDateTime.of(2031, 1, 2, 10, 30));
@@ -95,6 +97,55 @@ class RoomTransferCorrectnessTest {
     }
 
     @Test
+    /** Given phòng đích đã được giữ, When lễ tân chuyển phòng, Then chặn trước khi ghi transfer. */
+    void transferRejectsTargetThatIsNotCurrentlyEmptyAndReady() {
+        Room from = room("502", RoomStatus.OCCUPIED);
+        Room reserved = room("503", RoomStatus.RESERVED);
+        Reservation reservation = checkedInReservation(from,
+                LocalDateTime.of(2031, 1, 1, 14, 0), LocalDateTime.of(2031, 1, 5, 12, 0));
+        when(reservations.findForUpdate(9L)).thenReturn(Optional.of(reservation));
+        when(rooms.findAllForUpdateOrdered(List.of("502", "503"))).thenReturn(List.of(from, reserved));
+
+        RoomTransferService service = new RoomTransferService(reservations, rooms, transfers, audit);
+        var error = org.junit.jupiter.api.Assertions.assertThrows(
+                com.hospitality.mis.common.exception.DomainException.class,
+                () -> service.transfer(9L,
+                        new RoomTransferDtos.CreateRequest("502", "503", LocalDateTime.of(2031, 1, 2, 10, 30), "đổi phòng"),
+                        "frontdesk", "transfer-reserved"));
+
+        assertThat(error.getCode()).isEqualTo("ROOM_NOT_AVAILABLE");
+        verify(reservations, never()).saveAndFlush(any());
+        verifyNoInteractions(transfers, audit);
+    }
+
+    @Test
+    /** Given phòng READY nhưng có booking trùng kỳ còn lại, When chuyển, Then chặn overbooking. */
+    void transferRejectsOverlappingBookingForTheRemainingStay() {
+        Room from = room("502", RoomStatus.OCCUPIED);
+        Room target = room("504", RoomStatus.READY);
+        LocalDateTime transferredAt = LocalDateTime.of(2031, 1, 2, 10, 30);
+        LocalDateTime checkout = LocalDateTime.of(2031, 1, 5, 12, 0);
+        Reservation reservation = checkedInReservation(from, LocalDateTime.of(2031, 1, 1, 14, 0), checkout);
+        when(reservations.findForUpdate(9L)).thenReturn(Optional.of(reservation));
+        when(rooms.findAllForUpdateOrdered(List.of("502", "504"))).thenReturn(List.of(from, target));
+        when(reservations.hasOverlapExcludingReservation(9L, "504", transferredAt, checkout,
+                RoomStatus.CANCELLED,
+                List.of(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW, ReservationStatus.CHECKED_OUT)))
+                .thenReturn(true);
+
+        RoomTransferService service = new RoomTransferService(reservations, rooms, transfers, audit);
+        var error = org.junit.jupiter.api.Assertions.assertThrows(
+                com.hospitality.mis.common.exception.DomainException.class,
+                () -> service.transfer(9L,
+                        new RoomTransferDtos.CreateRequest("502", "504", transferredAt, "đổi phòng"),
+                        "frontdesk", "transfer-overlap"));
+
+        assertThat(error.getCode()).isEqualTo("OVERBOOKING");
+        verify(reservations, never()).saveAndFlush(any());
+        verifyNoInteractions(transfers, audit);
+    }
+
+    @Test
     /** Given actor request khác authenticated, When transfer, Then fail trước load reservation/room. */
     void transferRejectsClientActorThatDiffersFromAuthenticatedActorBeforeLoadingReservation() {
         RoomTransferService service = new RoomTransferService(reservations, rooms, transfers, audit);
@@ -112,5 +163,15 @@ class RoomTransferCorrectnessTest {
     /** Dựng room tối thiểu với status để fixture thể hiện rõ room nguồn/đích. */
     private static Room room(String id, RoomStatus status) {
         Room room = new Room(); room.setId(id); room.setStatus(status); return room;
+    }
+
+    private static Reservation checkedInReservation(Room room, LocalDateTime checkIn, LocalDateTime checkOut) {
+        Reservation reservation = new Reservation();
+        reservation.transitionTo(ReservationStatus.CONFIRMED);
+        reservation.transitionTo(ReservationStatus.CHECKED_IN);
+        ReservationRoom assignment = new ReservationRoom();
+        assignment.setRoom(room); assignment.setCheckIn(checkIn); assignment.setCheckOut(checkOut);
+        assignment.setStatus(RoomStatus.OCCUPIED); reservation.addRoom(assignment);
+        return reservation;
     }
 }

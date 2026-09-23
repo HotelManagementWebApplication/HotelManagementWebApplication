@@ -41,6 +41,25 @@ export class ApiError extends Error {
   get isRateLimited() { return this.status === 429; }
 }
 
+/**
+ * The Vercel build is a static frontend. It cannot reach a backend listening
+ * on the developer machine, and a failed browser fetch otherwise only shows
+ * up as a generic "failed to fetch" message. Keep this error structured so
+ * callers can still render their normal connection-error state while the
+ * console contains the actionable cause.
+ */
+function apiUnavailableError(baseUrl: string, cause: unknown): ApiError {
+  const target = baseUrl || "the current website";
+  const causeMessage = cause instanceof Error && cause.message ? ` (${cause.message})` : "";
+  return new ApiError(
+    0,
+    {
+      code: "API_UNAVAILABLE",
+      message: `Không thể kết nối API tại ${target}. Backend production phải có URL public HTTPS; localhost chỉ dùng cho môi trường local.${causeMessage}`,
+    },
+  );
+}
+
 const defaultStore: TokenStore = {
   get: () => {
     const accessToken = sessionStorage.getItem("hotel_mis_access_token");
@@ -114,19 +133,23 @@ export class ApiClient {
     const controller = new AbortController();
     const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fetch(`${this.baseUrl}${path}`, {
-        ...init,
-        method,
-        signal: controller.signal,
-        headers: {
-          Accept: "application/json",
-          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
-          ...headers,
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-      });
+      try {
+        return await fetch(`${this.baseUrl}${path}`, {
+          ...init,
+          method,
+          signal: controller.signal,
+          headers: {
+            Accept: "application/json",
+            ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+            ...headers,
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        });
+      } catch (error) {
+        throw apiUnavailableError(this.baseUrl, error);
+      }
     } finally { globalThis.clearTimeout(timeout); }
   }
 

@@ -363,12 +363,12 @@ export default function StaffPortal({ role, onBack }: Props) {
         display:"flex",alignItems:"center",gap:10}}>
         <img
           src="/hotel_logo.png"
-          alt="MAM Hotel Logo"
+          alt="MaM Hotel Logo"
           style={{width:34,height:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 8px rgba(184,148,74,0.4))"}}
         />
         {!collapsed && (
           <div style={{overflow:"hidden"}}>
-            <p style={{fontFamily:"'Cormorant Garamond',serif",color:"#FFF",fontSize:17,fontWeight:700,letterSpacing:"0.05em",lineHeight:1.1,whiteSpace:"nowrap"}}>MAM HOTEL</p>
+            <p style={{fontFamily:"'Cormorant Garamond',serif",color:"#FFF",fontSize:17,fontWeight:700,letterSpacing:"0.05em",lineHeight:1.1,whiteSpace:"nowrap"}}>MaM Hotel</p>
             <p style={{fontSize:9,color:rm.color,opacity:.85,whiteSpace:"nowrap",letterSpacing:"0.08em",textTransform:"uppercase"}}>{rm.labelEn}</p>
           </div>
         )}
@@ -486,7 +486,7 @@ export default function StaffPortal({ role, onBack }: Props) {
     <header style={{height:54,background:NAV,borderBottom:`1px solid ${BORDER}`,
       display:"flex",alignItems:"center",gap:10,padding:"0 18px",flexShrink:0,zIndex:20}}>
       <div style={{display:"flex",alignItems:"center",gap:5}}>
-        <span style={{fontSize:11,color:T2}}>MAM Hotel</span>
+        <span style={{fontSize:11,color:T2}}>MaM Hotel</span>
         <ChevronRight size={11} style={{color:T2}}/>
         <span style={{fontSize:11,fontWeight:600,color:T1}}>{menu.find(m=>m.id===page)?.label||"Tổng quan"}</span>
       </div>
@@ -671,7 +671,7 @@ export default function StaffPortal({ role, onBack }: Props) {
             <h1 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:"#FFF",lineHeight:1.1,margin:0}}>
               Xin chào, {userProfile?.full_name || "Nhân viên"}
             </h1>
-            <p style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:4}}>{new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })} · MAM Hotel PMS</p>
+            <p style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:4}}>{new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })} · MaM Hotel</p>
           </div>
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
             {[

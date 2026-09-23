@@ -50,7 +50,7 @@ public class WebConfig implements WebMvcConfigurer {
      * Origin rỗng hoặc wildcard bị từ chối lúc khởi động để không vô tình mở rộng biên trình duyệt.
      */
     CorsConfigurationSource corsConfigurationSource(
-            @Value("${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}") String configuredOrigins) {
+            @Value("${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://mamresort.vercel.app}") String configuredOrigins) {
 
         // Chỉ giữ origin cụ thể sau khi trim; danh sách này là biên tin cậy cho trình duyệt.
         List<String> origins = Arrays.stream(configuredOrigins.split(","))

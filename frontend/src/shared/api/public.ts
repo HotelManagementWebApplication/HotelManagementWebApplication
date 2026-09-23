@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { PublicRoomAvailability, PublicRoomDetail, PublicRoomSummary, PublicService, CommercialSpace } from "../types/public";
+import type { PublicRoomAvailability, PublicRoomDetail, PublicRoomSummary, PublicService } from "../types/public";
 
 export const publicApi = {
   rooms: (type?: string, page?: number, size?: number) => {
@@ -28,5 +28,4 @@ export const publicApi = {
     const query = params.toString();
     return apiClient.request<PublicService[]>(`/api/public/services${query ? `?${query}` : ""}`);
   },
-  commercialSpaces: () => apiClient.request<CommercialSpace[]>("/api/public/commercial-spaces"),
 };

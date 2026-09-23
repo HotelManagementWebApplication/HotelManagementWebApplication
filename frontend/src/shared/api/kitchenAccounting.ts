@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { Approval, ApprovalStatus, CashHandover, CashHandoverRequest, DebtSettlement, DebtSettlementRequest, Expense, ExpenseRequest, InventoryMovement, InventoryMovementRequest, InventoryReport, Invoice, InvoiceAdjustmentRequest, LedgerEntry, LedgerQuery, Page, PartnerDebt, PartnerDebtRequest, Payment, PaymentCreateRequest, PaymentQuery, PriceChangeRequest, PriceHistory, Receipt, ReceiptQuery, Reconciliation, Service, StockRequest, CommercialPartner, PartnerSettlement } from "../types/kitchenAccounting";
+import type { Approval, ApprovalStatus, CashHandover, CashHandoverRequest, DebtSettlement, DebtSettlementRequest, Expense, ExpenseRequest, InventoryMovement, InventoryMovementRequest, InventoryReport, Invoice, InvoiceAdjustmentRequest, LedgerEntry, LedgerQuery, Page, PartnerDebt, PartnerDebtRequest, Payment, PaymentCreateRequest, PaymentQuery, PriceChangeRequest, PriceHistory, Receipt, ReceiptQuery, Reconciliation, RestaurantBooking, Service, StockRequest } from "../types/kitchenAccounting";
 
 const key = () => `KA-${(globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^a-zA-Z0-9]/g, "").slice(0, 32)}`;
 const query = (params: object) => { const value = Object.entries(params).filter(([, item]) => item !== undefined && item !== "").map(([name, item]) => [name, String(item)] as [string, string]); const text = new URLSearchParams(value).toString(); return text ? `?${text}` : ""; };
@@ -12,6 +12,8 @@ const headerMutation = <T>(path: string, body: unknown, idempotencyKey: string) 
 
 export const kitchenAccountingApi = {
   services: () => apiClient.request<Service[]>("/api/services"),
+  restaurantBookings: (params: { date?: string; status?: string } = {}) => apiClient.request<RestaurantBooking[]>(`/api/operations/restaurant/service-bookings${query(params)}`),
+  markRestaurantBookingUsed: (id: number) => apiClient.request<RestaurantBooking>(`/api/operations/restaurant/service-bookings/${id}/use`, { method: "POST" }),
   lowStock: () => apiClient.request<Service[]>("/api/services/low-stock"),
   inventoryMovements: (serviceId: string) => apiClient.request<InventoryMovement[]>(`/api/services/${encodeURIComponent(serviceId)}/inventory-movements`),
   inventoryReport: (serviceId: string, params: { from?: string; to?: string } = {}) => apiClient.request<InventoryReport>(`/api/services/${encodeURIComponent(serviceId)}/inventory-movements/inventory-report${query(params)}`),
@@ -42,9 +44,6 @@ export const kitchenAccountingApi = {
   settlePartnerDebt: (id: number, body: DebtSettlementRequest, idempotencyKey: string) => headerMutation<PartnerDebt>(`/api/finance/partner-debts/${id}/settle`, body, idempotencyKey),
   ledger: (params: LedgerQuery = {}) => apiClient.request<Page<LedgerEntry>>(`/api/finance/ledger${query(params)}`),
   reconciliation: (params: { from?: string; to?: string } = {}) => apiClient.request<Reconciliation>(`/api/finance/reconciliation${query(params)}`),
-  commercialPartners: () => apiClient.request<CommercialPartner[]>("/api/finance/commercial-partners"),
-  partnerSettlements: () => apiClient.request<PartnerSettlement[]>("/api/finance/partner-settlements"),
-  exportPartnerSettlement: (id: number, idempotencyKey: string) => headerMutation<PartnerSettlement>(`/api/finance/partner-settlements/${id}/export`, undefined, idempotencyKey),
   issueReceipt: (invoiceId: number, body: { receipt_number: string; amount: number; method: Receipt["method"] }, idempotencyKey: string) => headerMutation<Receipt>(`/api/invoices/${invoiceId}/receipts`, body, idempotencyKey),
 };
 

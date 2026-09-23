@@ -6,7 +6,7 @@
 
 > [!IMPORTANT]
 > **QUYẾT ĐỊNH THIẾT KẾ BẮT BUỘC (19/09/2026)**:
-> Giữ nguyên vẹn 100% giao diện cao cấp MAM Hotel tại `frontend/src/pages/` và toàn bộ 12 trạm màn hình (`CustomerPortal`, `LoginPage`, `FrontDeskPMS`, `HousekeepingStation`, `MaintenanceStation`, `KitchenInventory`, `AccountingStation`, `HRStation`, `AdminStation`, `ManagerDashboard`, `StaffPortal`, `LandingPage`).
+> Giữ nguyên vẹn 100% giao diện cao cấp MaM Hotel tại `frontend/src/pages/` và toàn bộ 12 trạm màn hình (`CustomerPortal`, `LoginPage`, `FrontDeskPMS`, `HousekeepingStation`, `MaintenanceStation`, `KitchenInventory`, `AccountingStation`, `HRStation`, `AdminStation`, `ManagerDashboard`, `StaffPortal`, `LandingPage`).
 > Tuyệt đối không thay thế giao diện bằng các component thô sơ. Nối ruột backend Spring Boot ngầm bên dưới từng trạm theo cơ chế **Progressive Hydration**: dữ liệu vận hành lấy từ backend API và database là nguồn sự thật duy nhất; khi API lỗi phải hiển thị trạng thái tải lỗi/rỗng để người vận hành không nhầm dữ liệu trình diễn với dữ liệu thật.
 
 ## 1. Hiện trạng có thể kiểm chứng từ source
@@ -84,20 +84,19 @@ là positive safe integers, hiển thị lỗi local trước khi render feature
 
 ## 4. Những lát cắt đã có API caller
 
-### 4.1 Commercial partners, amenities và voucher
+### 4.1 Dịch vụ nội bộ và quyền lợi lưu trú
 
-Mô hình mặt bằng thương mại được lưu bằng Flyway V22 với các bảng
-`commercial_partners`, `commercial_spaces`, `partner_monthly_settlements` và
-`customer_vouchers`. CustomerPortal đọc danh mục dịch vụ hiện có, phát hành
-voucher qua `POST /api/customer/vouchers` và hiển thị mã voucher/Voucher VIP.
-AccountingStation đọc `GET /api/finance/commercial-partners` và
-`GET /api/finance/partner-settlements`; nút xuất công nợ gọi
-`POST /api/finance/partner-settlements/{id}/export`.
+Flyway V39 gỡ các bảng đối tác thương mại/voucher cũ, giữ công nợ nhà cung cấp
+và tạo `hotel_service_bookings`. CustomerPortal dùng
+`POST /api/customer/service-bookings` để đặt dịch vụ cho booking phòng đã xác
+nhận cọc; `GET /api/customer/service-bookings?reservation_id=...` để xem;
+`POST /api/customer/service-bookings/{id}/cancel` để hủy. Lễ tân dùng
+`GET /api/reservations/{id}/service-bookings` và
+`POST /api/reservations/{id}/service-bookings/{bookingId}/use` để xác nhận đã
+sử dụng. Chỉ phần vượt quyền lợi đã dùng mới tính vào hóa đơn checkout.
 
-Phân vùng mặt bằng và quyền truy cập phải giữ đúng contract: tầng 0–2 thương
-mại mở khách vãng lai, tầng 3–4 tiện ích cao cấp có day-pass, tầng 5–20 phòng
-nghỉ riêng tư, tầng 21 hồ bơi `GUEST_ONLY`. Giá trị hoa hồng tháng không được
-thấp hơn `commission_floor`.
+Không có voucher, thuê mặt bằng thương mại, hoa hồng hay khách vãng lai đặt
+dịch vụ. Hồ bơi chỉ hiển thị trên web và phục vụ trực tiếp theo booking phòng.
 
 ### Auth/customer/public
 

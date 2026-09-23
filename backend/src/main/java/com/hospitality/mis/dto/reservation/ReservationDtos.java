@@ -61,7 +61,12 @@ public final class ReservationDtos {
                            /** Thời điểm dự kiến nhận phòng. */
                            @NotNull LocalDateTime expectedCheckIn,
                            /** Thời điểm dự kiến trả phòng. */
-                           @NotNull LocalDateTime expectedCheckOut) {}
+                           @NotNull LocalDateTime expectedCheckOut,
+                           @jakarta.validation.constraints.Positive Integer guestCount) {
+        public RoomStay(String roomId, LocalDateTime expectedCheckIn, LocalDateTime expectedCheckOut) {
+            this(roomId, expectedCheckIn, expectedCheckOut, 1);
+        }
+    }
 
     /** Request tạo đặt phòng; rooms phải có ít nhất một phần tử hợp lệ. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
@@ -122,7 +127,13 @@ public final class ReservationDtos {
                                     /** Số lượng sử dụng phải dương. */
                                     @NotNull @jakarta.validation.constraints.Positive Integer quantity,
                                     /** Thời điểm sử dụng, có thể để service mặc định. */
-                                    LocalDateTime usedAt) {}
+                                    LocalDateTime usedAt,
+                                    String roomId,
+                                    String mealPeriod) {
+        public AddServiceRequest(String serviceId, Integer quantity, LocalDateTime usedAt) {
+            this(serviceId, quantity, usedAt, null, null);
+        }
+    }
 
     /** Dòng phòng trong response, gồm cả thời gian dự kiến và thực tế. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

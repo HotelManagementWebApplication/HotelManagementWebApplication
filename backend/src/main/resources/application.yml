@@ -20,6 +20,18 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
 
 hotel:
   time-zone: ${HOTEL_TIME_ZONE:Asia/Ho_Chi_Minh}
@@ -41,12 +53,20 @@ hotel:
     vip-stay-threshold: ${HOTEL_VIP_STAY_THRESHOLD:10}
 
 management:
+  health:
+    # SMTP credentials are optional in local/demo environments. Enable this probe only
+    # where MAIL_USERNAME and MAIL_PASSWORD are configured.
+    mail:
+      enabled: ${MAIL_HEALTH_ENABLED:false}
   endpoints:
     web:
       exposure:
         include: health,info
 
 server:
+  # Hosting providers expose their HTTP port through PORT; local development
+  # keeps the existing 8080 default.
+  port: ${PORT:${SERVER_PORT:8080}}
   servlet:
     encoding:
       charset: UTF-8

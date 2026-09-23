@@ -14,10 +14,7 @@ DELETE FROM stock_items;
 DELETE FROM leave_requests;
 DELETE FROM attendance_records;
 DELETE FROM vat_invoices;
-DELETE FROM customer_vouchers;
-DELETE FROM partner_monthly_settlements;
-DELETE FROM commercial_spaces;
-DELETE FROM commercial_partners;
+DELETE FROM hotel_service_bookings;
 DELETE FROM financial_ledger_entries;
 DELETE FROM partner_debt_settlements;
 DELETE FROM receipts;
@@ -70,8 +67,7 @@ ALTER TABLE room_images AUTO_INCREMENT = 1;
 ALTER TABLE approval_requests AUTO_INCREMENT = 1;
 ALTER TABLE audit_logs AUTO_INCREMENT = 1;
 ALTER TABLE refresh_tokens AUTO_INCREMENT = 1;
-ALTER TABLE customer_vouchers AUTO_INCREMENT = 1;
-ALTER TABLE partner_monthly_settlements AUTO_INCREMENT = 1;
+ALTER TABLE hotel_service_bookings AUTO_INCREMENT = 1;
 ALTER TABLE partner_debts AUTO_INCREMENT = 1;
 ALTER TABLE partner_debt_settlements AUTO_INCREMENT = 1;
 ALTER TABLE expenses AUTO_INCREMENT = 1;
@@ -147,22 +143,22 @@ SET marketing_tagline = CASE id
     END;
 
 INSERT INTO rooms (id, room_type_id, status, description, name, floor, version) VALUES
-('R101', 'RT001', 'available', 'STD đơn · tầng 5', '501', 5, 0), ('R102', 'RT002', 'available', 'STD đôi · tầng 5', '502', 5, 0), ('R103', 'RT003', 'available', 'SUP đơn · tầng 5', '503', 5, 0), ('R104', 'RT004', 'available', 'SUP đôi · tầng 5', '504', 5, 0),
-('R201', 'RT001', 'available', 'STD đơn · tầng 6', '601', 6, 0), ('R202', 'RT002', 'cleaning', 'STD đôi · tầng 6', '602', 6, 0), ('R203', 'RT003', 'available', 'SUP đơn · tầng 6', '603', 6, 0), ('R204', 'RT004', 'available', 'SUP đôi · tầng 6', '604', 6, 0),
-('R301', 'RT001', 'available', 'STD đơn · tầng 7', '701', 7, 0), ('R302', 'RT002', 'maintenance', 'STD đôi · tầng 7', '702', 7, 0), ('R303', 'RT003', 'available', 'SUP đơn · tầng 7', '703', 7, 0), ('R304', 'RT004', 'available', 'SUP đôi · tầng 7', '704', 7, 0),
-('R401', 'RT001', 'available', 'STD đơn · tầng 8', '801', 8, 0), ('R402', 'RT002', 'reserved', 'STD đôi · tầng 8', '802', 8, 0), ('R403', 'RT003', 'available', 'SUP đơn · tầng 8', '803', 8, 0), ('R404', 'RT004', 'available', 'SUP đôi · tầng 8', '804', 8, 0),
-('R501', 'RT003', 'available', 'SUP đơn · tầng 9', '901', 9, 0), ('R502', 'RT004', 'available', 'SUP đôi · tầng 9', '902', 9, 0), ('R503', 'RT005', 'available', 'DLX King · tầng 9', '903', 9, 0), ('R504', 'RT006', 'available', 'DLX Family · tầng 9', '904', 9, 0),
-('R601', 'RT003', 'available', 'SUP đơn · tầng 10', '1001', 10, 0), ('R602', 'RT004', 'available', 'SUP đôi · tầng 10', '1002', 10, 0), ('R603', 'RT005', 'available', 'DLX King · tầng 10', '1003', 10, 0), ('R604', 'RT006', 'available', 'DLX Family · tầng 10', '1004', 10, 0),
-('R701', 'RT004', 'available', 'SUP đôi · tầng 11', '1101', 11, 0), ('R702', 'RT005', 'available', 'DLX King · tầng 11', '1102', 11, 0), ('R703', 'RT006', 'available', 'DLX Family · tầng 11', '1103', 11, 0), ('R704', 'RT007', 'available', 'Suite Residence · tầng 11', '1104', 11, 0),
-('R801', 'RT004', 'available', 'SUP đôi · tầng 12', '1201', 12, 0), ('R802', 'RT005', 'available', 'DLX King · tầng 12', '1202', 12, 0), ('R803', 'RT006', 'available', 'DLX Family · tầng 12', '1203', 12, 0), ('R804', 'RT007', 'available', 'Suite Residence · tầng 12', '1204', 12, 0),
-('R901', 'RT005', 'available', 'DLX King · tầng 13', '1301', 13, 0), ('R902', 'RT006', 'available', 'DLX Family · tầng 13', '1302', 13, 0), ('R903', 'RT007', 'available', 'Suite Residence · tầng 13', '1303', 13, 0), ('R904', 'RT008', 'available', 'Suite Executive · tầng 13', '1304', 13, 0),
-('R1001', 'RT005', 'available', 'DLX King · tầng 14', '1401', 14, 0), ('R1002', 'RT006', 'available', 'DLX Family · tầng 14', '1402', 14, 0), ('R1003', 'RT007', 'available', 'Suite Residence · tầng 14', '1403', 14, 0), ('R1004', 'RT008', 'available', 'Suite Executive · tầng 14', '1404', 14, 0),
-('R1101', 'RT005', 'available', 'DLX King · tầng 15', '1501', 15, 0), ('R1102', 'RT006', 'available', 'DLX Family · tầng 15', '1502', 15, 0), ('R1103', 'RT007', 'available', 'Suite Residence · tầng 15', '1503', 15, 0), ('R1104', 'RT008', 'available', 'Suite Executive · tầng 15', '1504', 15, 0),
-('R1201', 'RT005', 'available', 'DLX King · tầng 16', '1601', 16, 0), ('R1202', 'RT006', 'available', 'DLX Family · tầng 16', '1602', 16, 0), ('R1203', 'RT007', 'available', 'Suite Residence · tầng 16', '1603', 16, 0), ('R1204', 'RT008', 'available', 'Suite Executive · tầng 16', '1604', 16, 0),
-('R1301', 'RT006', 'available', 'DLX Family · tầng 17', '1701', 17, 0), ('R1302', 'RT007', 'available', 'Suite Residence · tầng 17', '1702', 17, 0), ('R1303', 'RT008', 'available', 'Suite Executive · tầng 17', '1703', 17, 0), ('R1304', 'RT009', 'available', 'VIP nguyên căn · tầng 17', '1704', 17, 0),
-('R1401', 'RT006', 'available', 'DLX Family · tầng 18', '1801', 18, 0), ('R1402', 'RT007', 'available', 'Suite Residence · tầng 18', '1802', 18, 0), ('R1403', 'RT008', 'available', 'Suite Executive · tầng 18', '1803', 18, 0), ('R1404', 'RT009', 'available', 'VIP nguyên căn · tầng 18', '1804', 18, 0),
-('R1501', 'RT006', 'available', 'DLX Family · tầng 19', '1901', 19, 0), ('R1502', 'RT007', 'available', 'Suite Residence · tầng 19', '1902', 19, 0), ('R1503', 'RT008', 'available', 'Suite Executive · tầng 19', '1903', 19, 0), ('R1504', 'RT009', 'available', 'VIP nguyên căn · tầng 19', '1904', 19, 0),
-('R1601', 'RT006', 'available', 'DLX Family · tầng 20', '2001', 20, 0), ('R1602', 'RT007', 'available', 'Suite Residence · tầng 20', '2002', 20, 0), ('R1603', 'RT008', 'available', 'Suite Executive · tầng 20', '2003', 20, 0), ('R1604', 'RT009', 'available', 'VIP nguyên căn · tầng 20', '2004', 20, 0);
+('501', 'RT001', 'available', 'STD đơn · tầng 5', '501', 5, 0), ('502', 'RT002', 'available', 'STD đôi · tầng 5', '502', 5, 0), ('503', 'RT003', 'available', 'SUP đơn · tầng 5', '503', 5, 0), ('504', 'RT004', 'available', 'SUP đôi · tầng 5', '504', 5, 0),
+('601', 'RT001', 'available', 'STD đơn · tầng 6', '601', 6, 0), ('602', 'RT002', 'cleaning', 'STD đôi · tầng 6', '602', 6, 0), ('603', 'RT003', 'available', 'SUP đơn · tầng 6', '603', 6, 0), ('604', 'RT004', 'available', 'SUP đôi · tầng 6', '604', 6, 0),
+('701', 'RT001', 'available', 'STD đơn · tầng 7', '701', 7, 0), ('702', 'RT002', 'maintenance', 'STD đôi · tầng 7', '702', 7, 0), ('703', 'RT003', 'available', 'SUP đơn · tầng 7', '703', 7, 0), ('704', 'RT004', 'available', 'SUP đôi · tầng 7', '704', 7, 0),
+('801', 'RT001', 'available', 'STD đơn · tầng 8', '801', 8, 0), ('802', 'RT002', 'reserved', 'STD đôi · tầng 8', '802', 8, 0), ('803', 'RT003', 'available', 'SUP đơn · tầng 8', '803', 8, 0), ('804', 'RT004', 'available', 'SUP đôi · tầng 8', '804', 8, 0),
+('901', 'RT003', 'available', 'SUP đơn · tầng 9', '901', 9, 0), ('902', 'RT004', 'available', 'SUP đôi · tầng 9', '902', 9, 0), ('903', 'RT005', 'available', 'DLX King · tầng 9', '903', 9, 0), ('904', 'RT006', 'available', 'DLX Family · tầng 9', '904', 9, 0),
+('1001', 'RT003', 'available', 'SUP đơn · tầng 10', '1001', 10, 0), ('1002', 'RT004', 'available', 'SUP đôi · tầng 10', '1002', 10, 0), ('1003', 'RT005', 'available', 'DLX King · tầng 10', '1003', 10, 0), ('1004', 'RT006', 'available', 'DLX Family · tầng 10', '1004', 10, 0),
+('1101', 'RT004', 'available', 'SUP đôi · tầng 11', '1101', 11, 0), ('1102', 'RT005', 'available', 'DLX King · tầng 11', '1102', 11, 0), ('1103', 'RT006', 'available', 'DLX Family · tầng 11', '1103', 11, 0), ('1104', 'RT007', 'available', 'Suite Residence · tầng 11', '1104', 11, 0),
+('1201', 'RT004', 'available', 'SUP đôi · tầng 12', '1201', 12, 0), ('1202', 'RT005', 'available', 'DLX King · tầng 12', '1202', 12, 0), ('1203', 'RT006', 'available', 'DLX Family · tầng 12', '1203', 12, 0), ('1204', 'RT007', 'available', 'Suite Residence · tầng 12', '1204', 12, 0),
+('1301', 'RT005', 'available', 'DLX King · tầng 13', '1301', 13, 0), ('1302', 'RT006', 'available', 'DLX Family · tầng 13', '1302', 13, 0), ('1303', 'RT007', 'available', 'Suite Residence · tầng 13', '1303', 13, 0), ('1304', 'RT008', 'available', 'Suite Executive · tầng 13', '1304', 13, 0),
+('1401', 'RT005', 'available', 'DLX King · tầng 14', '1401', 14, 0), ('1402', 'RT006', 'available', 'DLX Family · tầng 14', '1402', 14, 0), ('1403', 'RT007', 'available', 'Suite Residence · tầng 14', '1403', 14, 0), ('1404', 'RT008', 'available', 'Suite Executive · tầng 14', '1404', 14, 0),
+('1501', 'RT005', 'available', 'DLX King · tầng 15', '1501', 15, 0), ('1502', 'RT006', 'available', 'DLX Family · tầng 15', '1502', 15, 0), ('1503', 'RT007', 'available', 'Suite Residence · tầng 15', '1503', 15, 0), ('1504', 'RT008', 'available', 'Suite Executive · tầng 15', '1504', 15, 0),
+('1601', 'RT005', 'available', 'DLX King · tầng 16', '1601', 16, 0), ('1602', 'RT006', 'available', 'DLX Family · tầng 16', '1602', 16, 0), ('1603', 'RT007', 'available', 'Suite Residence · tầng 16', '1603', 16, 0), ('1604', 'RT008', 'available', 'Suite Executive · tầng 16', '1604', 16, 0),
+('1701', 'RT006', 'available', 'DLX Family · tầng 17', '1701', 17, 0), ('1702', 'RT007', 'available', 'Suite Residence · tầng 17', '1702', 17, 0), ('1703', 'RT008', 'available', 'Suite Executive · tầng 17', '1703', 17, 0), ('1704', 'RT009', 'available', 'VIP nguyên căn · tầng 17', '1704', 17, 0),
+('1801', 'RT006', 'available', 'DLX Family · tầng 18', '1801', 18, 0), ('1802', 'RT007', 'available', 'Suite Residence · tầng 18', '1802', 18, 0), ('1803', 'RT008', 'available', 'Suite Executive · tầng 18', '1803', 18, 0), ('1804', 'RT009', 'available', 'VIP nguyên căn · tầng 18', '1804', 18, 0),
+('1901', 'RT006', 'available', 'DLX Family · tầng 19', '1901', 19, 0), ('1902', 'RT007', 'available', 'Suite Residence · tầng 19', '1902', 19, 0), ('1903', 'RT008', 'available', 'Suite Executive · tầng 19', '1903', 19, 0), ('1904', 'RT009', 'available', 'VIP nguyên căn · tầng 19', '1904', 19, 0),
+('2001', 'RT006', 'available', 'DLX Family · tầng 20', '2001', 20, 0), ('2002', 'RT007', 'available', 'Suite Residence · tầng 20', '2002', 20, 0), ('2003', 'RT008', 'available', 'Suite Executive · tầng 20', '2003', 20, 0), ('2004', 'RT009', 'available', 'VIP nguyên căn · tầng 20', '2004', 20, 0);
 
 -- Nội dung quảng cáo và gallery được gắn theo từng phòng, không dùng chung theo loại phòng.
 UPDATE rooms r
@@ -307,42 +303,15 @@ VALUES
 ('LNDRYEXP', 'Giặt ủi tận phòng · 4 giờ', 120000.00, 'món', 999, 0, TRUE, 'inroom',
  'Nhận đồ tại phòng, giặt hấp, là phẳng và hoàn trả trong 4 giờ.',
  'https://images.unsplash.com/photo-1604335399105-a0c585fd81a1?w=600&h=400&fit=crop&auto=format'),
-('LNDRYSTD', 'Giặt ủi tận phòng · Qua đêm', 80000.00, 'món', 999, 0, TRUE, 'inroom',
+('LNDRYSTD', 'Giặt ủi tận phòng · Qua đêm', 80000.00, 'lần', 999, 0, TRUE, 'inroom',
  'Nhận trước 22:00 và hoàn trả vào sáng hôm sau trước 8:00.',
  'https://images.unsplash.com/photo-1545173168-9f1947eebb7f?w=600&h=400&fit=crop&auto=format'),
 ('PRESSING', 'Ủi nhanh tại phòng', 60000.00, 'món', 999, 0, TRUE, 'inroom',
  'Làm phẳng trang phục công tác hoặc dạ tiệc trong thời gian ngắn.',
  'https://images.unsplash.com/photo-1556909212-d5b604d0c90d?w=600&h=400&fit=crop&auto=format'),
-('LABRASS', 'La Brasserie', 0.00, '', 999, 0, TRUE, 'fine-dining',
- 'Nhà hàng buffet quốc tế với quầy hải sản, bánh ngọt và bữa sáng phục vụ cả khách lưu trú lẫn khách vãng lai.',
+('MAMREST', 'MaM Restaurant', 250000.00, 'suất', 999999, 0, TRUE, 'fine-dining',
+ 'Bữa trưa hoặc bữa tối tại MaM Restaurant. Khách thuê theo gói ngày-đêm được miễn một bữa trưa và một bữa tối mỗi ngày cho từng khách trong booking.',
  'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=520&fit=crop&auto=format'),
-('OTTIMO', 'Ý Ottimo House', 0.00, '', 999, 0, TRUE, 'fine-dining',
- 'Ẩm thực Ý thủ công, pasta tươi và pizza lò đá trong không gian ấm cúng.',
- 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&h=520&fit=crop&auto=format'),
-('MERMAID', 'Mermaid Seafood', 0.00, '', 999, 0, TRUE, 'fine-dining',
- 'Hải sản tươi sống, bếp mở và thực đơn theo mùa.',
- 'https://images.unsplash.com/photo-1533777857889-4be7c70b33f7?w=800&h=520&fit=crop&auto=format'),
-('HAIDILAO', 'Haidilao Hotpot', 0.00, '', 999, 0, TRUE, 'fine-dining',
- 'Lẩu phục vụ tại bàn, phòng riêng cho nhóm và trải nghiệm ẩm thực vui nhộn.',
- 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800&h=520&fit=crop&auto=format'),
-('OMAKASE', 'Omakase', 0.00, '', 999, 0, TRUE, 'fine-dining',
- 'Quầy sushi omakase giới hạn chỗ, nguyên liệu Nhật tuyển chọn mỗi ngày.',
- 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=800&h=520&fit=crop&auto=format'),
-('SPICYBOX', 'Spicy Box', 0.00, '', 999, 0, TRUE, 'fine-dining',
- 'Món cay châu Á, phục vụ nhanh cho những buổi gặp gỡ sôi động.',
- 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=520&fit=crop&auto=format'),
-('DOKKI', 'Dokki', 0.00, '', 999, 0, TRUE, 'fine-dining',
- 'Buffet tokbokki và món Hàn Quốc dành cho gia đình, nhóm bạn.',
- 'https://images.unsplash.com/photo-1498654896293-37aacf113fd9?w=800&h=520&fit=crop&auto=format'),
-('SKYBAR', 'Quầy bar sân thượng Skyline & cocktail', 0.00, '', 999, 0, TRUE, 'fine-dining',
- 'Tầm nhìn toàn cảnh thành phố, cocktail thủ công và danh sách rượu vang tuyển chọn.',
- 'https://images.unsplash.com/photo-1536926219056-1e30e3a3b98d?w=600&h=400&fit=crop&auto=format'),
-('SPEAKEASY', 'Speakeasy Bar', 0.00, '', 999, 0, TRUE, 'fine-dining',
- 'Cocktail cổ điển, nhạc jazz và không gian riêng tư sau cánh cửa bí mật.',
- 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800&h=520&fit=crop&auto=format'),
-('WHISKYBAR', 'Whisky Library', 0.00, '', 999, 0, TRUE, 'fine-dining',
- 'Bộ sưu tập whisky lâu năm và cigar lounge cho những buổi tối chậm rãi.',
- 'https://images.unsplash.com/photo-1527281400683-1aae777175f8?w=800&h=520&fit=crop&auto=format'),
 ('DECOR', 'Set trang trí Lãng mạn / Kỷ niệm', 1200000.00, 'bộ', 30, 5, TRUE, 'fine-dining',
  'Hoa tươi, nến thơm, champagne và thảm cánh hoa hồng cho dịp đặc biệt.',
  'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&h=400&fit=crop&auto=format'),
@@ -352,12 +321,6 @@ VALUES
 ('SPAFACIAL', 'Chăm sóc da mặt cao cấp', 1350000.00, 'lượt', 999, 0, TRUE, 'spa',
  'Liệu trình 75 phút làm sạch sâu, dưỡng ẩm và trẻ hóa da.',
  'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600&h=400&fit=crop&auto=format'),
-('SENSPA', 'Sen Spa', 0.00, '', 999, 0, TRUE, 'spa',
- 'Trị liệu thảo mộc Việt, xông hơi và massage thư giãn trong không gian tĩnh.',
- 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800&h=520&fit=crop&auto=format'),
-('LAVIESPA', 'LaVie Spa', 0.00, '', 999, 0, TRUE, 'spa',
- 'Chăm sóc da, body therapy và phòng trị liệu riêng cho khách lưu trú.',
- 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=800&h=520&fit=crop&auto=format'),
 ('STEAM', 'Xông hơi & Sauna', 500000.00, 'lượt', 999, 0, TRUE, 'spa',
  'Khu xông hơi khô, ướt và phòng thư giãn với liệu trình theo giờ.',
  'https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?w=800&h=520&fit=crop&auto=format'),
@@ -367,10 +330,10 @@ VALUES
 ('CITYTOUR', 'Tour thành phố Sài Gòn – Nửa ngày', 650000.00, 'khách', 999, 0, TRUE, 'transport',
  'Tham quan các địa danh nổi bật cùng hướng dẫn viên địa phương.',
  'https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=600&h=400&fit=crop&auto=format'),
-('POOL', 'Hồ bơi vô cực & Jacuzzi', 0.00, '', 999, 0, TRUE, 'recreation',
- 'Tầng 21 · Hồ bơi vô cực ngoài trời, Jacuzzi riêng và quầy bar bên hồ bơi. Miễn phí cho khách thuê phòng theo đêm; khách vãng lai mua day-pass.',
+('POOL', 'Hồ bơi vô cực & Jacuzzi', 200000.00, 'khách/ngày', 999, 0, TRUE, 'recreation',
+ 'Tầng 21 · Miễn phí không giới hạn lượt cho khách đã đăng ký trong booking thuê theo gói ngày-đêm. Khách thuê theo giờ trả 200.000 đồng mỗi khách mỗi ngày.',
  'https://images.unsplash.com/photo-1575429198097-0414ec08e8cd?w=600&h=400&fit=crop&auto=format'),
-('GYM', 'Trung tâm Thể dục & Thể hình', 0.00, '', 999, 0, TRUE, 'recreation',
+('GYM', 'Trung tâm Thể dục & Thể hình', 100000.00, 'khách/ngày', 999, 0, TRUE, 'recreation',
  'Tầng 3–4 · Thiết bị tập luyện cao cấp, huấn luyện viên theo yêu cầu và lớp yoga hằng ngày.',
  'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&h=400&fit=crop&auto=format'),
 ('TENNIS', 'Sân Tennis & Cầu lông', 200000.00, 'giờ', 999, 0, TRUE, 'recreation',
@@ -388,75 +351,15 @@ VALUES
 ('EVENT', 'Tổ chức Tiệc cưới & Sự kiện', 0.00, '', 999, 0, TRUE, 'business',
  'Sảnh Grand Ballroom cho 500 khách cùng đội ngũ tổ chức sự kiện chuyên nghiệp.',
  'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=600&h=400&fit=crop&auto=format'),
-('BALLROOM', 'Nhà hàng tiệc cưới Grand Ballroom', 0.00, '', 999, 0, TRUE, 'business',
+('BALLROOM', 'Nhà hàng tiệc cưới Grand Ballroom', 0.00, '', 999, 0, FALSE, 'business',
  'Tầng 4 · Sảnh tiệc cho tiệc cưới, gala dinner và sự kiện thương hiệu.',
  'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=800&h=520&fit=crop&auto=format'),
 ('BOARDROOM', 'Phòng họp Executive', 3500000.00, 'ngày', 999, 0, TRUE, 'business',
  'Phòng họp riêng cho ban điều hành, có màn hình trình chiếu và phục vụ tea-break.',
  'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=800&h=520&fit=crop&auto=format');
 
--- Commercial tenants and shared amenities (requires Flyway V22).
-INSERT IGNORE INTO commercial_partners
-    (id, legal_name, brand_name, category, contact_phone, floor_from, floor_to, fixed_rent, service_fee, commission_rate, commission_floor)
-VALUES
-    ('PARTNER_FNB_01', 'Công ty La Brasserie Hospitality', 'La Brasserie', 'F&B', '0908000001', 0, 2, 40000000, 5000000, 5.00, 8000000),
-    ('PARTNER_FNB_02', 'Công ty MAM Coffee', 'MAM Coffee & Bakery', 'F&B', '0908000002', 0, 2, 28000000, 4000000, 5.00, 5000000),
-    ('PARTNER_RETAIL_01', 'Công ty Tiện Ích MAM', 'MAM Mart', 'RETAIL', '0908000003', 1, 2, 22000000, 3500000, 5.00, 4000000),
-    ('PARTNER_WELLNESS_01', 'Công ty Sen Wellness', 'Sen Spa & Sauna', 'WELLNESS', '0908000004', 3, 4, 65000000, 8000000, 5.00, 12000000),
-    ('PARTNER_FITNESS_01', 'Công ty MAM Fitness', 'MAM Gym', 'WELLNESS', '0908000005', 3, 4, 45000000, 6000000, 5.00, 7000000),
-    ('PARTNER_PHARMACY_01', 'Công ty Dược Tâm An', 'Nhà thuốc Tâm An', 'RETAIL', '0908000006', 0, 1, 18000000, 3000000, 5.00, 3000000),
-    ('PARTNER_FNB_03', 'Công ty Ottimo Hospitality', 'Ý Ottimo House', 'F&B', '0908000011', 0, 2, 36000000, 5000000, 5.00, 7000000),
-    ('PARTNER_FNB_04', 'Công ty Mermaid Seafood', 'Mermaid', 'F&B', '0908000012', 0, 2, 42000000, 5500000, 5.00, 9000000),
-    ('PARTNER_FNB_05', 'Công ty Haidilao Việt Nam', 'Haidilao', 'F&B', '0908000013', 1, 2, 50000000, 6500000, 5.00, 10000000),
-    ('PARTNER_FNB_06', 'Công ty Omakase Dining', 'Omakase', 'F&B', '0908000014', 2, 2, 48000000, 6000000, 5.00, 10000000),
-    ('PARTNER_FNB_07', 'Công ty Spicy Box', 'Spicy Box', 'F&B', '0908000015', 1, 2, 30000000, 4500000, 5.00, 6000000),
-    ('PARTNER_FNB_08', 'Công ty Dokki Việt Nam', 'Dokki', 'F&B', '0908000016', 1, 2, 32000000, 4500000, 5.00, 6500000),
-    ('PARTNER_BAR_01', 'Công ty Speakeasy Bar', 'Speakeasy Bar', 'F&B', '0908000017', 2, 2, 38000000, 5000000, 5.00, 8000000),
-    ('PARTNER_BAR_02', 'Công ty Whisky Lounge', 'Whisky', 'F&B', '0908000018', 2, 2, 40000000, 5000000, 5.00, 8000000),
-    ('PARTNER_BAR_03', 'Công ty Skyline Hospitality', 'Skyline', 'F&B', '0908000019', 2, 2, 45000000, 5500000, 5.00, 9000000),
-    ('PARTNER_WELLNESS_02', 'Công ty La Vie Wellness', 'La Vie Spa', 'WELLNESS', '0908000020', 3, 4, 58000000, 7000000, 5.00, 11000000),
-    ('PARTNER_SPORT_01', 'Công ty MAM Sports', 'MAM Sports Club', 'WELLNESS', '0908000021', 3, 4, 42000000, 5500000, 5.00, 8000000),
-    ('PARTNER_EVENT_01', 'Công ty MAM Events', 'MAM Events & Convention', 'EVENT', '0908000022', 4, 4, 70000000, 9000000, 5.00, 15000000);
+UPDATE services SET active=FALSE WHERE id IN ('ROOM24', 'EVENT');
 
-INSERT IGNORE INTO commercial_partners
-    (id, legal_name, brand_name, category, contact_phone, floor_from, floor_to, fixed_rent, service_fee, commission_rate, commission_floor, status)
-VALUES ('PARTNER_HOTEL_01', 'MAM Hotel', 'MAM Hotel Amenities', 'HOTEL_AMENITY', NULL, 21, 21, 0, 0, 0, 0, 'ACTIVE');
-
-INSERT IGNORE INTO commercial_spaces (id, partner_id, name, floor, zone, access_policy, service_id)
-VALUES
-    ('SPACE_LAURA', 'PARTNER_FNB_01', 'La Brasserie - Voucher demo', 0, 'Khu ẩm thực tầng trệt', 'PUBLIC', NULL),
-    ('SPACE_COFFEE', 'PARTNER_FNB_02', 'MAM Coffee & Bakery', 1, 'Sảnh thương mại tầng 1', 'PUBLIC', NULL),
-    ('SPACE_MART', 'PARTNER_RETAIL_01', 'MAM Mart', 1, 'Khu cửa hàng tiện lợi', 'PUBLIC', NULL),
-    ('SPACE_LABRASS', 'PARTNER_FNB_01', 'La Brasserie', 0, 'Khu ẩm thực tầng trệt', 'PUBLIC', 'LABRASS'),
-    ('SPACE_SPA', 'PARTNER_WELLNESS_01', 'Sen Spa & Sauna', 3, 'Khu tiện ích cao cấp', 'DAY_PASS', 'SPAMASS'),
-    ('SPACE_GYM', 'PARTNER_FITNESS_01', 'MAM Gym', 4, 'Khu tiện ích cao cấp', 'DAY_PASS', 'GYM'),
-    ('SPACE_POOL', 'PARTNER_HOTEL_01', 'Hồ bơi rooftop', 21, 'Rooftop', 'GUEST_ONLY', 'POOL'),
-    ('SPACE_OTTIMO', 'PARTNER_FNB_03', 'Ý Ottimo House', 0, 'Khu ẩm thực tầng trệt', 'PUBLIC', 'OTTIMO'),
-    ('SPACE_MERMAID', 'PARTNER_FNB_04', 'Mermaid', 1, 'Khu ẩm thực tầng 1', 'PUBLIC', 'MERMAID'),
-    ('SPACE_HAIDILAO', 'PARTNER_FNB_05', 'Haidilao', 1, 'Khu ẩm thực tầng 1', 'PUBLIC', 'HAIDILAO'),
-    ('SPACE_OMAKASE', 'PARTNER_FNB_06', 'Omakase', 2, 'Khu ẩm thực tầng 2', 'PUBLIC', 'OMAKASE'),
-    ('SPACE_SPICYBOX', 'PARTNER_FNB_07', 'Spicy Box', 1, 'Khu ẩm thực tầng 1', 'PUBLIC', 'SPICYBOX'),
-    ('SPACE_DOKKI', 'PARTNER_FNB_08', 'Dokki', 2, 'Khu ẩm thực tầng 2', 'PUBLIC', 'DOKKI'),
-    ('SPACE_SPEAKEASY', 'PARTNER_BAR_01', 'Speakeasy Bar', 2, 'Khu bar tầng 2', 'PUBLIC', 'SPEAKEASY'),
-    ('SPACE_WHISKY', 'PARTNER_BAR_02', 'Whisky', 2, 'Khu bar tầng 2', 'PUBLIC', 'WHISKYBAR'),
-    ('SPACE_SKYLINE', 'PARTNER_BAR_03', 'Skyline', 2, 'Khu bar tầng 2', 'PUBLIC', 'SKYBAR'),
-    ('SPACE_LAVIE', 'PARTNER_WELLNESS_02', 'La Vie Spa', 3, 'Khu tiện ích cao cấp tầng 3', 'DAY_PASS', 'LAVIESPA'),
-    ('SPACE_SPAFACIAL', 'PARTNER_WELLNESS_01', 'Sen Spa - Chăm sóc da', 3, 'Khu tiện ích cao cấp tầng 3', 'DAY_PASS', 'SPAFACIAL'),
-    ('SPACE_SENSPA', 'PARTNER_WELLNESS_01', 'Sen Spa - Trị liệu', 3, 'Khu tiện ích cao cấp tầng 3', 'DAY_PASS', 'SENSPA'),
-    ('SPACE_STEAM', 'PARTNER_WELLNESS_01', 'Sen Spa - Xông hơi', 4, 'Khu tiện ích cao cấp tầng 4', 'DAY_PASS', 'STEAM'),
-    ('SPACE_TENNIS', 'PARTNER_SPORT_01', 'Sân Tennis', 3, 'Câu lạc bộ thể thao tầng 3', 'DAY_PASS', 'TENNIS'),
-    ('SPACE_BADMINTON', 'PARTNER_SPORT_01', 'Sân Cầu lông', 3, 'Câu lạc bộ thể thao tầng 3', 'DAY_PASS', 'BADMINTON'),
-    ('SPACE_PINGPONG', 'PARTNER_SPORT_01', 'Bóng bàn', 4, 'Câu lạc bộ thể thao tầng 4', 'DAY_PASS', 'PINGPONG'),
-    ('SPACE_MEETING', 'PARTNER_EVENT_01', 'Phòng họp & Hội nghị', 4, 'Trung tâm hội nghị tầng 4', 'PUBLIC', 'MEETING'),
-    ('SPACE_EVENT', 'PARTNER_EVENT_01', 'Tổ chức Tiệc cưới & Sự kiện', 4, 'Trung tâm hội nghị tầng 4', 'PUBLIC', 'EVENT'),
-    ('SPACE_BALLROOM', 'PARTNER_EVENT_01', 'Grand Ballroom', 4, 'Trung tâm hội nghị tầng 4', 'PUBLIC', 'BALLROOM'),
-    ('SPACE_BOARDROOM', 'PARTNER_EVENT_01', 'Phòng họp Executive', 4, 'Trung tâm hội nghị tầng 4', 'PUBLIC', 'BOARDROOM');
-
-INSERT IGNORE INTO partner_monthly_settlements
-    (partner_id, period_start, period_end, fixed_rent, service_fee, actual_revenue, commission_rate, commission_floor, commission_due, total_due)
-SELECT id, DATE_FORMAT(CURDATE(), '%Y-%m-01'), LAST_DAY(CURDATE()), fixed_rent, service_fee, 0, commission_rate, commission_floor, commission_floor, fixed_rent + service_fee + commission_floor
-FROM commercial_partners
-WHERE category <> 'HOTEL_AMENITY';
 
 -- End-to-end demo transactions. These rows deliberately cover the states shown by
 -- the customer portal, front desk, accounting, housekeeping, technical and manager screens.
@@ -492,39 +395,48 @@ VALUES
      'DEMO-DEP-006', DATE_ADD(NOW(), INTERVAL 7 DAY), 'PAID');
 
 INSERT INTO reservation_rooms
-    (reservation_id, room_id, check_in, check_out, original_check_out, status, transfer_count)
+    (reservation_id, room_id, check_in, check_out, original_check_out, status, transfer_count, guest_count)
 VALUES
-    (1, 'R101', TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '14:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '12:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '12:00:00'), 'occupied', 0),
-    (2, 'R102', TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '14:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 4 DAY), '12:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 4 DAY), '12:00:00'), 'reserved', 0),
-    (3, 'R201', TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 2 DAY), '14:00:00'), TIMESTAMP(CURDATE(), '12:00:00'), TIMESTAMP(CURDATE(), '12:00:00'), 'occupied', 0),
-    (4, 'R301', TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 5 DAY), '14:00:00'), TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 2 DAY), '12:00:00'), TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 2 DAY), '12:00:00'), 'returned', 0),
-    (5, 'R401', TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '15:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '18:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '18:00:00'), 'reserved', 0),
-    (6, 'R1001', TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '14:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 4 DAY), '12:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 4 DAY), '12:00:00'), 'reserved', 0);
+    (1, '501', TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '14:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '12:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '12:00:00'), 'occupied', 0, 2),
+    (2, '502', TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '14:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 4 DAY), '12:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 4 DAY), '12:00:00'), 'reserved', 0, 1),
+    (3, '601', TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 2 DAY), '14:00:00'), TIMESTAMP(CURDATE(), '12:00:00'), TIMESTAMP(CURDATE(), '12:00:00'), 'occupied', 0, 1),
+    (4, '701', TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 5 DAY), '14:00:00'), TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 2 DAY), '12:00:00'), TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 2 DAY), '12:00:00'), 'returned', 0, 2),
+    (5, '801', TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '15:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '18:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '18:00:00'), 'reserved', 0, 1),
+    (6, '1401', TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '14:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 4 DAY), '12:00:00'), TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 4 DAY), '12:00:00'), 'reserved', 0, 2);
 
 UPDATE rooms SET status = CASE id
-    WHEN 'R101' THEN 'occupied'
-    WHEN 'R102' THEN 'reserved'
-    WHEN 'R201' THEN 'occupied'
-    WHEN 'R202' THEN 'cleaning'
-    WHEN 'R301' THEN 'cleaning'
-    WHEN 'R302' THEN 'maintenance'
-    WHEN 'R401' THEN 'reserved'
-    WHEN 'R402' THEN 'available'
+    WHEN '501' THEN 'occupied'
+    WHEN '502' THEN 'reserved'
+    WHEN '601' THEN 'occupied'
+    WHEN '602' THEN 'cleaning'
+    WHEN '701' THEN 'cleaning'
+    WHEN '702' THEN 'maintenance'
+    WHEN '801' THEN 'reserved'
+    WHEN '802' THEN 'available'
     ELSE status
 END;
 
 INSERT INTO service_usages (reservation_id, service_id, used_on, quantity, unit_price) VALUES
-    (1, 'BREAKFAST', DATE_SUB(CURDATE(), INTERVAL 1 DAY), 2, 450000.00),
+    (1, 'BREAKFAST', DATE_SUB(CURDATE(), INTERVAL 1 DAY), 2, 0.00),
     (1, 'SPAMASS', CURDATE(), 1, 980000.00),
-    (3, 'BREAKFAST', CURDATE(), 1, 450000.00),
+    (3, 'BREAKFAST', CURDATE(), 1, 0.00),
     (4, 'SPAFACIAL', DATE_SUB(CURDATE(), INTERVAL 3 DAY), 1, 1350000.00);
+
+INSERT INTO hotel_service_bookings
+    (reservation_id, room_id, service_id, scheduled_at, meal_period, quantity, free_quantity,
+     unit_price, status, request_key, request_hash, created_by, used_at, used_by)
+VALUES
+    (1, '501', 'MAMREST', TIMESTAMP(CURDATE(), '12:00:00'), 'LUNCH', 2, 2,
+     250000.00, 'USED', 'DEMO-SERVICE-001', REPEAT('0', 64), 'FRONTDESK', NOW(), 'FRONTDESK'),
+    (6, '1401', 'SPAMASS', TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '16:00:00'), NULL, 1, 0,
+     980000.00, 'CONFIRMED', 'DEMO-SERVICE-002', REPEAT('0', 64), 'customer:1', NULL, NULL);
 
 INSERT INTO invoices
     (id, reservation_id, issued_at, discount, deposit_paid, payment_method, status,
      room_total, service_total, amount_due, surcharge, compensation, extension_fee, adjustment_total, version)
 VALUES
-    (1, 1, NOW(), 0.00, 1000000.00, 'CASH', 'CHUA_THANH_TOAN', 2400000.00, 1880000.00, 3280000.00, 0.00, 0.00, 0.00, 0.00, 0),
-    (3, 3, NOW(), 0.00, 0.00, 'CASH', 'CHUA_THANH_TOAN', 1900000.00, 450000.00, 1650000.00, 0.00, 300000.00, 0.00, 0.00, 0),
+    (1, 1, NOW(), 0.00, 1000000.00, 'CASH', 'CHUA_THANH_TOAN', 2400000.00, 980000.00, 2380000.00, 0.00, 0.00, 0.00, 0.00, 0),
+    (3, 3, NOW(), 0.00, 0.00, 'CASH', 'CHUA_THANH_TOAN', 1900000.00, 0.00, 1200000.00, 0.00, 300000.00, 0.00, 0.00, 0),
     (4, 4, DATE_SUB(NOW(), INTERVAL 2 DAY), 710000.00, 2900000.00, 'CARD', 'DA_THANH_TOAN', 5800000.00, 1350000.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0);
 
 INSERT INTO payment_transactions
@@ -546,18 +458,18 @@ VALUES
 INSERT INTO room_equipment
     (id, room_id, name, original_value, purchased_on, quantity, active)
 VALUES
-    (1, 'R101', 'Minibar', 6500000.00, DATE_SUB(CURDATE(), INTERVAL 18 MONTH), 1, TRUE),
-    (2, 'R101', 'TV 4K', 12000000.00, DATE_SUB(CURDATE(), INTERVAL 12 MONTH), 1, TRUE),
-    (3, 'R201', 'Máy sấy tóc', 800000.00, DATE_SUB(CURDATE(), INTERVAL 10 MONTH), 1, TRUE),
-    (4, 'R202', 'Điều hòa', 18000000.00, DATE_SUB(CURDATE(), INTERVAL 14 MONTH), 1, TRUE),
-    (5, 'R302', 'Điều hòa', 22000000.00, DATE_SUB(CURDATE(), INTERVAL 20 MONTH), 1, TRUE),
-    (6, 'R302', 'Két an toàn', 9000000.00, DATE_SUB(CURDATE(), INTERVAL 15 MONTH), 1, TRUE);
+    (1, '501', 'Minibar', 6500000.00, DATE_SUB(CURDATE(), INTERVAL 18 MONTH), 1, TRUE),
+    (2, '501', 'TV 4K', 12000000.00, DATE_SUB(CURDATE(), INTERVAL 12 MONTH), 1, TRUE),
+    (3, '601', 'Máy sấy tóc', 800000.00, DATE_SUB(CURDATE(), INTERVAL 10 MONTH), 1, TRUE),
+    (4, '602', 'Điều hòa', 18000000.00, DATE_SUB(CURDATE(), INTERVAL 14 MONTH), 1, TRUE),
+    (5, '702', 'Điều hòa', 22000000.00, DATE_SUB(CURDATE(), INTERVAL 20 MONTH), 1, TRUE),
+    (6, '702', 'Két an toàn', 9000000.00, DATE_SUB(CURDATE(), INTERVAL 15 MONTH), 1, TRUE);
 
 INSERT INTO equipment_incidents
     (id, reservation_id, room_id, equipment_name, original_value, purchased_on, quantity, compensation,
      created_at, severity, handoff_status, handoff_note)
 VALUES
-    (1, 3, 'R201', 'Máy sấy tóc', 800000.00, DATE_SUB(CURDATE(), INTERVAL 10 MONTH), 1, 300000.00,
+    (1, 3, '601', 'Máy sấy tóc', 800000.00, DATE_SUB(CURDATE(), INTERVAL 10 MONTH), 1, 300000.00,
      NOW(), 'MEDIUM', 'OPEN', 'Chờ lễ tân xác nhận bồi thường khi khách trả phòng.');
 
 INSERT INTO inventory_movements
@@ -588,18 +500,18 @@ INSERT INTO expenses
 VALUES
     (1, 'Vệ sinh', 'Mua hóa chất và vật tư buồng phòng tháng này', 2350000.00, 'ACCOUNTING', DATE_SUB(NOW(), INTERVAL 2 DAY), 'APPROVED'),
     (2, 'Bảo trì', 'Thay linh kiện điều hòa phòng 702', 4800000.00, 'ACCOUNTING', DATE_SUB(NOW(), INTERVAL 1 DAY), 'RECORDED'),
-    (3, 'Marketing', 'In voucher VIP và bảng chỉ dẫn khu thương mại', 1250000.00, 'ACCOUNTING', DATE_SUB(NOW(), INTERVAL 4 DAY), 'APPROVED');
+    (3, 'Marketing', 'In tài liệu giới thiệu dịch vụ MaM Hotel', 1250000.00, 'ACCOUNTING', DATE_SUB(NOW(), INTERVAL 4 DAY), 'APPROVED');
 
 INSERT INTO partner_debts
     (id, partner_name, reference_code, amount, settled_amount, status, recorded_at)
 VALUES
-    (1, 'L\'Aura Palace Restaurant', 'DEMO-DEBT-FNB-09', 53000000.00, 0.00, 'OPEN', NOW()),
-    (2, 'An Nhiên Spa & Sauna', 'DEMO-DEBT-SPA-09', 73000000.00, 12000000.00, 'PARTIALLY_SETTLED', DATE_SUB(NOW(), INTERVAL 2 DAY));
+    (1, 'Nhà cung cấp thực phẩm MaM', 'DEMO-SUPPLIER-FNB-09', 53000000.00, 0.00, 'OPEN', NOW()),
+    (2, 'Nhà cung cấp vật tư spa MaM', 'DEMO-SUPPLIER-SPA-09', 73000000.00, 12000000.00, 'PARTIALLY_SETTLED', DATE_SUB(NOW(), INTERVAL 2 DAY));
 
 INSERT INTO partner_debt_settlements
     (id, partner_debt_id, amount, settled_by, settled_at, note)
 VALUES
-    (1, 2, 12000000.00, 'ACCOUNTING', DATE_SUB(NOW(), INTERVAL 1 DAY), 'Đối tác chuyển khoản đợt 1.');
+    (1, 2, 12000000.00, 'ACCOUNTING', DATE_SUB(NOW(), INTERVAL 1 DAY), 'Đã thanh toán nhà cung cấp đợt 1.');
 
 INSERT INTO financial_ledger_entries
     (id, entry_type, source_type, source_id, direction, amount, actor_id, occurred_at, note, finalized)
@@ -608,24 +520,6 @@ VALUES
     (2, 'PAYMENT_RECEIVED', 'PAYMENT_TRANSACTION', '4', 'DEBIT', 3540000.00, 'ACCOUNTING', DATE_SUB(NOW(), INTERVAL 2 DAY), 'Thu phần còn lại hóa đơn demo.', TRUE),
     (3, 'EXPENSE_RECORDED', 'EXPENSE', '1', 'CREDIT', 2350000.00, 'ACCOUNTING', DATE_SUB(NOW(), INTERVAL 2 DAY), 'Chi vật tư vệ sinh demo.', TRUE);
 
-INSERT INTO customer_vouchers
-    (id, voucher_code, guest_id, space_id, reservation_id, membership_tier, visit_at, status, created_at, revenue_amount, scanned_at, scanned_by)
-VALUES
-    (1, 'MAM-DEMO-SPA1', 2, 'SPACE_SPA', NULL, 'PLATINUM', TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '10:00:00'), 'SCANNED', DATE_SUB(NOW(), INTERVAL 2 DAY), 1200000.00, DATE_SUB(NOW(), INTERVAL 1 DAY), 'PARTNER_WELLNESS_01'),
-    (2, 'MAM-DEMO-POOL1', 1, 'SPACE_POOL', 1, 'STANDARD', TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '16:00:00'), 'ISSUED', NOW(), 0.00, NULL, NULL),
-    (3, 'MAM-DEMO-FNB1', 1, 'SPACE_LAURA', NULL, 'STANDARD', TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 2 DAY), '19:00:00'), 'ISSUED', NOW(), 0.00, NULL, NULL);
-
-UPDATE partner_monthly_settlements s
-JOIN commercial_partners p ON p.id = s.partner_id
-SET s.actual_revenue = (
-        SELECT COALESCE(SUM(v.revenue_amount), 0)
-        FROM customer_vouchers v
-        JOIN commercial_spaces cs ON cs.id = v.space_id
-        WHERE cs.partner_id = s.partner_id AND v.status = 'SCANNED'
-          AND DATE(v.scanned_at) BETWEEN s.period_start AND s.period_end
-    ),
-    s.commission_due = GREATEST(s.commission_floor, s.actual_revenue * s.commission_rate / 100),
-    s.total_due = s.fixed_rent + s.service_fee + GREATEST(s.commission_floor, s.actual_revenue * s.commission_rate / 100);
 
 INSERT INTO membership_history
     (id, guest_id, from_tier, to_tier, reason, changed_at)
@@ -647,8 +541,8 @@ VALUES
 
 INSERT INTO maintenance_work_orders
 (id, room_id, maintenance_type, scheduled_date, status, description) VALUES
-('WO001', 'R302', 'Sửa điều hòa', '2026-09-25', 'CHUA_XU_LY', 'Điều hòa không làm lạnh'),
-('WO002', 'R202', 'Kiểm tra sau vệ sinh', '2026-09-26', 'DA_HOAN_THANH', 'Kiểm tra phòng sau khi khách trả');
+('WO001', '702', 'Sửa điều hòa', '2026-09-25', 'CHUA_XU_LY', 'Điều hòa không làm lạnh'),
+('WO002', '602', 'Kiểm tra sau vệ sinh', '2026-09-26', 'DA_HOAN_THANH', 'Kiểm tra phòng sau khi khách trả');
 
 INSERT INTO employee_shifts
     (employee_id, shift_date, shift_code, starts_at, ends_at, status, created_by)
@@ -663,10 +557,10 @@ WHERE id IN ('FRONTDESK','HOUSEKEEP','TECHNICAL','ACCOUNTING','KITCHEN','MANAGER
 INSERT INTO housekeeping_tasks
     (room_id, assignee, status, checklist_complete, blocking_incident, note, assigned_by, updated_at)
 VALUES
-    ('R102', 'HOUSEKEEP', 'NEEDS_CLEANING', FALSE, FALSE, 'Chuẩn bị phòng cho lượt khách tiếp theo.', 'MANAGER', NOW(6)),
-    ('R202', 'HOUSEKEEP', 'IN_PROGRESS', FALSE, FALSE, 'Đang vệ sinh phòng Deluxe.', 'MANAGER', NOW(6)),
-    ('R302', 'HOUSEKEEP', 'WAITING_TECHNICAL', TRUE, TRUE, 'Chờ kỹ thuật xử lý điều hòa.', 'MANAGER', NOW(6)),
-    ('R301', 'HOUSEKEEP', 'CLEANED', TRUE, FALSE, 'Đã dọn xong, chờ quản lý kiểm tra cuối.', 'MANAGER', NOW(6));
+    ('502', 'HOUSEKEEP', 'NEEDS_CLEANING', FALSE, FALSE, 'Chuẩn bị phòng cho lượt khách tiếp theo.', 'MANAGER', NOW(6)),
+    ('602', 'HOUSEKEEP', 'IN_PROGRESS', FALSE, FALSE, 'Đang vệ sinh phòng Deluxe.', 'MANAGER', NOW(6)),
+    ('702', 'HOUSEKEEP', 'WAITING_TECHNICAL', TRUE, TRUE, 'Chờ kỹ thuật xử lý điều hòa.', 'MANAGER', NOW(6)),
+    ('701', 'HOUSEKEEP', 'CLEANED', TRUE, FALSE, 'Đã dọn xong, chờ quản lý kiểm tra cuối.', 'MANAGER', NOW(6));
 
 INSERT INTO housekeeping_checklist_templates (id, name, active) VALUES
     (1, 'Vệ sinh phòng tiêu chuẩn', TRUE),
@@ -693,8 +587,8 @@ INSERT INTO technical_work_orders
     (room_id, equipment_id, assignee, priority, sla_due_at, materials, result_note,
      acceptance_note, accepted_by, accepted_at, status, created_by, created_at, updated_at)
 VALUES
-    ('R302', (SELECT id FROM room_equipment WHERE room_id = 'R302' AND name = 'Điều hòa' LIMIT 1), 'TECHNICAL', 'HIGH', DATE_ADD(NOW(6), INTERVAL 4 HOUR), 'Kiểm tra điều hòa không làm lạnh', NULL, NULL, NULL, NULL, 'IN_PROGRESS', 'MANAGER', NOW(6), NOW(6)),
-    ('R202', (SELECT id FROM room_equipment WHERE room_id = 'R202' AND name = 'Điều hòa' LIMIT 1), 'TECHNICAL', 'MEDIUM', DATE_ADD(NOW(6), INTERVAL 1 DAY), 'Kiểm tra thiết bị sau vệ sinh', NULL, NULL, NULL, NULL, 'NEW', 'MANAGER', NOW(6), NOW(6));
+    ('702', (SELECT id FROM room_equipment WHERE room_id = '702' AND name = 'Điều hòa' LIMIT 1), 'TECHNICAL', 'HIGH', DATE_ADD(NOW(6), INTERVAL 4 HOUR), 'Kiểm tra điều hòa không làm lạnh', NULL, NULL, NULL, NULL, 'IN_PROGRESS', 'MANAGER', NOW(6), NOW(6)),
+    ('602', (SELECT id FROM room_equipment WHERE room_id = '602' AND name = 'Điều hòa' LIMIT 1), 'TECHNICAL', 'MEDIUM', DATE_ADD(NOW(6), INTERVAL 1 DAY), 'Kiểm tra thiết bị sau vệ sinh', NULL, NULL, NULL, NULL, 'NEW', 'MANAGER', NOW(6), NOW(6));
 
 -- OTA source/reconciliation demo. DIRECT remains the default for direct bookings.
 UPDATE reservations SET booking_source='AGODA', ota_gross_revenue=1650000.00, ota_commission=247500.00,
@@ -717,7 +611,14 @@ INSERT INTO attendance_records
 VALUES
     (1, 'FRONTDESK', CURDATE(), TIMESTAMP(CURDATE(), '06:02:00'), TIMESTAMP(CURDATE(), '14:05:00'), 'PRESENT', 'BIOMETRIC_IMPORT', 'FP-DEMO-001', 'Import từ file máy vân tay demo', 'HR'),
     (2, 'HOUSEKEEP', CURDATE(), TIMESTAMP(CURDATE(), '06:15:00'), TIMESTAMP(CURDATE(), '14:00:00'), 'LATE', 'BIOMETRIC_IMPORT', 'FP-DEMO-002', 'Import từ file máy vân tay demo', 'HR'),
-    (3, 'ACCOUNTING', CURDATE(), TIMESTAMP(CURDATE(), '08:00:00'), TIMESTAMP(CURDATE(), '17:00:00'), 'PRESENT', 'MANUAL', NULL, 'Nhập thủ công để test khi chưa có phần cứng', 'HR');
+    (3, 'ACCOUNTING', CURDATE(), TIMESTAMP(CURDATE(), '08:00:00'), TIMESTAMP(CURDATE(), '17:00:00'), 'PRESENT', 'MANUAL', NULL, 'Nhập thủ công để test khi chưa có phần cứng', 'HR'),
+    (4, 'TECHNICAL', CURDATE(), TIMESTAMP(CURDATE(), '08:05:00'), TIMESTAMP(CURDATE(), '17:10:00'), 'LATE', 'BIOMETRIC_IMPORT', 'FP-DEMO-004', 'Nhân viên đến muộn để kiểm thử cảnh báo', 'HR'),
+    (5, 'KITCHEN', CURDATE(), TIMESTAMP(CURDATE(), '07:55:00'), TIMESTAMP(CURDATE(), '16:30:00'), 'PRESENT', 'BIOMETRIC_IMPORT', 'FP-DEMO-005', 'Import từ máy vân tay demo', 'HR'),
+    (6, 'MANAGER', CURDATE(), TIMESTAMP(CURDATE(), '08:10:00'), TIMESTAMP(CURDATE(), '17:30:00'), 'LATE', 'BIOMETRIC_IMPORT', 'FP-DEMO-006', 'Nhân viên đến muộn để kiểm thử cảnh báo', 'HR'),
+    (7, 'DIRECTOR', CURDATE(), TIMESTAMP(CURDATE(), '08:00:00'), TIMESTAMP(CURDATE(), '17:00:00'), 'PRESENT', 'BIOMETRIC_IMPORT', 'FP-DEMO-007', 'Import từ máy vân tay demo', 'HR'),
+    (8, 'ADMIN', CURDATE(), NULL, NULL, 'ABSENT', 'MANUAL', NULL, 'Vắng không phép để kiểm thử trạng thái', 'HR'),
+    (9, 'HR', CURDATE(), NULL, NULL, 'ON_LEAVE', 'MANUAL', NULL, 'Nghỉ phép để kiểm thử trạng thái', 'HR'),
+    (10, 'STAFF', CURDATE(), TIMESTAMP(CURDATE(), '09:05:00'), TIMESTAMP(CURDATE(), '18:00:00'), 'LATE', 'BIOMETRIC_IMPORT', 'FP-DEMO-010', 'Nhân viên đến muộn để kiểm thử cảnh báo', 'HR');
 
 INSERT INTO leave_requests
     (id, employee_id, leave_type, start_date, end_date, reason, status, requested_by, approver, decided_at)
@@ -748,7 +649,7 @@ VALUES
     ('AST-GEN-001', 'Máy phát điện dự phòng 500kVA', 'Hệ thống điện', 'BUILDING', NULL, -2, 'Phòng kỹ thuật B2', 'Cummins PowerTech', '2022-11-10', DATE_ADD(CURDATE(), INTERVAL 10 DAY), 'MAINTENANCE_NEEDED', 480000000.00, 'Tài sản tòa nhà'),
     ('AST-ELEV-001', 'Thang máy khách số 1', 'Thang máy', 'BUILDING', NULL, 0, 'Sảnh chính cánh Bắc', 'Mitsubishi NexWay 1000kg', '2023-03-20', DATE_ADD(CURDATE(), INTERVAL 60 DAY), 'GOOD', 520000000.00, 'Tài sản tòa nhà'),
     ('AST-POOL-001', 'Hệ thống lọc hồ bơi', 'Hồ bơi', 'BUILDING', NULL, 21, 'Khu kỹ thuật hồ bơi', 'Emaux Commercial SB20', '2023-04-15', DATE_ADD(CURDATE(), INTERVAL 8 DAY), 'GOOD', 95000000.00, 'Tài sản tầng 21'),
-    ('AST-R101-TV', 'TV 4K phòng 501', 'Thiết bị phòng', 'ROOM', 'R101', 5, 'Phòng 501', 'Samsung 55 inch', DATE_SUB(CURDATE(), INTERVAL 12 MONTH), DATE_ADD(CURDATE(), INTERVAL 120 DAY), 'GOOD', 12000000.00, 'Liên kết tài sản phòng');
+    ('AST-501-TV', 'TV 4K phòng 501', 'Thiết bị phòng', 'ROOM', '501', 5, 'Phòng 501', 'Samsung 55 inch', DATE_SUB(CURDATE(), INTERVAL 12 MONTH), DATE_ADD(CURDATE(), INTERVAL 120 DAY), 'GOOD', 12000000.00, 'Liên kết tài sản phòng');
 
 INSERT INTO cash_handover_denominations (id, handover_id, denomination, quantity, amount)
 VALUES
@@ -789,262 +690,262 @@ DELETE FROM room_images;
 
 INSERT INTO room_images (room_id, relative_path, display_order, cover, content_type, size_bytes, active)
 VALUES
-    ('R101', 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=1200&h=800&q=80&room=R101&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R101', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=R101&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R101', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R101&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R101', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R101&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R102', 'https://images.unsplash.com/photo-1572987669554-0ba2ba9aee1f?auto=format&fit=crop&w=1200&h=800&q=80&room=R102&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R102', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=R102&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R102', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R102&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R102', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R102&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R201', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=R201&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R201', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=R201&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R201', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R201&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R201', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R201&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R202', 'https://images.unsplash.com/photo-1605346576608-92f1346b67d6?auto=format&fit=crop&w=1200&h=800&q=80&room=R202&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R202', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=R202&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R202', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R202&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R202', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R202&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R301', 'https://images.unsplash.com/photo-1631049421450-348ccd7f8949?auto=format&fit=crop&w=1200&h=800&q=80&room=R301&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R301', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=R301&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R301', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R301&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R301', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R301&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R302', 'https://images.pexels.com/photos/3754594/pexels-photo-3754594.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R302&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R302', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=R302&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R302', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R302&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R302', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R302&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R401', 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&h=800&q=80&room=R401&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R401', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=R401&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R401', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R401&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R401', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R401&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R402', 'https://images.pexels.com/photos/1457845/pexels-photo-1457845.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R402&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R402', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=R402&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R402', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R402&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R402', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R402&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R103', 'https://images.unsplash.com/photo-1618773928121-c32242e63f39?auto=format&fit=crop&w=1200&h=800&q=80&room=R103&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R103', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R103&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R103', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R103&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R103', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R103&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R104', 'https://images.pexels.com/photos/271618/pexels-photo-271618.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R104&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R104', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R104&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R104', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R104&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R104', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R104&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R203', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R203&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R203', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R203&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R203', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R203&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R203', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R203&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R204', 'https://images.pexels.com/photos/271616/pexels-photo-271616.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R204&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R204', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R204&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R204', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R204&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R204', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R204&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R303', 'https://images.unsplash.com/photo-1702014859878-5d4743176d28?auto=format&fit=crop&w=1200&h=800&q=80&room=R303&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R303', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R303&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R303', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R303&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R303', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R303&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R304', 'https://images.unsplash.com/photo-1667125095636-dce94dcbdd96?auto=format&fit=crop&w=1200&h=800&q=80&room=R304&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R304', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R304&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R304', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R304&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R304', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R304&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R403', 'https://images.unsplash.com/photo-1568495248636-6432b97bd949?auto=format&fit=crop&w=1200&h=800&q=80&room=R403&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R403', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R403&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R403', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R403&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R403', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R403&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R404', 'https://images.pexels.com/photos/271619/pexels-photo-271619.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R404&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R404', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R404&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R404', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R404&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R404', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R404&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R501', 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?auto=format&fit=crop&w=1200&h=800&q=80&room=R501&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R501', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R501&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R501', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R501&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R501', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R501&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R502', 'https://images.pexels.com/photos/3659683/pexels-photo-3659683.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R502&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R502', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R502&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R502', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R502&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R502', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R502&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R601', 'https://images.unsplash.com/photo-1629140727571-9b5c6f6267b4?auto=format&fit=crop&w=1200&h=800&q=80&room=R601&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R601', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R601&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R601', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R601&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R601', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R601&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R602', 'https://images.unsplash.com/photo-1605346434674-a440ca4dc4c0?auto=format&fit=crop&w=1200&h=800&q=80&room=R602&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R602', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R602&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R602', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R602&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R602', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R602&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R701', 'https://images.pexels.com/photos/164595/pexels-photo-164595.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R701&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R701', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R701&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R701', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R701&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R701', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R701&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R801', 'https://images.pexels.com/photos/279746/pexels-photo-279746.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R801&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R801', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=R801&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R801', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R801&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R801', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R801&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R503', 'https://images.unsplash.com/photo-1591088398332-8a7791972843?auto=format&fit=crop&w=1200&h=800&q=80&room=R503&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R503', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R503&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R503', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R503&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R503', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R503&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R504', 'https://images.unsplash.com/photo-1595576508898-0ad5c879a061?auto=format&fit=crop&w=1200&h=800&q=80&room=R504&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R504', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R504&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R504', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R504&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R504', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R504&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R603', 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1200&h=800&q=80&room=R603&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R603', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R603&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R603', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R603&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R603', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R603&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R604', 'https://images.unsplash.com/photo-1737517302831-e7b8a8eaa97c?auto=format&fit=crop&w=1200&h=800&q=80&room=R604&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R604', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R604&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R604', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R604&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R604', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R604&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R702', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R702&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R702', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R702&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R702', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R702&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R702', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R702&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R703', 'https://images.pexels.com/photos/271643/pexels-photo-271643.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R703&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R703', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R703&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R703', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R703&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R703', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R703&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R802', 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=1200&h=800&q=80&room=R802&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R802', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R802&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R802', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R802&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R802', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R802&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R803', 'https://images.pexels.com/photos/271659/pexels-photo-271659.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R803&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R803', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R803&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R803', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R803&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R803', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R803&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R901', 'https://images.unsplash.com/photo-1587985064135-0366536eab42?auto=format&fit=crop&w=1200&h=800&q=80&room=R901&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R901', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R901&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R901', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R901&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R901', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R901&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R902', 'https://images.unsplash.com/photo-1576354302919-96748cb8299e?auto=format&fit=crop&w=1200&h=800&q=80&room=R902&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R902', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R902&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R902', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R902&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R902', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R902&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1001', 'https://images.unsplash.com/photo-1713762523087-41019a875741?auto=format&fit=crop&w=1200&h=800&q=80&room=R1001&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1001', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R1001&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1001', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1001&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1001', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1001&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1002', 'https://images.pexels.com/photos/1743231/pexels-photo-1743231.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1002&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1002', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R1002&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1002', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1002&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1002', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1002&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1101', 'https://images.pexels.com/photos/237371/pexels-photo-237371.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1101&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1101', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R1101&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1101', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1101&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1101', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1101&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1102', 'https://images.unsplash.com/photo-1564078516393-cf04bd966897?auto=format&fit=crop&w=1200&h=800&q=80&room=R1102&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1102', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R1102&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1102', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1102&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1102', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1102&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1201', 'https://images.pexels.com/photos/276671/pexels-photo-276671.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1201&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1201', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R1201&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1201', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1201&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1201', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1201&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1202', 'https://images.unsplash.com/photo-1630660664869-c9d3cc676880?auto=format&fit=crop&w=1200&h=800&q=80&room=R1202&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1202', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R1202&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1202', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1202&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1202', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1202&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1301', 'https://images.pexels.com/photos/172872/pexels-photo-172872.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1301&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1301', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R1301&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1301', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1301&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1301', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1301&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1401', 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1401&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1401', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R1401&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1401', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1401&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1401', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1401&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1501', 'https://images.pexels.com/photos/271674/pexels-photo-271674.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1501&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1501', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R1501&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1501', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1501&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1501', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1501&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1601', 'https://images.unsplash.com/photo-1698927100805-2a32718a7e05?auto=format&fit=crop&w=1200&h=800&q=80&room=R1601&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1601', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=R1601&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1601', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1601&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1601', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1601&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R704', 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1200&h=800&q=80&room=R704&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R704', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R704&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R704', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R704&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R704', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R704&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R804', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R804&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R804', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R804&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R804', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R804&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R804', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R804&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R903', 'https://images.unsplash.com/photo-1731336478850-6bce7235e320?auto=format&fit=crop&w=1200&h=800&q=80&room=R903&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R903', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R903&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R903', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R903&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R903', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R903&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R904', 'https://images.unsplash.com/photo-1645619200527-c6786729c2da?auto=format&fit=crop&w=1200&h=800&q=80&room=R904&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R904', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R904&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R904', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R904&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R904', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R904&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1003', 'https://images.unsplash.com/photo-1776763018972-588e27bf6511?auto=format&fit=crop&w=1200&h=800&q=80&room=R1003&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1003', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1003&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1003', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1003&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1003', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1003&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1004', 'https://images.unsplash.com/photo-1718851972754-6638b49b4775?auto=format&fit=crop&w=1200&h=800&q=80&room=R1004&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1004', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1004&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1004', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1004&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1004', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1004&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1103', 'https://images.unsplash.com/photo-1592229505726-ca121723b8ef?auto=format&fit=crop&w=1200&h=800&q=80&room=R1103&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1103', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1103&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1103', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1103&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1103', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1103&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1104', 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&h=800&q=80&room=R1104&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1104', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1104&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1104', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1104&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1104', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1104&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1203', 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&h=800&q=80&room=R1203&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1203', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1203&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1203', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1203&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1203', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1203&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1204', 'https://images.pexels.com/photos/210265/pexels-photo-210265.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1204&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1204', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1204&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1204', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1204&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1204', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1204&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1302', 'https://images.unsplash.com/photo-1776763018821-8feeaeeee0a5?auto=format&fit=crop&w=1200&h=800&q=80&room=R1302&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1302', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1302&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1302', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1302&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1302', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1302&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1303', 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&h=800&q=80&room=R1303&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1303', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1303&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1303', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1303&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1303', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1303&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1402', 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=1200&h=800&q=80&room=R1402&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1402', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1402&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1402', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1402&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1402', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1402&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1403', 'https://images.unsplash.com/photo-1639678349557-ffe5bed73ce7?auto=format&fit=crop&w=1200&h=800&q=80&room=R1403&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1403', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1403&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1403', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1403&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1403', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1403&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1502', 'https://images.unsplash.com/photo-1711059985570-4c32ed12a12c?auto=format&fit=crop&w=1200&h=800&q=80&room=R1502&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1502', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1502&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1502', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1502&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1502', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1502&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1503', 'https://images.pexels.com/photos/271644/pexels-photo-271644.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1503&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1503', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1503&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1503', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1503&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1503', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1503&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1602', 'https://images.unsplash.com/photo-1544984243-ec57ea16fe25?auto=format&fit=crop&w=1200&h=800&q=80&room=R1602&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1602', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1602&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1602', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1602&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1602', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1602&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1603', 'https://images.pexels.com/photos/775219/pexels-photo-775219.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1603&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1603', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=R1603&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1603', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1603&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1603', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1603&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1304', 'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=1200&h=800&q=80&room=R1304&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1304', 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&h=800&q=80&room=R1304&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1304', 'https://images.pexels.com/photos/271637/pexels-photo-271637.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1304&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1304', 'https://images.pexels.com/photos/271642/pexels-photo-271642.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1304&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1404', 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&h=800&q=80&room=R1404&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1404', 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&h=800&q=80&room=R1404&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1404', 'https://images.pexels.com/photos/271637/pexels-photo-271637.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1404&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1404', 'https://images.pexels.com/photos/271642/pexels-photo-271642.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1404&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1504', 'https://images.pexels.com/photos/262048/pexels-photo-262048.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1504&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1504', 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&h=800&q=80&room=R1504&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1504', 'https://images.pexels.com/photos/271637/pexels-photo-271637.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1504&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1504', 'https://images.pexels.com/photos/271642/pexels-photo-271642.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1504&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1604', 'https://images.pexels.com/photos/2506990/pexels-photo-2506990.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1604&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
-    ('R1604', 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&h=800&q=80&room=R1604&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1604', 'https://images.pexels.com/photos/271637/pexels-photo-271637.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1604&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
-    ('R1604', 'https://images.pexels.com/photos/271642/pexels-photo-271642.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=R1604&view=4', 3, FALSE, 'image/jpeg', 1, TRUE);
+    ('501', 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=1200&h=800&q=80&room=501&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('501', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=501&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('501', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=501&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('501', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=501&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('502', 'https://images.unsplash.com/photo-1572987669554-0ba2ba9aee1f?auto=format&fit=crop&w=1200&h=800&q=80&room=502&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('502', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=502&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('502', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=502&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('502', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=502&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('601', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=601&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('601', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=601&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('601', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=601&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('601', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=601&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('602', 'https://images.unsplash.com/photo-1605346576608-92f1346b67d6?auto=format&fit=crop&w=1200&h=800&q=80&room=602&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('602', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=602&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('602', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=602&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('602', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=602&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('701', 'https://images.unsplash.com/photo-1631049421450-348ccd7f8949?auto=format&fit=crop&w=1200&h=800&q=80&room=701&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('701', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=701&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('701', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=701&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('701', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=701&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('702', 'https://images.pexels.com/photos/3754594/pexels-photo-3754594.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=702&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('702', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=702&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('702', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=702&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('702', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=702&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('801', 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&h=800&q=80&room=801&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('801', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=801&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('801', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=801&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('801', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=801&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('802', 'https://images.pexels.com/photos/1457845/pexels-photo-1457845.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=802&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('802', 'https://images.unsplash.com/photo-1549638441-b787d2e11f14?auto=format&fit=crop&w=1200&h=800&q=80&room=802&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('802', 'https://images.pexels.com/photos/271672/pexels-photo-271672.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=802&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('802', 'https://images.pexels.com/photos/1457847/pexels-photo-1457847.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=802&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('503', 'https://images.unsplash.com/photo-1618773928121-c32242e63f39?auto=format&fit=crop&w=1200&h=800&q=80&room=503&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('503', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=503&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('503', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=503&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('503', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=503&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('504', 'https://images.pexels.com/photos/271618/pexels-photo-271618.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=504&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('504', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=504&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('504', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=504&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('504', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=504&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('603', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=603&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('603', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=603&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('603', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=603&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('603', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=603&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('604', 'https://images.pexels.com/photos/271616/pexels-photo-271616.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=604&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('604', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=604&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('604', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=604&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('604', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=604&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('703', 'https://images.unsplash.com/photo-1702014859878-5d4743176d28?auto=format&fit=crop&w=1200&h=800&q=80&room=703&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('703', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=703&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('703', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=703&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('703', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=703&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('704', 'https://images.unsplash.com/photo-1667125095636-dce94dcbdd96?auto=format&fit=crop&w=1200&h=800&q=80&room=704&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('704', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=704&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('704', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=704&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('704', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=704&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('803', 'https://images.unsplash.com/photo-1568495248636-6432b97bd949?auto=format&fit=crop&w=1200&h=800&q=80&room=803&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('803', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=803&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('803', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=803&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('803', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=803&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('804', 'https://images.pexels.com/photos/271619/pexels-photo-271619.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=804&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('804', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=804&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('804', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=804&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('804', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=804&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('901', 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?auto=format&fit=crop&w=1200&h=800&q=80&room=901&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('901', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=901&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('901', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=901&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('901', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=901&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('902', 'https://images.pexels.com/photos/3659683/pexels-photo-3659683.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=902&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('902', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=902&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('902', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=902&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('902', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=902&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1001', 'https://images.unsplash.com/photo-1629140727571-9b5c6f6267b4?auto=format&fit=crop&w=1200&h=800&q=80&room=1001&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1001', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=1001&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1001', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1001&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1001', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1001&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1002', 'https://images.unsplash.com/photo-1605346434674-a440ca4dc4c0?auto=format&fit=crop&w=1200&h=800&q=80&room=1002&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1002', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=1002&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1002', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1002&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1002', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1002&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1101', 'https://images.pexels.com/photos/164595/pexels-photo-164595.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1101&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1101', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=1101&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1101', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1101&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1101', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1101&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1201', 'https://images.pexels.com/photos/279746/pexels-photo-279746.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1201&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1201', 'https://images.unsplash.com/photo-1578898886225-c7c894047899?auto=format&fit=crop&w=1200&h=800&q=80&room=1201&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1201', 'https://images.pexels.com/photos/271660/pexels-photo-271660.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1201&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1201', 'https://images.pexels.com/photos/271631/pexels-photo-271631.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1201&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('903', 'https://images.unsplash.com/photo-1591088398332-8a7791972843?auto=format&fit=crop&w=1200&h=800&q=80&room=903&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('903', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=903&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('903', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=903&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('903', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=903&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('904', 'https://images.unsplash.com/photo-1595576508898-0ad5c879a061?auto=format&fit=crop&w=1200&h=800&q=80&room=904&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('904', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=904&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('904', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=904&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('904', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=904&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1003', 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1200&h=800&q=80&room=1003&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1003', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1003&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1003', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1003&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1003', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1003&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1004', 'https://images.unsplash.com/photo-1737517302831-e7b8a8eaa97c?auto=format&fit=crop&w=1200&h=800&q=80&room=1004&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1004', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1004&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1004', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1004&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1004', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1004&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1102', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1102&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1102', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1102&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1102', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1102&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1102', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1102&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1103', 'https://images.pexels.com/photos/271643/pexels-photo-271643.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1103&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1103', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1103&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1103', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1103&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1103', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1103&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1202', 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=1200&h=800&q=80&room=1202&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1202', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1202&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1202', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1202&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1202', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1202&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1203', 'https://images.pexels.com/photos/271659/pexels-photo-271659.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1203&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1203', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1203&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1203', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1203&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1203', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1203&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1301', 'https://images.unsplash.com/photo-1587985064135-0366536eab42?auto=format&fit=crop&w=1200&h=800&q=80&room=1301&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1301', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1301&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1301', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1301&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1301', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1301&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1302', 'https://images.unsplash.com/photo-1576354302919-96748cb8299e?auto=format&fit=crop&w=1200&h=800&q=80&room=1302&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1302', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1302&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1302', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1302&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1302', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1302&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1401', 'https://images.unsplash.com/photo-1713762523087-41019a875741?auto=format&fit=crop&w=1200&h=800&q=80&room=1401&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1401', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1401&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1401', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1401&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1401', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1401&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1402', 'https://images.pexels.com/photos/1743231/pexels-photo-1743231.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1402&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1402', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1402&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1402', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1402&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1402', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1402&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1501', 'https://images.pexels.com/photos/237371/pexels-photo-237371.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1501&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1501', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1501&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1501', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1501&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1501', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1501&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1502', 'https://images.unsplash.com/photo-1564078516393-cf04bd966897?auto=format&fit=crop&w=1200&h=800&q=80&room=1502&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1502', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1502&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1502', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1502&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1502', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1502&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1601', 'https://images.pexels.com/photos/276671/pexels-photo-276671.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1601&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1601', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1601&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1601', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1601&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1601', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1601&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1602', 'https://images.unsplash.com/photo-1630660664869-c9d3cc676880?auto=format&fit=crop&w=1200&h=800&q=80&room=1602&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1602', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1602&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1602', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1602&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1602', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1602&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1701', 'https://images.pexels.com/photos/172872/pexels-photo-172872.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1701&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1701', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1701&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1701', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1701&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1701', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1701&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1801', 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1801&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1801', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1801&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1801', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1801&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1801', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1801&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1901', 'https://images.pexels.com/photos/271674/pexels-photo-271674.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1901&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1901', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=1901&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1901', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1901&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1901', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1901&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('2001', 'https://images.unsplash.com/photo-1698927100805-2a32718a7e05?auto=format&fit=crop&w=1200&h=800&q=80&room=2001&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('2001', 'https://images.unsplash.com/photo-1631049552057-403cdb8f0658?auto=format&fit=crop&w=1200&h=800&q=80&room=2001&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('2001', 'https://images.pexels.com/photos/271627/pexels-photo-271627.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=2001&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('2001', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=2001&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1104', 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1200&h=800&q=80&room=1104&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1104', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1104&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1104', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1104&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1104', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1104&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1204', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1204&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1204', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1204&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1204', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1204&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1204', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1204&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1303', 'https://images.unsplash.com/photo-1731336478850-6bce7235e320?auto=format&fit=crop&w=1200&h=800&q=80&room=1303&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1303', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1303&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1303', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1303&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1303', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1303&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1304', 'https://images.unsplash.com/photo-1645619200527-c6786729c2da?auto=format&fit=crop&w=1200&h=800&q=80&room=1304&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1304', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1304&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1304', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1304&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1304', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1304&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1403', 'https://images.unsplash.com/photo-1776763018972-588e27bf6511?auto=format&fit=crop&w=1200&h=800&q=80&room=1403&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1403', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1403&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1403', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1403&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1403', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1403&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1404', 'https://images.unsplash.com/photo-1718851972754-6638b49b4775?auto=format&fit=crop&w=1200&h=800&q=80&room=1404&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1404', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1404&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1404', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1404&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1404', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1404&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1503', 'https://images.unsplash.com/photo-1592229505726-ca121723b8ef?auto=format&fit=crop&w=1200&h=800&q=80&room=1503&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1503', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1503&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1503', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1503&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1503', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1503&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1504', 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&h=800&q=80&room=1504&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1504', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1504&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1504', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1504&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1504', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1504&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1603', 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&h=800&q=80&room=1603&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1603', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1603&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1603', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1603&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1603', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1603&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1604', 'https://images.pexels.com/photos/210265/pexels-photo-210265.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1604&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1604', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1604&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1604', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1604&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1604', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1604&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1702', 'https://images.unsplash.com/photo-1776763018821-8feeaeeee0a5?auto=format&fit=crop&w=1200&h=800&q=80&room=1702&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1702', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1702&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1702', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1702&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1702', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1702&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1703', 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&h=800&q=80&room=1703&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1703', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1703&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1703', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1703&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1703', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1703&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1802', 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=1200&h=800&q=80&room=1802&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1802', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1802&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1802', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1802&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1802', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1802&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1803', 'https://images.unsplash.com/photo-1639678349557-ffe5bed73ce7?auto=format&fit=crop&w=1200&h=800&q=80&room=1803&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1803', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1803&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1803', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1803&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1803', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1803&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1902', 'https://images.unsplash.com/photo-1711059985570-4c32ed12a12c?auto=format&fit=crop&w=1200&h=800&q=80&room=1902&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1902', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1902&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1902', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1902&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1902', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1902&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1903', 'https://images.pexels.com/photos/271644/pexels-photo-271644.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1903&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1903', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=1903&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1903', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1903&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1903', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1903&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('2002', 'https://images.unsplash.com/photo-1544984243-ec57ea16fe25?auto=format&fit=crop&w=1200&h=800&q=80&room=2002&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('2002', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=2002&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('2002', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=2002&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('2002', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=2002&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('2003', 'https://images.pexels.com/photos/775219/pexels-photo-775219.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=2003&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('2003', 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&h=800&q=80&room=2003&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('2003', 'https://images.pexels.com/photos/1457842/pexels-photo-1457842.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=2003&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('2003', 'https://images.pexels.com/photos/271661/pexels-photo-271661.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=2003&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1704', 'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=1200&h=800&q=80&room=1704&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1704', 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&h=800&q=80&room=1704&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1704', 'https://images.pexels.com/photos/271637/pexels-photo-271637.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1704&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1704', 'https://images.pexels.com/photos/271642/pexels-photo-271642.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1704&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1804', 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&h=800&q=80&room=1804&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1804', 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&h=800&q=80&room=1804&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1804', 'https://images.pexels.com/photos/271637/pexels-photo-271637.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1804&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1804', 'https://images.pexels.com/photos/271642/pexels-photo-271642.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1804&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('1904', 'https://images.pexels.com/photos/262048/pexels-photo-262048.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1904&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('1904', 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&h=800&q=80&room=1904&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('1904', 'https://images.pexels.com/photos/271637/pexels-photo-271637.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1904&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('1904', 'https://images.pexels.com/photos/271642/pexels-photo-271642.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=1904&view=4', 3, FALSE, 'image/jpeg', 1, TRUE),
+    ('2004', 'https://images.pexels.com/photos/2506990/pexels-photo-2506990.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=2004&view=1', 0, TRUE, 'image/jpeg', 1, TRUE),
+    ('2004', 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&h=800&q=80&room=2004&view=2', 1, FALSE, 'image/jpeg', 1, TRUE),
+    ('2004', 'https://images.pexels.com/photos/271637/pexels-photo-271637.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=2004&view=3', 2, FALSE, 'image/jpeg', 1, TRUE),
+    ('2004', 'https://images.pexels.com/photos/271642/pexels-photo-271642.jpeg?auto=compress&cs=tinysrgb&w=1200&h=800&fit=crop&room=2004&view=4', 3, FALSE, 'image/jpeg', 1, TRUE);
 
 UPDATE room_types
 SET cover_image_url = CASE room_type_code

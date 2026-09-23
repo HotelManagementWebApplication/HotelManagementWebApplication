@@ -20,10 +20,23 @@ describe("customer ownership contract", () => {
     await customerApi.reservations();
     await customerApi.reservation(42);
     await customerApi.depositPayment(42);
+    await customerApi.cancelReservation(42, "Đổi kế hoạch", "customer-cancel-42");
     expect(request).toHaveBeenNthCalledWith(1, "/api/auth/customers/me");
     expect(request).toHaveBeenNthCalledWith(2, "/api/customer/reservations");
     expect(request).toHaveBeenNthCalledWith(3, "/api/customer/reservations/42");
     expect(request).toHaveBeenNthCalledWith(4, "/api/customer/reservations/42/deposit-payment");
+    expect(request).toHaveBeenNthCalledWith(5, "/api/customer/reservations/42/cancel", { method: "POST", body: { reason: "Đổi kế hoạch" }, idempotencyKey: "customer-cancel-42" });
+  });
+
+  it("routes hotel service booking, listing and cancellation through the customer's booking", async () => {
+    const request = vi.spyOn(apiClient, "request").mockResolvedValue({ id: 12 });
+    const body = { reservation_id: 6, room_id: "R1001", service_id: "MAMREST", scheduled_at: "2031-01-10T18:30:00", quantity: 2, meal_period: "DINNER" as const };
+    await customerApi.bookService(body, "service-dinner-1");
+    await customerApi.serviceBookings(6);
+    await customerApi.cancelServiceBooking(12);
+    expect(request).toHaveBeenNthCalledWith(1, "/api/customer/service-bookings", { method: "POST", body, idempotencyKey: "service-dinner-1" });
+    expect(request).toHaveBeenNthCalledWith(2, "/api/customer/service-bookings?reservation_id=6");
+    expect(request).toHaveBeenNthCalledWith(3, "/api/customer/service-bookings/12/cancel", { method: "POST" });
   });
 
   it("surfaces ownership errors from the backend instead of manufacturing a result", async () => {

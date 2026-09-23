@@ -26,6 +26,7 @@ import com.hospitality.mis.service.operations.MaintenanceService;
 import com.hospitality.mis.service.operations.RoomTransferService;
 import com.hospitality.mis.service.reservation.ReservationService;
 import com.hospitality.mis.service.reservation.CustomerReservationService;
+import com.hospitality.mis.service.reservation.HotelServiceBookingService;
 import com.hospitality.mis.service.room.RoomService;
 import com.hospitality.mis.service.room.RoomEquipmentService;
 import com.hospitality.mis.service.room.RoomMediaService;
@@ -98,9 +99,10 @@ class DepartmentAuthorizationMatrixTest {
     @MockBean HousekeepingChecklistService mock27;
     @MockBean EmployeeShiftService mock28;
     @MockBean HousekeepingInspectionService mock29;
+    @MockBean HotelServiceBookingService mock30;
     @MockBean ApprovalAuthorization approvalAuthorization;
     /** Gom các business mock để reset invocation và chứng minh deny không gọi nghiệp vụ. */
-    private List<Object> businessMocks() { return List.of(mock0, mock1, mock2, mock3, mock4, mock5, mock6, mock7, mock8, mock9, mock10, mock11, mock12, mock13, mock14, mock15, mock16, mock17, mock18, mock19, mock20, mock21, mock22, mock23, mock24, mock25, mock26, mock27, mock28, mock29); }
+    private List<Object> businessMocks() { return List.of(mock0, mock1, mock2, mock3, mock4, mock5, mock6, mock7, mock8, mock9, mock10, mock11, mock12, mock13, mock14, mock15, mock16, mock17, mock18, mock19, mock20, mock21, mock22, mock23, mock24, mock25, mock26, mock27, mock28, mock29, mock30); }
 
     /** Stub response tối thiểu để matrix chỉ đo RBAC, không đo business rules. */
     @BeforeEach void responses() {
@@ -110,7 +112,7 @@ class DepartmentAuthorizationMatrixTest {
             java.math.BigDecimal.ZERO, null, null, null, List.of()));
         when(mock21.get(any(), any(), any(), anyInt(), anyInt())).thenReturn(
             new com.hospitality.mis.dto.operations.FrontDeskDashboardDtos.Response(
-                java.time.LocalDate.now(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                java.time.LocalDate.now(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
                 List.of(), Map.of(), List.of(), 0, 20, 0, 0));
         when(mock22.list(any(), any(), any())).thenReturn(List.of());
         when(mock23.list(any(), any())).thenReturn(List.of());
@@ -195,6 +197,8 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("PUT", "/api/room-types/STD/amenities", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"amenity_ids\":[]}"),
             new Endpoint("GET", "/api/reservations", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
             new Endpoint("GET", "/api/reservations/1", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
+            new Endpoint("GET", "/api/reservations/1/service-bookings", "MANAGER,FRONT_DESK", "{}"),
+            new Endpoint("POST", "/api/reservations/1/service-bookings/1/use", "MANAGER,FRONT_DESK", "{}"),
             new Endpoint("POST", "/api/reservations", "MANAGER,FRONT_DESK", "{\"guest_id\":1,\"employee_id\":\"actor\",\"deposit\":0,\"rental_type\":\"PACKAGE\",\"rooms\":[{\"room_id\":\"101\",\"expected_check_in\":\"2026-10-01T12:00:00\",\"expected_check_out\":\"2026-10-02T12:00:00\"}]}"),
             new Endpoint("POST", "/api/reservations/1/check-in", "MANAGER,FRONT_DESK", "{}"),
             new Endpoint("POST", "/api/reservations/1/confirm", "MANAGER,FRONT_DESK", "{}"),
@@ -208,6 +212,7 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/reservations/1/equipment-incidents", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING", "{\"room_id\":\"101\",\"equipment_name\":\"TV\",\"original_value\":100,\"purchased_at\":\"2026-01-01\",\"quantity\":1}"),
             new Endpoint("POST", "/api/operations/reservations/1/equipment-incidents", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING", "{\"room_id\":\"101\",\"equipment_name\":\"TV\",\"original_value\":100,\"purchased_at\":\"2026-01-01\",\"quantity\":1}"),
             new Endpoint("GET", "/api/operations/incidents", "ADMIN,DIRECTOR,MANAGER,HOUSEKEEPING,TECHNICAL", "{}"),
+            new Endpoint("POST", "/api/operations/incidents", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING", "{\"room_id\":\"101\",\"equipment_name\":\"Cửa phòng\",\"quantity\":1,\"severity\":\"MEDIUM\",\"description\":\"Khóa cửa kẹt\"}"),
             new Endpoint("PATCH", "/api/operations/reservations/incidents/1/handoff", "ADMIN,DIRECTOR,MANAGER,HOUSEKEEPING,TECHNICAL", "{\"status\":\"ACKNOWLEDGED\"}"),
             new Endpoint("POST", "/api/operations/reservations/1/room-transfers", "MANAGER,FRONT_DESK", "{\"from_room_id\":\"101\",\"to_room_id\":\"102\"}"),
             new Endpoint("GET", "/api/invoices/reservation/1", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{}"),
@@ -228,10 +233,13 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/services/S1/price/submit", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{\"price\":120,\"reason\":\"Cost update\"}"),
             new Endpoint("POST", "/api/services/S1/price/activate", "ADMIN,DIRECTOR,MANAGER", "{\"price\":120,\"reason\":\"Cost update\"}"),
             new Endpoint("GET", "/api/services/S1/price-history", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
+            new Endpoint("GET", "/api/operations/restaurant/service-bookings?date=2026-10-01", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{}"),
+            new Endpoint("POST", "/api/operations/restaurant/service-bookings/1/use", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{}"),
             new Endpoint("GET", "/api/operations/maintenance/room/101", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("POST", "/api/operations/maintenance", "ADMIN,DIRECTOR,MANAGER,HOUSEKEEPING,TECHNICAL", "{\"id\":\"M1\",\"room_id\":\"101\",\"type\":\"Repair\",\"scheduled_date\":\"2026-10-01\"}"),
             new Endpoint("PATCH", "/api/operations/maintenance/M1/status", "ADMIN,DIRECTOR,MANAGER,HOUSEKEEPING,TECHNICAL", "{\"status\":\"DANG_BAO_TRI\"}"),
             new Endpoint("GET", "/api/finance/cash-handovers", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
+            new Endpoint("GET", "/api/finance/cash-handovers/mine", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{}"),
             new Endpoint("GET", "/api/finance/expenses", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/partner-debts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/partner-debts/1/settlements", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
@@ -260,6 +268,10 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("GET", "/api/customer/reservations", "CUSTOMER", "{}"),
             new Endpoint("GET", "/api/customer/reservations/1", "CUSTOMER", "{}"),
             new Endpoint("GET", "/api/customer/reservations/1/deposit-payment", "CUSTOMER", "{}"),
+            new Endpoint("POST", "/api/customer/reservations/1/cancel", "CUSTOMER", "{\"reason\":\"Khách đổi kế hoạch\"}"),
+            new Endpoint("POST", "/api/customer/service-bookings", "CUSTOMER", "{\"reservation_id\":1,\"room_id\":\"101\",\"service_id\":\"S1\",\"scheduled_at\":\"2026-10-01T12:00:00\",\"quantity\":1}"),
+            new Endpoint("GET", "/api/customer/service-bookings?reservation_id=1", "CUSTOMER", "{}"),
+            new Endpoint("POST", "/api/customer/service-bookings/1/cancel", "CUSTOMER", "{}"),
             new Endpoint("POST", "/api/auth/logout", "ADMIN,DIRECTOR,MANAGER,HR,FRONT_DESK,ACCOUNTING,HOUSEKEEPING,TECHNICAL,KITCHEN,STAFF,CUSTOMER,UNKNOWN", "{}")
     ); }
     /** Sinh role case, gồm UNKNOWN để bảo vệ default deny. */
@@ -299,22 +311,29 @@ class DepartmentAuthorizationMatrixTest {
     /** Given handler mappings production, When đối chiếu matrix, Then không protected endpoint bị bỏ sót. */
     @Test void everyProtectedApiMappingIsCoveredByTheMatrix() {
         Set<String> publicPaths = Set.of("/api/auth/login", "/api/auth/customers/login",
-            "/api/auth/refresh", "/api/auth/customers/register");
+            "/api/auth/refresh", "/api/auth/customers/register", "/api/auth/customers/register-with-otp",
+            "/api/auth/customers/reset-password-otp");
         Set<String> covered = new HashSet<>();
+        List<String> coverageErrors = new ArrayList<>();
         for (var entry : requestMappingHandlerMapping.getHandlerMethods().entrySet()) {
             Class<?> beanType = entry.getValue().getBeanType();
             if (beanType.getSimpleName().startsWith("EnterpriseExtension") || beanType.getSimpleName().startsWith("CommercialPartner")) continue;
             for (String pattern : entry.getKey().getPatternValues()) {
-                if (!pattern.startsWith("/api/") || pattern.startsWith("/api/public/") || publicPaths.contains(pattern)) continue;
+                if (!pattern.startsWith("/api/") || pattern.startsWith("/api/public/")
+                        || pattern.startsWith("/api/auth/otp/") || publicPaths.contains(pattern)) continue;
                 for (var method : entry.getKey().getMethodsCondition().getMethods()) {
                     String regex = pattern.replaceAll("\\{[^}]+}", "[^/]+");
                     var matches = endpoints().stream().filter(e -> e.method().equals(method.name())
                         && e.path().split("\\?")[0].matches(regex)).toList();
-                    assertThat(matches).as("Uncovered endpoint: " + method + " " + pattern).hasSize(1);
-                    covered.add(matches.get(0).toString());
+                    if (matches.size() != 1) {
+                        coverageErrors.add((matches.isEmpty() ? "Uncovered" : "Duplicated") + " endpoint: " + method + " " + pattern);
+                    } else {
+                        covered.add(matches.get(0).toString());
+                    }
                 }
             }
         }
+        assertThat(coverageErrors).as("Every protected endpoint must have exactly one matrix row").isEmpty();
         assertThat(covered).hasSize(endpoints().size());
     }
 }

@@ -74,6 +74,25 @@ class FrontDeskDashboardQueryIntegrationTest {
     }
 
     @Test
+    void dashboardUpcomingBucketReturnsFutureReservedRoomsWithoutMixingThemIntoTodaysArrivals() {
+        Guest guest = guest("Future Guest", "0900000112", "010000000012");
+        Reservation future = reservation(guest, room("R205"), ReservationStatus.CONFIRMED,
+                BUSINESS_DATE.plusDays(1).atTime(18, 0), BUSINESS_DATE.plusDays(1).atTime(21, 0));
+        reservation(guest, room("R206"), ReservationStatus.CONFIRMED,
+                BUSINESS_DATE.atTime(18, 0), BUSINESS_DATE.atTime(21, 0));
+        Reservation cancelledLine = reservation(guest, room("R207"), ReservationStatus.CONFIRMED,
+                BUSINESS_DATE.plusDays(2).atTime(18, 0), BUSINESS_DATE.plusDays(2).atTime(21, 0));
+        cancelledLine.getRooms().get(0).setStatus(com.hospitality.mis.entity.room.RoomStatus.CANCELLED);
+        entityManager.flush();
+        entityManager.clear();
+
+        var page = reservations.dashboardIds("", null, "UPCOMING",
+                BUSINESS_DATE.atStartOfDay(), BUSINESS_DATE.plusDays(1).atStartOfDay(), PageRequest.of(0, 20));
+
+        assertThat(page.getContent()).containsExactly(future.getId());
+    }
+
+    @Test
     void dashboardIncidentQueryIsStableAndBoundedByRequestedPage() {
         Guest guest = guest("Incident Guest", "0900000121", "010000000021");
         Reservation reservation = reservation(guest, room("R301"), ReservationStatus.CHECKED_IN,

@@ -3,7 +3,8 @@ import { authApi } from "../shared/api/auth";
 import { ApiError } from "../shared/api/client";
 import { frontDeskApi, newFrontDeskIdempotencyKey, newPaymentIdempotencyKey } from "../shared/api/frontDesk";
 import { EmployeeProfileDropdown } from "../components/common/EmployeeProfileDropdown";
-import type { CashDenomination, CashHandover, Dashboard, DashboardItem, Guest, GuestCreate, Invoice, MembershipHistoryEntry, PaymentMethod, Receipt as ReceiptDto, ReservationCreate, ReservationStatus, ServiceCatalogItem, TimelineEvent } from "../shared/types/frontDesk";
+import type { CashDenomination, CashHandover, Dashboard, DashboardItem, Guest, GuestCreate, HotelServiceBooking, Invoice, MembershipHistoryEntry, PaymentMethod, Receipt as ReceiptDto, ReservationCreate, ReservationStatus, RoomEquipment, ServiceCatalogItem, TimelineEvent } from "../shared/types/frontDesk";
+import { localDateTimeValue, localDateValue } from "../shared/utils/localDate";
 import {
   Search, Bell, Home, LayoutGrid, Users, Settings,
   CheckCircle2, XCircle, Sparkles, AlertCircle,
@@ -60,9 +61,9 @@ const OCC_CFG: Record<OccStatus, { labelVi: string; bg: string; text: string; do
   ood:      { labelVi:"Ngoài hoạt động", bg:"#FFE4E6", text:"#BE123C", dot:"#F43F5E" },
 };
 const CLN_CFG: Record<CleanStatus, { labelVi: string; bg: string; text: string; dot: string }> = {
-  clean:    { labelVi:"Sạch",    bg:"#DCFCE7", text:"#166534", dot:"#16A34A" },
+  clean:    { labelVi:"Sẵn sàng", bg:"#DCFCE7", text:"#166534", dot:"#16A34A" },
   cleaning: { labelVi:"Đang dọn", bg:"#FEF9C3", text:"#854D0E", dot:"#CA8A04" },
-  dirty:    { labelVi:"Bẩn",    bg:"#FEF3C7", text:"#92400E", dot:"#F59E0B" },
+  dirty:    { labelVi:"Cần dọn", bg:"#FEF3C7", text:"#92400E", dot:"#F59E0B" },
 };
 
 const roomTypeLabel = (type: string) => ({
@@ -77,7 +78,7 @@ const bedLabel = (beds: string) => beds.replace("1 King","1 giường King").rep
 const DEFAULT_SHIFT_CHECKLIST: { id: string; label: string; done: boolean }[] = [
   { id: "c1", label: "Kiểm đếm và đối chiếu tiền mặt thực tế trong két", done: false },
   { id: "c2", label: "Kiểm tra phòng đến và phòng đi trong ca trực", done: false },
-  { id: "c3", label: "Đối soát biên lai và các giao dịch POS / chuyển khoản", done: false },
+  { id: "c3", label: "Đối soát biên lai, thanh toán tại quầy và chuyển khoản", done: false },
   { id: "c4", label: "Bàn giao thẻ từ, chìa khóa phòng và tài sản quầy", done: false },
   { id: "c5", label: "Ghi chú các yêu cầu đặc biệt và sự cố tồn đọng", done: false },
 ];
@@ -97,15 +98,21 @@ const fmtFolio = (r: Room) => {
 };
 const fmtItem = (item: FolioItem, cur?: "$" | "VND") =>
   cur === "$" ? fmtUSD(item.amount) : fmtVND(item.amount);
+const serviceUnitLabel = (service: ServiceCatalogItem) => service.unit?.trim() || "dịch vụ";
+const servicePriceLabel = (service: ServiceCatalogItem) =>
+  service.price > 0 ? `${fmtVND(service.price)} / ${serviceUnitLabel(service)}` : "Chưa niêm yết giá";
+const serviceAvailabilityLabel = (service: ServiceCatalogItem) =>
+  service.stock > 0 ? `Còn ${service.stock}` : "Hết phục vụ";
 const reservationIdFromRoom = (room: Room) => room.reservationId ?? Number(room.bookingId?.match(/\d+/)?.[0]);
 const apiErrorText = (error: unknown) => {
-  if (!(error instanceof ApiError)) return error instanceof Error ? error.message : "Không thể kết nối backend. Vui lòng thử lại.";
+  if (!(error instanceof ApiError)) return "Không thể kết nối hệ thống. Vui lòng thử lại.";
   if (error.status === 401) return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
   if (error.status === 403) return "Tài khoản Lễ tân không có quyền thực hiện thao tác này.";
-  if (error.status === 409) return error.message || "Dữ liệu vừa thay đổi hoặc phòng không còn khả dụng.";
-  if (error.status === 422) return error.message || "Trạng thái đặt phòng không cho phép thao tác này.";
+  if (error.status === 404) return "Không tìm thấy thông tin lưu trú.";
+  if (error.status === 409) return "Dữ liệu vừa thay đổi hoặc phòng không còn khả dụng.";
+  if (error.status === 422) return error.message || "Dữ liệu nghiệp vụ không hợp lệ.";
   if (error.status === 429) return "Thao tác quá nhanh. Vui lòng chờ rồi thử lại.";
-  return error.message;
+  return "Không thể hoàn tất thao tác. Vui lòng thử lại.";
 };
 const fmtDateTime = (value?: string | null) => value ? new Date(value).toLocaleString("vi-VN") : "—";
 const localDateTimeNow = () => {
@@ -121,7 +128,7 @@ const printReceipt = (receipt: ReceiptDto, room: Room, invoice: Invoice): boolea
       return false;
     }
     const safe = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]!));
-    popup.document.write(`<!doctype html><html><head><title>Biên lai ${safe(receipt.receipt_number)}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#0f172a}h1{font-size:22px;margin:0 0 4px}.muted{color:#64748b;font-size:12px}.row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #e2e8f0}.total{font-size:18px;font-weight:700}button{margin-top:24px;padding:10px 16px}</style></head><body><h1>MAM HOTEL</h1><p class="muted">BIÊN LAI THANH TOÁN</p><div class="row"><span>Số biên lai</span><strong>${safe(receipt.receipt_number)}</strong></div><div class="row"><span>Khách hàng</span><strong>${safe(room.guestName ?? "—")}</strong></div><div class="row"><span>Phòng</span><strong>${safe(room.number)}</strong></div><div class="row"><span>Hóa đơn</span><strong>#${safe(invoice.id)}</strong></div><div class="row"><span>Phương thức</span><strong>${safe(receipt.method)}</strong></div><div class="row total"><span>Số tiền</span><strong>${safe(fmtVND(receipt.amount))}</strong></div><p class="muted">Phát hành: ${safe(fmtDateTime(receipt.issued_at))} · ${safe(receipt.issued_by)}</p><button onclick="window.print()">In biên lai</button><script>window.onload=()=>window.print()</script></body></html>`);
+      popup.document.write(`<!doctype html><html><head><title>Biên lai ${safe(receipt.receipt_number)}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#0f172a}h1{font-size:22px;margin:0 0 4px}.muted{color:#64748b;font-size:12px}.row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #e2e8f0}.total{font-size:18px;font-weight:700}button{margin-top:24px;padding:10px 16px}</style></head><body><h1>MaM Hotel</h1><p class="muted">BIÊN LAI THANH TOÁN</p><div class="row"><span>Số biên lai</span><strong>${safe(receipt.receipt_number)}</strong></div><div class="row"><span>Khách hàng</span><strong>${safe(room.guestName ?? "—")}</strong></div><div class="row"><span>Phòng</span><strong>${safe(room.number)}</strong></div><div class="row"><span>Hóa đơn</span><strong>#${safe(invoice.id)}</strong></div><div class="row"><span>Phương thức</span><strong>${safe(receipt.method)}</strong></div><div class="row total"><span>Số tiền</span><strong>${safe(fmtVND(receipt.amount))}</strong></div><p class="muted">Phát hành: ${safe(fmtDateTime(receipt.issued_at))} · ${safe(receipt.issued_by)}</p><button onclick="window.print()">In biên lai</button><script>window.onload=()=>window.print()</script></body></html>`);
     popup.document.close();
     return true;
   } catch (error) {
@@ -233,10 +240,12 @@ function RoomCard({ room, selected, onClick }: { room: Room; selected: boolean; 
 /* ══════════════════════════════════════════════════════════
    ROOM DRAWER
 ══════════════════════════════════════════════════════════ */
-function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClose: () => void; onRefresh: () => Promise<void> | void; onCheckIn?: (resId: number) => Promise<void> }) {
+function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred }: { room: Room; rooms: Room[]; onClose: () => void; onRefresh: () => Promise<void> | void; onCheckIn?: (resId: number) => Promise<void>; onTransferred?: (roomId: string) => void }) {
   const reservationId = reservationIdFromRoom(room);
   const validReservation = Number.isSafeInteger(reservationId) && reservationId > 0;
   const isCheckedIn = room.reservationStatus === "CHECKED_IN";
+  const canTransferCurrentRoom = validReservation && isCheckedIn
+    && room.occStatus === "occupied" && room.cleanStatus === "clean";
   const canCheckIn = validReservation && (room.reservationStatus === "CONFIRMED" || room.reservationStatus === "DEPOSIT_PAID" || room.occStatus === "reserved" || (!room.reservationStatus && room.occStatus === "vacant" && Boolean(room.guestName)));
   const canConfirm = validReservation && room.reservationStatus === "DRAFT";
   const canCancel = validReservation && ["DRAFT", "DEPOSIT_PAID", "CONFIRMED"].includes(room.reservationStatus || "");
@@ -244,8 +253,10 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
 
   const [tab, setTab] = useState<"info"|"service"|"history"|"notes">("info");
   const [services, setServices] = useState<ServiceCatalogItem[]>([]);
+  const [serviceBookings, setServiceBookings] = useState<HotelServiceBooking[]>([]);
   const [serviceId, setServiceId] = useState("");
   const [serviceQuantity, setServiceQuantity] = useState(1);
+  const [serviceMealPeriod, setServiceMealPeriod] = useState<"LUNCH" | "DINNER">("LUNCH");
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [payments, setPayments] = useState<any[]>([]);
@@ -255,19 +266,50 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
 
   const [busy, setBusy] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
-  const [operation, setOperation] = useState<"transfer" | "extend" | "cancel" | "incident" | "status" | null>(null);
+  const [operation, setOperation] = useState<"transfer" | "extend" | "cancel" | "incident" | null>(null);
   const [transferRoom, setTransferRoom] = useState("");
   const [transferReason, setTransferReason] = useState("");
   const [extendAt, setExtendAt] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [incidentEquipName, setIncidentEquipName] = useState("");
+  const [roomEquipment, setRoomEquipment] = useState<RoomEquipment[]>([]);
+  const [loadingEquipment, setLoadingEquipment] = useState(false);
+  const [availableTransferRoomIds, setAvailableTransferRoomIds] = useState<Set<string> | null>(null);
+  const [loadingTransferRooms, setLoadingTransferRooms] = useState(false);
   const [incidentQuantity, setIncidentQuantity] = useState(1);
   const [incidentSeverity, setIncidentSeverity] = useState<"LOW" | "MEDIUM" | "HIGH" | "CRITICAL">("MEDIUM");
-  const [roomStatusTarget, setRoomStatusTarget] = useState<string>("available");
 
   const [checkoutStep, setCheckoutStep] = useState<"idle" | "review" | "payment" | "receipt" | "done">("idle");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [issuedReceipt, setIssuedReceipt] = useState<ReceiptDto | null>(null);
+
+  const selectedService = services.find(service => service.id === serviceId);
+  const transferRooms = useMemo(() => rooms
+    .filter(candidate => candidate.id !== room.id)
+    .sort((left, right) => left.number.localeCompare(right.number, "vi", { numeric: true })), [room.id, rooms]);
+  const selectedTransferRoom = transferRooms.find(candidate => candidate.id === transferRoom);
+  const canTransferTo = (candidate: Room) => candidate.occStatus === "vacant" && candidate.cleanStatus === "clean"
+    && availableTransferRoomIds?.has(candidate.id) === true;
+  const transferRoomState = (candidate: Room) => {
+    if (candidate.occStatus === "reserved") return "đã giữ phòng";
+    if (candidate.occStatus === "occupied" || candidate.occStatus === "dnd") return "đang có khách";
+    if (candidate.occStatus === "ood") return "ngoài hoạt động";
+    if (candidate.cleanStatus === "cleaning") return "đang dọn";
+    if (candidate.cleanStatus === "dirty") return "cần dọn";
+    if (loadingTransferRooms || availableTransferRoomIds === null) return "đang kiểm tra lịch";
+    if (!availableTransferRoomIds.has(candidate.id)) return "đã có lịch trùng";
+    return "trống, sẵn sàng";
+  };
+  const serviceQuantityAvailable = Boolean(selectedService && selectedService.stock >= serviceQuantity);
+  const canRecordService = Boolean(
+    validReservation &&
+    selectedService &&
+    selectedService.price > 0 &&
+    serviceQuantity >= 1 &&
+    serviceQuantityAvailable &&
+    busy === null &&
+    (room.reservationStatus === undefined || room.reservationStatus === "CHECKED_IN")
+  );
 
   const keys = useRef({
     service: newFrontDeskIdempotencyKey(),
@@ -291,10 +333,12 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
 
   const loadDetails = useCallback(async () => {
     if (!validReservation) return;
-    const [catalogResult, timelineResult, invoiceResult] = await Promise.allSettled([
+    const [catalogResult, timelineResult, invoiceResult, bookingsResult] = await Promise.allSettled([
       frontDeskApi.services(), frontDeskApi.timeline(reservationId), frontDeskApi.invoice(reservationId),
+      frontDeskApi.serviceBookings(reservationId),
     ]);
     if (catalogResult.status === "fulfilled") setServices(catalogResult.value.filter(item => item.active !== false));
+    if (bookingsResult.status === "fulfilled") setServiceBookings(bookingsResult.value);
     if (timelineResult.status === "fulfilled") setTimeline(timelineResult.value);
     if (invoiceResult.status === "fulfilled") {
       setInvoice(invoiceResult.value);
@@ -312,6 +356,7 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
   useEffect(() => {
     setFeedback(null); setOperation(null); setCheckoutStep("idle"); setIssuedReceipt(null);
     setTransferRoom(""); setTransferReason(""); setExtendAt(""); setCancelReason("");
+    setAvailableTransferRoomIds(null); setLoadingTransferRooms(false);
     setIncidentEquipName(""); setIncidentQuantity(1); setMembershipHistory(null);
     keys.current = {
       service: newFrontDeskIdempotencyKey(),
@@ -327,6 +372,46 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
     };
     void loadDetails();
   }, [loadDetails, room.id]);
+
+  useEffect(() => {
+    if (operation !== "incident") return;
+    setLoadingEquipment(true);
+    setFeedback(null);
+    void frontDeskApi.roomEquipment(room.id)
+      .then(items => {
+        const active = items.filter(item => item.active);
+        setRoomEquipment(active);
+        setIncidentEquipName(active[0]?.name ?? "");
+      })
+      .catch(error => setFeedback({ tone: "error", text: `Không thể tải danh mục thiết bị: ${apiErrorText(error)}` }))
+      .finally(() => setLoadingEquipment(false));
+  }, [operation, room.id]);
+
+  useEffect(() => {
+    if (operation !== "transfer") return;
+    if (!room.checkOut) {
+      setAvailableTransferRoomIds(new Set());
+      setFeedback({ tone: "error", text: "Không xác định được thời gian trả phòng để kiểm tra phòng đích." });
+      return;
+    }
+    let active = true;
+    setLoadingTransferRooms(true);
+    setAvailableTransferRoomIds(null);
+    setTransferRoom("");
+    setFeedback(null);
+    void frontDeskApi.roomAvailability(localDateTimeNow(), room.checkOut)
+      .then(items => {
+        if (active) setAvailableTransferRoomIds(new Set(items.filter(item => item.available).map(item => item.room_id)));
+      })
+      .catch(error => {
+        if (active) {
+          setAvailableTransferRoomIds(new Set());
+          setFeedback({ tone: "error", text: `Không thể kiểm tra lịch phòng đích: ${apiErrorText(error)}` });
+        }
+      })
+      .finally(() => { if (active) setLoadingTransferRooms(false); });
+    return () => { active = false; };
+  }, [operation, room.checkOut]);
 
   const finishMutation = async (message: string) => {
     setFeedback({ tone: "success", text: message });
@@ -383,17 +468,6 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
     finally { setBusy(null); }
   };
 
-  const handleUpdateRoomStatus = async () => {
-    if (busy) return;
-    setBusy("status"); setFeedback(null);
-    try {
-      await frontDeskApi.updateRoomStatus(room.id, roomStatusTarget);
-      setOperation(null);
-      await finishMutation(`Đã cập nhật trạng thái phòng ${room.number} thành ${roomStatusTarget}.`);
-    } catch (error) { setFeedback({ tone: "error", text: apiErrorText(error) }); }
-    finally { setBusy(null); }
-  };
-
   const handleRecordEquipmentIncident = async () => {
     if (!validReservation || !incidentEquipName.trim() || incidentQuantity < 1 || busy) return;
     setBusy("incident"); setFeedback(null);
@@ -401,6 +475,7 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
       await frontDeskApi.recordEquipmentIncident(reservationId, {
         room_id: room.id,
         equipment_name: incidentEquipName.trim(),
+        equipment_id: roomEquipment.find(item => item.name === incidentEquipName)?.id,
         quantity: incidentQuantity,
         severity: incidentSeverity,
       }, keys.current.incident);
@@ -424,23 +499,35 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
   };
 
   const addService = async () => {
-    if (!validReservation || !serviceId || serviceQuantity < 1 || busy) return;
+    if (!validReservation || !selectedService || !serviceQuantityAvailable || serviceQuantity < 1 || busy) return;
     setBusy("service"); setFeedback(null);
     try {
-      await frontDeskApi.addService(reservationId, { service_id: serviceId, quantity: serviceQuantity }, keys.current.service);
+      await frontDeskApi.addService(reservationId, { service_id: serviceId, quantity: serviceQuantity,
+        room_id: room.id, ...(serviceId === "MAMREST" ? { meal_period: serviceMealPeriod } : {}) }, keys.current.service);
       keys.current.service = newFrontDeskIdempotencyKey(); setServiceQuantity(1);
       await finishMutation("Đã ghi nhận dịch vụ/minibar vào booking.");
     } catch (error) { setFeedback({ tone: "error", text: apiErrorText(error) }); }
     finally { setBusy(null); }
   };
 
+  const markServiceUsed = async (bookingId: number) => {
+    if (!validReservation || busy) return;
+    setBusy(`service-${bookingId}`); setFeedback(null);
+    try {
+      await frontDeskApi.useServiceBooking(reservationId, bookingId);
+      await finishMutation("Đã xác nhận dịch vụ được sử dụng. Phần trả phí sẽ vào hóa đơn khi checkout.");
+    } catch (error) { setFeedback({ tone: "error", text: apiErrorText(error) }); }
+    finally { setBusy(null); }
+  };
+
   const transfer = async () => {
-    if (!validReservation || !transferRoom.trim() || busy) return;
+    if (!canTransferCurrentRoom || !selectedTransferRoom || !canTransferTo(selectedTransferRoom) || busy) return;
     setBusy("transfer"); setFeedback(null);
     try {
-      await frontDeskApi.transfer(reservationId, { from_room_id: room.id, to_room_id: transferRoom.trim(), reason: transferReason.trim() || undefined }, keys.current.transfer);
+      await frontDeskApi.transfer(reservationId, { from_room_id: room.id, to_room_id: selectedTransferRoom.id, reason: transferReason.trim() || undefined }, keys.current.transfer);
       keys.current.transfer = newFrontDeskIdempotencyKey(); setOperation(null);
-      await finishMutation(`Đã chuyển booking sang phòng ${transferRoom.trim()}.`);
+      await finishMutation(`Đã chuyển booking sang phòng ${selectedTransferRoom.number} (${selectedTransferRoom.id}).`);
+      onTransferred?.(selectedTransferRoom.id);
     } catch (error) { setFeedback({ tone: "error", text: apiErrorText(error) }); }
     finally { setBusy(null); }
   };
@@ -463,15 +550,15 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
       const finalInvoice = await frontDeskApi.checkOut(reservationId, { at: localDateTimeNow() }, keys.current.checkout);
       keys.current.checkout = newFrontDeskIdempotencyKey();
       setInvoice(finalInvoice); setCheckoutStep(finalInvoice.payable > 0 ? "review" : "done"); setTab("info");
-      setFeedback({ tone: "success", text: finalInvoice.payable > 0 ? "Backend đã chốt checkout và lập hóa đơn. Hãy đọc lại với khách trước khi thu tiền." : "Checkout hoàn tất; hóa đơn không còn số dư phải thu." });
-    } catch (error) { setFeedback({ tone: "error", text: `Không thể checkout/lập hóa đơn: ${apiErrorText(error)}` }); }
+      setFeedback({ tone: "success", text: finalInvoice.payable > 0 ? "Đã hoàn tất trả phòng và lập hóa đơn. Vui lòng kiểm tra lại với khách trước khi thu tiền." : "Trả phòng hoàn tất; hóa đơn không còn số dư phải thu." });
+    } catch (error) { setFeedback({ tone: "error", text: `Không thể hoàn tất trả phòng và lập hóa đơn: ${apiErrorText(error)}` }); }
     finally { setBusy(null); }
   };
 
   const confirmCheckout = async () => {
     if (!invoice || invoice.payable <= 0 || busy) return;
     setCheckoutStep("payment");
-    setFeedback({ tone: "info", text: "Khách đã xác nhận hóa đơn. Chỉ ghi thanh toán sau khi đã nhận tiền/POS/chuyển khoản thành công." });
+    setFeedback({ tone: "info", text: "Khách đã xác nhận hóa đơn. Chỉ ghi thanh toán sau khi đã nhận tiền mặt, thanh toán bằng thẻ hoặc chuyển khoản thành công." });
   };
 
   const recordPayment = async () => {
@@ -480,7 +567,7 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
     try {
       await frontDeskApi.recordPayment(invoice.id, { amount: invoice.payable, method: paymentMethod, type: "PAYMENT", reference: `CHECKOUT-${reservationId}` }, keys.current.payment);
       keys.current.payment = newPaymentIdempotencyKey(); setCheckoutStep("receipt");
-      setFeedback({ tone: "success", text: "Backend đã xác nhận thanh toán. Bây giờ có thể phát hành biên lai." });
+      setFeedback({ tone: "success", text: "Đã xác nhận thanh toán. Bây giờ có thể phát hành biên lai." });
     } catch (error) { setFeedback({ tone: "error", text: apiErrorText(error) }); }
     finally { setBusy(null); }
   };
@@ -499,13 +586,16 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
   };
 
   return (
-    <div style={{ width:370,background:"#FFF",borderLeft:"1px solid #E2E8F0",
+    <div aria-label={`Chi tiết phòng ${room.number}`} style={{ width:"clamp(400px, 26vw, 460px)",background:"#FFF",borderLeft:"1px solid #E2E8F0",
       display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden" }}>
       {/* Header */}
       <div style={{ padding:"16px 20px 0",borderBottom:"1px solid #E2E8F0",flexShrink:0 }}>
         <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12 }}>
           <div style={{ flex:1,minWidth:0 }}>
-            <p style={{ fontSize:24,fontWeight:800,color:"#0F172A",marginBottom:2 }}>{room.number}</p>
+            <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap",marginBottom:2}}>
+              <p style={{ fontSize:24,fontWeight:800,color:"#0F172A" }}>Phòng {room.number}</p>
+              <span style={{fontSize:10,fontWeight:700,color:"#64748B",background:"#F1F5F9",border:"1px solid #E2E8F0",borderRadius:5,padding:"2px 6px"}}>room_id {room.id}</span>
+            </div>
             <p style={{ fontSize:13,color:"#64748B" }}>{roomTypeLabel(room.type)}</p>
             <div style={{ display:"flex",gap:6,marginTop:8 }}>
               <OccBadge s={room.occStatus} /> <ClnBadge s={room.cleanStatus} />
@@ -649,30 +739,69 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
         )}
         {tab === "service" && (
           <div>
-            <p style={{fontSize:11,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>Ghi nhận dịch vụ / minibar</p>
+            <p style={{fontSize:11,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Dịch vụ khách đã đặt trước</p>
+            {serviceBookings.filter(item => item.room_id === room.id).length === 0 ? (
+              <p style={{fontSize:12,color:"#94A3B8",marginBottom:16}}>Phòng này chưa có dịch vụ đặt trước.</p>
+            ) : <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:18}}>
+              {serviceBookings.filter(item => item.room_id === room.id).map(item => (
+                <div key={item.id} style={{padding:"10px 12px",border:"1px solid #E2E8F0",borderRadius:9,background:"#FFF",display:"flex",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                  <div>
+                    <strong style={{fontSize:12,color:"#0F172A"}}>{services.find(service => service.id === item.service_id)?.name ?? item.service_id} · {item.quantity} suất/lần</strong>
+                    <p style={{fontSize:11,color:"#64748B",marginTop:3}}>{fmtDateTime(item.scheduled_at)}{item.meal_period ? ` · ${item.meal_period === "LUNCH" ? "Bữa trưa" : "Bữa tối"}` : ""}</p>
+                    <p style={{fontSize:11,color:"#475569",marginTop:3}}>Miễn phí {item.free_quantity}/{item.quantity} · Phải trả {item.amount_due.toLocaleString("vi-VN")} ₫</p>
+                  </div>
+                  {item.status === "CONFIRMED" ? <button type="button" disabled={!isCheckedIn || Boolean(busy) || new Date(item.scheduled_at).getTime() > Date.now()} onClick={() => void markServiceUsed(item.id)} style={{border:0,borderRadius:7,padding:"8px 10px",background:"#166534",color:"#FFF",fontSize:11,fontWeight:700,cursor:"pointer"}}>Xác nhận đã dùng</button> : <span style={{fontSize:11,color:item.status === "USED" ? "#166534" : "#64748B"}}>{item.status === "USED" ? "Đã sử dụng" : "Đã hủy"}</span>}
+                </div>
+              ))}
+            </div>}
+            <p style={{fontSize:11,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:".08em",marginBottom:4}}>Dịch vụ phát sinh & minibar</p>
+            <p style={{fontSize:12,color:"#64748B",lineHeight:1.5,marginBottom:12}}>Chọn dịch vụ khách đã sử dụng để ghi vào tài khoản phòng.</p>
             {room.reservationStatus && room.reservationStatus !== "CHECKED_IN" && (
               <div role="note" style={{padding:"8px 10px",borderRadius:7,background:"#FEF3C7",color:"#92400E",fontSize:11,marginBottom:10}}>
                 Lưu ý: Chỉ có thể ghi nhận dịch vụ khi khách đang lưu trú (Đã nhận phòng).
               </div>
             )}
             <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
-              <select value={serviceId} onChange={event=>setServiceId(event.target.value)} style={{height:36,border:"1px solid #E2E8F0",borderRadius:8,padding:"0 10px",fontSize:12,background:"#FFF",outline:"none"}}>
-                <option value="">Chọn dịch vụ từ catalog backend</option>
-                {services.map(service=><option key={service.id} value={service.id}>{service.name} · {fmtVND(service.price)} / {service.unit || "lần"} · tồn {service.stock}</option>)}
+              <label htmlFor="front-desk-service" style={{fontSize:11,fontWeight:600,color:"#475569"}}>Dịch vụ khách đã sử dụng</label>
+              <select id="front-desk-service" value={serviceId} onChange={event=>setServiceId(event.target.value)} style={{height:38,border:"1px solid #CBD5E1",borderRadius:8,padding:"0 10px",fontSize:12,background:"#FFF",outline:"none",color:"#0F172A"}}>
+                <option value="">Chọn dịch vụ cần ghi nhận</option>
+                {services.map(service=><option key={service.id} value={service.id} disabled={service.stock < 1}>{service.name} · {servicePriceLabel(service)} · {serviceAvailabilityLabel(service)}</option>)}
               </select>
+              {selectedService && (
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:"10px 12px",borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0"}}>
+                  <div>
+                    <p style={{fontSize:10,color:"#94A3B8",marginBottom:2}}>Đơn giá áp dụng</p>
+                    <p style={{fontSize:12,fontWeight:700,color:"#334155"}}>{servicePriceLabel(selectedService)}</p>
+                  </div>
+                  <div>
+                    <p style={{fontSize:10,color:"#94A3B8",marginBottom:2}}>Khả dụng</p>
+                    <p style={{fontSize:12,fontWeight:700,color:selectedService.stock > 0 ? "#166534" : "#B91C1C"}}>{serviceAvailabilityLabel(selectedService)}</p>
+                  </div>
+                </div>
+              )}
+              {serviceId === "MAMREST" && (
+                <label htmlFor="front-desk-meal-period" style={{fontSize:11,fontWeight:600,color:"#475569"}}>Bữa ăn
+                  <select id="front-desk-meal-period" value={serviceMealPeriod} onChange={event=>setServiceMealPeriod(event.target.value as "LUNCH" | "DINNER")}
+                    style={{display:"block",width:"100%",height:38,marginTop:5,border:"1px solid #CBD5E1",borderRadius:8,padding:"0 10px",background:"#FFF"}}>
+                    <option value="LUNCH">Bữa trưa</option><option value="DINNER">Bữa tối</option>
+                  </select>
+                </label>
+              )}
+              {["BREAKFAST", "LNDRYSTD", "MAMREST", "POOL"].includes(serviceId) && <p style={{fontSize:11,color:"#166534"}}>Hệ thống trừ hạn mức miễn phí của booking theo ngày/phòng; phần vượt tính theo giá niêm yết.</p>}
+              <label htmlFor="front-desk-service-quantity" style={{fontSize:11,fontWeight:600,color:"#475569"}}>Số lượng</label>
               <div style={{display:"flex",gap:7}}>
-                <input value={serviceQuantity} onChange={event=>setServiceQuantity(Math.max(1, Number(event.target.value)))} type="number" min="1" step="1" aria-label="Số lượng dịch vụ" style={{flex:1,height:34,border:"1px solid #E2E8F0",borderRadius:8,padding:"0 10px",fontSize:12,outline:"none"}} />
-                <button disabled={!serviceId || serviceQuantity<1 || busy!==null || (room.reservationStatus !== undefined && room.reservationStatus !== "CHECKED_IN")} onClick={()=>void addService()} style={{height:34,padding:"0 11px",borderRadius:8,border:"none",background:serviceId&&serviceQuantity>0&&busy===null&&(room.reservationStatus === undefined || room.reservationStatus === "CHECKED_IN")?"#16A34A":"#CBD5E1",color:"#FFF",fontSize:11,fontWeight:700,cursor:serviceId&&busy===null?"pointer":"not-allowed"}}>{busy==="service"?"Đang ghi…":"Ghi nhận"}</button>
+                <input id="front-desk-service-quantity" value={serviceQuantity} onChange={event=>setServiceQuantity(Math.max(1, Number(event.target.value) || 1))} type="number" min="1" step="1" aria-label="Số lượng dịch vụ" style={{flex:1,height:36,border:"1px solid #CBD5E1",borderRadius:8,padding:"0 10px",fontSize:12,outline:"none"}} />
+                <button disabled={!canRecordService} onClick={()=>void addService()} style={{height:36,padding:"0 12px",borderRadius:8,border:"none",background:canRecordService?"#16A34A":"#CBD5E1",color:"#FFF",fontSize:11,fontWeight:700,cursor:canRecordService?"pointer":"not-allowed",whiteSpace:"nowrap"}}>{busy==="service"?"Đang ghi nhận…":"Ghi vào hóa đơn"}</button>
               </div>
             </div>
-            <p style={{fontSize:12,color:"#64748B",padding:"12px",background:"#F8FAFC",borderRadius:8}}>Giá được lấy từ catalog backend; Lễ tân không thể nhập hoặc sửa giá.</p>
+            <p style={{fontSize:12,color:"#64748B",padding:"12px",background:"#F8FAFC",borderRadius:8,lineHeight:1.5}}>Giá niêm yết là giá cho phần phải trả. Quyền lợi miễn phí được áp dụng trước; phần còn lại cộng vào hóa đơn phòng khi checkout.</p>
           </div>
         )}
         {tab==="history" && (
           <div>
             <div style={{ marginBottom: 16 }}>
               <strong style={{ fontSize: 12, color: "#334155" }}>Dòng thời gian sự kiện</strong>
-              {timeline.length===0?<p style={{fontSize:12,color:"#94A3B8",padding:"12px 0"}}>Chưa có lịch sử backend.</p>:timeline.map(event=><div key={event.id} style={{padding:"8px 0",borderBottom:"1px solid #F1F5F9"}}><strong style={{fontSize:12,color:"#334155"}}>{event.event_type||event.action||"Cập nhật"}</strong><p style={{fontSize:11,color:"#64748B",marginTop:2}}>{fmtDateTime(event.occurred_at||event.created_at)}{event.actor_id?` · ${event.actor_id}`:""}</p>{event.details&&<p style={{fontSize:11,color:"#475569",marginTop:2}}>{event.details}</p>}</div>)}
+              {timeline.length===0?<p style={{fontSize:12,color:"#94A3B8",padding:"12px 0"}}>Chưa có lịch sử thao tác.</p>:timeline.map(event=><div key={event.id} style={{padding:"8px 0",borderBottom:"1px solid #F1F5F9"}}><strong style={{fontSize:12,color:"#334155"}}>{event.event_type||event.action||"Cập nhật"}</strong><p style={{fontSize:11,color:"#64748B",marginTop:2}}>{fmtDateTime(event.occurred_at||event.created_at)}{event.actor_id?` · ${event.actor_id}`:""}</p>{event.details&&<p style={{fontSize:11,color:"#475569",marginTop:2}}>{event.details}</p>}</div>)}
             </div>
 
             {payments.length > 0 && (
@@ -725,21 +854,6 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
         )}
         {feedback && <div role={feedback.tone==="error"?"alert":"status"} style={{marginTop:12,padding:"10px 12px",borderRadius:8,fontSize:12,lineHeight:1.5,background:feedback.tone==="error"?"#FFF1F2":feedback.tone==="success"?"#F0FDF4":"#EFF6FF",color:feedback.tone==="error"?"#BE123C":feedback.tone==="success"?"#166534":"#1D4ED8"}}>{feedback.text}</div>}
 
-        {operation==="status" && (
-          <div style={{marginTop:12,padding:12,border:"1px solid #E2E8F0",borderRadius:10,background:"#F8FAFC"}}>
-            <strong style={{fontSize:12}}>Đổi trạng thái phòng</strong>
-            <select value={roomStatusTarget} onChange={e=>setRoomStatusTarget(e.target.value)} style={{width:"100%",height:34,marginTop:8,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 9px",background:"#FFF"}}>
-              <option value="available">available (Trống / Sẵn sàng)</option>
-              <option value="cleaning">cleaning (Đang dọn phòng)</option>
-              <option value="maintenance">maintenance (Bảo trì)</option>
-              <option value="out_of_service">out_of_service (Khóa / Ngoài hoạt động)</option>
-            </select>
-            <button onClick={()=>void handleUpdateRoomStatus()} disabled={busy!==null} style={{marginTop:8,width:"100%",height:34,borderRadius:7,background:"#0F172A",color:"#FFF",fontWeight:700,cursor:"pointer"}}>
-              {busy==="status"?"Đang cập nhật…":"Lưu trạng thái phòng"}
-            </button>
-          </div>
-        )}
-
         {operation==="cancel" && (
           <div style={{marginTop:12,padding:12,border:"1px solid #FECDD3",borderRadius:10,background:"#FFF1F2"}}>
             <strong style={{fontSize:12,color:"#BE123C"}}>Hủy đặt phòng</strong>
@@ -753,7 +867,7 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
         {operation==="incident" && (
           <div style={{marginTop:12,padding:12,border:"1px solid #FDE68A",borderRadius:10,background:"#FFFBEB"}}>
             <strong style={{fontSize:12,color:"#92400E"}}>Báo sự cố thiết bị</strong>
-            <input value={incidentEquipName} onChange={e=>setIncidentEquipName(e.target.value)} placeholder="Tên thiết bị hư hỏng..." style={{width:"100%",height:34,marginTop:8,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 9px",boxSizing:"border-box"}} />
+            {loadingEquipment ? <p style={{fontSize:11,color:"#64748B",marginTop:8}}>Đang tải thiết bị của phòng…</p> : roomEquipment.length > 0 ? <select value={incidentEquipName} onChange={e=>setIncidentEquipName(e.target.value)} aria-label="Thiết bị gặp sự cố" style={{width:"100%",height:34,marginTop:8,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 9px",background:"#FFF"}}>{roomEquipment.map(item=><option key={item.id} value={item.name}>{item.name} · có {item.quantity}</option>)}</select> : <p style={{fontSize:11,color:"#92400E",marginTop:8,lineHeight:1.5}}>Phòng chưa có thiết bị nào trong danh mục. Hãy nhờ quản trị thiết bị bổ sung trước khi lập biên bản.</p>}
             <div style={{display:"flex",gap:6,marginTop:7}}>
               <input type="number" min="1" value={incidentQuantity} onChange={e=>setIncidentQuantity(Math.max(1, Number(e.target.value)))} placeholder="Số lượng" style={{width:80,height:34,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 9px",boxSizing:"border-box"}} />
               <select value={incidentSeverity} onChange={e=>setIncidentSeverity(e.target.value as any)} style={{flex:1,height:34,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 8px",background:"#FFF"}}>
@@ -763,16 +877,35 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
                 <option value="CRITICAL">Khẩn cấp (CRITICAL)</option>
               </select>
             </div>
-            <button onClick={()=>void handleRecordEquipmentIncident()} disabled={!incidentEquipName.trim()||busy!==null} style={{marginTop:8,width:"100%",height:34,borderRadius:7,background:"#D97706",color:"#FFF",fontWeight:700,cursor:incidentEquipName.trim()?"pointer":"not-allowed"}}>
+            <button onClick={()=>void handleRecordEquipmentIncident()} disabled={!incidentEquipName.trim()||loadingEquipment||busy!==null} style={{marginTop:8,width:"100%",height:34,borderRadius:7,background:"#D97706",color:"#FFF",fontWeight:700,cursor:incidentEquipName.trim()&&!loadingEquipment?"pointer":"not-allowed"}}>
               {busy==="incident"?"Đang ghi nhận…":"Xác nhận báo sự cố"}
             </button>
           </div>
         )}
 
-        {operation==="transfer" && <div style={{marginTop:12,padding:12,border:"1px solid #BFDBFE",borderRadius:10,background:"#EFF6FF"}}><strong style={{fontSize:12}}>Chuyển phòng</strong><input value={transferRoom} onChange={event=>setTransferRoom(event.target.value)} placeholder="Mã phòng mới" style={{width:"100%",height:34,marginTop:8,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 9px",boxSizing:"border-box"}}/><input value={transferReason} onChange={event=>setTransferReason(event.target.value)} placeholder="Lý do (tùy chọn)" style={{width:"100%",height:34,marginTop:7,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 9px",boxSizing:"border-box"}}/><button onClick={()=>void transfer()} disabled={!transferRoom.trim()||busy!==null} style={{marginTop:8,width:"100%",height:34,borderRadius:7,background:"#2563EB",color:"#FFF",fontWeight:700,cursor:"pointer"}}>{busy==="transfer"?"Đang chuyển…":"Xác nhận chuyển phòng"}</button></div>}
-        {operation==="extend" && <div style={{marginTop:12,padding:12,border:"1px solid #BFDBFE",borderRadius:10,background:"#EFF6FF"}}><strong style={{fontSize:12}}>Gia hạn lưu trú</strong><input type="datetime-local" value={extendAt} onChange={event=>setExtendAt(event.target.value)} style={{width:"100%",height:34,marginTop:8,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 9px",boxSizing:"border-box"}}/><p style={{fontSize:10,color:"#64748B",marginTop:5}}>Backend sẽ kiểm tra giao nhau và quy tắc gửi trước giờ trả phòng.</p><button onClick={()=>void extend()} disabled={!extendAt||busy!==null} style={{marginTop:8,width:"100%",height:34,borderRadius:7,background:"#2563EB",color:"#FFF",fontWeight:700,cursor:"pointer"}}>{busy==="extend"?"Đang gia hạn…":"Xác nhận gia hạn"}</button></div>}
+        {operation==="transfer" && (
+          <div style={{marginTop:12,padding:12,border:"1px solid #BFDBFE",borderRadius:10,background:"#EFF6FF"}}>
+            <strong style={{fontSize:12}}>Chuyển phòng</strong>
+            <p style={{fontSize:11,color:"#475569",marginTop:4}}>Phòng hiện tại: <strong>{room.number}</strong> · room_id <strong>{room.id}</strong></p>
+            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#475569",marginTop:9}}>
+              Phòng đích
+              <select aria-label="Phòng đích" value={transferRoom} onChange={event=>setTransferRoom(event.target.value)} style={{width:"100%",height:36,marginTop:5,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 9px",background:"#FFF",boxSizing:"border-box"}}>
+                <option value="">{loadingTransferRooms ? "Đang kiểm tra lịch phòng…" : "Chọn phòng trống, sẵn sàng"}</option>
+                {transferRooms.map(candidate => (
+                  <option key={candidate.id} value={candidate.id} disabled={!canTransferTo(candidate)}>
+                    Phòng {candidate.number} · room_id {candidate.id} · {transferRoomState(candidate)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p style={{fontSize:10,color:"#64748B",lineHeight:1.5,marginTop:5}}>Phòng đã giữ, đang có khách, đang dọn hoặc ngoài hoạt động không thể chọn. Hệ thống sẽ kiểm tra lại lịch trùng ngay khi xác nhận.</p>
+            <input aria-label="Lý do chuyển phòng" value={transferReason} onChange={event=>setTransferReason(event.target.value)} placeholder="Lý do (tùy chọn)" style={{width:"100%",height:34,marginTop:7,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 9px",boxSizing:"border-box"}}/>
+            <button onClick={()=>void transfer()} disabled={!selectedTransferRoom||!canTransferTo(selectedTransferRoom)||busy!==null} style={{marginTop:8,width:"100%",height:34,borderRadius:7,background:selectedTransferRoom&&canTransferTo(selectedTransferRoom)?"#2563EB":"#94A3B8",color:"#FFF",fontWeight:700,cursor:selectedTransferRoom&&canTransferTo(selectedTransferRoom)?"pointer":"not-allowed"}}>{busy==="transfer"?"Đang chuyển…":"Xác nhận chuyển phòng"}</button>
+          </div>
+        )}
+        {operation==="extend" && <div style={{marginTop:12,padding:12,border:"1px solid #BFDBFE",borderRadius:10,background:"#EFF6FF"}}><strong style={{fontSize:12}}>Gia hạn lưu trú</strong><input type="datetime-local" value={extendAt} onChange={event=>setExtendAt(event.target.value)} style={{width:"100%",height:34,marginTop:8,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 9px",boxSizing:"border-box"}}/><p style={{fontSize:10,color:"#64748B",marginTop:5}}>Hệ thống sẽ kiểm tra phòng còn trống và điều kiện gia hạn trước giờ trả phòng.</p><button onClick={()=>void extend()} disabled={!extendAt||busy!==null} style={{marginTop:8,width:"100%",height:34,borderRadius:7,background:"#2563EB",color:"#FFF",fontWeight:700,cursor:"pointer"}}>{busy==="extend"?"Đang gia hạn…":"Xác nhận gia hạn"}</button></div>}
 
-        {checkoutStep!=="idle" && invoice && <div style={{marginTop:12,padding:13,border:"1px solid #BBF7D0",borderRadius:10,background:"#F0FDF4"}}><p style={{fontSize:10,fontWeight:800,color:"#166534",letterSpacing:1}}>QUY TRÌNH TRẢ PHÒNG</p><p style={{fontSize:12,color:"#334155",marginTop:6}}>Hóa đơn #{invoice.id} · Còn thanh toán <strong>{fmtVND(invoice.payable)}</strong></p>{checkoutStep==="review"&&<><label style={{display:"block",fontSize:11,color:"#475569",marginTop:9}}>Phương thức thanh toán<select value={paymentMethod} onChange={event=>setPaymentMethod(event.target.value as PaymentMethod)} style={{width:"100%",height:34,marginTop:4,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 8px",background:"#FFF"}}><option value="CASH">Tiền mặt</option><option value="CARD">Thẻ / POS</option><option value="BANK_TRANSFER">Chuyển khoản</option></select></label><button onClick={()=>void confirmCheckout()} disabled={busy!==null} style={{marginTop:9,width:"100%",height:36,borderRadius:7,background:"#16A34A",color:"#FFF",fontWeight:700}}>{busy==="checkout"?"Đang checkout…":"Khách đã xác nhận hóa đơn"}</button></>}{checkoutStep==="payment"&&<button onClick={()=>void recordPayment()} disabled={busy!==null} style={{marginTop:9,width:"100%",height:36,borderRadius:7,background:"#0F172A",color:"#FFF",fontWeight:700}}>{busy==="payment"?"Đang ghi thanh toán…":`Xác nhận đã thu ${fmtVND(invoice.payable)}`}</button>}{checkoutStep==="receipt"&&<button onClick={()=>void issueAndPrintReceipt()} disabled={busy!==null} style={{marginTop:9,width:"100%",height:36,borderRadius:7,background:"#2563EB",color:"#FFF",fontWeight:700}}>{busy==="receipt"?"Đang phát hành…":"Phát hành & in biên lai"}</button>}{checkoutStep==="done"&&<div style={{marginTop:9,fontSize:12,fontWeight:700,color:"#166534"}}>{issuedReceipt?`Hoàn tất · ${issuedReceipt.receipt_number}`:"Hoàn tất · không phát sinh số tiền phải thu"}{issuedReceipt&&<button onClick={()=>printReceipt(issuedReceipt,room,invoice)} style={{display:"block",marginTop:7,color:"#1D4ED8",fontWeight:700}}>In lại biên lai</button>}</div>}</div>}
+        {checkoutStep!=="idle" && invoice && <div style={{marginTop:12,padding:13,border:"1px solid #BBF7D0",borderRadius:10,background:"#F0FDF4"}}><p style={{fontSize:10,fontWeight:800,color:"#166534",letterSpacing:1}}>QUY TRÌNH TRẢ PHÒNG</p><p style={{fontSize:12,color:"#334155",marginTop:6}}>Hóa đơn #{invoice.id} · Còn thanh toán <strong>{fmtVND(invoice.payable)}</strong></p>{checkoutStep==="review"&&<><label style={{display:"block",fontSize:11,color:"#475569",marginTop:9}}>Phương thức thanh toán<select value={paymentMethod} onChange={event=>setPaymentMethod(event.target.value as PaymentMethod)} style={{width:"100%",height:34,marginTop:4,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 8px",background:"#FFF"}}><option value="CASH">Tiền mặt</option><option value="CARD">Thẻ</option><option value="BANK_TRANSFER">Chuyển khoản</option></select></label><button onClick={()=>void confirmCheckout()} disabled={busy!==null} style={{marginTop:9,width:"100%",height:36,borderRadius:7,background:"#16A34A",color:"#FFF",fontWeight:700}}>{busy==="checkout"?"Đang hoàn tất trả phòng…":"Khách đã xác nhận hóa đơn"}</button></>}{checkoutStep==="payment"&&<button onClick={()=>void recordPayment()} disabled={busy!==null} style={{marginTop:9,width:"100%",height:36,borderRadius:7,background:"#0F172A",color:"#FFF",fontWeight:700}}>{busy==="payment"?"Đang ghi thanh toán…":`Xác nhận đã thu ${fmtVND(invoice.payable)}`}</button>}{checkoutStep==="receipt"&&<button onClick={()=>void issueAndPrintReceipt()} disabled={busy!==null} style={{marginTop:9,width:"100%",height:36,borderRadius:7,background:"#2563EB",color:"#FFF",fontWeight:700}}>{busy==="receipt"?"Đang phát hành…":"Phát hành & in biên lai"}</button>}{checkoutStep==="done"&&<div style={{marginTop:9,fontSize:12,fontWeight:700,color:"#166534"}}>{issuedReceipt?`Hoàn tất · ${issuedReceipt.receipt_number}`:"Hoàn tất · không phát sinh số tiền phải thu"}{issuedReceipt&&<button onClick={()=>printReceipt(issuedReceipt,room,invoice)} style={{display:"block",marginTop:7,color:"#1D4ED8",fontWeight:700}}>In lại biên lai</button>}</div>}</div>}
       </div>
 
       {/* Action buttons */}
@@ -799,9 +932,9 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
           boxShadow:validReservation&&room.reservationStatus==="CHECKED_IN"?"0 2px 8px rgba(22,163,74,.3)":"none" }}>
           <CheckCircle2 size={16} /> {busy==="review"?"Đang tải hóa đơn…":"Trả phòng & Quyết toán"}
         </button>
-        <button onClick={()=>setOperation(value=>value==="transfer"?null:"transfer")} disabled={!validReservation||busy!==null} style={{ width:"100%",padding:"11px",borderRadius:9,
+        <button onClick={()=>setOperation(value=>value==="transfer"?null:"transfer")} disabled={!canTransferCurrentRoom||busy!==null} title={!canTransferCurrentRoom?"Chỉ chuyển được phòng hiện đang có khách và đã sẵn sàng vận hành":undefined} style={{ width:"100%",padding:"11px",borderRadius:9,
           background:"#FFF",border:"1px solid #E2E8F0",color:"#334155",
-          fontSize:13,fontWeight:600,cursor:"pointer",
+          fontSize:13,fontWeight:600,cursor:canTransferCurrentRoom?"pointer":"not-allowed",opacity:canTransferCurrentRoom?1:.55,
           display:"flex",alignItems:"center",justifyContent:"center",gap:7 }}>
           <RefreshCcw size={14} /> Chuyển phòng
         </button>
@@ -819,18 +952,17 @@ function RoomDrawer({ room, onClose, onRefresh, onCheckIn }: { room: Room; onClo
             <PlusCircle size={13} /> Thêm Dịch vụ
           </button>
         </div>
-        <div style={{ display:"flex",gap:8 }}>
-          <button onClick={()=>setOperation(v=>v==="status"?null:"status")} disabled={busy!==null} style={{ flex:1,padding:"9px",borderRadius:8,
-            background:"#F8FAFC",border:"1px solid #E2E8F0",color:"#475569",fontSize:11,fontWeight:600,cursor:"pointer" }}>
-            Đổi trạng thái phòng
-          </button>
-          {validReservation && (
+        <div role="note" style={{padding:"9px 10px",borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0",color:"#64748B",fontSize:11,lineHeight:1.5}}>
+          Trạng thái phòng được cập nhật theo quy trình nhận/trả phòng. Dọn phòng và bảo trì do bộ phận chuyên trách xử lý để không bỏ qua checklist hoặc nghiệm thu.
+        </div>
+        {validReservation && (
+          <div style={{ display:"flex",gap:8 }}>
             <button onClick={()=>setOperation(v=>v==="incident"?null:"incident")} disabled={busy!==null} style={{ flex:1,padding:"9px",borderRadius:8,
               background:"#F8FAFC",border:"1px solid #E2E8F0",color:"#D97706",fontSize:11,fontWeight:600,cursor:"pointer" }}>
               Báo sự cố thiết bị
             </button>
-          )}
-        </div>
+          </div>
+        )}
         {(canCancel || canNoShow) && (
           <div style={{ display:"flex",gap:8,marginTop:2 }}>
             {canCancel && (
@@ -868,7 +1000,7 @@ function KpiBar({ rooms, arrivals, departures }: { rooms: Room[]; arrivals: numb
         { label:"Khách đến", val:String(arrivals),sub:"Booking đến hôm nay",trend:"",iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:Users },
         { label:"Khách trả phòng",val:String(departures),sub:"Booking trả hôm nay",trend:"",iconBg:"#DBEAFE",iconColor:"#3B82F6",Icon:ArrowUpRight },
         { label:"Công suất", val:`${occupancy}%`,sub:`${occupied} / ${rooms.length} phòng có khách`,trend:"",iconBg:"#EDE9FE",iconColor:"#7C3AED",Icon:BedDouble },
-        { label:"Trạng thái phòng",val:`Sạch: ${clean}`,sub:`Đã giữ: ${reserved} · Bẩn: ${dirty}`,trend:"",iconBg:"#FEF3C7",iconColor:"#D97706",Icon:Sparkles },
+        { label:"Phòng sẵn sàng",val:`Sẵn sàng: ${clean}`,sub:`Đã giữ: ${reserved} · Cần dọn: ${dirty}`,trend:"",iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:CheckCircle2 },
       ].map((k,i,arr) => (
         <div key={k.label} style={{ flex:1,padding:"16px 0",display:"flex",alignItems:"center",gap:14,
           borderRight:i<arr.length-1?"1px solid #F1F5F9":"none",
@@ -927,7 +1059,7 @@ function OverviewScreen({ arrivals, departures, alerts = [], activities = [], da
       </div>
 
       <div style={{ padding:20,display:"flex",flexDirection:"column",gap:16 }}>
-        <div role={dataState==="fallback"?"alert":"status"} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"9px 12px",borderRadius:9,background:dataState==="live"?"#F0FDF4":dataState==="loading"?"#EFF6FF":"#FFFBEB",border:`1px solid ${dataState==="live"?"#BBF7D0":dataState==="loading"?"#BFDBFE":"#FDE68A"}`,fontSize:12,color:"#334155"}}><span>{dataState==="live"?"● Dữ liệu trực tiếp từ backend":dataState==="loading"?"Đang đồng bộ dashboard backend…":`Không tải được dữ liệu backend. ${dataError??""}`}</span>{dataState==="fallback"&&<button onClick={onRetry} style={{fontWeight:700,color:"#1D4ED8",whiteSpace:"nowrap"}}>Thử lại</button>}</div>
+        <div role={dataState==="fallback"?"alert":"status"} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"9px 12px",borderRadius:9,background:dataState==="live"?"#F0FDF4":dataState==="loading"?"#EFF6FF":"#FFFBEB",border:`1px solid ${dataState==="live"?"#BBF7D0":dataState==="loading"?"#BFDBFE":"#FDE68A"}`,fontSize:12,color:"#334155"}}><span>{dataState==="live"?"● Dữ liệu đang được cập nhật":dataState==="loading"?"Đang cập nhật thông tin vận hành…":`Không tải được thông tin vận hành. ${dataError??""}`}</span>{dataState==="fallback"&&<button onClick={onRetry} style={{fontWeight:700,color:"#1D4ED8",whiteSpace:"nowrap"}}>Thử lại</button>}</div>
         {/* Alerts */}
         <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
           {alerts.length === 0 ? (
@@ -1320,7 +1452,7 @@ function RoomMapScreen({ rooms = [], focusRoomId, onRefresh, onCheckIn }: { room
           })}
         </div>
       </div>
-      {selectedRoom && <RoomDrawer room={selectedRoom} onClose={()=>setSelectedRoom(null)} onRefresh={onRefresh} onCheckIn={onCheckIn} />}
+      {selectedRoom && <RoomDrawer room={selectedRoom} rooms={rooms} onClose={()=>setSelectedRoom(null)} onRefresh={onRefresh} onCheckIn={onCheckIn} onTransferred={roomId=>setSelectedRoom(rooms.find(candidate=>candidate.id===roomId)??null)} />}
     </div>
   );
 }
@@ -1359,17 +1491,18 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
   // Form states for Create Reservation
   const [bookGuestId, setBookGuestId] = useState("");
   const [bookRoomId, setBookRoomId] = useState("");
+  const [bookGuestCount, setBookGuestCount] = useState(1);
   const [bookRentalType, setBookRentalType] = useState<"PACKAGE" | "HOURLY">("PACKAGE");
   const [bookCheckIn, setBookCheckIn] = useState(() => {
     const d = new Date();
     d.setMinutes(0, 0, 0);
-    return d.toISOString().slice(0, 16);
+    return localDateTimeValue(d);
   });
   const [bookCheckOut, setBookCheckOut] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     d.setHours(12, 0, 0, 0);
-    return d.toISOString().slice(0, 16);
+    return localDateTimeValue(d);
   });
   const [bookDeposit, setBookDeposit] = useState("0");
 
@@ -1484,6 +1617,10 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
       setActionError("Vui lòng nhập số phòng.");
       return;
     }
+    if (!Number.isSafeInteger(bookGuestCount) || bookGuestCount < 1) {
+      setActionError("Số khách ở trong phòng phải là số nguyên dương.");
+      return;
+    }
     setSubmittingModal(true);
     setActionError(null);
     try {
@@ -1495,13 +1632,14 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
         booking_source: "DIRECT_FRONT_DESK",
         rooms: [{
           room_id: bookRoomId.trim(),
-          expected_check_in: new Date(bookCheckIn).toISOString(),
-          expected_check_out: new Date(bookCheckOut).toISOString(),
+          guest_count: bookGuestCount,
+          expected_check_in: bookCheckIn,
+          expected_check_out: bookCheckOut,
         }],
       });
       setFeedback(`Đã tạo đặt phòng #${res.id} thành công.`);
       setShowCreateBooking(false);
-      setBookGuestId(""); setBookRoomId(""); setBookDeposit("0");
+      setBookGuestId(""); setBookRoomId(""); setBookGuestCount(1); setBookDeposit("0");
       await onRefresh?.();
     } catch (err) {
       setActionError(apiErrorText(err));
@@ -1676,7 +1814,7 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
                       <td style={{ padding:"12px 14px" }}>
                         <span style={{ fontSize:11,fontWeight:500,padding:"2px 8px",borderRadius:99,
                           background:checkedIn.includes(g.id)?"#DCFCE7":"#DBEAFE",color:checkedIn.includes(g.id)?"#166534":"#1D4ED8" }}>
-                          {checkedIn.includes(g.id)?"Đã nhận phòng":"Chờ backend xác nhận"}
+                          {checkedIn.includes(g.id)?"Đã nhận phòng":"Đang chờ xác nhận"}
                         </span>
                       </td>
                       <td style={{ padding:"12px 14px" }}>
@@ -1737,7 +1875,7 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
               </thead>
               <tbody>
                 {directoryLoading ? (
-                  <tr><td colSpan={9} style={{ padding:"28px 14px",textAlign:"center",fontSize:12,color:"#94A3B8" }}>Đang tải danh sách khách hàng từ backend…</td></tr>
+                  <tr><td colSpan={9} style={{ padding:"28px 14px",textAlign:"center",fontSize:12,color:"#94A3B8" }}>Đang tải danh sách khách hàng…</td></tr>
                 ) : directoryGuests.length === 0 ? (
                   <tr><td colSpan={9} style={{ padding:"28px 14px",textAlign:"center",fontSize:12,color:"#94A3B8" }}>Không tìm thấy thông tin khách hàng phù hợp</td></tr>
                 ) : (
@@ -1847,6 +1985,11 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
                     style={{ width:"100%",height:36,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 10px",fontSize:13,marginTop:4,boxSizing:"border-box" }} />
                 </label>
               </div>
+              <label style={{ fontSize:12,fontWeight:600,color:"#334155" }}>
+                Số khách trong phòng *
+                <input required type="number" min="1" step="1" value={bookGuestCount} onChange={e=>setBookGuestCount(Number(e.target.value))}
+                  style={{ width:"100%",height:36,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 10px",fontSize:13,marginTop:4,boxSizing:"border-box" }} />
+              </label>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
                 <label style={{ fontSize:12,fontWeight:600,color:"#334155" }}>
                   Hình thức thuê
@@ -1928,7 +2071,7 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
 function ShiftScreen({ actorId, arrivalCount, departureCount }: { actorId: string; arrivalCount: number; departureCount: number }) {
   const [checklist, setChecklist] = useState(DEFAULT_SHIFT_CHECKLIST);
   const [notes, setNotes] = useState(EMPTY_SHIFT_NOTES);
-  const [shiftCode, setShiftCode] = useState(`FD-${new Date().toISOString().slice(0,10)}`);
+  const [shiftCode, setShiftCode] = useState(`FD-${localDateValue()}`);
   const [toActor, setToActor] = useState("");
   const [actualAmount, setActualAmount] = useState("");
   const [denominationQuantities, setDenominationQuantities] = useState<Record<number, number>>({});
@@ -1936,12 +2079,30 @@ function ShiftScreen({ actorId, arrivalCount, departureCount }: { actorId: strin
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<CashHandover | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [handoverHistory, setHandoverHistory] = useState<CashHandover[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const handoverKey = useRef(newFrontDeskIdempotencyKey());
   const doneCount = checklist.filter(c=>c.done).length;
   const denominationLines: CashDenomination[] = CASH_DENOMINATIONS
     .map(denomination => ({ denomination, quantity: denominationQuantities[denomination] ?? 0 }))
     .filter(line => line.quantity > 0);
   const denominationTotal = denominationLines.reduce((sum, line) => sum + line.denomination * line.quantity, 0);
+
+  const loadHandoverHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const page = await frontDeskApi.myCashHandovers({ page: 0, size: 8 });
+      setHandoverHistory(page.items);
+      setHistoryError(null);
+    } catch (cause) {
+      setHistoryError(apiErrorText(cause));
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadHandoverHistory(); }, [loadHandoverHistory]);
 
   const toggleCheck = (id:string) =>
     setChecklist(prev=>prev.map(c=>c.id===id?{...c,done:!c.done}:c));
@@ -1966,6 +2127,7 @@ function ShiftScreen({ actorId, arrivalCount, departureCount }: { actorId: strin
     try {
       const response = await frontDeskApi.cashHandover({ shift_code: shiftCode.trim(), from_actor: actorId, to_actor: toActor.trim(), actual_amount: Number(actualAmount), note: notes.trim() || null, denominations: denominationLines }, handoverKey.current);
       setResult(response); handoverKey.current = newFrontDeskIdempotencyKey();
+      await loadHandoverHistory();
     } catch (cause) { setError(apiErrorText(cause)); }
     finally { setSubmitting(false); }
   };
@@ -1975,7 +2137,7 @@ function ShiftScreen({ actorId, arrivalCount, departureCount }: { actorId: strin
       <div style={{ padding:"20px 24px" }}>
         <div style={{ marginBottom:16 }}>
           <h2 style={{ fontSize:18,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Giao ca &amp; Két tiền</h2>
-          <p style={{ fontSize:12,color:"#94A3B8" }}>Actor đã xác thực: <strong>{actorId || "Đang tải…"}</strong> · Backend tự tính số tiền kỳ vọng</p>
+          <p style={{ fontSize:12,color:"#94A3B8" }}>Nhân viên thực hiện: <strong>{actorId || "Đang tải…"}</strong> · Số tiền cần bàn giao do hệ thống tự tính</p>
         </div>
 
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16 }}>
@@ -2005,7 +2167,7 @@ function ShiftScreen({ actorId, arrivalCount, departureCount }: { actorId: strin
                 </label>)}
               </div>
             </div>
-            <div style={{ background:"#EFF6FF",borderRadius:12,border:"1px solid #BFDBFE",padding:"14px 16px" }}><p style={{fontSize:12,fontWeight:700,color:"#1D4ED8"}}>Tách biệt quyền tài chính</p><p style={{fontSize:11,color:"#475569",lineHeight:1.6,marginTop:4}}>Lễ tân không được thêm giao dịch hay xem sổ tài chính. Khi bàn giao, backend tự tính <code>expected_amount</code> từ payment ledger và trả về chênh lệch.</p></div>
+            <div style={{ background:"#EFF6FF",borderRadius:12,border:"1px solid #BFDBFE",padding:"14px 16px" }}><p style={{fontSize:12,fontWeight:700,color:"#1D4ED8"}}>Tách biệt quyền tài chính</p><p style={{fontSize:11,color:"#475569",lineHeight:1.6,marginTop:4}}>Lễ tân không được thêm giao dịch hay xem sổ tài chính. Khi bàn giao, hệ thống tự tính số tiền cần bàn giao từ các khoản thu và trả về chênh lệch.</p></div>
 
             {/* Kiểm két button */}
             <button onClick={confirmCashCount} disabled={!actualAmount} style={{ width:"100%",padding:"13px",borderRadius:10,
@@ -2023,7 +2185,7 @@ function ShiftScreen({ actorId, arrivalCount, departureCount }: { actorId: strin
               <p style={{ fontSize:13,fontWeight:700,color:"#0F172A",marginBottom:12 }}>Thông tin ca làm</p>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
                 {[
-                  {label:"Actor giao ca", val:actorId||"—"},
+                  {label:"Nhân viên giao ca", val:actorId||"—"},
                   {label:"Mã ca", val:shiftCode||"—"},
                   {label:"Khách đến", val:`${arrivalCount} booking`},
                   {label:"Khách đi", val:`${departureCount} booking`},
@@ -2088,6 +2250,14 @@ function ShiftScreen({ actorId, arrivalCount, departureCount }: { actorId: strin
             </button>
           </div>
         </div>
+
+        <section aria-label="Lịch sử bàn giao của tôi" style={{ marginTop:16,background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden" }}>
+          <div style={{padding:"14px 16px",borderBottom:"1px solid #F1F5F9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+            <div><p style={{fontSize:13,fontWeight:700,color:"#0F172A"}}>Lịch sử bàn giao của tôi</p><p style={{fontSize:11,color:"#64748B",marginTop:2}}>Chỉ hiển thị các biên bản bạn là người giao hoặc nhận tiền.</p></div>
+            <button onClick={()=>void loadHandoverHistory()} disabled={historyLoading} style={{fontSize:11,color:"#2563EB",fontWeight:700,background:"transparent",cursor:historyLoading?"wait":"pointer"}}>{historyLoading?"Đang tải…":"Tải lại"}</button>
+          </div>
+          {historyError ? <div role="alert" style={{padding:"12px 16px",fontSize:12,color:"#BE123C",background:"#FFF1F2"}}>Không thể tải lịch sử: {historyError}</div> : historyLoading ? <p style={{padding:"16px",fontSize:12,color:"#64748B"}}>Đang tải lịch sử bàn giao…</p> : handoverHistory.length === 0 ? <p style={{padding:"16px",fontSize:12,color:"#64748B"}}>Chưa có biên bản bàn giao nào của bạn.</p> : <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:"#F8FAFC",color:"#64748B",textAlign:"left"}}>{["Thời gian", "Ca", "Bàn giao", "Kiểm đếm", "Chênh lệch", "Ghi chú"].map(label=><th key={label} style={{padding:"9px 12px",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",whiteSpace:"nowrap"}}>{label}</th>)}</tr></thead><tbody>{handoverHistory.map(item=><tr key={item.id} style={{borderTop:"1px solid #F1F5F9",color:"#334155"}}><td style={{padding:"10px 12px",whiteSpace:"nowrap"}}>{fmtDateTime(item.handed_over_at)}</td><td style={{padding:"10px 12px",fontWeight:700}}>{item.shift_code}</td><td style={{padding:"10px 12px",whiteSpace:"nowrap"}}>{item.from_actor} <span style={{color:"#94A3B8"}}>→</span> {item.to_actor}</td><td style={{padding:"10px 12px",fontWeight:600,whiteSpace:"nowrap"}}>{fmtVND(item.actual_amount)}</td><td style={{padding:"10px 12px",fontWeight:700,color:item.variance === 0 ? "#166534" : "#B45309",whiteSpace:"nowrap"}}>{item.variance === 0 ? "Khớp" : fmtVND(item.variance)}</td><td style={{padding:"10px 12px",maxWidth:260}}>{item.note || "—"}</td></tr>)}</tbody></table></div>}
+        </section>
       </div>
     </div>
   );
@@ -2151,7 +2321,7 @@ function TopHeader({ search, setSearch, actorName, onLogout }: { search:string; 
           onClose={()=>setProfileOpen(false)}
           onLogout={onLogout}
           align="top-right"
-          currentRoleLabel="Lễ tân PMS"
+          currentRoleLabel="Lễ tân"
           departmentName="Bộ phận Tiền sảnh"
         />
       </div>
@@ -2187,11 +2357,16 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
     try {
       const dashboard: Dashboard = await frontDeskApi.dashboard(query.trim() ? { q: query.trim() } : {});
       if (sequence !== requestSequence.current) return;
-      const stays = [...dashboard.current_stays, ...dashboard.arrivals, ...dashboard.departures];
+      // Ưu tiên khách đang ở/đến hôm nay; dùng booking sắp tới để card phòng vẫn thể hiện
+      // phòng đã được giữ mà không làm sai KPI "khách đến hôm nay".
+      const stays = [...dashboard.current_stays, ...dashboard.arrivals, ...dashboard.departures, ...(dashboard.upcoming_stays ?? [])];
       const findStay = (roomId: string) => stays.find(item => item.room_ids.includes(roomId));
       const mappedRooms = dashboard.rooms.map((raw): Room => {
-        const stay = findStay(raw.room_id);
         const status = raw.status.toUpperCase();
+        const roomCannotHostGuest = ["CLEANING", "DIRTY", "NEEDS_CLEANING", "OUT_OF_SERVICE", "MAINTENANCE", "BLOCKED", "CANCELLED", "RETURNED"].includes(status);
+        // Trạng thái vận hành của phòng thắng dữ liệu read-model bị trễ: phòng đang dọn/bảo trì
+        // tuyệt đối không được hiện khách hoặc mở thao tác chuyển phòng.
+        const stay = roomCannotHostGuest ? undefined : findStay(raw.room_id);
         const occupied = status === "OCCUPIED" || stay?.status === "CHECKED_IN";
         const isReserved = status === "RESERVED" || stay?.status === "CONFIRMED" || stay?.status === "DEPOSIT_PAID";
         return {
@@ -2250,7 +2425,7 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
   }, [loadDashboard, search]);
 
   const handleCheckIn = async (guest: ArrivingGuest) => {
-    if (!guest.reservationId) throw new Error("Không tìm thấy mã đặt phòng backend.");
+    if (!guest.reservationId) throw new Error("Không tìm thấy mã đặt phòng.");
     await handleCheckInById(guest.reservationId);
   };
 
@@ -2283,11 +2458,11 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
           <div style={{ display:"flex",alignItems:"center",gap:10 }}>
             <img
               src="/hotel_logo.png"
-              alt="MAM Hotel Logo"
+              alt="MaM Hotel Logo"
               style={{ width:38,height:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 6px rgba(184,148,74,0.35))" }}
             />
             <div>
-              <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",lineHeight:1.1,fontFamily:"'Cormorant Garamond',Georgia,serif",letterSpacing:"0.05em" }}>MAM HOTEL</p>
+              <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",lineHeight:1.1,fontFamily:"'Cormorant Garamond',Georgia,serif",letterSpacing:"0.05em" }}>MaM Hotel</p>
               <p style={{ fontSize:9,color:"#B8944A",letterSpacing:"0.12em",textTransform:"uppercase",marginTop:2,fontWeight:600 }}>HỆ THỐNG LỄ TÂN</p>
             </div>
           </div>
@@ -2334,7 +2509,7 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
             onClose={()=>setSidebarProfileOpen(false)}
             onLogout={onBack}
             align="bottom-left"
-            currentRoleLabel="Lễ tân PMS"
+              currentRoleLabel="Lễ tân"
             departmentName="Bộ phận Tiền sảnh"
           />
         </div>

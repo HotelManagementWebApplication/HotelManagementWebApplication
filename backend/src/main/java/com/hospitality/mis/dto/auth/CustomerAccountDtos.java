@@ -2,6 +2,7 @@ package com.hospitality.mis.dto.auth;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import com.hospitality.mis.dto.guest.GuestDtos;
 
@@ -9,6 +10,41 @@ import com.hospitality.mis.dto.guest.GuestDtos;
 public final class CustomerAccountDtos {
     /** Namespace chỉ chứa DTO, không tạo đối tượng tiện ích. */
     private CustomerAccountDtos() {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    /** Request gửi mã OTP đến email. */
+    public record OtpSendRequest(
+            @NotBlank(message = "Email không được để trống")
+            @Email(message = "Địa chỉ email không đúng định dạng")
+            String email) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    /** Request đăng ký tài khoản khách hàng kèm mã OTP xác thực email. */
+    public record RegisterWithOtpRequest(
+            @NotBlank(message = "Số điện thoại không được để trống")
+            String phone,
+            @NotBlank(message = "Mật khẩu không được để trống")
+            String password,
+            @NotBlank(message = "Họ tên không được để trống")
+            String fullName,
+            @NotBlank(message = "Số giấy tờ định danh không được để trống")
+            String identityNumber,
+            @NotBlank(message = "Email không được để trống")
+            @Email(message = "Địa chỉ email không đúng định dạng")
+            String email,
+            @NotBlank(message = "Mã OTP không được để trống")
+            String otp) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    /** Request đặt lại mật khẩu bằng mã OTP đã gửi qua email. */
+    public record ResetPasswordOtpRequest(
+            @NotBlank(message = "Email không được để trống")
+            @Email(message = "Địa chỉ email không đúng định dạng")
+            String email,
+            @NotBlank(message = "Mã OTP không được để trống")
+            String otp,
+            @NotBlank(message = "Mật khẩu mới không được để trống")
+            String newPassword) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     /** Trạng thái tài khoản công khai, không trả mật khẩu. */

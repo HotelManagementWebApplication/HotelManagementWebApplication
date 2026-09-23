@@ -4,8 +4,9 @@ import { enterpriseApi } from "../shared/api/enterprise";
 import { authApi } from "../shared/api/auth";
 import { EmployeeProfileDropdown } from "../components/common/EmployeeProfileDropdown";
 import type { OtaReconciliation, VatInvoice } from "../shared/types/enterprise";
-import type { Invoice as ApiInvoice, CashHandover, CashDenomination, PaymentMethod as ApiPaymentMethod, CommercialPartner, PartnerSettlement, PartnerDebt } from "../shared/types/kitchenAccounting";
+import type { Invoice as ApiInvoice, CashHandover, CashDenomination, PaymentMethod as ApiPaymentMethod, PartnerDebt } from "../shared/types/kitchenAccounting";
 import type { EmployeeProfileDto } from "../shared/types/api";
+import { localDateValue } from "../shared/utils/localDate";
 import {
   LayoutDashboard, ConciergeBell, CalendarDays, Sparkles, UtensilsCrossed,
   Wrench, FileText, BarChart2, Users, Settings,
@@ -14,52 +15,11 @@ import {
   CheckCircle2, ArrowUpRight, ChevronLeft, ChevronRight, LogOut, Sun, Moon,
 } from "lucide-react";
 
-function CommercialPartnersScreen() {
-  const [partners, setPartners] = useState<CommercialPartner[]>([]);
-  const [settlements, setSettlements] = useState<PartnerSettlement[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState<number | null>(null);
-  const fmt = (value: number) => `${Math.round(value).toLocaleString("vi-VN")} ₫`;
-
-  useEffect(() => {
-    Promise.all([kitchenAccountingApi.commercialPartners(), kitchenAccountingApi.partnerSettlements()])
-      .then(([partnerRows, settlementRows]) => { setPartners(partnerRows); setSettlements(settlementRows); })
-      .catch(err => console.warn("Commercial partner API unavailable:", err))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const exportSettlement = async (row: PartnerSettlement) => {
-    setExporting(row.id);
-    try {
-      const result = await kitchenAccountingApi.exportPartnerSettlement(row.id, `SETTLE-${row.id}-${Date.now()}`);
-      setSettlements(rows => rows.map(item => item.id === result.id ? result : item));
-    } catch (error) { window.alert(error instanceof Error ? error.message : "Không thể xuất công nợ tháng."); }
-    finally { setExporting(null); }
-  };
-
-  return <div style={{ flex:1, overflowY:"auto", padding:"18px 22px" }}>
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
-      <div><h2 style={{ fontSize:20, fontWeight:800, color:"#0F172A", marginBottom:4 }}>Quản lý Đối tác &amp; Mặt bằng</h2><p style={{ fontSize:12, color:"#64748B" }}>Tiền thuê cố định · Phí dịch vụ · Hoa hồng 5% có mức sàn bảo hiểm doanh thu</p></div>
-      <span style={{ padding:"7px 10px", borderRadius:8, background:"#EFF6FF", color:"#1D4ED8", fontSize:11, fontWeight:700 }}>Tòa nhà: tầng 0–21</span>
-    </div>
-    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:16 }}>
-      {[{label:"Đối tác đang thuê",value:String(partners.length),color:"#2563EB"},{label:"Công nợ kỳ hiện tại",value:fmt(settlements.reduce((sum,row)=>sum+row.total_due,0)),color:"#0F172A"},{label:"Hoa hồng phải thu",value:fmt(settlements.reduce((sum,row)=>sum+row.commission_due,0)),color:"#B45309"}].map(card=><div key={card.label} style={{ background:"#FFF", border:"1px solid #E2E8F0", borderRadius:10, padding:"14px 16px" }}><p style={{ fontSize:11, color:"#64748B", marginBottom:5 }}>{card.label}</p><p style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:20, fontWeight:800, color:card.color }}>{card.value}</p></div>)}
-    </div>
-    <div style={{ background:"#FFF", border:"1px solid #E2E8F0", borderRadius:12, overflow:"hidden", marginBottom:16 }}>
-      <div style={{ padding:"13px 16px", borderBottom:"1px solid #E2E8F0" }}><p style={{ fontSize:13, fontWeight:800, color:"#0F172A" }}>Danh sách thương hiệu &amp; mặt bằng</p><p style={{ fontSize:11, color:"#94A3B8", marginTop:2 }}>Phân khu thương mại tầng 0–2 · tiện ích cao cấp tầng 3–4 · phòng nghỉ tầng 5–20 · hồ bơi tầng 21</p></div>
-      {loading ? <p style={{ padding:20, fontSize:12, color:"#64748B" }}>Đang tải dữ liệu đối tác...</p> : partners.map(partner=><div key={partner.id} style={{ display:"grid", gridTemplateColumns:"1.5fr 110px 150px 150px 130px", gap:12, alignItems:"center", padding:"13px 16px", borderTop:"1px solid #F1F5F9" }}><div><p style={{ fontSize:12, fontWeight:700, color:"#0F172A" }}>{partner.brand_name}</p><p style={{ fontSize:10, color:"#94A3B8" }}>{partner.category} · Tầng {partner.floor_from}{partner.floor_to !== partner.floor_from ? `–${partner.floor_to}` : ""}</p></div><span style={{ fontSize:11, color:"#475569" }}>Đang thuê</span><span style={{ fontSize:11, color:"#475569" }}>Mặt bằng {fmt(partner.fixed_rent)}/tháng</span><span style={{ fontSize:11, color:"#475569" }}>Dịch vụ {fmt(partner.service_fee)}</span><span style={{ fontSize:11, fontWeight:700, color:"#B45309" }}>{partner.commission_rate}% · sàn {fmt(partner.commission_floor)}</span></div>)}
-    </div>
-    <div style={{ background:"#FFF", border:"1px solid #E2E8F0", borderRadius:12, overflow:"hidden" }}>
-      <div style={{ padding:"13px 16px", borderBottom:"1px solid #E2E8F0" }}><p style={{ fontSize:13, fontWeight:800, color:"#0F172A" }}>Công nợ tháng &amp; hoa hồng voucher</p><p style={{ fontSize:11, color:"#94A3B8", marginTop:2 }}>Hoa hồng = số lớn hơn giữa 5% doanh thu thực tế và mức sàn cam kết.</p></div>
-      {settlements.map(row=><div key={row.id} style={{ display:"grid", gridTemplateColumns:"1.4fr 125px 125px 130px 130px 125px", gap:12, alignItems:"center", padding:"13px 16px", borderTop:"1px solid #F1F5F9" }}><div><p style={{ fontSize:12, fontWeight:700 }}>{row.partner_name}</p><p style={{ fontSize:10, color:"#94A3B8" }}>{row.period_start} – {row.period_end}</p></div><span style={{ fontSize:11 }}>Doanh thu {fmt(row.actual_revenue)}</span><span style={{ fontSize:11 }}>Hoa hồng {fmt(row.commission_due)}</span><strong style={{ fontSize:12 }}>{fmt(row.total_due)}</strong><span style={{ fontSize:10, color:row.status === "EXPORTED" ? "#166534" : "#92400E", fontWeight:700 }}>{row.status === "EXPORTED" ? "Đã xuất" : "Chờ xuất"}</span><button disabled={row.status !== "OPEN" || exporting === row.id} onClick={()=>exportSettlement(row)} style={{ height:30, border:0, borderRadius:7, background:row.status === "OPEN" ? "#0F172A" : "#E2E8F0", color:row.status === "OPEN" ? "#FFF" : "#94A3B8", fontSize:11, fontWeight:700, cursor:row.status === "OPEN" ? "pointer" : "default" }}>{exporting === row.id ? "Đang xuất..." : "Xuất công nợ"}</button></div>)}
-    </div>
-  </div>;
-}
 
 /* ══════════════════════════════════════════════════════════
    TYPES
 ══════════════════════════════════════════════════════════ */
-type MainTab = "handover" | "ledger" | "ota" | "vat" | "debt" | "commercial";
+type MainTab = "handover" | "ledger" | "ota" | "vat" | "debt";
 type LedgerTab = "all" | "cash" | "card" | "vietqr" | "agoda" | "booking";
 type PayStatus = "paid" | "pending" | "refunded";
 type OtaChannel = "agoda" | "booking" | "expedia" | "airbnb" | "direct";
@@ -106,7 +66,6 @@ const SIDEBAR_NAV: { id:MainTab; label:string; Icon:React.ElementType }[] = [
   { id:"vat",      label:"Hóa đơn & Biên lai",       Icon:FileText },
   { id:"ota",      label:"Đối soát kênh bán",        Icon:RefreshCcw },
   { id:"debt",     label:"Công nợ đối tác",          Icon:Building2 },
-  { id:"commercial", label:"Đối tác & Mặt bằng",       Icon:Building2 },
 ];
 
 const METHOD_CFG: Record<string,{bg:string;text:string;label:string}> = {
@@ -187,7 +146,7 @@ function CashHandoverPanel({
       setConfirmed(true);
       setFormOpen(false);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Không thể ghi nhận bàn giao vào database.");
+      window.alert("Không thể ghi nhận bàn giao. Vui lòng thử lại.");
     }
   };
 
@@ -266,7 +225,7 @@ function CashHandoverPanel({
             {cashRows.length === 0 && (
               <tr>
                 <td colSpan={7} style={{ padding:"28px 12px",textAlign:"center",fontSize:12,color:"#94A3B8" }}>
-                  Chưa có dữ liệu bàn giao két từ database.
+                  Chưa có dữ liệu bàn giao két.
                 </td>
               </tr>
             )}
@@ -343,7 +302,7 @@ function CashHandoverPanel({
             <input value={denominationText} onChange={event => setDenominationText(event.target.value)} placeholder="500000:2,200000:1" style={{ display:"block",width:"100%",height:32,marginTop:4,padding:"0 8px",border:"1px solid #CBD5E1",borderRadius:7,boxSizing:"border-box" }} />
           </label>
           <button type="button" onClick={() => void submitHandover()} disabled={submitting} style={{ marginTop:10,height:32,padding:"0 14px",border:0,borderRadius:7,background:"#0F172A",color:"#FFF",fontSize:11,fontWeight:700,opacity:submitting?0.6:1 }}>
-            {submitting ? "Đang lưu vào database…" : "Lưu bàn giao vào database"}
+            {submitting ? "Đang lưu bàn giao…" : "Lưu bàn giao"}
           </button>
         </div>
       )}
@@ -572,7 +531,7 @@ function OtaScreen({ otaData = [], onReconcile }: { otaData?: OtaRow[]; onReconc
             {otaData.length === 0 && (
               <tr>
                 <td colSpan={7} style={{ padding:"32px 14px",textAlign:"center",fontSize:12,color:"#94A3B8" }}>
-                  Backend chưa có dữ liệu kênh OTA/nguồn đặt phòng để đối soát.
+                  Chưa có dữ liệu kênh OTA/nguồn đặt phòng để đối soát.
                 </td>
               </tr>
             )}
@@ -662,7 +621,7 @@ function VatScreen({ vatData = [], onExportXml }: { vatData?: VatRow[]; onExport
         {[
           { label:"Tổng hóa đơn đã phát hành",val:String(vatData.filter(r=>r.status==="issued").length),unit:"hóa đơn" },
           { label:"Hóa đơn chờ phát hành",     val:String(vatData.filter(r=>r.status==="pending").length), unit:"hóa đơn" },
-          { label:"Tổng VAT đã thu",  val:`${Math.round(totalVat).toLocaleString("vi-VN")} ₫`,unit:"Theo dữ liệu backend" },
+          { label:"Tổng VAT đã thu",  val:`${Math.round(totalVat).toLocaleString("vi-VN")} ₫`,unit:"Theo số liệu đã ghi nhận" },
         ].map(c => (
           <div key={c.label} style={{ background:"#FFF",borderRadius:10,border:"1px solid #E2E8F0",padding:"14px 18px" }}>
             <p style={{ fontSize:11,color:"#64748B",marginBottom:4 }}>{c.label}</p>
@@ -686,7 +645,7 @@ function VatScreen({ vatData = [], onExportXml }: { vatData?: VatRow[]; onExport
             {vatData.length === 0 && (
               <tr>
                 <td colSpan={8} style={{ padding:"32px 14px",textAlign:"center",fontSize:12,color:"#94A3B8" }}>
-                  Backend chưa có dữ liệu hóa đơn VAT/tax rate.
+                  Chưa có dữ liệu hóa đơn VAT hoặc thuế suất.
                 </td>
               </tr>
             )}
@@ -828,18 +787,18 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
     const reservationId = row.reservationIds?.[0];
     if (!reservationId) return;
     try { await enterpriseApi.updateOtaStatus(reservationId, "MATCHED"); setLiveOta(items => items.map(item => item.reservation_id === reservationId ? { ...item, status: "MATCHED" } : item)); }
-    catch (error) { window.alert(error instanceof Error ? error.message : "Không thể đối soát OTA."); }
+    catch (error) { window.alert("Không thể đối soát OTA. Vui lòng thử lại."); }
   };
   const exportVatXml = async (id: number) => {
     try { const xml = await enterpriseApi.vatXml(id); const blob = new Blob([xml], { type: "application/xml;charset=utf-8" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `vat-${id}.xml`; link.click(); URL.revokeObjectURL(url); }
-    catch (error) { window.alert(error instanceof Error ? error.message : "Không thể xuất XML VAT."); }
+    catch (error) { window.alert("Không thể xuất XML VAT. Vui lòng thử lại."); }
   };
   const submitCashHandover = async (payload: { actualAmount: number; toActor: string; denominations: CashDenomination[] }) => {
     if (!userProfile?.employee_id) throw new Error("Không xác định được nhân viên đang đăng nhập.");
     setCashHandoverSubmitting(true);
     try {
       const saved = await kitchenAccountingApi.recordCashHandover({
-        shift_code: `ACCOUNTING-${new Date().toISOString().slice(0, 10)}`,
+        shift_code: `ACCOUNTING-${localDateValue()}`,
         from_actor: userProfile.employee_id,
         to_actor: payload.toActor,
         actual_amount: payload.actualAmount,
@@ -859,7 +818,7 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
   const financeKpis = [
     { label:"Doanh thu hôm nay", Icon:DollarSign, iconBg:"#DCFCE7",iconColor:"#16A34A",val:fmtUSD(revenueToday),sub:`${paidInvoices.length} hóa đơn đã thanh toán`, subUp:false },
     { label:"Tiền mặt trong két", Icon:DollarSign, iconBg:"#DBEAFE",iconColor:"#2563EB",val:fmtUSD(cashToday), sub:"Theo hóa đơn đã ghi nhận", subUp:false },
-    { label:"Thanh toán thẻ/POS", Icon:CreditCard, iconBg:"#EDE9FE",iconColor:"#5B21B6",val:fmtUSD(cardToday),sub:"Theo hóa đơn đã ghi nhận", subUp:false },
+    { label:"Thanh toán bằng thẻ", Icon:CreditCard, iconBg:"#EDE9FE",iconColor:"#5B21B6",val:fmtUSD(cardToday),sub:"Theo hóa đơn đã ghi nhận", subUp:false },
     { label:"Chuyển khoản chờ đối soát",Icon:Building2, iconBg:"#FEF9C3",iconColor:"#92400E",val:fmtUSD(pendingTransfer), sub:"Theo hóa đơn đang chờ", subUp:false },
     { label:"Hoàn tiền chờ Giám đốc",  Icon:RefreshCcw,  iconBg:"#FFE4E8",iconColor:"#DC2626",val:"0",          sub:"Chưa có dữ liệu hoàn tiền",       subUp:false },
   ];
@@ -879,7 +838,6 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
     { id:"ota",      label:"Đối soát kênh bán" },
     { id:"vat",      label:"Hóa đơn & VAT" },
     { id:"debt",     label:"Công nợ đối tác" },
-    { id:"commercial", label:"Đối tác & Mặt bằng" },
   ];
 
   return (
@@ -893,11 +851,11 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
           <div style={{ display:"flex",alignItems:"center",gap:9 }}>
             <img
               src="/hotel_logo.png"
-              alt="MAM Hotel Logo"
+              alt="MaM Hotel Logo"
               style={{ width:36,height:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 6px rgba(184,148,74,0.35))" }}
             />
             <div>
-              <p style={{ fontSize:13,fontWeight:700,color:"#0F172A",lineHeight:1.1,fontFamily:"'Cormorant Garamond',Georgia,serif",letterSpacing:"0.05em" }}>MAM HOTEL</p>
+              <p style={{ fontSize:13,fontWeight:700,color:"#0F172A",lineHeight:1.1,fontFamily:"'Cormorant Garamond',Georgia,serif",letterSpacing:"0.05em" }}>MaM Hotel</p>
               <p style={{ fontSize:9,color:"#2563EB",letterSpacing:"0.08em",textTransform:"uppercase",marginTop:2,fontWeight:600 }}>KẾ TOÁN &amp; TÀI CHÍNH</p>
             </div>
           </div>
@@ -1078,7 +1036,6 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
             const updated = await kitchenAccountingApi.settlePartnerDebt(debt.id, { amount: remaining, note: "Tất toán từ giao diện kế toán" }, newKitchenIdempotencyKey());
             setLiveDebts(rows => rows.map(row => row.id === updated.id ? updated : row));
           }} />}
-          {mainTab === "commercial" && <CommercialPartnersScreen />}
         </div>
       </div>
     </div>

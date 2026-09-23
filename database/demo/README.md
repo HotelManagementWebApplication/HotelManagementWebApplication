@@ -51,10 +51,10 @@ before MySQL receives it.
 
 `reset_demo.sql` clears and reseeds the complete demo fixture: rooms, guests,
 services, reservations, hourly booking hold, invoices, payments, receipts,
-housekeeping/technical tasks, inventory, finance, commercial partners,
-vouchers, and pending approvals. It also includes one future `DEPOSIT_PAID`
-overnight booking for the demo customer so the guest-only pool voucher can be
-tested end to end. Dates are generated from `CURDATE()` so the fixture remains
+housekeeping/technical tasks, inventory, finance, hotel-operated service
+bookings, supplier debts, and pending approvals. It also includes one future
+`DEPOSIT_PAID` overnight booking for testing advance service reservations.
+Dates are generated from `CURDATE()` so the fixture remains
 usable when the demo is run later.
 
 For normal local startup, use the guarded script below instead of resetting by

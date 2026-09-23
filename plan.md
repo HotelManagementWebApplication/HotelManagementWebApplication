@@ -168,10 +168,10 @@ Proof bắt buộc:
 - Operations concurrency tests.
 - Regression tests ở API boundary, không test alias/tên đã retired.
 
-### Phase 4 — Frontend web production flow (Bảo tồn 100% Giao diện MAM Hotel)
+### Phase 4 — Frontend web production flow (Bảo tồn 100% Giao diện MaM Hotel)
 
 > [!IMPORTANT]
-> **Quy định bất di bất dịch về Frontend**: Giữ nguyên vẹn 100% giao diện cao cấp MAM Hotel và toàn bộ 12 trạm màn hình tại `frontend/src/pages/` (`CustomerPortal`, `LoginPage`, `FrontDeskPMS`, `HousekeepingStation`, `MaintenanceStation`, `KitchenInventory`, `AccountingStation`, `HRStation`, `AdminStation`, `ManagerDashboard`, `StaffPortal`, `LandingPage`). Nghiêm cấm xóa bỏ, ghi đè hoặc thay thế bằng các component thô sơ.
+> **Quy định bất di bất dịch về Frontend**: Giữ nguyên vẹn 100% giao diện cao cấp MaM Hotel và toàn bộ 12 trạm màn hình tại `frontend/src/pages/` (`CustomerPortal`, `LoginPage`, `FrontDeskPMS`, `HousekeepingStation`, `MaintenanceStation`, `KitchenInventory`, `AccountingStation`, `HRStation`, `AdminStation`, `ManagerDashboard`, `StaffPortal`, `LandingPage`). Nghiêm cấm xóa bỏ, ghi đè hoặc thay thế bằng các component thô sơ.
 
 Nguyên tắc tích hợp Backend vào Giao diện hiện hành:
 - **Cơ chế Progressive Hydration / Graceful Fallback**: Frontend giữ nguyên layout, style Tailwind/CSS và tương tác phong phú. Logic state ưu tiên nạp dữ liệu từ backend Spring Boot qua `frontend/src/shared/api/*`; nếu backend offline hoặc dữ liệu rỗng, tự động fallback về mock data trong `data.ts`, đảm bảo giao diện luôn hiển thị hoàn hảo khi trình diễn cho khách.

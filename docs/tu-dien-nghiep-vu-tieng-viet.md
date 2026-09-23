@@ -77,9 +77,8 @@ thương hiệu đó có thể là đối tác thuê mặt bằng. Hệ thống 
 | `Invoice` | Hóa đơn thanh toán/folio của khách hoặc booking |
 | `Payment transaction` | Một dòng thu tiền hoặc hoàn tiền |
 | `Receipt` | Biên lai xác nhận đã thu tiền |
-| `Voucher` | Mã ưu đãi hoặc mã xác nhận dịch vụ/đặt chỗ |
-| `Commercial partner` | Đối tác thuê mặt bằng hoặc vận hành dịch vụ |
-| `Commercial space` | Mặt bằng/khu vực cho đối tác sử dụng |
+| `HotelServiceBooking` | Dịch vụ khách lưu trú đã đặt, gắn với booking và phòng |
+| `Supplier debt` | Công nợ mua hàng/vật tư với nhà cung cấp; không phải hoa hồng thương mại |
 | `Inventory` | Tồn kho vật tư, hàng hóa hoặc đồ dùng |
 | `Housekeeping` | Bộ phận buồng phòng |
 | `Technical asset` | Tài sản kỹ thuật của phòng hoặc tòa nhà |
@@ -388,16 +387,15 @@ thanh toán phòng (`invoices`).
 thanh toán một phần. `Void`/`Voided` nghĩa là vô hiệu hóa nghiệp vụ, không
 phải xóa dấu vết khỏi hệ thống.
 
-## 9. Dịch vụ và đối tác mặt bằng
+## 9. Dịch vụ do MaM Hotel vận hành
 
 ### 9.1. Nhóm dịch vụ
 
 | Nhóm | Ví dụ |
 |---|---|
-| Nhà hàng | La Brasserie, Ottimo House, Mermaid, Haidilao, Omakase, Spicy Box, Dokki |
-| Bar | Speakeasy Bar, Whisky, Skyline |
+| Nhà hàng | MaM Restaurant |
 | Dịch vụ phòng | Bữa sáng, giặt ủi tận phòng, bổ sung vật dụng |
-| Spa | Sen Spa, LaVie Spa |
+| Spa | Dịch vụ spa do MaM Hotel phục vụ |
 | Thể thao/vui chơi | Hồ bơi, tennis, cầu lông, bóng bàn, gym |
 | Hội nghị/sự kiện | Nhà hàng tiệc cưới, phòng họp, hội nghị tầng 4 |
 
@@ -412,24 +410,19 @@ Mỗi `Service` cần có tối thiểu:
 | `price` | Giá bán |
 | `unit` | Đơn vị tính, ví dụ lượt, phần, kg, giờ |
 
-### 9.2. Mô hình doanh thu đối tác
+### 9.2. Đặt và sử dụng dịch vụ
 
-Mỗi đối tác có thể phát sinh ba khoản:
+Chỉ khách có booking phòng đã xác nhận cọc mới được đặt trước dịch vụ trên web;
+khách ngoài không được đặt. Dịch vụ chỉ được ghi nhận `USED` sau khi booking
+`CHECKED_IN`. Mỗi lượt đặt gắn với `reservation_id`, `room_id`, số lượng và
+thời gian sử dụng. `free_quantity` là phần nằm trong hạn mức; chỉ phần vượt
+hạn mức đã dùng mới tính vào hóa đơn phòng. Hủy booking phòng tự hủy dịch vụ
+chưa dùng. Hồ bơi chỉ xem thông tin trên web, không đặt trước.
 
-1. `Fixed rent` – tiền mặt bằng cố định hàng tháng.
-2. `Service fee` – phí an ninh, vệ sinh, bảo vệ, điều hòa khu vực chung.
-3. `Commission` – hoa hồng doanh thu.
-
-Hoa hồng phải tính theo công thức:
-
-```text
-Tiền hoa hồng phải thu = số lớn hơn giữa:
-5% doanh thu thực tế
-và mức sàn cam kết trong hợp đồng
-```
-
-Ví dụ: doanh thu 100.000.000 đồng thì 5% là 5.000.000 đồng. Nếu mức sàn là
-8.000.000 đồng, hệ thống ghi nhận 8.000.000 đồng tiền hoa hồng.
+Khách thuê theo gói ngày-đêm có quyền lợi: hồ bơi không giới hạn theo số khách
+trong booking; giặt ủi một lần/ngày/phòng; bữa sáng một suất/ngày/khách; tại
+MaM Restaurant mỗi khách một bữa trưa và một bữa tối/ngày. Khách thuê theo giờ
+trả giá niêm yết cho mọi dịch vụ. Xem bảng giá tại `rule.md` mục 15.
 
 ### 9.3. Thuật ngữ đặt bàn/lịch hẹn
 
@@ -437,11 +430,10 @@ Ví dụ: doanh thu 100.000.000 đồng thì 5% là 5.000.000 đồng. Nếu m�
 |---|---|
 | `Table booking` | Đặt bàn |
 | `Appointment` | Đặt lịch hẹn, ví dụ lịch spa |
-| `Voucher` | Phiếu/mã xác nhận quyền sử dụng |
-| `VIP voucher` | Voucher ưu đãi dành cho khách VIP |
-| `Scanned voucher` | Voucher đã được quét để ghi nhận sử dụng |
-| `Partner debt` | Công nợ với đối tác |
-| `Monthly settlement` | Quyết toán hàng tháng |
+| `CONFIRMED` | Dịch vụ đã đặt và giữ hạn mức miễn phí |
+| `USED` | Lễ tân xác nhận đã sử dụng; phần trả phí vào hóa đơn phòng |
+| `CANCELLED` | Dịch vụ đã hủy; hạn mức được giải phóng |
+| `Supplier debt` | Công nợ nhà cung cấp hàng hóa/vật tư |
 
 ## 10. Vận hành buồng phòng và kỹ thuật
 
@@ -711,7 +703,7 @@ tiếng Việt như “Khách đến hôm nay”, “Chưa thanh toán cọc”,
 | Ai duyệt nghỉ phép? | Quản lý theo chính sách đã chốt. |
 | Hóa đơn VAT có phải hóa đơn phòng không? | Không. VAT là chứng từ thuế riêng; hóa đơn phòng/folio là chứng từ thanh toán nội bộ. |
 | Kho đồ vải có tách riêng không? | Có tách theo bộ phận nhưng liên kết với tồn kho chung. |
-| Tiền hoa hồng đối tác tính thế nào? | Lấy số lớn hơn giữa 5% doanh thu thực tế và mức sàn cam kết. |
+| Dịch vụ của MaM Hotel tính tiền thế nào? | Chỉ phần vượt quyền lợi miễn phí và đã sử dụng được cộng vào hóa đơn phòng khi checkout. |
 
 ## 17. Quy tắc duy trì tài liệu
 

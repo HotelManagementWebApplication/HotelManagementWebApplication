@@ -194,7 +194,7 @@ describe("MaintenanceStation Operational Interface", () => {
     render(<MaintenanceStation onBack={onBack} />);
 
     // Brand and Department
-    expect(screen.getByText(/MAM HOTEL/i)).toBeDefined();
+    expect(screen.getByText(/MaM Hotel/i)).toBeDefined();
     expect(screen.getAllByText(/KỸ THUẬT & BẢO TRÌ/i).length).toBeGreaterThan(0);
 
     // Technician profile loaded dynamically
@@ -255,7 +255,7 @@ describe("MaintenanceStation Operational Interface", () => {
     fireEvent.change(descInput, { target: { value: "Máy lạnh kêu to" } });
 
     // Submit
-    const submitBtn = screen.getByRole("button", { name: /Tạo & Phân công phiếu vào CSDL/i });
+    const submitBtn = screen.getByRole("button", { name: /Tạo & phân công phiếu/i });
     expect(submitBtn.hasAttribute("disabled")).toBe(false);
     fireEvent.click(submitBtn);
 
@@ -395,7 +395,7 @@ describe("MaintenanceStation Operational Interface", () => {
     render(<MaintenanceStation onBack={onBack} />);
 
     await waitFor(() => {
-      expect(screen.getByText(/CSDL connection timed out/i)).toBeDefined();
+      expect(screen.getByText(/Không thể tải danh sách phiếu kỹ thuật và phòng/i)).toBeDefined();
     });
 
     // Should offer retry button

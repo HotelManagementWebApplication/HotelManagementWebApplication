@@ -19,4 +19,13 @@ public interface CustomerAccountRepository extends JpaRepository<CustomerAccount
     @EntityGraph(attributePaths = "guest")
     @Query("select a from CustomerAccount a where a.id = :id")
     Optional<CustomerAccount> findByIdWithGuest(@Param("id") Long id);
+
+    /** Tìm tài khoản khách hàng theo địa chỉ email của khách. */
+    @EntityGraph(attributePaths = "guest")
+    @Query("select a from CustomerAccount a where lower(a.guest.email) = lower(:email)")
+    Optional<CustomerAccount> findByGuestEmail(@Param("email") String email);
+
+    /** Kiểm tra xem địa chỉ email đã được liên kết với tài khoản khách nào chưa. */
+    @Query("select count(a) > 0 from CustomerAccount a where lower(a.guest.email) = lower(:email)")
+    boolean existsByGuestEmail(@Param("email") String email);
 }

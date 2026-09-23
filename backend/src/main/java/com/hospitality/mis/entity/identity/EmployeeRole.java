@@ -29,8 +29,9 @@ public enum EmployeeRole {
     /** Kỹ thuật, quản lý thiết bị và phiếu bảo trì. */
     TECHNICAL(ROOM_READ, ROOM_WRITE, ROOM_CATALOG_WRITE, ROOM_ADMIN_READ, ROOM_ADMIN_WRITE, EQUIPMENT_READ, EQUIPMENT_WRITE, RESERVATION_READ,
             MAINTENANCE_READ, MAINTENANCE_WRITE, TECHNICAL_WORK_ORDER_READ, TECHNICAL_WORK_ORDER_WRITE, TECHNICAL_WORK_ORDER_RELEASE, NOTIFICATION_READ, INCIDENT_HANDOFF),
-    /** Bếp, quản lý danh mục dịch vụ và tồn kho liên quan. */
-    KITCHEN(SERVICE_READ, SERVICE_WRITE, INVENTORY_READ, INVENTORY_WRITE, SERVICE_PRICE_REQUEST),
+    /** Bếp & F&B, chịu trách nhiệm danh mục, tồn kho và vận hành đơn nhà hàng. */
+    KITCHEN(SERVICE_READ, SERVICE_WRITE, INVENTORY_READ, INVENTORY_WRITE, SERVICE_PRICE_REQUEST,
+            RESTAURANT_ORDER_READ, RESTAURANT_ORDER_WRITE),
     /** Nhân viên thông thường chỉ xem phòng và đặt phòng. */
     STAFF(ROOM_READ, RESERVATION_READ),
     /** Nhân sự chỉ đọc dữ liệu nhân viên. */

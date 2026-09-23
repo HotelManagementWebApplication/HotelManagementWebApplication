@@ -115,6 +115,12 @@ public class SecurityConfig {
 
                                 "/api/auth/customers/register",
 
+                                "/api/auth/customers/register-with-otp",
+
+                                "/api/auth/customers/reset-password-otp",
+
+                                "/api/auth/otp/**",
+
                                 "/api/public/**"
 
                         ).permitAll()

@@ -154,6 +154,7 @@ class ReservationCancellationCorrectnessTest {
     private Reservation reservation(Guest guest, Employee employee, LocalDateTime checkIn) {
         Reservation result = new Reservation(); result.setGuest(guest); result.setEmployee(employee);
         result.setDepositAmount(new BigDecimal("100.00"));
+        result.setDepositPaymentStatus(com.hospitality.mis.entity.reservation.DepositPaymentStatus.PAID);
         result.transitionTo(ReservationStatus.CONFIRMED);
         Room room = new Room(); room.setId("101");
         ReservationRoom line = new ReservationRoom(); line.setRoom(room); line.setCheckIn(checkIn); line.setCheckOut(checkIn.plusHours(4)); line.setStatus(com.hospitality.mis.entity.room.RoomStatus.RESERVED);

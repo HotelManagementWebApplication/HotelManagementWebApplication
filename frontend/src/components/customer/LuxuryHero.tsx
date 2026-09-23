@@ -17,7 +17,7 @@ export const LuxuryHero: React.FC<LuxuryHeroProps> = ({ onScrollToRooms }) => {
 
   return (
     <div className="relative w-full min-h-[90vh] sm:min-h-[94vh] flex flex-col justify-between overflow-hidden bg-[#0A0E17]">
-      {/* Background Video using user's uploaded resort video (hero.mp4) */}
+      {/* Background Video using user's uploaded hotel video (hero.mp4) */}
       <div className="absolute inset-0 z-0 overflow-hidden bg-[#0A0E17]">
         <video
           ref={videoRef}
@@ -29,7 +29,7 @@ export const LuxuryHero: React.FC<LuxuryHeroProps> = ({ onScrollToRooms }) => {
           className="w-full h-full object-cover scale-105 transition-transform duration-1000"
           style={{ filter: "brightness(0.85) contrast(1.04)" }}
         >
-          {/* User's uploaded resort video served from public/hero.mp4 */}
+          {/* User's uploaded hotel video served from public/hero.mp4 */}
           <source src="/hero.mp4" type="video/mp4" />
         </video>
 
@@ -56,7 +56,7 @@ export const LuxuryHero: React.FC<LuxuryHeroProps> = ({ onScrollToRooms }) => {
       {/* Center Cinematic Typography */}
       <div className="relative z-10 max-w-5xl mx-auto px-6 text-center my-auto py-12">
         <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 mb-6 text-[#E6CA85] text-xs tracking-[0.3em] uppercase font-semibold">
-          <span>MaM RESORT &amp; LUXURY RETREAT</span>
+          <span>MaM Hotel &amp; Luxury Retreat</span>
         </div>
 
         <h1

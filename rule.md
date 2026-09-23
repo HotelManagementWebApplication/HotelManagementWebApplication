@@ -158,6 +158,17 @@ Cập nhật ngày 12/09/2026:
 7. Ảnh phòng lưu local trong giai đoạn đầu, tối đa 10 ảnh/phòng, 5 MB/ảnh, hỗ trợ JPEG, PNG và WebP.
 8. Pet Agent chỉ tư vấn, giải thích, tra cứu/tóm tắt trong quyền actor và đề xuất thao tác. Mọi mutation cần người dùng xác nhận, backend kiểm tra quyền, approval khi cần và audit; agent không được ghi trực tiếp database.
 
+## 15. Dịch vụ của khách sạn (quyết định ngày 22/09/2026)
+
+- Nhà hàng MaM Restaurant, spa và các dịch vụ phục vụ khách lưu trú thuộc khách sạn. Bỏ toàn bộ mô hình đối tác thuê mặt bằng, nhượng quyền, voucher và quyết toán hoa hồng thương mại. Công nợ với nhà cung cấp hàng hóa/vật tư vẫn được theo dõi. Khách không thuê phòng không được đặt dịch vụ trên web.
+- Giao diện phải hiển thị rõ `Miễn phí` hoặc đơn giá dịch vụ. Không dùng nhãn `Theo chính sách` để thay cho giá `0`; giá `0` trong danh mục không đủ để xác định khách có được miễn phí hay không. Dòng dịch vụ tính phí phải có đơn giá xác định trước khi khách xác nhận.
+- Một booking thuê theo gói ngày-đêm được hưởng các quyền lợi sau trong thời gian lưu trú: hồ bơi miễn phí không giới hạn lượt cho số khách đã đăng ký trong booking; giặt ủi tiêu chuẩn miễn phí một lần/đơn mỗi ngày cho mỗi phòng; bữa sáng tại phòng miễn phí một suất mỗi ngày cho mỗi khách; MaM Restaurant miễn phí cho từng khách một bữa trưa và một bữa tối mỗi ngày. Hồ bơi chỉ hiển thị thông tin trên web, không đặt trước.
+- Booking thuê theo giờ không hưởng các quyền lợi miễn phí trên; nếu sử dụng dịch vụ thì tính phí theo giá đã niêm yết.
+- Phần sử dụng trong hạn mức miễn phí có giá phải thu bằng `0`. Phần vượt hạn mức phải tính phí theo giá đã niêm yết và ghi rõ trên hóa đơn. Dịch vụ tính phí do khách sạn vận hành được cộng vào hóa đơn phòng, thanh toán lúc checkout.
+- Khách có thể đặt trước dịch vụ sau khi booking được xác nhận đã thanh toán cọc. Đơn đặt dịch vụ gắn với reservation/phòng và lưu trong `hotel_service_bookings`; trạng thái ban đầu `CONFIRMED`. Chỉ được ghi nhận `USED` khi reservation đã `CHECKED_IN`. Booking phòng bị hủy, no-show hoặc checkout thì các dịch vụ chưa dùng tự động chuyển `CANCELLED`. Chỉ dịch vụ đã dùng mới được cộng vào hóa đơn.
+- Khi tạo booking, lưu tổng số khách của từng phòng để kiểm tra quyền lợi theo số khách; không bắt buộc tách người lớn và trẻ em.
+- Giá niêm yết ban đầu do chủ sở hữu ủy quyền thiết lập: hồ bơi 200.000 VND/khách/ngày; giặt ủi tiêu chuẩn 80.000 VND/lần; bữa sáng tại phòng 450.000 VND/suất; MaM Restaurant 250.000 VND/suất; gym 100.000 VND/khách/ngày. Giá này áp dụng cho khách thuê theo giờ và phần vượt hạn mức của khách thuê theo gói. Các lần đổi giá sau đó tuân thủ quy trình duyệt giá dịch vụ.
+
 ## Tham chiếu nguồn
 
 Các điểm đối chiếu từ DOCX extraction: P20, P21, P70–P78, T101R6, T101R12, T101R13, T101R15, T112R1, T115R1, T134R2, T139R1, T177R2. Khi tham chiếu nào khác với quyết định cuối của chủ sở hữu, áp dụng quyết định cuối và ghi nhận mâu thuẫn tương ứng.

@@ -28,6 +28,7 @@ public class ReservationRoom {
     @Column(name = "status", nullable = false, length = 30) private RoomStatus status = RoomStatus.RESERVED;
     /** Số lần đổi phòng đã thực hiện cho dòng đặt phòng. */
     @Column(name = "transfer_count", nullable = false) private int transferCount;
+    @Column(name = "guest_count", nullable = false) private int guestCount = 1;
     public Reservation getReservation() { return reservation; }
     public Room getRoom() { return room; }
     public LocalDateTime getCheckIn() { return checkIn; }
@@ -35,6 +36,8 @@ public class ReservationRoom {
     public LocalDateTime getOriginalCheckOut() { return originalCheckOut == null ? checkOut : originalCheckOut; }
     public RoomStatus getStatus() { return status; }
     public int getTransferCount() { return transferCount; }
+    public int getGuestCount() { return guestCount; }
+    public void setGuestCount(int value) { guestCount = value; }
     public void setReservation(Reservation value) { reservation = value; }
     public void setRoom(Room value) { room = value; }
     public void setCheckIn(LocalDateTime value) { checkIn = value; }

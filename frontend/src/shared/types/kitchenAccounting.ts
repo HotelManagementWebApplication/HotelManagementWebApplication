@@ -10,6 +10,7 @@ export interface Service {
   category?: string | null; description?: string | null; image_url?: string | null;
   stock: number; safety_threshold: number; low_stock: boolean;
 }
+export interface RestaurantBooking { id: number; reservation_id: number; room_id: string; service_id: string; service_name: string; scheduled_at: string; quantity: number; free_quantity: number; unit_price: number; amount_due: number; meal_period: string | null; status: "CONFIRMED" | "USED" | "CANCELLED" | string; note: string | null; }
 export interface StockRequest { quantity: number; }
 export interface InventoryMovementRequest { service_id: string; type: MovementType; quantity: number; reason: string | null; }
 export interface PriceChangeRequest { price: number; reason: string; }
@@ -35,8 +36,6 @@ export interface PartnerDebtRequest { partner_name: string; reference_code: stri
 export interface DebtSettlementRequest { amount: number; note: string | null; }
 export interface LedgerEntry { id: number; entry_type: string; source_type: string; source_id: string; direction: string; amount: number; actor_id: string; occurred_at: string; note: string | null; finalized: boolean; }
 export interface Reconciliation { from_date: string | null; to_date: string | null; totals_by_method: Record<string, number>; total_payments: number; total_refunds: number; net_total: number; recognized_revenue: number; outstanding_partner_debt: number; cash_variance: number; }
-export interface CommercialPartner { id: string; legal_name: string; brand_name: string; category: string; floor_from: number; floor_to: number; fixed_rent: number; service_fee: number; commission_rate: number; commission_floor: number; status: string; }
-export interface PartnerSettlement { id: number; partner_id: string; partner_name: string; period_start: string; period_end: string; fixed_rent: number; service_fee: number; actual_revenue: number; commission_rate: number; commission_floor: number; commission_due: number; total_due: number; status: string; }
 
 export interface PaymentQuery { invoice_id?: number; method?: PaymentMethod; type?: PaymentTransactionType; status?: PaymentTransactionStatus; from?: string; to?: string; page?: number; size?: number; }
 export interface ReceiptQuery { invoice_id?: number; method?: PaymentMethod; issued_by?: string; from?: string; to?: string; page?: number; size?: number; }

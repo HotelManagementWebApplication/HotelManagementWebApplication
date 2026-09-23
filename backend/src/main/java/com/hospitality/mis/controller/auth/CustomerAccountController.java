@@ -29,6 +29,24 @@ public class CustomerAccountController {
     }
 
     /**
+     * Đăng ký tài khoản khách hàng kèm mã OTP xác thực email qua POST /api/auth/customers/register-with-otp.
+     */
+    @PostMapping("/register-with-otp")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CustomerAccountDtos.Response registerWithOtp(@Valid @RequestBody CustomerAccountDtos.RegisterWithOtpRequest request) {
+        return service.registerWithOtp(request);
+    }
+
+    /**
+     * Đặt lại mật khẩu khách hàng bằng mã OTP qua POST /api/auth/customers/reset-password-otp.
+     */
+    @PostMapping("/reset-password-otp")
+    @ResponseStatus(HttpStatus.OK)
+    public void resetPasswordOtp(@Valid @RequestBody CustomerAccountDtos.ResetPasswordOtpRequest request) {
+        service.resetPasswordOtp(request);
+    }
+
+    /**
      * Lấy hồ sơ khách hàng hiện tại qua GET /api/auth/customers/me, không có path/query/header/body tham số.
      * {@code hasRole('CUSTOMER')} và kiểm tra principal trong thân phương thức giới hạn phạm vi đúng tài khoản khách hàng;
      * trả thông tin hồ sơ, còn principal sai loại bị từ chối truy cập.

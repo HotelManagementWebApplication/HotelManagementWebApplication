@@ -62,6 +62,7 @@ public class BillingService {
     /** Lưu các điều chỉnh hóa đơn đã gắn actor và idempotency key. */
     private final InvoiceAdjustmentRepository adjustments;
     private FinancialLedgerService ledger;
+    private com.hospitality.mis.service.reservation.HotelServiceBookingService hotelServiceBookings;
 
     @org.springframework.beans.factory.annotation.Autowired
     public BillingService(ReservationRepository reservations, InvoiceRepository invoices, PricingPolicy pricing,
@@ -77,6 +78,8 @@ public class BillingService {
     void setBusinessClock(Clock clock) { this.clock = clock; }
     @org.springframework.beans.factory.annotation.Autowired
     void setFinancialLedger(FinancialLedgerService ledger) { this.ledger = ledger; }
+    @org.springframework.beans.factory.annotation.Autowired
+    void setHotelServiceBookings(com.hospitality.mis.service.reservation.HotelServiceBookingService service) { this.hotelServiceBookings = service; }
 
     /** Hàm khởi tạo thuận tiện cho kiểm thử, dành cho các bên gọi không sử dụng chức năng điều chỉnh. */
     public BillingService(ReservationRepository reservations, InvoiceRepository invoices, PricingPolicy pricing,
@@ -120,6 +123,7 @@ public class BillingService {
         BigDecimal services = reservation.getServiceUsages() == null ? BigDecimal.ZERO : reservation.getServiceUsages().stream()
                 .map(x -> x.getUnitPrice().multiply(BigDecimal.valueOf(x.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (hotelServiceBookings != null) services = services.add(hotelServiceBookings.usedTotal(reservationId));
         BigDecimal compensation = incidents.findByReservationId(reservationId).stream().map(x -> x.getCompensation())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         if (late.signum() > 0) reservation.getGuest().recordLateCheckout();
@@ -203,7 +207,7 @@ public class BillingService {
                 deposit.toPlainString(), "DEPOSIT_RECEIPT:" + receipt.getReceiptNumber());
     }
 
-    /** Hoàn tiền cọc khi hủy đúng hạn; yêu cầu phê duyệt và không lặp lại theo reservation. */
+    /** Hoàn tiền cọc tự động khi hủy đúng hạn theo policy 48 giờ; không lặp lại theo reservation. */
     @Transactional
     public void settleCancellationDeposit(Reservation reservation, String actor, boolean late) {
         if (late || reservation.getDepositAmount() == null || reservation.getDepositAmount().signum() == 0) return;
@@ -213,13 +217,20 @@ public class BillingService {
         if (!transactions.findByIdempotencyKeyPrefix(key + ".").isEmpty()) return;
         PaymentTransaction source = depositPayments(invoice).stream().findFirst()
                 .orElseThrow(() -> error("DEPOSIT_PAYMENT_NOT_FOUND", "Không tìm thấy giao dịch tiền cọc"));
-        String approvalPayload = "CANCELLATION_DEPOSIT:" + invoice.getId() + ":" + source.getId();
-        approvals.requireApproved("DEPOSIT_REFUND", String.valueOf(invoice.getId()), approvalPayload,
-                source.getAmount(), boundActor);
+        // Khách tự hủy đúng hạn được hoàn theo policy ngay. Nhân viên thao tác thay khách
+        // vẫn phải qua approval để không thể tự ý xuất tiền khỏi quỹ.
+        boolean employeeInitiated = SecurityActor.currentPrincipal().isEmployee();
+        String approvalPayload = "CANCELLATION_DEPOSIT:" + reservation.getId() + ":" + source.getId();
+        if (employeeInitiated) {
+            approvals.requireApproved("DEPOSIT_REFUND", String.valueOf(invoice.getId()),
+                    approvalPayload, source.getAmount(), boundActor);
+        }
         PaymentTransaction refund = refundFor(invoice, source, source.getAmount(),
                 "CANCELLATION_DEPOSIT:" + reservation.getId(), key, boundActor);
-        approvals.consumeApproved("DEPOSIT_REFUND", String.valueOf(invoice.getId()), approvalPayload,
-                source.getAmount(), boundActor);
+        if (employeeInitiated) {
+            approvals.consumeApproved("DEPOSIT_REFUND", String.valueOf(invoice.getId()),
+                    approvalPayload, source.getAmount(), boundActor);
+        }
         reconcile(invoice);
         audit.record(boundActor, "DEPOSIT_REFUNDED_ON_CANCELLATION", "PAYMENT_TRANSACTION", String.valueOf(refund.getId()),
                 source.getAmount().toPlainString(), "0", sourceReference(source));
@@ -312,8 +323,10 @@ public class BillingService {
     /** Tìm các khoản cọc còn số dư hoàn được theo thứ tự thời gian. */
     private List<PaymentTransaction> depositPayments(Invoice invoice) {
         return transactions.findByInvoiceIdAndStatus(invoice.getId(), PaymentTransaction.TransactionStatus.COMPLETED).stream()
-                .filter(x -> x.getType() == PaymentTransaction.TransactionType.PAYMENT && x.getReference() != null
-                        && x.getReference().startsWith("DEPOSIT:"))
+                .filter(x -> x.getType() == PaymentTransaction.TransactionType.PAYMENT)
+                .filter(x -> (x.getReference() != null && x.getReference().startsWith("DEPOSIT:"))
+                        || x.getExternalEventId() != null
+                        || "PAYMENT_GATEWAY".equals(x.getActorId()))
                 .filter(x -> remainingFor(x, invoice).signum() > 0)
                 .sorted(Comparator.comparing(PaymentTransaction::getOccurredAt)).toList();
     }
@@ -390,6 +403,11 @@ public class BillingService {
         boolean global = auth != null && auth.getAuthorities().stream().map(x -> x.getAuthority())
                 .anyMatch(x -> x.equals("ROLE_ADMIN") || x.equals("ROLE_DIRECTOR") || x.equals("ROLE_MANAGER") || x.equals("ROLE_ACCOUNTING") || x.equals("ROLE_FRONT_DESK"));
         if (reservation == null) throw new AccessDeniedException("Thiếu phạm vi đặt phòng");
+        boolean customerOwner = auth != null && auth.getAuthorities().stream().map(x -> x.getAuthority())
+                .anyMatch("ROLE_CUSTOMER"::equals)
+                && reservation.getCustomerAccount() != null
+                && String.valueOf(reservation.getCustomerAccount().getId()).equals(actor);
+        if (customerOwner) return;
         // Booking online chưa có employee owner; chỉ staff có quyền toàn cục được xử lý tiếp.
         if (reservation.getEmployee() == null) {
             if (!global) throw new AccessDeniedException("Thiếu phạm vi đặt phòng");

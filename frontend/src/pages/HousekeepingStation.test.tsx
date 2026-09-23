@@ -448,7 +448,7 @@ describe("HousekeepingStation Operational Interface", () => {
     // Linen screen should display empty message
     const linenNav = screen.getByRole("button", { name: /Đồ vải & Vật tư ca/i });
     fireEvent.click(linenNav);
-    expect(await screen.findByText("Database chưa có dữ liệu tồn kho đồ vải/vật tư buồng phòng.")).toBeDefined();
+    expect(await screen.findByText("Chưa có dữ liệu tồn kho đồ vải/vật tư buồng phòng.")).toBeDefined();
 
     // Incidents screen should display empty message
     const incidentNav = screen.getByRole("button", { name: /Báo sự cố kỹ thuật/i });
@@ -461,7 +461,7 @@ describe("HousekeepingStation Operational Interface", () => {
 
     render(<HousekeepingStation onBack={onBack} />);
 
-    expect(await screen.findByText("Không thể tải dữ liệu từ máy chủ backend. Vui lòng thử lại.")).toBeDefined();
+    expect(await screen.findByText("Không thể tải dữ liệu vận hành. Vui lòng thử lại.")).toBeDefined();
 
     // Test retry button
     vi.spyOn(housekeepingTechnicalApi, "tasks").mockResolvedValue(mockTasks as any);
@@ -504,7 +504,7 @@ describe("HousekeepingStation Operational Interface", () => {
     fireEvent.click(startCleanBtn);
 
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith("Network disconnect");
+      expect(alertSpy).toHaveBeenCalledWith("Không thể bắt đầu dọn phòng. Vui lòng thử lại.");
     });
   });
 });

@@ -32,6 +32,12 @@ describe("ApiClient", () => {
     expect(fetchMock).toHaveBeenCalledWith("https://api.test/api/auth/logout", expect.objectContaining({ body: JSON.stringify({ refresh_token: "refresh" }) })); expect(tokenStore.get()).toBeNull();
   });
 
+  it("turns browser network failures into an actionable API error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    await expect(new ApiClient("https://api.mamresort.example").request("/api/public/rooms"))
+      .rejects.toMatchObject({ status: 0, code: "API_UNAVAILABLE" });
+  });
+
   it.each([400, 401, 403, 409, 422, 429])("maps HTTP %s to ApiError", async status => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(status, { code: "status_error", message: "bad" })));
     const promise = new ApiClient("https://api.test", store()).request("/failure", { retryOnUnauthorized: false });

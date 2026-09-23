@@ -735,7 +735,7 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
         console.warn("Backend manager profile unavailable:", err);
         if (active) {
           setCurrentManager(null);
-          setProfileError(err instanceof Error ? err.message : "Không thể tải hồ sơ quản lý.");
+          setProfileError("Không thể tải hồ sơ quản lý. Vui lòng thử lại.");
         }
       })
       .finally(() => {
@@ -875,7 +875,7 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
       setAcceptModalOrder(null);
       setAcceptNoteInput("");
     } catch (err) {
-      setAcceptModalError(err instanceof Error ? err.message : "Không thể nghiệm thu phiếu kỹ thuật.");
+      setAcceptModalError("Không thể nghiệm thu phiếu kỹ thuật. Vui lòng thử lại.");
     } finally {
       setIsAccepting(false);
     }
@@ -897,11 +897,11 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
           <div style={{ display:"flex",alignItems:"center",gap:9 }}>
             <img
               src="/hotel_logo.png"
-              alt="MAM Hotel Logo"
+              alt="MaM Hotel Logo"
               style={{ width:36,height:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 6px rgba(184,148,74,0.35))" }}
             />
             <div>
-              <p style={{ fontSize:13,fontWeight:700,color:"#0F172A",lineHeight:1.1,fontFamily:"'Cormorant Garamond',Georgia,serif",letterSpacing:"0.05em" }}>MAM HOTEL</p>
+              <p style={{ fontSize:13,fontWeight:700,color:"#0F172A",lineHeight:1.1,fontFamily:"'Cormorant Garamond',Georgia,serif",letterSpacing:"0.05em" }}>MaM Hotel</p>
               <p style={{ fontSize:9,color:"#7C3AED",letterSpacing:"0.08em",textTransform:"uppercase",marginTop:2,fontWeight:600 }}>BAN ĐIỀU HÀNH</p>
             </div>
           </div>

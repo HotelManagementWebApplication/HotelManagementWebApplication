@@ -32,6 +32,7 @@ public final class FrontDeskDashboardDtos {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Response(LocalDate businessDate, List<ReservationItem> arrivals,
                            List<ReservationItem> departures, List<ReservationItem> currentStays,
+                           List<ReservationItem> upcomingStays,
                            List<ReservationItem> unpaidDeposits, List<ReservationItem> invoiceBalances,
                            List<RoomSummary> rooms, Map<String, Long> roomCounts,
                            List<IncidentItem> incidents, int page, int size, long totalElements,

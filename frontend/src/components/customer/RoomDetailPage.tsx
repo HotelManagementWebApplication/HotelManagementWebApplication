@@ -65,7 +65,7 @@ export const RoomDetailPage: React.FC<RoomDetailPageProps> = ({ room, onBack, on
             <span>Quay lại</span>
           </button>
           <span>/</span>
-          <span>MaM Resort</span>
+          <span>MaM Hotel</span>
           <span>/</span>
           <span>Hội An</span>
           <span>/</span>

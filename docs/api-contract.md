@@ -130,10 +130,13 @@ permissions từ client.
 | `GET /api/public/rooms/availability` | Query bắt buộc `from`, `to`; tùy chọn `type`, `page`, `size` | Public; availability cùng metadata catalog và ảnh riêng theo phòng, `Cache-Control: no-store` |
 | `GET /api/public/services` | Query `page` default 0, `size` default 20 | Public; DTO gồm `category`, `description`, `image_url`; cache 30s |
 | `POST /api/public/payment-callbacks/deposit` | Body `provider_event_id`, `payment_code`, `amount`, `reference`, `status`; header `X-Payment-Signature` | Public provider route; HMAC hợp lệ mới được nhận |
-| `POST /api/customer/reservations` | Body `rental_type`, `rooms[]`, `idempotency_key`; room item `room_id`, `expected_check_in`, `expected_check_out` | `CUSTOMER`; 201, tối đa 3 phòng, guest lấy từ JWT |
+| `POST /api/customer/reservations` | Body `rental_type`, `rooms[]`, `idempotency_key`; room item `room_id`, `expected_check_in`, `expected_check_out`, `guest_count` | `CUSTOMER`; 201, tối đa 3 phòng, guest lấy từ JWT |
 | `GET /api/customer/reservations` | Không body | `CUSTOMER`; chỉ booking của customer |
 | `GET /api/customer/reservations/{id}` | Path `id` | `CUSTOMER`; ownership enforced |
 | `GET /api/customer/reservations/{id}/deposit-payment` | Path `id` | `CUSTOMER`; payment instruction của chính booking |
+| `POST /api/customer/service-bookings` | Body `reservation_id`, `room_id`, `service_id`, `scheduled_at`, `quantity`, tùy chọn `meal_period`, `note`; header `Idempotency-Key` | `CUSTOMER`; 201, booking phòng đã xác nhận cọc; không cho khách ngoài hay đặt trước hồ bơi |
+| `GET /api/customer/service-bookings` | Query `reservation_id` | `CUSTOMER`; chỉ dịch vụ của booking thuộc tài khoản |
+| `POST /api/customer/service-bookings/{id}/cancel` | Path `id` | `CUSTOMER`; chỉ hủy dịch vụ chưa dùng của chính mình |
 
 Customer booking dùng `idempotency_key` trong body. Cùng customer, cùng key và
 cùng fingerprint được trả lại booking đã tạo; khác owner/fingerprint trả 422
@@ -178,7 +181,7 @@ nhận.
 | Method và path | Query/body/header | Capability |
 |---|---|---|
 | `GET /api/front-desk/dashboard` | Query `date`, `q`, `status`, `page` default 0, `size` default 20 | `FRONT_DESK_DASHBOARD` |
-| `POST /api/reservations` | Body `guest_id`, `employee_id`, `deposit`, `rental_type`, `rooms[]`, optional `idempotency_key`; room `room_id`, `expected_check_in`, `expected_check_out`; header optional | `RESERVATION_CREATE`; 201 |
+| `POST /api/reservations` | Body `guest_id`, `employee_id`, `deposit`, `rental_type`, `rooms[]`, optional `idempotency_key`; room `room_id`, `expected_check_in`, `expected_check_out`, `guest_count`; header optional | `RESERVATION_CREATE`; 201 |
 | `GET /api/reservations` | Query `status`, `guest_id`, `page` default 0, `size` default 20 | `RESERVATION_READ`; page response |
 | `GET /api/reservations/{id}` | Path `id` | `RESERVATION_READ`; scope actor trừ global-read role |
 | `POST /api/reservations/{id}/confirm` | Không body; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE`; `DRAFT → CONFIRMED` |
@@ -188,7 +191,9 @@ nhận.
 | `POST /api/reservations/{id}/cancel` | Body `reason`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
 | `POST /api/reservations/{id}/no-show` | Không body; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
 | `POST /api/reservations/{id}/extend` | Body `new_expected_check_out`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
-| `POST /api/reservations/{id}/services` | Body `service_id`, `quantity`, `used_at`; header bắt buộc `Idempotency-Key` | `RESERVATION_SERVICE_WRITE` |
+| `POST /api/reservations/{id}/services` | Body `service_id`, `quantity`, `used_at`, `room_id`, `meal_period` nếu là MaM Restaurant; header bắt buộc `Idempotency-Key` | `RESERVATION_SERVICE_WRITE`; ghi dịch vụ đã dùng, áp dụng hạn mức miễn phí |
+| `GET /api/reservations/{id}/service-bookings` | Path `id` | `RESERVATION_SERVICE_WRITE`; danh sách dịch vụ khách đặt trước |
+| `POST /api/reservations/{id}/service-bookings/{bookingId}/use` | Path `id`, `bookingId` | `RESERVATION_SERVICE_WRITE`; chỉ xác nhận `USED` khi booking đã `CHECKED_IN` |
 | `GET /api/reservations/{id}/timeline` | Path `id` | `RESERVATION_READ`; actor scope |
 | `POST /api/reservations/{id}/equipment-incidents` | Body `room_id`, `equipment_name`, `equipment_id`, `quantity`, `severity`; header bắt buộc `Idempotency-Key` | `INCIDENT_WRITE` |
 | `POST /api/operations/reservations/{reservationId}/room-transfers` | Body `from_room_id`, `to_room_id`, `transferred_at`, `reason`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |

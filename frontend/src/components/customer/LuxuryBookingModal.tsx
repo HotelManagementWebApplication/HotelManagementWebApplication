@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Room } from "../../types";
 import { X, Calendar, Clock, Users, ShieldCheck, CreditCard, Wallet, Banknote } from "lucide-react";
 
@@ -30,6 +30,24 @@ interface LuxuryBookingModalProps {
 
 const fmtVND = (n: number) => n.toLocaleString("vi-VN") + " ₫";
 
+/** Giữ nguyên giờ địa phương của ô datetime-local; không chuyển sang UTC rồi cắt chuỗi. */
+const localDateTime = (value: Date) => {
+  const two = (part: number) => String(part).padStart(2, "0");
+  return `${value.getFullYear()}-${two(value.getMonth() + 1)}-${two(value.getDate())}T${two(value.getHours())}:${two(value.getMinutes())}`;
+};
+
+const addLocalHours = (value: string, hours: number) => {
+  const at = new Date(value);
+  at.setHours(at.getHours() + hours);
+  return localDateTime(at);
+};
+
+const nextNightCheckoutDate = (checkIn: string) => {
+  const at = new Date(`${checkIn}T12:00:00`);
+  at.setDate(at.getDate() + 1);
+  return localDateTime(at).slice(0, 10);
+};
+
 export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
   room,
   isOpen,
@@ -52,7 +70,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
     const d = new Date();
     d.setDate(d.getDate() + 1);
     d.setHours(14, 0, 0, 0);
-    return d.toISOString().slice(0, 16);
+    return localDateTime(d);
   });
   const [hourlyDuration, setHourlyDuration] = useState(3);
 
@@ -63,6 +81,23 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
   const [email, setEmail] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer">("transfer");
   const [formError, setFormError] = useState("");
+
+  const earliestNightDate = useMemo(() => {
+    const now = new Date();
+    if (now.getHours() >= 14) now.setDate(now.getDate() + 1);
+    return localDateTime(now).slice(0, 10);
+  }, [isOpen]);
+  const earliestHourlyDateTime = useMemo(() => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 5, 0, 0);
+    return localDateTime(now);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (checkIn < earliestNightDate) setCheckIn(earliestNightDate);
+    const minimumCheckOutDate = nextNightCheckoutDate(checkIn);
+    if (checkOut < minimumCheckOutDate) setCheckOut(minimumCheckOutDate);
+  }, [checkIn, checkOut, earliestNightDate]);
 
   if (!isOpen) return null;
 
@@ -95,6 +130,14 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
       setFormError("Vui lòng nhập Số điện thoại liên hệ.");
       return;
     }
+    const start = bookMode === "hour" ? new Date(hourlyCheckIn) : new Date(`${checkIn}T14:00:00`);
+    const end = bookMode === "hour"
+      ? new Date(addLocalHours(hourlyCheckIn, hourlyDuration))
+      : new Date(`${checkOut}T12:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start <= new Date() || end <= start) {
+      setFormError("Vui lòng chọn thời gian lưu trú hợp lệ trong tương lai.");
+      return;
+    }
     setFormError("");
 
     await onConfirm({
@@ -105,9 +148,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
       hourlyCheckIn: bookMode === "hour" ? hourlyCheckIn : undefined,
       hourlyCheckOut:
         bookMode === "hour"
-          ? new Date(
-              new Date(hourlyCheckIn).getTime() + hourlyDuration * 3600000
-            ).toISOString().slice(0, 16)
+          ? addLocalHours(hourlyCheckIn, hourlyDuration)
           : undefined,
       guests,
       guestName,
@@ -187,6 +228,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
                 <input
                   type="date"
                   value={checkIn}
+                  min={earliestNightDate}
                   onChange={(e) => setCheckIn(e.target.value)}
                   className="w-full bg-transparent text-sm font-semibold text-[#1C1917] outline-none cursor-pointer"
                 />
@@ -199,7 +241,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
                 <input
                   type="date"
                   value={checkOut}
-                  min={checkIn}
+                  min={nextNightCheckoutDate(checkIn)}
                   onChange={(e) => setCheckOut(e.target.value)}
                   className="w-full bg-transparent text-sm font-semibold text-[#1C1917] outline-none cursor-pointer"
                 />
@@ -214,6 +256,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
                 <input
                   type="datetime-local"
                   value={hourlyCheckIn}
+                  min={earliestHourlyDateTime}
                   onChange={(e) => setHourlyCheckIn(e.target.value)}
                   className="w-full bg-transparent text-sm font-semibold text-[#1C1917] outline-none cursor-pointer"
                 />

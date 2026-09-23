@@ -67,6 +67,7 @@ public class ReservationService {
     private InvoiceRepository invoices;
     private PaymentTransactionRepository paymentTransactions;
     private ReceiptRepository receipts;
+    private HotelServiceBookingService hotelServiceBookings;
     /** Policy chặn khách bị block và ghi nhận hủy trễ. */
     private final BookingPolicy bookingPolicy = BookingPolicy.defaults();
     /** Đồng hồ múi giờ nghiệp vụ để tính thời điểm nhận/trả/no-show nhất quán. */
@@ -88,6 +89,8 @@ public class ReservationService {
 
     @org.springframework.beans.factory.annotation.Autowired
     void setBusinessClock(Clock clock) { this.clock = clock; }
+    @org.springframework.beans.factory.annotation.Autowired
+    void setHotelServiceBookings(HotelServiceBookingService service) { this.hotelServiceBookings = service; }
 
     @org.springframework.beans.factory.annotation.Autowired
     void setTimelineRepositories(InvoiceRepository invoices, PaymentTransactionRepository paymentTransactions,
@@ -144,6 +147,10 @@ public class ReservationService {
         }
         for (var line : request.rooms()) {
             if (locked.get(line.roomId()).getStatus().blocksAvailability()) throw error("ROOM_NOT_AVAILABLE", "Phòng không sẵn sàng: " + line.roomId());
+            int guestCount = line.guestCount() == null ? 1 : line.guestCount();
+            var roomType = locked.get(line.roomId()).getRoomType();
+            if (guestCount < 1 || (roomType != null && guestCount > roomType.getMaxOccupancy()))
+                throw error("INVALID_GUEST_COUNT", "Số khách vượt sức chứa của phòng " + line.roomId());
             if (reservations.hasOverlap(line.roomId(), line.expectedCheckIn(), line.expectedCheckOut(), RoomStatus.CANCELLED, IGNORED)) throw error("OVERBOOKING", "Phòng đã có lịch trùng: " + line.roomId());
         }
         BigDecimal requiredDeposit = requiredDeposit(request, locked);
@@ -157,7 +164,7 @@ public class ReservationService {
         reservation.setIdempotencyKey(key);
         reservation.setCanonicalRequestFingerprint(fingerprint);
         reservation.transitionTo(reservation.getDepositAmount().signum() > 0 ? ReservationStatus.DEPOSIT_PAID : ReservationStatus.CONFIRMED);
-        request.rooms().forEach(line -> { ReservationRoom rr = new ReservationRoom(); rr.setRoom(locked.get(line.roomId())); rr.setCheckIn(line.expectedCheckIn()); rr.setCheckOut(line.expectedCheckOut()); rr.setStatus(RoomStatus.RESERVED); reservation.addRoom(rr); });
+        request.rooms().forEach(line -> { ReservationRoom rr = new ReservationRoom(); rr.setRoom(locked.get(line.roomId())); rr.setCheckIn(line.expectedCheckIn()); rr.setCheckOut(line.expectedCheckOut()); rr.setGuestCount(line.guestCount() == null ? 1 : line.guestCount()); rr.setStatus(RoomStatus.RESERVED); reservation.addRoom(rr); });
         try {
             Reservation saved = reservations.saveAndFlush(reservation);
             billing.registerDeposit(saved);
@@ -231,6 +238,7 @@ public class ReservationService {
             Reservation r = locked(id);
             requireState(r, ReservationStatus.CHECKED_IN);
             List<LocalDateTime> scheduled = r.getRooms().stream().map(ReservationRoom::getCheckOut).toList();
+            if (hotelServiceBookings != null) hotelServiceBookings.cancelForReservation(id, actor);
             InvoiceDtos.Response response = billing.checkOut(id, request == null ? null : request.at(),
                     request == null ? null : request.paymentMethod(), actor);
             // Dịch vụ thanh toán tính toán dựa trên thời điểm trả phòng theo lịch, nhưng không được
@@ -246,11 +254,31 @@ public class ReservationService {
                                            String suppliedActor, String key) {
         String actor = authenticatedActor(suppliedActor);
         ReservationAccess.requireOperator(actor);
+        return cancelInternal(id, request, actor, key, null, "reservation-cancel");
+    }
+
+    /** Cho phép chính chủ booking online tự hủy; vẫn dùng chung policy 48 giờ/no-show. */
+    @Transactional
+    public ReservationDtos.Response cancelForCustomer(Long id, ReservationDtos.CancelRequest request,
+                                                      String suppliedActor, String key) {
+        String actor = authenticatedActor(suppliedActor);
+        SecurityActor.Principal principal = SecurityActor.currentPrincipal();
+        if (!principal.isCustomer() || !principal.id().equals(actor))
+            throw error("CUSTOMER_REQUIRED", "Chỉ khách hàng được hủy booking của mình");
+        return cancelInternal(id, request, actor, key, Long.valueOf(principal.id()), "customer-reservation-cancel");
+    }
+
+    private ReservationDtos.Response cancelInternal(Long id, ReservationDtos.CancelRequest request,
+                                                     String actor, String key, Long customerAccountId,
+                                                     String idempotencyScope) {
         String reason = request == null ? null : request.reason();
         String fingerprint = IdempotencySupport.fingerprint("CANCEL|" + id + "|" + (reason == null ? "" : reason.trim()));
-        return executeIdempotent("reservation-cancel", key, actor, fingerprint, ReservationDtos.Response.class, () -> {
+        return executeIdempotent(idempotencyScope, key, actor, fingerprint, ReservationDtos.Response.class, () -> {
             if (reason == null || reason.isBlank()) throw error("CANCELLATION_REASON_REQUIRED", "Hủy đặt phòng phải có lý do");
             Reservation r = locked(id);
+            if (customerAccountId != null && (r.getCustomerAccount() == null
+                    || !customerAccountId.equals(r.getCustomerAccount().getId())))
+                throw error("RESERVATION_NOT_FOUND", "Không tìm thấy booking");
             requireState(r, ReservationStatus.DRAFT, ReservationStatus.CONFIRMED, ReservationStatus.DEPOSIT_PAID);
             LocalDateTime now = LocalDateTime.now(clock);
             LocalDateTime checkIn = r.getRooms().stream().map(ReservationRoom::getCheckIn).min(LocalDateTime::compareTo)
@@ -260,6 +288,7 @@ public class ReservationService {
             if (r.getActualCheckIn() == null && !now.isBefore(scheduledCheckout)) {
                 r.transitionTo(ReservationStatus.NO_SHOW);
                 r.getRooms().forEach(x -> x.setStatus(RoomStatus.CANCELLED));
+                if (hotelServiceBookings != null) hotelServiceBookings.cancelForReservation(id, actor);
                 r.setCancellationReason(reason.trim());
                 r.setCancellationOutcome(CancellationOutcome.FORFEIT);
                 audit.record(actor, "RESERVATION_NO_SHOW", "RESERVATION", id.toString(), null,
@@ -269,10 +298,12 @@ public class ReservationService {
             }
             boolean late = !now.isBefore(checkIn.minusHours(lateCancellationHours)) && now.isBefore(checkIn);
             CancellationOutcome outcome = late ? CancellationOutcome.FORFEIT
-                    : (r.getDepositAmount() != null && r.getDepositAmount().signum() > 0
+                    : (r.getDepositPaymentStatus() == com.hospitality.mis.entity.reservation.DepositPaymentStatus.PAID
+                    && r.getDepositAmount() != null && r.getDepositAmount().signum() > 0
                     ? CancellationOutcome.REFUND : CancellationOutcome.RETAIN);
             r.transitionTo(ReservationStatus.CANCELLED);
             r.getRooms().forEach(x -> x.setStatus(RoomStatus.CANCELLED));
+            if (hotelServiceBookings != null) hotelServiceBookings.cancelForReservation(id, actor);
             if (late) bookingPolicy.recordLateCancellation(r.getGuest());
             r.setCancellationReason(reason.trim());
             r.setCancellationOutcome(outcome);
@@ -405,6 +436,10 @@ public class ReservationService {
                 throw error("NO_SHOW_TOO_EARLY", "Chỉ được đánh dấu no-show sau khi hết thời gian đặt phòng");
             r.transitionTo(ReservationStatus.NO_SHOW);
             r.getRooms().forEach(x -> x.setStatus(RoomStatus.CANCELLED));
+            if (hotelServiceBookings != null) hotelServiceBookings.cancelForReservation(id, actor);
+            r.setCancellationReason("Khách không đến trước khi kỳ lưu trú kết thúc");
+            r.setCancellationOutcome(CancellationOutcome.FORFEIT);
+            billing.settleCancellationDeposit(r, actor, true);
             audit.record(actor, "RESERVATION_NO_SHOW", "RESERVATION", id.toString(), null,
                     ReservationStatus.NO_SHOW.name(), "DEPOSIT_FORFEITED");
             return toResponse(r);
@@ -418,11 +453,20 @@ public class ReservationService {
         String actor = authenticatedActor(suppliedActor);
         ReservationAccess.requireOperator(actor);
         String fingerprint = IdempotencySupport.fingerprint("SERVICE|" + id + "|" + request.serviceId() + "|"
-                + request.quantity() + "|" + request.usedAt());
+                + request.quantity() + "|" + request.usedAt() + "|" + request.roomId() + "|" + request.mealPeriod());
         return executeIdempotent("reservation-service", key, actor, fingerprint, ReservationDtos.Response.class, () -> {
             Reservation r = locked(id);
             requireState(r, ReservationStatus.CHECKED_IN);
+            if (hotelServiceBookings != null && Set.of("BREAKFAST", "LNDRYSTD", "MAMREST", "POOL").contains(request.serviceId())) {
+                String roomId = request.roomId() == null ? r.getRooms().get(0).getRoom().getId() : request.roomId();
+                hotelServiceBookings.recordAtFrontDesk(new HotelServiceBookingService.Request(id, roomId,
+                        request.serviceId(), request.usedAt() == null ? LocalDateTime.now(clock) : request.usedAt(),
+                        request.quantity(), request.mealPeriod(), null), key, actor);
+                return toResponse(r);
+            }
             Service service = serviceCatalog.findWithLockById(request.serviceId()).orElseThrow(() -> error("SERVICE_NOT_FOUND", "Không tìm thấy dịch vụ"));
+            if (!service.isActive() || service.getPrice() == null || service.getPrice().signum() <= 0)
+                throw error("SERVICE_NOT_AVAILABLE", "Dịch vụ đã ngừng bán hoặc chưa niêm yết giá");
             if (service.getStockQuantity() < request.quantity()) throw error("INSUFFICIENT_STOCK", "Tồn kho không đủ");
             var usedOn = (request.usedAt() == null ? LocalDateTime.now(clock) : request.usedAt()).toLocalDate();
             var lineKey = new ServiceUsageId(id, request.serviceId(), usedOn);
@@ -463,7 +507,7 @@ public class ReservationService {
     /** Tạo fingerprint canonical từ guest, employee, cọc, loại thuê và lịch phòng. */
     private String createFingerprint(ReservationDtos.CreateRequest request) {
         String rooms = request.rooms().stream().map(line -> line.roomId().trim() + "@"
-                        + line.expectedCheckIn() + "/" + line.expectedCheckOut())
+                        + line.expectedCheckIn() + "/" + line.expectedCheckOut() + "/" + (line.guestCount() == null ? 1 : line.guestCount()))
                 .sorted().reduce((a, b) -> a + ";" + b).orElse("");
         return IdempotencySupport.fingerprint("CREATE|guest=" + request.guestId() + "|employee="
                 + request.employeeId().trim() + "|deposit=" + (request.deposit() == null ? BigDecimal.ZERO : request.deposit().stripTrailingZeros().toPlainString())
@@ -475,7 +519,7 @@ public class ReservationService {
         if (reservation.getCanonicalRequestFingerprint() != null && !reservation.getCanonicalRequestFingerprint().isBlank())
             return reservation.getCanonicalRequestFingerprint();
         String rooms = reservation.getRooms().stream().map(line -> line.getRoom().getId() + "@"
-                        + line.getCheckIn() + "/" + line.getCheckOut())
+                        + line.getCheckIn() + "/" + line.getCheckOut() + "/" + line.getGuestCount())
                 .sorted().reduce((a, b) -> a + ";" + b).orElse("");
         return IdempotencySupport.fingerprint("CREATE|guest=" + reservation.getGuest().getId() + "|employee="
                 + (reservation.getEmployee() == null ? "" : reservation.getEmployee().getEmployeeId()) + "|deposit="

@@ -32,7 +32,7 @@ type TabType = "overview" | "password" | "permissions";
 
 const ROLE_INFO_MAP: Record<string, { label: string; department: string; gradient: string; badge: string }> = {
   FRONT_DESK: {
-    label: "Lễ tân PMS",
+    label: "Lễ tân",
     department: "Bộ phận Tiền sảnh",
     gradient: "from-[#1D4ED8] to-[#3B82F6]",
     badge: "bg-blue-50 text-blue-700 border-blue-200",
@@ -51,7 +51,7 @@ const ROLE_INFO_MAP: Record<string, { label: string; department: string; gradien
   },
   KITCHEN: {
     label: "Bếp trưởng & F&B",
-    department: "Bộ phận Bếp & Minibar",
+    department: "Bộ phận Bếp & Nhà hàng",
     gradient: "from-[#EA580C] to-[#F97316]",
     badge: "bg-orange-50 text-orange-700 border-orange-200",
   },
@@ -243,7 +243,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
   const roleKey = profile?.role || "STAFF";
   const roleMeta = ROLE_INFO_MAP[roleKey] ?? {
     label: currentRoleLabel || "Nhân viên",
-    department: departmentName || "Khách sạn MAM",
+    department: departmentName || "MaM Hotel",
     gradient: "from-[#1E293B] to-[#334155]",
     badge: "bg-slate-50 text-slate-700 border-slate-200",
   };
@@ -279,7 +279,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
     setSavingPw(true);
     try {
       await authApi.changePassword(newPassword);
-      setPwSuccess("Đổi mật khẩu thành công và lưu vào CSDL!");
+      setPwSuccess("Đổi mật khẩu thành công!");
       setNewPassword("");
       setConfirmPassword("");
       setTimeout(() => {
@@ -288,7 +288,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
       }, 1500);
     } catch (err: unknown) {
       const apiErr = err as { message?: string };
-      setPwError(apiErr?.message || "Đổi mật khẩu thất bại. Vui lòng thử lại.");
+      setPwError("Đổi mật khẩu thất bại. Vui lòng thử lại.");
     } finally {
       setSavingPw(false);
     }
@@ -433,7 +433,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
                   <Shield size={12} className="text-slate-400" /> Trạng thái
                 </span>
                 <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
-                  <CheckCircle2 size={12} /> Đang trực tuyến · CSDL
+                  <CheckCircle2 size={12} /> Đang trực tuyến
                 </span>
               </div>
             </div>
@@ -523,7 +523,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
               className="w-full py-2 px-3 rounded-xl bg-[#0F172A] hover:bg-slate-800 text-white text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
             >
               {savingPw ? (
-                <span>Đang cập nhật CSDL...</span>
+                <span>Đang cập nhật...</span>
               ) : (
                 <>
                   <KeyRound size={13} />

@@ -26,7 +26,7 @@ class RoomDomainTest {
         assertColumn(Room.class, "id", "id", 10);
         assertColumn(Room.class, "name", "name", 100);
         assertColumn(Room.class, "floor", "floor", 0);
-        assertColumn(Room.class, "description", "description", 255);
+        assertColumn(Room.class, "description", "description", 1200);
         assertColumn(Room.class, "status", "status", 30);
         assertColumn(RoomType.class, "id", "id", 10);
         assertColumn(RoomType.class, "name", "name", 50);

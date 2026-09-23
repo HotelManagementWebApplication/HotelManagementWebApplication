@@ -37,4 +37,12 @@ public class CustomerReservationController {
     public CustomerReservationDtos.PaymentInstruction payment(@PathVariable Long id) {
         return service.payment(id, SecurityActor.currentActor());
     }
+
+    @PostMapping("/{id}/cancel")
+    public CustomerReservationDtos.Response cancel(
+            @PathVariable Long id,
+            @Valid @RequestBody com.hospitality.mis.dto.reservation.ReservationDtos.CancelRequest request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey) {
+        return service.cancel(id, request, SecurityActor.currentActor(), idempotencyKey);
+    }
 }

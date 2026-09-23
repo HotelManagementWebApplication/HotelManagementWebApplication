@@ -8,6 +8,7 @@ import com.hospitality.mis.entity.billing.Invoice;
 import com.hospitality.mis.entity.reservation.Reservation;
 import com.hospitality.mis.entity.reservation.ReservationRoom;
 import com.hospitality.mis.entity.reservation.ReservationStatus;
+import com.hospitality.mis.entity.room.RoomStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,8 @@ public class FrontDeskDashboardService {
                 normalized, status, "DEPARTURES", fromAt, toAt, pageRequest);
         List<FrontDeskDashboardDtos.ReservationItem> current = dashboardItems(
                 normalized, status, "CURRENT", fromAt, toAt, pageRequest);
+        List<FrontDeskDashboardDtos.ReservationItem> upcoming = dashboardItems(
+                normalized, status, "UPCOMING", fromAt, toAt, pageRequest);
         List<FrontDeskDashboardDtos.ReservationItem> unpaidDeposits = dashboardItems(
                 normalized, status, "UNPAID_DEPOSITS", fromAt, toAt, pageRequest);
         List<FrontDeskDashboardDtos.ReservationItem> balances = dashboardItems(
@@ -73,7 +76,7 @@ public class FrontDeskDashboardService {
 
         int totalPages = allReservations.getTotalPages();
         return new FrontDeskDashboardDtos.Response(businessDate,
-                arrivals, departures, current, unpaidDeposits, balances, roomItems, roomCounts, incidentItems,
+                arrivals, departures, current, upcoming, unpaidDeposits, balances, roomItems, roomCounts, incidentItems,
                 safePage, safeSize, allReservations.getTotalElements(), totalPages);
     }
 
@@ -92,13 +95,22 @@ public class FrontDeskDashboardService {
                 .min(LocalDateTime::compareTo).orElse(null);
         LocalDateTime checkOut = r.getRooms().stream().map(ReservationRoom::getCheckOut)
                 .max(LocalDateTime::compareTo).orElse(null);
+        List<String> activeRoomIds = r.getRooms().stream()
+                .filter(this::isActiveRoomAssignment)
+                .map(x -> x.getRoom().getId())
+                .toList();
         Invoice invoice = r.getInvoice();
         return new FrontDeskDashboardDtos.ReservationItem(r.getId(),
                 r.getGuest() == null ? null : r.getGuest().getId(),
                 r.getGuest() == null ? null : r.getGuest().getFullName(),
                 r.getGuest() == null ? null : r.getGuest().getPhone(), r.getStatus(), checkIn, checkOut,
-                r.getRooms().stream().map(x -> x.getRoom().getId()).toList(), r.getDepositAmount(),
+                activeRoomIds, r.getDepositAmount(),
                 r.getDepositPaymentStatus() == null ? null : r.getDepositPaymentStatus().name(),
                 invoice == null ? BigDecimal.ZERO : invoice.getAmountDue());
+    }
+
+    /** Dashboard chỉ gắn khách với phân bổ còn hiệu lực, không gắn lại phòng nguồn sau khi đổi/trả. */
+    private boolean isActiveRoomAssignment(ReservationRoom line) {
+        return line.getStatus() == RoomStatus.RESERVED || line.getStatus() == RoomStatus.OCCUPIED;
     }
 }

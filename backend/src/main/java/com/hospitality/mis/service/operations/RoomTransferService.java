@@ -84,14 +84,14 @@ public class RoomTransferService {
                     .orElseThrow(() -> new DomainException("ROOM_NOT_FOUND", "Không tìm thấy phòng đích"));
             if (to.getStatus() != RoomStatus.READY)
                 throw new DomainException("ROOM_NOT_AVAILABLE", "Phòng đích không sẵn sàng");
-            if (reservations.hasOverlapExcludingReservation(reservationId, to.getId(), detail.getCheckIn(),
-                    detail.getCheckOut(), RoomStatus.CANCELLED,
-                    List.of(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW, ReservationStatus.CHECKED_OUT)))
-                throw new DomainException("OVERBOOKING", "Phòng đích đã có lịch trùng");
 
             LocalDateTime transferredAt = request.transferredAt() == null ? LocalDateTime.now(clock) : request.transferredAt();
             if (!transferredAt.isAfter(detail.getCheckIn()) || !transferredAt.isBefore(detail.getCheckOut()))
                 throw new DomainException("INVALID_TRANSFER_TIME", "Thời điểm chuyển phải nằm trong kỳ lưu trú");
+            if (reservations.hasOverlapExcludingReservation(reservationId, to.getId(), transferredAt,
+                    detail.getCheckOut(), RoomStatus.CANCELLED,
+                    List.of(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW, ReservationStatus.CHECKED_OUT)))
+                throw new DomainException("OVERBOOKING", "Phòng đích đã có người đặt trong thời gian lưu trú còn lại");
 
             Room from = detail.getRoom();
             LocalDateTime scheduledCheckout = detail.getCheckOut();

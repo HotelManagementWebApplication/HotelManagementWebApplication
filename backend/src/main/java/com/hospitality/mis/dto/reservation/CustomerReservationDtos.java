@@ -32,13 +32,27 @@ public final class CustomerReservationDtos {
     public record RoomStay(
             @NotBlank String roomId,
             @NotNull LocalDateTime expectedCheckIn,
-            @NotNull LocalDateTime expectedCheckOut) {}
+            @NotNull LocalDateTime expectedCheckOut,
+            @jakarta.validation.constraints.Positive Integer guestCount) {
+        public RoomStay(String roomId, LocalDateTime expectedCheckIn, LocalDateTime expectedCheckOut) {
+            this(roomId, expectedCheckIn, expectedCheckOut, 1);
+        }
+    }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record RoomLine(
             String roomId,
+            String roomName,
+            String roomTypeName,
+            BigDecimal unitPrice,
+            BigDecimal totalPrice,
             LocalDateTime expectedCheckIn,
-            LocalDateTime expectedCheckOut) {}
+            LocalDateTime expectedCheckOut,
+            int guestCount) {
+        public RoomLine(String roomId, LocalDateTime expectedCheckIn, LocalDateTime expectedCheckOut, int guestCount) {
+            this(roomId, roomId, null, null, null, expectedCheckIn, expectedCheckOut, guestCount);
+        }
+    }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record PaymentInstruction(
@@ -55,14 +69,32 @@ public final class CustomerReservationDtos {
             ReservationDtos.RentalType rentalType,
             String bookingSource,
             BigDecimal depositAmount,
+            BigDecimal totalAmount,
             LocalDateTime bookedAt,
             List<RoomLine> rooms,
-            PaymentInstruction depositPayment) {
-        /** Giữ tương thích với các caller Java cũ chưa có nguồn đặt phòng trong response. */
+            PaymentInstruction depositPayment,
+            List<com.hospitality.mis.service.reservation.HotelServiceBookingService.Response> services,
+            String cancellationReason,
+            com.hospitality.mis.entity.reservation.CancellationOutcome cancellationOutcome) {
+        /** Giữ tương thích với các caller Java cũ */
+        public Response(Long id, ReservationStatus status, ReservationDtos.RentalType rentalType,
+                        String bookingSource, BigDecimal depositAmount, BigDecimal totalAmount,
+                        LocalDateTime bookedAt, List<RoomLine> rooms, PaymentInstruction depositPayment) {
+            this(id, status, rentalType, bookingSource, depositAmount, totalAmount, bookedAt, rooms, depositPayment, List.of(), null, null);
+        }
+        public Response(Long id, ReservationStatus status, ReservationDtos.RentalType rentalType,
+                        String bookingSource, BigDecimal depositAmount, LocalDateTime bookedAt,
+                        List<RoomLine> rooms, PaymentInstruction depositPayment) {
+            this(id, status, rentalType, bookingSource, depositAmount,
+                 depositAmount != null ? depositAmount.multiply(BigDecimal.valueOf(2)) : BigDecimal.ZERO,
+                 bookedAt, rooms, depositPayment, List.of(), null, null);
+        }
         public Response(Long id, ReservationStatus status, ReservationDtos.RentalType rentalType,
                         BigDecimal depositAmount, LocalDateTime bookedAt, List<RoomLine> rooms,
                         PaymentInstruction depositPayment) {
-            this(id, status, rentalType, "DIRECT", depositAmount, bookedAt, rooms, depositPayment);
+            this(id, status, rentalType, "DIRECT", depositAmount,
+                 depositAmount != null ? depositAmount.multiply(BigDecimal.valueOf(2)) : BigDecimal.ZERO,
+                 bookedAt, rooms, depositPayment, List.of(), null, null);
         }
     }
 }

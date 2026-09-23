@@ -53,6 +53,8 @@ class CustomerAuthenticationIntegrationTest {
     @Autowired RefreshTokenRepository refreshTokens;
     /** SQL audit assertion cho password reset. */
     @Autowired JdbcTemplate jdbc;
+    /** Dịch vụ OTP dùng để kiểm tra và xác nhận mã xác thực. */
+    @Autowired com.hospitality.mis.service.auth.OtpService otpService;
 
     /** Dọn token/account/guest/audit và seed employee trước mỗi scenario. */
     @BeforeEach
@@ -204,6 +206,80 @@ class CustomerAuthenticationIntegrationTest {
                                 "0900000091", "customer-password", "Customer", "ID09000093"))))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("PHONE_ALREADY_IN_USE"));
+    }
+
+    @Test
+    /** Kiểm tra luồng gửi OTP và đăng ký tài khoản khách hàng bằng mã OTP. */
+    void customerRegisterWithOtpFlow() throws Exception {
+        String email = "newguest@example.com";
+        // 1. Gửi OTP đăng ký
+        mockMvc.perform(post("/api/auth/otp/send-register")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.OtpSendRequest(email))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        // Sinh lại OTP có kiểm soát để test xác thực
+        String otp = otpService.generateOtp(email, com.hospitality.mis.service.auth.OtpPurpose.REGISTER);
+
+        // 2. Nhập sai OTP -> 422
+        mockMvc.perform(post("/api/auth/customers/register-with-otp")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.RegisterWithOtpRequest(
+                                "0900000095", "customer-password", "OTP Customer", "ID09000095", email, "000000"))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("OTP_INCORRECT"));
+
+        // 3. Đăng ký đúng OTP -> 201
+        mockMvc.perform(post("/api/auth/customers/register-with-otp")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.RegisterWithOtpRequest(
+                                "0900000095", "customer-password", "OTP Customer", "ID09000095", email, otp))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.phone").value("0900000095"));
+
+        // 4. Đăng nhập với tài khoản vừa tạo thành công
+        mockMvc.perform(post("/api/auth/customers/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.LoginRequest("0900000095", "customer-password"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.access_token").isNotEmpty());
+    }
+
+    @Test
+    /** Kiểm tra luồng gửi OTP và đặt lại mật khẩu khi quên mật khẩu. */
+    void customerResetPasswordWithOtpFlow() throws Exception {
+        String email = "resetguest@example.com";
+        String otp = otpService.generateOtp(email, com.hospitality.mis.service.auth.OtpPurpose.REGISTER);
+
+        // Đăng ký tài khoản trước
+        mockMvc.perform(post("/api/auth/customers/register-with-otp")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.RegisterWithOtpRequest(
+                                "0900000096", "old-password", "Reset Customer", "ID09000096", email, otp))))
+                .andExpect(status().isCreated());
+
+        // 1. Gửi OTP quên mật khẩu
+        mockMvc.perform(post("/api/auth/otp/send-forgot-password")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.OtpSendRequest(email))))
+                .andExpect(status().isOk());
+
+        // Lấy mã OTP đặt lại mật khẩu
+        String resetOtp = otpService.generateOtp(email, com.hospitality.mis.service.auth.OtpPurpose.FORGOT_PASSWORD);
+
+        // 2. Đặt lại mật khẩu với OTP hợp lệ
+        mockMvc.perform(post("/api/auth/customers/reset-password-otp")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.ResetPasswordOtpRequest(
+                                email, resetOtp, "new-secret-pwd"))))
+                .andExpect(status().isOk());
+
+        // 3. Đăng nhập bằng mật khẩu mới thành công
+        mockMvc.perform(post("/api/auth/customers/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.LoginRequest("0900000096", "new-secret-pwd"))))
+                .andExpect(status().isOk());
     }
 
     /** Đăng ký customer fixture chuẩn dùng lại trong login/reset tests. */

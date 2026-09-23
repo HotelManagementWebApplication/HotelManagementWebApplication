@@ -1,10 +1,10 @@
 # Kiểm toán tích hợp giao diện – backend hiện tại
 
-Ngày cập nhật: 20/09/2026
+Ngày cập nhật: 22/09/2026
 
 ## Cập nhật kiểm chứng runtime ngày 21/09/2026
 
-- MySQL đang chạy trong container `web-hotel-mis-mysql-3307`, database `QLKS`, cổng host `3307`; backend duy nhất chạy cổng `8080` và Flyway đang ở v34.
+- MySQL đang chạy trong container `web-hotel-mis-mysql-3307`, database `QLKS`, cổng host `3307`; backend duy nhất chạy cổng `8080` và Flyway đang ở v39.
 - Đối chiếu trực tiếp bằng ID: `rooms` trong database = 64 và `/api/public/rooms` = 64, không có ID lệch; `services` active trong database = 34 và `/api/public/services` = 34, không có ID lệch.
 - Đăng nhập customer `0901234567` thành công; API customer trả booking có các nguồn `DIRECT` và `AGODA`. Các API đọc thật của FRONTDESK, HOUSEKEEP, ACCOUNTING, KITCHEN và MANAGER đều trả HTTP 200 với tài khoản seed tương ứng.
 - V31 lưu metadata dùng chung của loại phòng; V33 bổ sung mô tả quảng cáo riêng trên từng bản ghi `rooms` và V34 phân bổ 3 ảnh gốc khác nhau cho từng `room_id` trong `room_images`. Public API và giao diện ưu tiên dữ liệu riêng của phòng, chỉ dùng metadata loại phòng làm dự phòng cho dữ liệu cũ.
@@ -30,24 +30,25 @@ các biến môi trường fixture disposable, vì vậy không được tính l
 - Một backend duy nhất chạy tại `http://localhost:8080`.
 - Vite proxy chuyển các request `/api` từ frontend sang backend 8080.
 - Backend kết nối MySQL `QLKS` tại cổng 3307.
-- API kiểm tra thực tế đang trả về 64 phòng và 34 dịch vụ từ database; database có 192 ảnh hoạt động, 192 URL ảnh khác nhau và 64/64 phòng có đủ 3 URL ảnh khác nhau.
-- Database đang ở Flyway v34; 24 dịch vụ thương mại có mặt bằng/voucher tương ứng,
-  còn các dịch vụ nội bộ như minibar, bữa sáng tại phòng, giặt ủi, trang trí,
-  đưa đón và tour không bị gắn nhầm vào đối tác thuê mặt bằng.
-- Các mặt bằng thương mại đã có dữ liệu cho nhà hàng, bar, spa, thể thao, hội nghị
-  và hồ bơi theo tầng. Hồ bơi yêu cầu booking `PACKAGE` đã cọc của đúng khách.
+- API kiểm tra thực tế đang trả về 64 phòng và danh mục dịch vụ active từ database; các dịch vụ cũ của mô hình nhượng quyền đã được ngừng public.
+- Database đang ở Flyway v39; các bảng `commercial_partners`, `commercial_spaces`,
+  `partner_monthly_settlements` và `customer_vouchers` đã được gỡ. Công nợ nhà
+  cung cấp trong `partner_debts` vẫn được giữ.
+- Dịch vụ do MaM Hotel vận hành được đặt trong `hotel_service_bookings`, gắn với
+  booking/phòng. Chỉ booking đã thanh toán cọc được đặt trước; chỉ booking
+  `CHECKED_IN` mới được xác nhận `USED`. Hồ bơi chỉ hiển thị thông tin trên web.
 - Giao diện khách hàng không còn lấy danh sách phòng từ `frontend/src/data.ts` và không còn tự rơi về danh sách dịch vụ mẫu khi API lỗi.
 
 ## Các màn hình đã dùng dữ liệu backend
 
 | Màn hình | Dữ liệu và thao tác đã nối |
 |---|---|
-| `CustomerPortal` | Phòng, tình trạng còn phòng, chi tiết phòng, dịch vụ, mặt bằng thương mại, tạo booking online, mã cọc và `booking_source`. |
+| `CustomerPortal` | Phòng, tình trạng còn phòng, chi tiết phòng, dịch vụ nội bộ, tạo booking online, đặt dịch vụ gắn với booking, mã cọc và `booking_source`. |
 | `FrontDeskPMS` | Dashboard khách đến/đi/đang ở, phòng, booking, check-in, check-out, gia hạn, chuyển phòng, thêm dịch vụ, hóa đơn, thanh toán, biên lai, bàn giao két. |
 | `HousekeepingStation` | Nhiệm vụ buồng, checklist, kiểm tra minibar, sự cố, tồn đồ vải và nhập/xuất đồ vải. |
 | `MaintenanceStation` | Phiếu kỹ thuật, cập nhật trạng thái, nghiệm thu/mở khóa phòng, danh mục tài sản và trạng thái tài sản. |
 | `KitchenInventory` | Danh mục dịch vụ, tồn kho, biến động nhập/xuất, đề xuất đổi giá và hàng đợi phê duyệt. |
-| `AccountingStation` | Hóa đơn, công nợ, bàn giao két, đối soát OTA, VAT/XML, đối tác/mặt bằng và xuất công nợ tháng. |
+| `AccountingStation` | Hóa đơn, công nợ nhà cung cấp, bàn giao két, đối soát OTA và VAT/XML. |
 | `HRStation` | Nhân viên, ca làm, import chấm công, nghỉ phép, phê duyệt nghỉ phép và tự sinh tài khoản nhân viên. |
 | `AdminStation` | Danh sách nhân viên, khóa/mở tài khoản, audit log, tạo tài khoản nhân viên và đổi vai trò theo hợp đồng backend. |
 | `ManagerDashboard` | Hàng đợi phê duyệt, phòng, nhân sự, nhiệm vụ buồng, sự cố, hóa đơn và chi phí. |
@@ -62,8 +63,9 @@ các biến môi trường fixture disposable, vì vậy không được tính l
 5. Backend đổi booking sang `DEPOSIT_PAID`.
 6. Dashboard lễ tân mới đưa booking đó vào nhóm “Khách đến hôm nay”. Booking chưa cọc vẫn nằm ở nhóm “Booking chưa thanh toán cọc”, không hiện nhầm ở danh sách khách đến.
 
-Với voucher hồ bơi, frontend lấy booking đêm đã cọc của tài khoản khách và gửi
-`reservation_id`; backend kiểm tra đúng chính sách `GUEST_ONLY` trước khi phát hành mã.
+Với dịch vụ đặt trước, frontend lấy booking đã cọc của tài khoản khách và gửi
+`reservation_id`, `room_id`, thời gian và số lượng; backend tính hạn mức miễn phí
+theo số khách/phòng/ngày và ghi phần vượt vào hóa đơn khi checkout.
 
 Tiền cọc hiện là 50% theo chính sách backend. Thuê theo giờ dùng `hourly_price` của `room_types`; nếu loại phòng chưa cấu hình giá giờ thì backend mới dùng giá ngày chia 24 làm dự phòng nghiệp vụ.
 
@@ -72,9 +74,8 @@ Tiền cọc hiện là 50% theo chính sách backend. Thuê theo giờ dùng `h
 - Xác nhận thanh toán cọc trên giao diện khách chưa thể tự hoàn tất nếu chưa có cổng thanh toán thật; frontend chỉ hiển thị hướng dẫn/mã cọc. Việc xác nhận phải đi qua webhook HMAC.
 - Một số nút tiện ích của màn hình quản trị như sao lưu snapshot, xuất audit CSV, gửi email và cài đặt bảo mật hiện mới là giao diện; chưa có API nghiệp vụ tương ứng nên không được xem là đã ghi database.
 - Backend chưa có thao tác xóa ca trực; giao diện HR báo rõ thay vì giả vờ lưu.
-- Các dịch vụ nội bộ không có mặt bằng voucher sẽ cần luồng “yêu cầu dịch vụ gắn vào booking”
-  riêng nếu muốn khách tự đặt trực tiếp từ portal; hiện chúng vẫn hiển thị đúng catalog
-  backend nhưng không phát hành voucher đối tác.
+- Các dịch vụ nội bộ đã có luồng “đặt dịch vụ gắn vào booking”; không phát hành
+  voucher và không hỗ trợ khách ngoài đặt dịch vụ.
 - Một số thông tin trang trí như avatar, thời tiết, tên ca trực ở header không phải dữ liệu vận hành.
 
 Các phần trên không ảnh hưởng đến luồng đặt phòng, cọc, lễ tân, buồng phòng, kỹ thuật, kho, kế toán và nhân sự đã nối backend.
