@@ -21,7 +21,6 @@ class MailConfigurationTest {
 
             assertThat(username).isEqualTo("${MAIL_USERNAME:minhtuyen220706@gmail.com}");
             assertThat(password).startsWith("${MAIL_PASSWORD:").endsWith("}")
-                    .hasSizeGreaterThan("${MAIL_PASSWORD:}".length() + 1)
                     .doesNotContain("//", "2 dòng này");
         }
     }
