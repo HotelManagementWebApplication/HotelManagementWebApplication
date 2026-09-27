@@ -12,6 +12,7 @@ import javax.sql.DataSource;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Collectors;
@@ -130,33 +131,52 @@ class SqlServerMigrationTest {
     void everyDictionaryColumnUsesExactCollationAndRejectsAccentlessLookalikes() throws Exception {
         Set<String> expectedColumns = valueDictionaryColumns();
         assertThat(expectedColumns).hasSize(57);
+        String auditRun = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String invalidEmployeeCode = "AC" + auditRun;
+        String leaveEmployeeCode = "AL" + auditRun;
+        String invalidServiceCode = "SV" + auditRun;
+        String invalidEmployeePhone = "09" + String.format("%010d",
+                Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 10_000_000_000L));
+        String leaveEmployeePhone = "09" + String.format("%010d",
+                Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 10_000_000_000L));
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
-            java.util.Map<String, String> actual = new java.util.HashMap<>();
-            try (var result = statement.executeQuery("select table_name, column_name, collation_name "
-                    + "from information_schema.columns where table_schema='dbo' and collation_name is not null")) {
-                while (result.next()) actual.put(result.getString(1) + "." + result.getString(2), result.getString(3));
+            try {
+                java.util.Map<String, String> actual = new java.util.HashMap<>();
+                try (var result = statement.executeQuery("select table_name, column_name, collation_name "
+                        + "from information_schema.columns where table_schema='dbo' and collation_name is not null")) {
+                    while (result.next()) actual.put(result.getString(1) + "." + result.getString(2), result.getString(3));
+                }
+                assertThat(actual.keySet()).containsAll(expectedColumns);
+                for (String column : expectedColumns) {
+                    assertThat(actual.get(column)).as("collation for %s", column).isEqualTo("Vietnamese_100_CS_AS");
+                }
+                assertThatThrownBy(() -> statement.executeUpdate("insert into NhanVien "
+                        + "(maNhanVien, hoVaTen, matKhau, vaiTro, soDienThoai, trangThaiLamViec) "
+                        + "values ('" + invalidEmployeeCode + "', 'Audit', 'not-a-password', 'Lễ tân', '"
+                        + invalidEmployeePhone + "', 'dang lam viec')"))
+                        .as("accentless employee status must violate the database check")
+                        .isInstanceOf(java.sql.SQLException.class);
+                assertThatThrownBy(() -> statement.executeUpdate("insert into DichVu "
+                        + "(maDichVu, ten, gia, danhMuc) values ('" + invalidServiceCode + "', 'Audit', 0, 'dich vu tai phong')"))
+                        .as("accentless service category must violate the database check")
+                        .isInstanceOf(java.sql.SQLException.class);
+                statement.executeUpdate("insert into NhanVien "
+                        + "(maNhanVien, hoVaTen, matKhau, vaiTro, soDienThoai) "
+                        + "values ('" + leaveEmployeeCode + "', 'Audit leave', 'not-a-password', N'Lễ tân', '"
+                        + leaveEmployeePhone + "')");
+                assertThatThrownBy(() -> statement.executeUpdate("insert into DonNghiPhep "
+                        + "(maNhanVien, loaiNghiPhep, ngayBatDau, ngayKetThuc, lyDo, nguoiYeuCau, trangThai) "
+                        + "values ('" + leaveEmployeeCode + "', N'Nghỉ phép năm', '2035-01-10', '2035-01-11', N'Audit', '"
+                        + leaveEmployeeCode + "', N'dang phe duyet')"))
+                        .as("leave status outside the Vietnamese dictionary must violate CHECK")
+                        .isInstanceOf(java.sql.SQLException.class);
+            } finally {
+                statement.executeUpdate("delete from DonNghiPhep where maNhanVien in ('" + invalidEmployeeCode + "','"
+                        + leaveEmployeeCode + "') or nguoiYeuCau in ('" + invalidEmployeeCode + "','" + leaveEmployeeCode + "')");
+                statement.executeUpdate("delete from NhanVien where maNhanVien in ('" + invalidEmployeeCode + "','"
+                        + leaveEmployeeCode + "')");
+                statement.executeUpdate("delete from DichVu where maDichVu='" + invalidServiceCode + "'");
             }
-            assertThat(actual.keySet()).containsAll(expectedColumns);
-            for (String column : expectedColumns) {
-                assertThat(actual.get(column)).as("collation for %s", column).isEqualTo("Vietnamese_100_CS_AS");
-            }
-            assertThatThrownBy(() -> statement.executeUpdate("insert into NhanVien "
-                    + "(maNhanVien, hoVaTen, matKhau, vaiTro, soDienThoai, trangThaiLamViec) "
-                    + "values ('AUDIT-CASE', 'Audit', 'not-a-password', 'Lễ tân', '0999999997', 'dang lam viec')"))
-                    .as("accentless employee status must violate the database check")
-                    .isInstanceOf(java.sql.SQLException.class);
-            assertThatThrownBy(() -> statement.executeUpdate("insert into DichVu "
-                    + "(maDichVu, ten, gia, danhMuc) values ('AUDIT-CAT', 'Audit', 0, 'dich vu tai phong')"))
-                    .as("accentless service category must violate the database check")
-                    .isInstanceOf(java.sql.SQLException.class);
-            statement.executeUpdate("insert into NhanVien "
-                    + "(maNhanVien, hoVaTen, matKhau, vaiTro, soDienThoai) "
-                    + "values ('AUDIT-LV', 'Audit leave', 'not-a-password', N'Lễ tân', '0999999996')");
-            assertThatThrownBy(() -> statement.executeUpdate("insert into DonNghiPhep "
-                    + "(maNhanVien, loaiNghiPhep, ngayBatDau, ngayKetThuc, lyDo, nguoiYeuCau, trangThai) "
-                    + "values ('AUDIT-LV', N'Nghỉ phép năm', '2035-01-10', '2035-01-11', N'Audit', 'AUDIT-LV', N'dang phe duyet')"))
-                    .as("leave status outside the Vietnamese dictionary must violate CHECK")
-                    .isInstanceOf(java.sql.SQLException.class);
         }
     }
 

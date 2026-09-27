@@ -32,11 +32,11 @@ jobs:
           distribution: temurin
           java-version: '24'
           cache: maven
-      - name: Create clean SQL Server database
+      - name: Recreate clean SQL Server database
         run: |
           cid=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2022-latest" --format '{{.ID}}' | head -n 1)
           test -n "$cid"
-          docker exec "$cid" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'ci-SqlServer-password-2026!' -C -Q "IF DB_ID(N'QLKS') IS NULL CREATE DATABASE [QLKS] COLLATE Vietnamese_100_CI_AI;"
+          docker exec "$cid" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'ci-SqlServer-password-2026!' -C -b -Q "IF DB_ID(N'QLKS') IS NOT NULL BEGIN ALTER DATABASE [QLKS] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [QLKS]; END; CREATE DATABASE [QLKS] COLLATE Vietnamese_100_CI_AI;"
       - name: Test with clean SQL Server, Flyway and Hibernate validation
         env:
           MIGRATION_TEST_DB_URL: jdbc:sqlserver://127.0.0.1:1433;databaseName=QLKS;encrypt=true;trustServerCertificate=true
