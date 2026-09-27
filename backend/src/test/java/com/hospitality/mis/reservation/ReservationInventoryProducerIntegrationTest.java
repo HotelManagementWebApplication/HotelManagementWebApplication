@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** Real JPA proof that addService locks, idempotently replays, and writes one ISSUE movement. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:reservationinventoryproducer;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:reservationinventoryproducer;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=", "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })

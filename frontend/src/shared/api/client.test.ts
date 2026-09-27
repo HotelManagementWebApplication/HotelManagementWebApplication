@@ -46,7 +46,7 @@ describe("ApiClient", () => {
   });
 
   it.each([400, 422])("classifies HTTP %s as validation", async status => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(status, { code: "VALIDATION_ERROR", message: "Invalid request data", details: ["field: invalid"] })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(status, { code: "VALIDATION_ERROR", message: "Dữ liệu yêu cầu không hợp lệ", details: ["field: không hợp lệ"] })));
     await expect(new ApiClient("https://api.test", store()).request("/failure", { retryOnUnauthorized: false })).rejects.toSatisfy((error: unknown) => error instanceof ApiError && error.isValidation);
   });
 });

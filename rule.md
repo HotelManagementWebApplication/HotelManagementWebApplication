@@ -10,7 +10,8 @@
 
 ## 2. Hợp đồng chuẩn (canonical contract)
 
-- Tên trường, trạng thái, sự kiện, tham số API, cột/schema và các định danh nghiệp vụ dùng tiếng Anh theo kiểu `lower_snake_case`, thống nhất trong toàn hệ thống.
+- Tên trường Java, trạng thái, sự kiện, tham số API và các định danh nghiệp vụ dùng tiếng Anh, thống nhất trong toàn hệ thống.
+- Tên bảng/cột vật lý SQL Server dùng hợp đồng tiếng Việt không dấu đã chốt trong `backend/src/main/resources/db/migration/V1__baseline_schema.sql`; JPA mapping, native SQL, tài liệu và test phải dùng đúng hợp đồng vật lý này.
 - Đây là hard cut: không có legacy alias, không dual-read, không dual-write, không compatibility facade và không có runtime owner cũ.
 - API, schema, tài liệu và test phải cùng tuân theo hợp đồng chuẩn hiện hành.
 
@@ -53,7 +54,7 @@ Phụ thu trả phòng muộn được tính trên giá phòng trước khi áp 
 - Một khách tối đa đặt 3 phòng cho cùng một kỳ lưu trú.
 - Mọi thao tác đặt phòng phải bảo toàn khả dụng phòng và ngăn đặt chồng (overlap).
 - Việc chuyển trạng thái phải hợp lệ theo state machine hiện hành; không được bỏ qua trạng thái hoặc cập nhật tùy ý.
-- Phải gắn thao tác với actor đã xác thực, hỗ trợ idempotency, và dùng khóa MySQL phù hợp để kiểm tra/cập nhật khả dụng một cách nguyên tử.
+- Phải gắn thao tác với actor đã xác thực, hỗ trợ idempotency, và dùng khóa SQL Server phù hợp để kiểm tra/cập nhật khả dụng một cách nguyên tử.
 - Các kiểm tra khả dụng, chuyển trạng thái, ghi dữ liệu liên quan và sự kiện audit phải nằm trong ranh giới transaction thích hợp.
 
 ## 6. Hủy đặt phòng
@@ -172,3 +173,10 @@ Cập nhật ngày 12/09/2026:
 ## Tham chiếu nguồn
 
 Các điểm đối chiếu từ DOCX extraction: P20, P21, P70–P78, T101R6, T101R12, T101R13, T101R15, T112R1, T115R1, T134R2, T139R1, T177R2. Khi tham chiếu nào khác với quyết định cuối của chủ sở hữu, áp dụng quyết định cuối và ghi nhận mâu thuẫn tương ứng.
+
+## 16. Sender email OTP local
+
+- `spring.mail.username` và `spring.mail.password` trong `backend/src/main/resources/application.yml` là cấu hình bắt buộc để gửi OTP local/demo. Không xóa, để rỗng, đổi sender hoặc rotate hai giá trị này trong cleanup thông thường.
+- Giữ `MailConfigurationTest` và kiểm tra nó trong backend test gate; test phải fail nếu một trong hai cấu hình bị mất hoặc YAML comment lọt vào giá trị.
+- Khi SMTP lỗi, API phải trả lỗi rõ ràng; không ghi OTP ra log và không báo đã gửi thành công.
+- Chủ repo tự quyết định việc rà soát credential khi chuẩn bị push public. Không tự thay đổi sender local trước quyết định đó.

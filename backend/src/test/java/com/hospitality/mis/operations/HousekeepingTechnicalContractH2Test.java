@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** H2 proof for the P1.7/P1.8 durable command and ownership contract. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:housekeeping-technical-contract;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:housekeeping-technical-contract;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.flyway.enabled=false",

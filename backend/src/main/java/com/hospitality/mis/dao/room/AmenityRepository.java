@@ -9,8 +9,8 @@ import java.util.List;
 
 /** Kho tiện nghi, bao gồm truy vấn active theo loại phòng cho public read model. */
 public interface AmenityRepository extends JpaRepository<Amenity, Long> {
-    @Query(value = "select a.* from amenities a join room_type_amenities rta on rta.amenity_id = a.id "
-            + "where rta.room_type_id = :roomTypeId and a.active = true order by a.name, a.id", nativeQuery = true)
+    @Query(value = "select a.* from TienNghi a join LoaiPhongTienNghi lptn on lptn.maTienNghi = a.maTienNghi "
+            + "where lptn.maLoaiPhong = :roomTypeId and a.dangHoatDong = 1 order by a.ten, a.maTienNghi", nativeQuery = true)
     List<Amenity> findActiveByRoomTypeId(@Param("roomTypeId") String roomTypeId);
     List<Amenity> findAllByOrderByNameAscIdAsc();
 }

@@ -89,20 +89,30 @@ public class AuthService {
         }
     }
 
-    /** Xác thực tài khoản khách bằng số điện thoại và cấp token có quyền khách. */
+    /** Xác thực tài khoản khách bằng số điện thoại hoặc email và cấp token có quyền khách. */
     @Transactional(noRollbackFor = AuthFailureException.class)
     public AuthDtos.TokenResponse customerLogin(CustomerAccountDtos.LoginRequest request) {
-        String phone;
-        try {
-            phone = PhoneNumberNormalizer.normalize(request.phone());
-        } catch (DomainException exception) {
-            throw new AuthFailureException();
+        String identifier = request.phone() == null ? "" : request.phone().trim();
+        CustomerAccount account;
+        String auditIdentifier;
+        if (identifier.contains("@")) {
+            String email = identifier.toLowerCase(java.util.Locale.ROOT);
+            account = customerAccounts.findByGuestEmail(email).orElse(null);
+            auditIdentifier = email;
+        } else {
+            String phone;
+            try {
+                phone = PhoneNumberNormalizer.normalize(identifier);
+            } catch (DomainException exception) {
+                throw new AuthFailureException();
+            }
+            account = customerAccounts.findByPhone(phone).orElse(null);
+            auditIdentifier = phone;
         }
-        CustomerAccount account = customerAccounts.findByPhone(phone).orElse(null);
         if (account == null || !EmployeeUserDetailsService.isBcryptHash(account.getPassword())
                 || !passwordEncoder.matches(request.password(), account.getPassword())) {
             audit.record("SYSTEM", "LOGIN_FAILED", "CUSTOMER_ACCOUNT",
-                    phone, null, null, "Invalid credentials");
+                    auditIdentifier, null, null, "Invalid credentials");
             throw new AuthFailureException();
         }
         if (!account.isEnabled()) {

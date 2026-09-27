@@ -8,20 +8,38 @@ import jakarta.persistence.AttributeConverter;
 
 import jakarta.persistence.Converter;
 
+import java.util.Map;
 
 
-/** Lưu trạng thái phòng bằng đúng giá trị canonical của room-status contract. */
+
+/** Giữ mã JSON hiện hành nhưng lưu trạng thái phòng bằng tiếng Việt trong QLKS. */
 
 @Converter(autoApply = false)
 
 public class RoomStatusConverter implements AttributeConverter<RoomStatus, String> {
 
+    private static final Map<RoomStatus, String> TO_DATABASE = Map.of(
+            RoomStatus.READY, "Sẵn sàng",
+            RoomStatus.OCCUPIED, "Đang có khách",
+            RoomStatus.CLEANING, "Đang dọn phòng",
+            RoomStatus.MAINTENANCE, "Đang bảo trì",
+            RoomStatus.OUT_OF_SERVICE, "Ngừng sử dụng",
+            RoomStatus.RESERVED, "Đã giữ phòng",
+            RoomStatus.RETURNED, "Đã trả phòng",
+            RoomStatus.CANCELLED, "Đã hủy");
+
+    private static final Map<String, RoomStatus> FROM_DATABASE = TO_DATABASE.entrySet().stream()
+            .collect(java.util.stream.Collectors.toUnmodifiableMap(Map.Entry::getValue, Map.Entry::getKey));
+
     @Override
 
-    /** Ghi null thành null; trạng thái khác dùng giá trị canonical lower_snake_case. */
+    /** Ghi null thành null; mã API lower_snake_case không đi vào database. */
     public String convertToDatabaseColumn(RoomStatus status) {
 
-        return status == null ? null : status.databaseCode();
+        if (status == null) return null;
+        String value = TO_DATABASE.get(status);
+        if (value == null) throw new IllegalArgumentException("Unsupported room status: " + status);
+        return value;
 
     }
 
@@ -29,10 +47,13 @@ public class RoomStatusConverter implements AttributeConverter<RoomStatus, Strin
 
     @Override
 
-    /** Đọc null thành null; mọi giá trị không canonical bị từ chối. */
+    /** Đọc null thành null; mọi giá trị database ngoài từ điển đều bị từ chối. */
     public RoomStatus convertToEntityAttribute(String databaseValue) {
 
-        return databaseValue == null ? null : RoomStatus.fromDatabaseCode(databaseValue);
+        if (databaseValue == null) return null;
+        RoomStatus status = FROM_DATABASE.get(databaseValue);
+        if (status == null) throw new IllegalArgumentException("Unknown Vietnamese room status: " + databaseValue);
+        return status;
 
     }
 

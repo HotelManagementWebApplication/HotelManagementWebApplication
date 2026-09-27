@@ -6,5 +6,5 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface EmployeeLoginEventRepository extends JpaRepository<EmployeeLoginEvent, Long> {
-    Page<EmployeeLoginEvent> findByEmployeeEmployeeId(String employeeId, Pageable pageable);
+    Page<EmployeeLoginEvent> findByEmployeeEmployeeIdOrderByOccurredAtDescIdDesc(String employeeId, Pageable pageable);
 }

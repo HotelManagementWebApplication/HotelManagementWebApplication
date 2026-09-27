@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 
 @SpringBootTest(properties = {
-    "spring.datasource.url=jdbc:h2:mem:crossshift;MODE=MySQL;DB_CLOSE_DELAY=-1",
+    "spring.datasource.url=jdbc:h2:mem:crossshift;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
     "spring.datasource.username=sa", "spring.datasource.password=",
     "spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"
 })
@@ -84,7 +84,7 @@ class CrossShiftReservationWorkflowTest {
         em.flush();
         assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CHECKED_OUT);
         assertThat(reservation.getEmployee().getEmployeeId()).isEqualTo("shift-one");
-        Number audited = (Number) em.createNativeQuery("select count(*) from audit_logs where actor = 'next-shift' and action = 'RESERVATION_CHECKED_IN'").getSingleResult();
+        Number audited = (Number) em.createNativeQuery("select count(*) from NhatKyKiemSoat where nguoiThucHien = 'next-shift' and hanhDong = 'RESERVATION_CHECKED_IN'").getSingleResult();
         assertThat(audited.longValue()).isEqualTo(1);
     }
 

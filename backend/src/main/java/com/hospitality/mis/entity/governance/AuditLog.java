@@ -10,9 +10,9 @@ import java.time.Instant;
 
 @Entity
 
-@Table(name = "audit_logs", indexes = {
-        @Index(name = "idx_audit_logs_actor_time", columnList = "actor,created_at"),
-        @Index(name = "idx_audit_logs_action_time", columnList = "action,created_at")
+@Table(name = "NhatKyKiemSoat", indexes = {
+        @Index(name = "idxNhatKyKiemSoat01", columnList = "nguoiThucHien,thoiDiemTao"),
+        @Index(name = "idxNhatKyKiemSoat02", columnList = "hanhDong,thoiDiemTao")
 })
 
 /** Bản ghi kiểm toán bất biến về ai đã thực hiện hành động trên đối tượng nào. */
@@ -21,31 +21,32 @@ public class AuditLog {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
 
     /** ID log do cơ sở dữ liệu sinh. */
+    @Column(name = "maNhatKyKiemSoat")
     private Long id;
 
     /** Chủ thể thực hiện hành động, dùng cho truy vết. */
-    @Column(nullable = false, length = 50) private String actor;
+    @Column(name = "nguoiThucHien", nullable = false, length = 50) private String actor;
 
     /** Mã hành động nghiệp vụ đã xảy ra. */
-    @Column(nullable = false, length = 100) private String action;
+    @Column(name = "hanhDong", nullable = false, length = 100) private String action;
 
     /** Loại đối tượng bị tác động. */
-    @Column(name = "entity_type", nullable = false, length = 100) private String entityType;
+    @Column(name = "loaiDoiTuong", nullable = false, length = 100) private String entityType;
 
     /** ID đối tượng bị tác động. */
-    @Column(name = "entity_id", nullable = false, length = 100) private String entityId;
+    @Column(name = "maDoiTuong", nullable = false, length = 100) private String entityId;
 
     /** Ảnh chụp trước thay đổi; có thể null khi đối tượng được tạo mới. */
-    @Lob @Column(name = "before_data", columnDefinition = "TEXT") private String beforeData;
+    @Column(name = "duLieuTruoc", columnDefinition = "NVARCHAR(MAX)") private String beforeData;
     /** Ảnh chụp sau thay đổi; có thể null khi đối tượng bị xóa. */
-    @Lob @Column(name = "after_data", columnDefinition = "TEXT") private String afterData;
-    @Column(length = 500) private String reason;
+    @Column(name = "duLieuSau", columnDefinition = "NVARCHAR(MAX)") private String afterData;
+    @Column(name = "lyDo", length = 500) private String reason;
 
     /** Mã liên kết các log thuộc cùng một yêu cầu phân tán. */
-    @Column(name = "correlation_key", length = 100) private String correlationKey;
+    @Column(name = "khoaLienKet", length = 100) private String correlationKey;
 
     /** Thời điểm log được tạo tại server. */
-    @Column(name = "created_at", nullable = false) private Instant createdAt = Instant.now();
+    @Column(name = "thoiDiemTao", nullable = false) private Instant createdAt = Instant.now();
 
 
     /** Constructor rỗng dành cho JPA. */

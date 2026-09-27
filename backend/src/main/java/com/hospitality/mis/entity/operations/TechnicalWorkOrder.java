@@ -6,23 +6,25 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "technical_work_orders")
+@Table(name = "PhieuCongViecKyThuat")
 public class TechnicalWorkOrder {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "room_id", nullable = false) private Room room;
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "equipment_id") private RoomEquipment equipment;
-    @Column(length = 10) private String assignee;
-    @Column(nullable = false, length = 20) private String priority = "MEDIUM";
-    @Column(name = "sla_due_at") private LocalDateTime slaDueAt;
-    @Column(length = 1000) private String materials;
-    @Column(name = "result_note", length = 1000) private String resultNote;
-    @Column(name = "acceptance_note", length = 1000) private String acceptanceNote;
-    @Column(name = "accepted_by", length = 50) private String acceptedBy;
-    @Column(name = "accepted_at") private LocalDateTime acceptedAt;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 30) private TechnicalWorkOrderStatus status = TechnicalWorkOrderStatus.NEW;
-    @Column(name = "created_by", nullable = false, length = 10) private String createdBy;
-    @Column(name = "created_at", nullable = false) private LocalDateTime createdAt = LocalDateTime.now();
-    @Column(name = "updated_at", nullable = false) private LocalDateTime updatedAt = LocalDateTime.now();
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) @Column(name = "maPhieuCongViecKyThuat")
+ private Long id;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "maPhong", nullable = false) private Room room;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "maThietBiPhong") private RoomEquipment equipment;
+    @Column(name = "nguoiDuocPhanCong", length = 10) private String assignee;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseCodeConverters.PriorityConverter.class)
+    @Column(name = "doUuTien", nullable = false, length = 20) private String priority = "MEDIUM";
+    @Column(name = "thoiHanSla") private LocalDateTime slaDueAt;
+    @Column(name = "vatTuSuDung", length = 1000) private String materials;
+    @Column(name = "ghiChuKetQua", length = 1000) private String resultNote;
+    @Column(name = "ghiChuNghiemThu", length = 1000) private String acceptanceNote;
+    @Column(name = "nguoiNghiemThu", length = 50) private String acceptedBy;
+    @Column(name = "thoiDiemNghiemThu") private LocalDateTime acceptedAt;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.TechnicalWorkOrderStatusConverter.class) @Column(name = "trangThai", nullable = false, length = 30) private TechnicalWorkOrderStatus status = TechnicalWorkOrderStatus.NEW;
+    @Column(name = "nguoiTao", nullable = false, length = 10) private String createdBy;
+    @Column(name = "thoiDiemTao", nullable = false) private LocalDateTime createdAt = LocalDateTime.now();
+    @Column(name = "thoiDiemCapNhat", nullable = false) private LocalDateTime updatedAt = LocalDateTime.now();
 
     public Long getId() { return id; } public Room getRoom() { return room; } public RoomEquipment getEquipment() { return equipment; }
     public String getAssignee() { return assignee; } public String getPriority() { return priority; } public LocalDateTime getSlaDueAt() { return slaDueAt; }

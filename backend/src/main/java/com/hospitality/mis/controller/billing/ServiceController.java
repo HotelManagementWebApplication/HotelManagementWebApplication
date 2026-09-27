@@ -136,4 +136,12 @@ public class ServiceController {
     @PreAuthorize("@departmentAccess.allows(authentication, 'SERVICE_READ')")
     public List<ServiceDtos.PriceHistoryResponse> priceHistory(@PathVariable String id) { return service.priceHistory(id); }
 
+    /** Bếp chỉ đọc lịch sử đề xuất giá do chính nhân viên đang đăng nhập gửi. */
+    @GetMapping("/price-requests")
+    @PreAuthorize("@departmentAccess.allows(authentication, 'SERVICE_PRICE_REQUEST')")
+    public List<com.hospitality.mis.dto.governance.ApprovalDtos.Response> myPriceRequests() {
+        return service.priceRequestsFor(SecurityActor.currentActor()).stream()
+                .map(com.hospitality.mis.dto.governance.ApprovalDtos.Response::from).toList();
+    }
+
 }

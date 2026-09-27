@@ -12,18 +12,19 @@ jobs:
       run:
         working-directory: backend
     services:
-      mysql:
-        image: mysql:8.4
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
         env:
-          MYSQL_DATABASE: QLKS
-          MYSQL_ROOT_PASSWORD: ci-root-password
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: ci-SqlServer-password-2026!
+          MSSQL_PID: Developer
         ports:
-          - 3306:3306
+          - 1433:1433
         options: >-
-          --health-cmd="mysqladmin ping -h localhost -uroot -pci-root-password --silent"
-          --health-interval=5s
+          --health-cmd="/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ci-SqlServer-password-2026! -C -Q 'SELECT 1' -b -o /dev/null"
+          --health-interval=10s
           --health-timeout=5s
-          --health-retries=20
+          --health-retries=30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -31,12 +32,47 @@ jobs:
           distribution: temurin
           java-version: '24'
           cache: maven
-      - name: Test with clean MySQL, Flyway and Hibernate validation
+      - name: Create clean SQL Server database
+        run: |
+          cid=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2022-latest" --format '{{.ID}}' | head -n 1)
+          test -n "$cid"
+          docker exec "$cid" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'ci-SqlServer-password-2026!' -C -Q "IF DB_ID(N'QLKS') IS NULL CREATE DATABASE [QLKS] COLLATE Vietnamese_100_CI_AI;"
+      - name: Test with clean SQL Server, Flyway and Hibernate validation
         env:
-          MIGRATION_TEST_DB_URL: jdbc:mysql://127.0.0.1:3306/QLKS?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-          MIGRATION_TEST_DB_USERNAME: root
-          MIGRATION_TEST_DB_PASSWORD: ci-root-password
+          MIGRATION_TEST_DB_URL: jdbc:sqlserver://127.0.0.1:1433;databaseName=QLKS;encrypt=true;trustServerCertificate=true
+          MIGRATION_TEST_DB_USERNAME: sa
+          MIGRATION_TEST_DB_PASSWORD: ci-SqlServer-password-2026!
         run: mvn -B test
+      - name: Verify every SQL Server proof suite actually ran
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          sources = {path.stem for path in Path("src/test/java").rglob("SqlServer*Test.java")}
+          reports = {}
+          for path in Path("target/surefire-reports").glob("TEST-*.xml"):
+              class_name = path.name.removeprefix("TEST-").removesuffix(".xml").split(".")[-1]
+              reports[class_name] = path
+
+          missing = sorted(sources - reports.keys())
+          if missing:
+              raise SystemExit(f"SQL Server proof suites did not run: {', '.join(missing)}")
+
+          skipped = []
+          empty = []
+          for name in sorted(sources):
+              suite = ET.parse(reports[name]).getroot()
+              if int(suite.attrib.get("skipped", "0")):
+                  skipped.append(name)
+              if int(suite.attrib.get("tests", "0")) == 0:
+                  empty.append(name)
+          if skipped:
+              raise SystemExit(f"SQL Server proof suites were skipped: {', '.join(skipped)}")
+          if empty:
+              raise SystemExit(f"SQL Server proof suites contained no tests: {', '.join(empty)}")
+          print(f"Verified {len(sources)} SQL Server proof suites: all ran with zero skips.")
+          PY
 
   frontend:
     runs-on: ubuntu-latest

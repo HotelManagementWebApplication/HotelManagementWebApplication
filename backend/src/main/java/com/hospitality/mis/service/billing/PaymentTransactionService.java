@@ -126,14 +126,14 @@ public class PaymentTransactionService {
     public List<PaymentTransactionDtos.Response> listByInvoice(Long invoiceId) {
         Invoice invoice = invoices.findById(invoiceId).orElseThrow(() -> error("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn"));
         requireScope(invoice, SecurityActor.currentActor());
-        return transactions.findByInvoiceIdOrderByOccurredAtAsc(invoiceId).stream().map(this::toResponse).toList();
+        return transactions.findByInvoiceIdOrderByOccurredAtAscIdAsc(invoiceId).stream().map(this::toResponse).toList();
     }
     @Transactional(readOnly = true)
     public PaymentTransactionDtos.PageResponse pageByInvoice(Long invoiceId, int page, int size) {
         Invoice invoice = invoices.findById(invoiceId).orElseThrow(() -> error("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn"));
         requireScope(invoice, SecurityActor.currentActor());
         int safePage = Math.max(0, page), safeSize = Math.max(1, Math.min(100, size));
-        var result = transactions.findByInvoiceIdOrderByOccurredAtAsc(invoiceId,
+        var result = transactions.findByInvoiceIdOrderByOccurredAtAscIdAsc(invoiceId,
                 org.springframework.data.domain.PageRequest.of(safePage, safeSize));
         return new PaymentTransactionDtos.PageResponse(result.getContent().stream().map(this::toResponse).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());

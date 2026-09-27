@@ -2,29 +2,31 @@
 package com.hospitality.mis.entity.billing;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
-@Entity @Table(name = "services") @Access(AccessType.FIELD)
+@Entity @Table(name = "DichVu") @Access(AccessType.FIELD)
 /** Danh mục dịch vụ và tồn kho dùng để lập dòng dịch vụ trên hóa đơn. */
 public class Service {
     /** Mã dịch vụ nghiệp vụ, được tham chiếu bởi các dòng sử dụng dịch vụ. */
-    @Id @Column(name="id", length=10) private String id;
+    @Id @Column(name="maDichVu", length=10) private String id;
     /** Tên hiển thị của dịch vụ. */
-    @Column(name="name", nullable=false, length=100) private String name;
+    @Column(name="ten", nullable=false, length=100) private String name;
     /** Đơn giá hiện tại của danh mục; giá lịch sử được chụp ở ServiceUsage. */
-    @Column(name="price", nullable=false, precision=10, scale=2) private BigDecimal price;
+    @Column(name="gia", nullable=false, precision=10, scale=2) private BigDecimal price;
     /** Đơn vị tính, mặc định một lần sử dụng. */
-    @Column(name="unit", nullable=false, length=20) private String unit="TIME";
+    @jakarta.persistence.Convert(converter = com.hospitality.mis.persistence.VietnameseCodeConverters.ServiceUnitConverter.class)
+    @Column(name="donViTinh", nullable=false, length=20) private String unit="lần";
     /** Nhóm hiển thị trên cổng khách hàng. */
-    @Column(name="category", nullable=false, length=50) private String category="other";
+    @jakarta.persistence.Convert(converter = com.hospitality.mis.persistence.VietnameseCodeConverters.ServiceCategoryConverter.class)
+    @Column(name="danhMuc", nullable=false, length=50) private String category="other";
     /** Mô tả công khai của dịch vụ. */
-    @Column(name="description", length=1000) private String description;
+    @Column(name="moTa", length=1000) private String description;
     /** URL ảnh đại diện công khai của dịch vụ. */
-    @Column(name="image_url", length=500) private String imageUrl;
+    @Column(name="duongDanAnh", length=500) private String imageUrl;
     /** Số lượng tồn kho hiện tại. */
-    @Column(name="stock_quantity", nullable=false) private int stockQuantity;
+    @Column(name="soLuongTonKho", nullable=false) private int stockQuantity;
     /** Ngưỡng cảnh báo khi tồn kho xuống thấp. */
-    @Column(name="safety_threshold", nullable=false) private int safetyThreshold;
+    @Column(name="nguongAnToan", nullable=false) private int safetyThreshold;
     /** Chỉ dịch vụ active mới được đưa vào public catalog. */
-    @Column(name="active", nullable=false) private boolean active = true;
+    @Column(name="dangHoatDong", nullable=false) private boolean active = true;
     public String getId(){return id;} public void setId(String v){id=v;}
     public String getName(){return name;} public void setName(String v){name=v;}
     public BigDecimal getPrice(){return price;} public void setPrice(BigDecimal v){price=v;}

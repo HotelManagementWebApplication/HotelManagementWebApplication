@@ -4,6 +4,7 @@ package com.hospitality.mis.common.exception;
 
 
 import com.hospitality.mis.common.api.ApiError;
+import com.hospitality.mis.service.auth.EmailDeliveryException;
 
 import org.springframework.http.HttpStatus;
 
@@ -42,6 +43,13 @@ import java.util.List;
 /** Chuyển các ngoại lệ dùng chung thành payload lỗi nhất quán cho mọi endpoint. */
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(EmailDeliveryException.class)
+    /** Báo SMTP không khả dụng để client không nhầm OTP đã được gửi thành công. */
+    public ResponseEntity<ApiError> handleEmailDelivery(EmailDeliveryException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(
+                new ApiError(Instant.now(), 503, "EMAIL_DELIVERY_FAILED", exception.getMessage(), List.of()));
+    }
+
 
 
     @ExceptionHandler(DomainException.class)
@@ -68,7 +76,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest().body(new ApiError(Instant.now(), 400, "VALIDATION_ERROR",
 
-                "Invalid request data", details));
+                "Dữ liệu yêu cầu không hợp lệ", details));
 
     }
 
@@ -83,7 +91,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest().body(new ApiError(Instant.now(), 400, "INVALID_REQUEST",
 
-                "Invalid request data", List.of()));
+                "Dữ liệu yêu cầu không hợp lệ", List.of()));
 
     }
 
@@ -96,7 +104,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiError(Instant.now(), 403,
 
-                "ACCESS_DENIED", "Access is denied", List.of()));
+                "ACCESS_DENIED", "Bạn không có quyền thực hiện thao tác này", List.of()));
 
     }
 
@@ -109,7 +117,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(Instant.now(), 409,
 
-                "DATA_CONFLICT", "Data already exists or was changed by another operation", List.of()));
+                "DATA_CONFLICT", "Dữ liệu đã tồn tại hoặc vừa được thay đổi bởi thao tác khác", List.of()));
 
     }
 

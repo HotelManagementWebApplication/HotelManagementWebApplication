@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:roomapi;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:roomapi;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.flyway.enabled=false",
@@ -43,7 +43,7 @@ class RoomApiContractTest {
     /** Seed type STD và room R101 READY trước mỗi API test. */
     @BeforeEach
     void seedRoom() {
-        jdbc.update("delete from audit_logs");
+        jdbc.update("delete from NhatKyKiemSoat");
         rooms.deleteAllInBatch();
         roomTypes.deleteAllInBatch();
 

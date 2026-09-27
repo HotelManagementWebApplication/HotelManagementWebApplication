@@ -4,30 +4,31 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Entity @Table(name = "payment_transactions")
+@Entity @Table(name = "GiaoDichThanhToan")
 /** Dòng giao dịch thanh toán/hoàn tiền bất biến trong sổ cái hóa đơn. */
 public class PaymentTransaction {
     /** ID giao dịch do cơ sở dữ liệu sinh. */
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) @Column(name = "maGiaoDichThanhToan")
+ private Long id;
     /** Hóa đơn mà giao dịch tác động đến. */
-    @ManyToOne(optional = false, fetch = FetchType.LAZY) @JoinColumn(name = "invoice_id", nullable = false) private Invoice invoice;
+    @ManyToOne(optional = false, fetch = FetchType.LAZY) @JoinColumn(name = "maHoaDon", nullable = false) private Invoice invoice;
     /** Số tiền của lần thu hoặc hoàn tiền. */
-    @Column(nullable = false, precision = 12, scale = 2) private BigDecimal amount;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 30) private PaymentMethod method;
+    @Column(name = "soTien", nullable = false, precision = 12, scale = 2) private BigDecimal amount;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.PaymentMethodConverter.class) @Column(name = "phuongThuc", nullable = false, length = 30) private PaymentMethod method;
     /** Phân biệt thu tiền và hoàn tiền để tính số dư đúng chiều. */
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private TransactionType type;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.TransactionTypeConverter.class) @Column(name = "loai", nullable = false, length = 20) private TransactionType type;
     /** Kết quả xử lý của giao dịch; chỉ giao dịch hoàn tất mới được quyết toán. */
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private TransactionStatus status = TransactionStatus.COMPLETED;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.TransactionStatusConverter.class) @Column(name = "trangThai", nullable = false, length = 20) private TransactionStatus status = TransactionStatus.COMPLETED;
     /** Mã tham chiếu từ cổng thanh toán hoặc giao dịch hoàn tiền gốc. */
-    @Column(length = 100) private String reference;
+    @Column(name = "maThamChieu", length = 100) private String reference;
     /** Thời điểm giao dịch phát sinh theo nghiệp vụ. */
-    @Column(name = "occurred_at", nullable = false) private LocalDateTime occurredAt;
+    @Column(name = "thoiDiemPhatSinh", nullable = false) private LocalDateTime occurredAt;
     /** Tác nhân tạo giao dịch, dùng cho audit/đối soát. */
-    @Column(name = "actor_id", nullable = false, length = 50) private String actorId;
+    @Column(name = "maNguoiThucHien", nullable = false, length = 50) private String actorId;
     /** Khóa duy nhất của yêu cầu thu/hoàn, dùng để chống xử lý lặp. */
-    @Column(name = "idempotency_key", length = 100, unique = true) private String idempotencyKey;
+    @Column(name = "khoaChongTrung", length = 100) private String idempotencyKey;
     /** Mã sự kiện từ payment provider, dùng để nhận callback lặp an toàn. */
-    @Column(name = "external_event_id", length = 100, unique = true) private String externalEventId;
+    @Column(name = "maSuKienBenNgoai", length = 100) private String externalEventId;
     /** Loại bút toán: thu tiền hoặc hoàn tiền. */
     public enum TransactionType {
         /** Khoản tiền thu vào hóa đơn. */

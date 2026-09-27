@@ -29,11 +29,11 @@ class RoomStatusContractTest {
     }
 
     @Test
-    void persistenceConverterUsesTheSameCanonicalValues() {
+    void persistenceConverterUsesVietnameseDatabaseValues() {
         RoomStatusConverter converter = new RoomStatusConverter();
 
-        assertThat(converter.convertToDatabaseColumn(RoomStatus.MAINTENANCE)).isEqualTo("maintenance");
-        assertThat(converter.convertToEntityAttribute("maintenance")).isEqualTo(RoomStatus.MAINTENANCE);
+        assertThat(converter.convertToDatabaseColumn(RoomStatus.MAINTENANCE)).isEqualTo("Đang bảo trì");
+        assertThat(converter.convertToEntityAttribute("Đang bảo trì")).isEqualTo(RoomStatus.MAINTENANCE);
         assertThat(converter.convertToDatabaseColumn(null)).isNull();
         assertThat(converter.convertToEntityAttribute(null)).isNull();
     }

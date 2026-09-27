@@ -15,11 +15,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mail.MailSendException;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import jakarta.mail.internet.MimeMessage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -28,15 +36,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:customerauth;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:customerauth;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.mail.username=otp-test@example.com",
+        "spring.mail.password=test-only-password"
 })
 @AutoConfigureMockMvc
 /** Bảo vệ customer auth end-to-end: claims, refresh rotation, reset và phone uniqueness. */
 class CustomerAuthenticationIntegrationTest {
+    /** Mail transport è stubbed in test per non eseguire invii SMTP reali. */
+    @MockitoBean JavaMailSender mailSender;
+
     /** HTTP boundary thật cho đăng ký/login/refresh/reset. */
     @Autowired MockMvc mockMvc;
     /** Mapper đọc token response và kiểm tra claim JWT. */
@@ -59,11 +72,12 @@ class CustomerAuthenticationIntegrationTest {
     /** Dọn token/account/guest/audit và seed employee trước mỗi scenario. */
     @BeforeEach
     void setUp() {
+        when(mailSender.createMimeMessage()).thenAnswer(ignored -> new JavaMailSenderImpl().createMimeMessage());
         refreshTokens.deleteAll();
         accounts.deleteAll();
         employees.deleteAll();
-        jdbc.update("delete from guests");
-        jdbc.update("delete from audit_logs");
+        jdbc.update("delete from KhachLuuTru");
+        jdbc.update("delete from NhatKyKiemSoat");
         Employee employee = new Employee();
         employee.setEmployeeId("employee");
         employee.setFullName("Employee");
@@ -193,7 +207,7 @@ class CustomerAuthenticationIntegrationTest {
                         .content(json(new AuthDtos.RefreshRequest(tokens.get("refresh_token").asText()))))
                 .andExpect(status().isUnauthorized());
         customerLoginWithPassword("new-password");
-        assertThat(jdbc.queryForObject("select count(*) from audit_logs where action = 'PASSWORD_RESET'", Integer.class))
+        assertThat(jdbc.queryForObject("select count(*) from NhatKyKiemSoat where hanhDong = 'PASSWORD_RESET'", Integer.class))
                 .isEqualTo(1);
     }
 
@@ -247,6 +261,25 @@ class CustomerAuthenticationIntegrationTest {
     }
 
     @Test
+    /** Tài khoản đăng ký bằng email phải đăng nhập được bằng email, không phân biệt hoa thường. */
+    void customerLoginAcceptsRegisteredEmail() throws Exception {
+        String email = "Email.Login@example.com";
+        String otp = otpService.generateOtp(email, com.hospitality.mis.service.auth.OtpPurpose.REGISTER);
+
+        mockMvc.perform(post("/api/auth/customers/register-with-otp")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.RegisterWithOtpRequest(
+                                "0900000097", "customer-password", "Email Customer", "ID09000097", email, otp))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/auth/customers/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.LoginRequest("EMAIL.LOGIN@EXAMPLE.COM", "customer-password"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.access_token").isNotEmpty());
+    }
+
+    @Test
     /** Kiểm tra luồng gửi OTP và đặt lại mật khẩu khi quên mật khẩu. */
     void customerResetPasswordWithOtpFlow() throws Exception {
         String email = "resetguest@example.com";
@@ -283,6 +316,18 @@ class CustomerAuthenticationIntegrationTest {
     }
 
     /** Đăng ký customer fixture chuẩn dùng lại trong login/reset tests. */
+    @Test
+    /** SMTP outage phải được phản ánh thành lỗi HTTP, không trả response gửi OTP thành công. */
+    void otpRequestReturnsServiceUnavailableWhenSmtpFails() throws Exception {
+        doThrow(new MailSendException("SMTP unavailable")).when(mailSender).send(any(MimeMessage.class));
+
+        mockMvc.perform(post("/api/auth/otp/send-register")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.OtpSendRequest("mail-failure@example.com"))))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("EMAIL_DELIVERY_FAILED"));
+    }
+
     private void registerCustomer() throws Exception {
         mockMvc.perform(post("/api/auth/customers/register").contentType(APPLICATION_JSON)
                         .content(json(new CustomerAccountDtos.RegisterRequest(

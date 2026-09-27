@@ -26,6 +26,9 @@ public interface ApprovalRepository extends JpaRepository<ApprovalRequest, Long>
     /** Liệt kê yêu cầu phê duyệt theo trạng thái, bản ghi mới hơn đứng trước. */
     List<ApprovalRequest> findByStatusOrderByIdDesc(String status);
 
+    /** Lịch sử yêu cầu của một nhân viên, giới hạn theo đúng loại nghiệp vụ cần xem. */
+    List<ApprovalRequest> findByRequesterAndActionOrderByIdDesc(String requester, String action);
+
     /** Khóa yêu cầu theo ID để tiêu thụ hoặc chuyển trạng thái phê duyệt độc quyền. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<ApprovalRequest> findWithLockById(Long id);

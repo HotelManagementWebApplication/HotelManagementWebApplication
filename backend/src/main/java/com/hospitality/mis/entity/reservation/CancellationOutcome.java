@@ -4,8 +4,8 @@ package com.hospitality.mis.entity.reservation;
 public enum CancellationOutcome {
     /** Hoàn lại tiền theo chính sách hủy. */
     REFUND,
-    /** Giữ lại tiền cọc hoặc khoản đã thu. */
+    /** Hủy đúng hạn nhưng không có khoản thanh toán đủ điều kiện để hoàn. */
     RETAIN,
-    /** Mất toàn bộ khoản đủ điều kiện bị khấu trừ. */
+    /** Mất quyền hoàn tiền do hủy muộn hoặc không đến nhận phòng. */
     FORFEIT
 }

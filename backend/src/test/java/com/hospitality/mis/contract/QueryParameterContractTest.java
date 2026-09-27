@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** HTTP proof for the query names consumed by the shared frontend API clients. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:queryparametercontract;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:queryparametercontract;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=", "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })

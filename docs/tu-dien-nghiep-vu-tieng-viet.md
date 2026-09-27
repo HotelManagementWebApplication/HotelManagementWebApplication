@@ -15,18 +15,16 @@ lưu hoặc trao đổi. Không tự ý đổi mã này chỉ vì muốn đổi 
 Mã tiếng Anh giúp backend, frontend, database và các cổng thanh toán nói cùng
 một ngôn ngữ ổn định. Người dùng cuối chỉ nhìn thấy nhãn tiếng Việt.
 
-## 2. Mô hình kinh doanh của tòa nhà
+## 2. Phạm vi kinh doanh
 
-| Khu vực | Chức năng | Quyền sử dụng chính |
-|---|---|---|
-| Tầng trệt–tầng 2 | Khu thương mại và mặt bằng cho đối tác thuê | Khách vãng lai và khách lưu trú |
-| Tầng 3–tầng 4 | Spa, xông hơi, gym, hội nghị, nhà hàng tiệc | Khách lưu trú dùng theo chính sách; khách vãng lai mua vé hoặc đặt lịch |
-| Tầng 5–tầng 20 | Phòng nghỉ khách sạn | Khách có đặt phòng và thẻ từ |
-| Tầng 21 | Hồ bơi | Miễn phí cho khách thuê phòng ngày đêm; khách vãng lai dùng vé nếu chính sách cho phép |
+MaM Hotel vận hành dịch vụ lưu trú, nhà hàng và các dịch vụ phục vụ khách sạn.
+Những booking dịch vụ thuộc phạm vi hệ thống phải gắn với khách/booking/phòng
+theo quy tắc nghiệp vụ tương ứng.
 
-Khách sạn không nhất thiết tự vận hành nhà hàng, quán cà phê hoặc spa. Các
-thương hiệu đó có thể là đối tác thuê mặt bằng. Hệ thống theo dõi tiền thuê cố
-định, phí dịch vụ và hoa hồng doanh thu của đối tác.
+Hệ thống không quản lý mô hình đối tác thuê mặt bằng, nhượng quyền, voucher
+thương mại hoặc quyết toán hoa hồng cho bên thuê. Công nợ nhà cung cấp hàng
+hóa/vật tư vẫn thuộc phạm vi kế toán và phải được phân biệt với công nợ hoặc
+hoa hồng thương mại của đối tác.
 
 ## 3. Các thành phần của hệ thống
 
@@ -45,7 +43,7 @@ thương hiệu đó có thể là đối tác thuê mặt bằng. Hệ thống 
 | `Repository` / `DAO` | Bộ truy cập dữ liệu | Đọc và ghi database theo yêu cầu của service |
 | `Database` | Cơ sở dữ liệu | Nơi lưu dữ liệu thật của hệ thống |
 | `Migration` | Phiên bản thay đổi database | Script tạo bảng, thêm cột hoặc cập nhật cấu trúc |
-| `Flyway` | Công cụ quản lý migration | Chạy các migration theo thứ tự `V1`, `V2`, ... |
+| `Flyway` | Công cụ quản lý cấu trúc | Database demo chạy baseline `V1` duy nhất |
 | `Schema` | Bộ cấu trúc database | Trong dự án hiện tại là schema `QLKS` |
 | `Transaction` | Giao dịch nguyên tử | Một chuỗi thao tác thành công toàn bộ hoặc hoàn tác toàn bộ |
 | `Validation` | Kiểm tra hợp lệ | Chặn dữ liệu thiếu, sai định dạng hoặc sai giới hạn |
@@ -152,8 +150,8 @@ hiện gửi `DIRECT`. Khi booking đến từ một OTA, phải gửi đúng m�
 | Mã | Tiếng Việt | Ý nghĩa |
 |---|---|---|
 | `REFUND` | Hoàn tiền | Hoàn lại tiền theo chính sách hủy. |
-| `RETAIN` | Giữ lại khoản đã thu | Khách sạn giữ một phần hoặc toàn bộ tiền cọc theo chính sách. |
-| `FORFEIT` | Mất khoản đủ điều kiện | Khoản tiền đủ điều kiện bị khấu trừ toàn bộ. |
+| `RETAIN` | Không phát sinh hoàn tiền | Hủy đúng hạn nhưng chưa có khoản thanh toán đủ điều kiện để hoàn. |
+| `FORFEIT` | Mất quyền hoàn tiền | Hủy muộn hoặc không đến nhận phòng nên mất quyền hoàn tiền cọc. |
 
 ## 6. Trạng thái phòng và loại phòng
 
@@ -162,7 +160,7 @@ hiện gửi `DIRECT`. Khi booking đến từ một OTA, phải gửi đúng m�
 | Mã API/database | Tiếng Việt | Có được bán/đặt không? |
 |---|---|---|
 | `available` (`READY`) | Sẵn sàng | Có |
-| `reserved` (`RESERVED`) | Đã giữ cho booking | Không nhận booking trùng |
+| `reserved` (`RESERVED`) | Đã giữ phòng | Không nhận đặt phòng trùng |
 | `occupied` (`OCCUPIED`) | Đang có khách | Không |
 | `cleaning` (`CLEANING`) | Đang dọn | Không |
 | `maintenance` (`MAINTENANCE`) | Đang bảo trì | Không |
@@ -369,7 +367,7 @@ thống cần lưu riêng:
 Không gộp các trường này vào hồ sơ khách (`guests`) hoặc nhầm với hóa đơn
 thanh toán phòng (`invoices`).
 
-### 8.6. Chi phí, sổ cái và công nợ đối tác
+### 8.6. Chi phí, sổ cái và công nợ nhà cung cấp
 
 | Nhóm | Mã | Tiếng Việt | Ý nghĩa |
 |---|---|---|---|
@@ -378,14 +376,15 @@ thanh toán phòng (`invoices`).
 | Chi phí | `VOIDED` | Đã hủy | Khoản chi không còn hiệu lực. |
 | Chiều sổ cái | `DEBIT` | Ghi nợ/chi ra | Dòng làm tăng khoản phải thu hoặc ghi nhận tiền đi ra tùy loại sổ. |
 | Chiều sổ cái | `CREDIT` | Ghi có/thu vào | Dòng làm tăng khoản phải trả hoặc ghi nhận tiền đi vào tùy loại sổ. |
-| Công nợ đối tác | `OPEN` | Đang mở | Chưa tất toán. |
-| Công nợ đối tác | `PARTIALLY_SETTLED` | Đã tất toán một phần | Đã thanh toán một phần, vẫn còn số dư. |
-| Công nợ đối tác | `SETTLED` | Đã tất toán | Đã thanh toán đầy đủ. |
-| Công nợ đối tác | `VOIDED` | Đã hủy | Công nợ bị hủy theo nghiệp vụ. |
+| Công nợ nhà cung cấp | `OPEN` | Đang mở | Chưa thanh toán. |
+| Công nợ nhà cung cấp | `PARTIALLY_SETTLED` | Đã thanh toán một phần | Đã thanh toán một phần, vẫn còn số dư. |
+| Công nợ nhà cung cấp | `SETTLED` | Đã thanh toán đủ | Đã thanh toán đầy đủ. |
+| Công nợ nhà cung cấp | `VOIDED` | Đã hủy | Công nợ bị hủy theo nghiệp vụ. |
 
-`Settled` nghĩa là đã quyết toán xong. `Partially settled` nghĩa là chỉ mới
-thanh toán một phần. `Void`/`Voided` nghĩa là vô hiệu hóa nghiệp vụ, không
-phải xóa dấu vết khỏi hệ thống.
+`Settled` ở đây nghĩa là đã thanh toán công nợ nhà cung cấp, không phải quyết
+toán tiền thuê mặt bằng hay hoa hồng thương mại. `Partially settled` nghĩa là
+mới thanh toán một phần. `Void`/`Voided` nghĩa là vô hiệu hóa nghiệp vụ,
+không phải xóa dấu vết khỏi hệ thống.
 
 ## 9. Dịch vụ do MaM Hotel vận hành
 

@@ -11,17 +11,18 @@ import jakarta.persistence.Table;
 
 /** Tiện nghi dùng chung cho các loại phòng và public room detail. */
 @Entity
-@Table(name = "amenities")
+@Table(name = "TienNghi")
 @Access(AccessType.FIELD)
 public class Amenity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "maTienNghi")
     private Long id;
 
-    @Column(name = "name", nullable = false, length = 100)
+    @Column(name = "ten", nullable = false, length = 100)
     private String name;
 
-    @Column(name = "active", nullable = false)
+    @Column(name = "dangHoatDong", nullable = false)
     private boolean active = true;
 
     public Long getId() { return id; }

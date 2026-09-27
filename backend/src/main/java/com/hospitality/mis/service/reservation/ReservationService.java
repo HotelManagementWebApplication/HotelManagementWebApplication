@@ -114,9 +114,8 @@ public class ReservationService {
         requireActor(actor, request.employeeId());
         String key = effectiveKey(request.idempotencyKey(), headerKey);
         String fingerprint = createFingerprint(request);
-        // Tra cứu có khóa đối với khóa duy nhất chưa tồn tại sẽ tạo khóa khoảng trống
-        // InnoDB và có thể khiến hai yêu cầu tạo độc lập rơi vào bế tắc trước khi chúng
-        // đến khóa phòng chuẩn. Đọc trước, sau đó tuần tự hóa theo phòng.
+        // Không khóa idempotency key chưa tồn tại trước khi lấy khóa phòng: mọi yêu cầu
+        // phải đi theo cùng thứ tự khóa aggregate phòng rồi mới ghi idempotency record.
         var prior = reservations.findByIdempotencyKey(key);
         if (prior.isPresent()) {
             Reservation existing = prior.get();
@@ -145,20 +144,21 @@ public class ReservationService {
             }
             return toResponse(existing);
         }
+        LocalDateTime now = LocalDateTime.now(clock);
         for (var line : request.rooms()) {
             if (locked.get(line.roomId()).getStatus().blocksAvailability()) throw error("ROOM_NOT_AVAILABLE", "Phòng không sẵn sàng: " + line.roomId());
             int guestCount = line.guestCount() == null ? 1 : line.guestCount();
             var roomType = locked.get(line.roomId()).getRoomType();
             if (guestCount < 1 || (roomType != null && guestCount > roomType.getMaxOccupancy()))
                 throw error("INVALID_GUEST_COUNT", "Số khách vượt sức chứa của phòng " + line.roomId());
-            if (reservations.hasOverlap(line.roomId(), line.expectedCheckIn(), line.expectedCheckOut(), RoomStatus.CANCELLED, IGNORED)) throw error("OVERBOOKING", "Phòng đã có lịch trùng: " + line.roomId());
+            if (reservations.hasOverlap(line.roomId(), line.expectedCheckIn(), line.expectedCheckOut(), RoomStatus.CANCELLED, IGNORED, now)) throw error("OVERBOOKING", "Phòng đã có lịch trùng: " + line.roomId());
         }
         BigDecimal requiredDeposit = requiredDeposit(request, locked);
         BigDecimal suppliedDeposit = request.deposit() == null ? BigDecimal.ZERO : request.deposit();
         if (requiredDeposit.signum() > 0 && suppliedDeposit.compareTo(requiredDeposit) != 0)
             throw error("INVALID_DEPOSIT", "Tiền đặt cọc phải bằng 50% tiền phòng dự kiến");
         Reservation reservation = new Reservation(); reservation.setGuest(guest); reservation.setEmployee(employee);
-        reservation.setBookedAt(LocalDateTime.now(clock));
+        reservation.setBookedAt(now);
         reservation.setDepositAmount(suppliedDeposit); reservation.setRentalType(request.rentalType().name());
         reservation.setBookingSource(request.bookingSource());
         reservation.setIdempotencyKey(key);
@@ -180,7 +180,7 @@ public class ReservationService {
     }
 
     /** Lấy chi tiết booking theo id, chỉ đọc và báo lỗi nếu không tồn tại. */
-    @Transactional(readOnly=true) public ReservationDtos.Response get(Long id) { return reservations.findDetails(id).map(this::toResponse).orElseThrow(() -> error("RESERVATION_NOT_FOUND", "Không tìm thấy đặt phòng: " + id)); }
+    @Transactional(readOnly=true) public ReservationDtos.Response get(Long id) { return reservations.findDetails(id).map(reservation -> toResponse(reservation, true)).orElseThrow(() -> error("RESERVATION_NOT_FOUND", "Không tìm thấy đặt phòng: " + id)); }
     /** Tìm phân trang theo trạng thái/khách, giới hạn dữ liệu theo quyền đọc của actor. */
     @Transactional(readOnly = true)
     public ReservationDtos.PageResponse list(ReservationStatus status, Long guestId, int page, int size) {
@@ -206,6 +206,7 @@ public class ReservationService {
             Reservation r = locked(id);
             requireState(r, ReservationStatus.CONFIRMED, ReservationStatus.DEPOSIT_PAID);
             LocalDateTime at = request == null || request.at() == null ? LocalDateTime.now(clock) : request.at();
+            LocalDateTime now = LocalDateTime.now(clock);
             Map<String, Room> lockedRooms = lockRooms(r.getRooms().stream().map(x -> x.getRoom().getId()).toList());
             for (ReservationRoom rr : r.getRooms()) {
                 if (at.isBefore(rr.getCheckIn())) throw error("EARLY_CHECK_IN", "Không thể nhận phòng trước giờ dự kiến");
@@ -214,7 +215,7 @@ public class ReservationService {
                 if (room.getStatus() != RoomStatus.READY && room.getStatus() != RoomStatus.RESERVED)
                     throw error("ROOM_NOT_AVAILABLE", "Phòng chưa sẵn sàng để nhận khách");
                 if (reservations.hasOverlapExcludingReservation(id, room.getId(), at, rr.getCheckOut(),
-                        RoomStatus.CANCELLED, IGNORED)) throw error("OVERBOOKING", "Phòng có lịch đặt giao nhau");
+                        RoomStatus.CANCELLED, IGNORED, now)) throw error("OVERBOOKING", "Phòng có lịch đặt giao nhau");
             }
             for (ReservationRoom rr : r.getRooms()) {
                 rr.setStatus(RoomStatus.OCCUPIED);
@@ -330,13 +331,14 @@ public class ReservationService {
                 throw error("INVALID_INTERVAL", "Thời gian gia hạn không hợp lệ");
             LocalDateTime newCheckout = request.newExpectedCheckOut();
             lockRooms(r.getRooms().stream().map(x -> x.getRoom().getId()).toList());
+            LocalDateTime now = LocalDateTime.now(clock);
             int delta = -1;
             for (ReservationRoom rr : r.getRooms()) {
                 if (!newCheckout.isAfter(rr.getCheckOut())) throw error("INVALID_EXTENSION", "Giờ trả mới phải sau giờ trả hiện tại");
-                if (LocalDateTime.now(clock).isAfter(rr.getCheckOut().minusHours(1)))
+                if (now.isAfter(rr.getCheckOut().minusHours(1)))
                     throw error("EXTENSION_TOO_LATE", "Chỉ được gia hạn trước giờ trả ít nhất 1 tiếng");
                 if (reservations.hasOverlapExcludingReservation(id, rr.getRoom().getId(), rr.getCheckIn(), newCheckout,
-                        RoomStatus.CANCELLED, IGNORED)) throw error("OVERBOOKING", "Khung giờ gia hạn đã có lịch đặt");
+                        RoomStatus.CANCELLED, IGNORED, now)) throw error("OVERBOOKING", "Khung giờ gia hạn đã có lịch đặt");
                 if (delta < 0) delta = (int) Duration.between(rr.getCheckOut(), newCheckout).toMinutes();
             }
             r.setExtensionMinutes(Math.addExact(r.getExtensionMinutes(), delta));
@@ -384,10 +386,11 @@ public class ReservationService {
                     throw error("INVALID_INTERVAL", "Giờ trả phải sau giờ nhận");
             }
             lockRooms(reservation.getRooms().stream().map(x -> x.getRoom().getId()).toList());
+            LocalDateTime now = LocalDateTime.now(clock);
             for (ReservationRoom line : reservation.getRooms()) {
                 ReservationDtos.RoomStay next = requested.get(line.getRoom().getId());
                 if (next == null) throw error("ROOM_SET_IMMUTABLE", "Không được đổi phòng trong thao tác cập nhật lịch");
-                if (reservations.hasOverlapExcludingReservation(id, line.getRoom().getId(), next.expectedCheckIn(), next.expectedCheckOut(), RoomStatus.CANCELLED, IGNORED))
+                if (reservations.hasOverlapExcludingReservation(id, line.getRoom().getId(), next.expectedCheckIn(), next.expectedCheckOut(), RoomStatus.CANCELLED, IGNORED, now))
                     throw error("OVERBOOKING", "Phòng có lịch đặt giao nhau");
                 line.setCheckIn(next.expectedCheckIn());
                 line.setCheckOut(next.expectedCheckOut());
@@ -404,9 +407,9 @@ public class ReservationService {
         var entries = new ArrayList<com.hospitality.mis.entity.governance.AuditLog>(audit.timeline("RESERVATION", id.toString()));
         if (invoices != null) invoices.findByReservationId(id).ifPresent(invoice -> {
             entries.addAll(audit.timeline("INVOICE", invoice.getId().toString()));
-            paymentTransactions.findByInvoiceIdOrderByOccurredAtAsc(invoice.getId())
+            paymentTransactions.findByInvoiceIdOrderByOccurredAtAscIdAsc(invoice.getId())
                     .forEach(payment -> entries.addAll(audit.timeline("PAYMENT_TRANSACTION", payment.getId().toString())));
-            receipts.findByInvoiceIdOrderByIssuedAtAsc(invoice.getId())
+            receipts.findByInvoiceIdOrderByIssuedAtAscIdAsc(invoice.getId())
                     .forEach(receipt -> entries.addAll(audit.timeline("RECEIPT", receipt.getId().toString())));
         });
         return entries.stream().distinct().sorted(Comparator.comparing(com.hospitality.mis.entity.governance.AuditLog::getCreatedAt)
@@ -554,5 +557,27 @@ public class ReservationService {
     /** Tạo DomainException nhất quán cho validation của reservation boundary. */
     private DomainException error(String code,String message){return new DomainException(code,message);}
     /** Chuyển booking và các room line thành response, giữ cả lịch và thời điểm thực tế. */
-    public ReservationDtos.Response toResponse(Reservation r){return new ReservationDtos.Response(r.getId(),r.getGuest().getId(),r.getEmployee() == null ? null : r.getEmployee().getEmployeeId(),r.getStatus(),ReservationDtos.RentalType.valueOf(r.getRentalType()),r.getDepositAmount(),r.getBookedAt(),r.getActualCheckIn(),r.getActualCheckOut(),r.getRooms().stream().map(x->new ReservationDtos.RoomLine(x.getRoom().getId(),x.getCheckIn(),x.getCheckOut(),r.getActualCheckIn(),r.getActualCheckOut())).toList(),r.getCancellationReason(),r.getCancellationOutcome(),r.getBookingSource(),r.getOtaGrossRevenue(),r.getOtaCommission(),r.getOtaNetRevenue(),r.getOtaReconciliationStatus());}
+    public ReservationDtos.Response toResponse(Reservation r) {
+        return toResponse(r, false);
+    }
+
+    private ReservationDtos.Response toResponse(Reservation r, boolean includeServiceUsages) {
+        List<ReservationDtos.ServiceUsageLine> serviceUsages = !includeServiceUsages || r.getServiceUsages() == null ? List.of()
+                : r.getServiceUsages().stream()
+                .sorted(Comparator.comparing(ServiceUsage::getUsedOn).thenComparing(line -> line.getService().getName()))
+                .map(line -> {
+                    int quantity = line.getQuantity() == null ? 0 : line.getQuantity();
+                    return new ReservationDtos.ServiceUsageLine(line.getService().getId(), line.getService().getName(),
+                            line.getUsedOn(), quantity, line.getUnitPrice(),
+                            line.getUnitPrice().multiply(BigDecimal.valueOf(quantity)));
+                }).toList();
+        return new ReservationDtos.Response(r.getId(), r.getGuest().getId(),
+                r.getEmployee() == null ? null : r.getEmployee().getEmployeeId(), r.getStatus(),
+                ReservationDtos.RentalType.valueOf(r.getRentalType()), r.getDepositAmount(), r.getBookedAt(),
+                r.getActualCheckIn(), r.getActualCheckOut(),
+                r.getRooms().stream().map(x -> new ReservationDtos.RoomLine(x.getRoom().getId(), x.getCheckIn(),
+                        x.getCheckOut(), r.getActualCheckIn(), r.getActualCheckOut())).toList(),
+                r.getCancellationReason(), r.getCancellationOutcome(), r.getBookingSource(), r.getOtaGrossRevenue(),
+                r.getOtaCommission(), r.getOtaNetRevenue(), r.getOtaReconciliationStatus(), serviceUsages);
+    }
 }

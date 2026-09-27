@@ -15,7 +15,7 @@ import java.math.BigDecimal;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:roompersistence;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:roompersistence;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=",
         "spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"
 })
@@ -26,7 +26,7 @@ class RoomPersistenceTest {
     @Autowired RoomRepository rooms;
     /** Repository type thật, persist trước room vì FK. */
     @Autowired RoomTypeRepository roomTypes;
-    /** JDBC assertion bảo vệ giá trị vật lý canonical do converter ghi xuống. */
+    /** JDBC assertion bảo vệ giá trị tiếng Việt do converter ghi xuống. */
     @Autowired JdbcTemplate jdbc;
 
     @Test
@@ -43,8 +43,8 @@ class RoomPersistenceTest {
         Room reloaded = rooms.findForUpdate("R101").orElseThrow();
         assertThat(reloaded.getRoomType().getId()).isEqualTo("STD");
         assertThat(reloaded.getStatus()).isEqualTo(RoomStatus.READY);
-        assertThat(jdbc.queryForObject("select status from rooms where id = ?", String.class, "R101"))
-                .isEqualTo("available");
+        assertThat(jdbc.queryForObject("select trangThai from Phong where maPhong = ?", String.class, "R101"))
+                .isEqualTo("Sẵn sàng");
         assertThat(reloaded.getVersion()).isZero();
     }
 }

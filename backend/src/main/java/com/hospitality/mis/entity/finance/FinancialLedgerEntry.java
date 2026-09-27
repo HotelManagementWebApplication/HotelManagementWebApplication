@@ -5,19 +5,20 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "financial_ledger_entries")
+@Table(name = "ButToanTaiChinh")
 public class FinancialLedgerEntry {
     public enum Direction { DEBIT, CREDIT }
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
-    @Column(name = "entry_type", nullable = false, length = 40) private String entryType;
-    @Column(name = "source_type", nullable = false, length = 40) private String sourceType;
-    @Column(name = "source_id", nullable = false, length = 100) private String sourceId;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 10) private Direction direction;
-    @Column(nullable = false, precision = 14, scale = 2) private BigDecimal amount;
-    @Column(name = "actor_id", nullable = false, length = 50) private String actorId;
-    @Column(name = "occurred_at", nullable = false) private LocalDateTime occurredAt;
-    @Column(length = 500) private String note;
-    @Column(nullable = false) private boolean finalized = true;
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) @Column(name = "maButToanTaiChinh")
+ private Long id;
+    @Column(name = "loaiButToan", nullable = false, length = 40) private String entryType;
+    @Column(name = "loaiNguon", nullable = false, length = 40) private String sourceType;
+    @Column(name = "maNguon", nullable = false, length = 100) private String sourceId;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.LedgerDirectionConverter.class) @Column(name = "chieuButToan", nullable = false, length = 10) private Direction direction;
+    @Column(name = "soTien", nullable = false, precision = 14, scale = 2) private BigDecimal amount;
+    @Column(name = "maNguoiThucHien", nullable = false, length = 50) private String actorId;
+    @Column(name = "thoiDiemPhatSinh", nullable = false) private LocalDateTime occurredAt;
+    @Column(name = "ghiChu", length = 500) private String note;
+    @Column(name = "daChotSo", nullable = false) private boolean finalized = true;
     public Long getId() { return id; } public String getEntryType() { return entryType; }
     public String getSourceType() { return sourceType; } public String getSourceId() { return sourceId; }
     public Direction getDirection() { return direction; } public BigDecimal getAmount() { return amount; }

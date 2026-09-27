@@ -42,8 +42,8 @@ class ReservationTimelineAggregationTest {
         Receipt receipt = new Receipt(); ReflectionTestUtils.setField(receipt, "id", 40L);
         when(reservations.existsById(9L)).thenReturn(true);
         when(invoices.findByReservationId(9L)).thenReturn(Optional.of(invoice));
-        when(payments.findByInvoiceIdOrderByOccurredAtAsc(20L)).thenReturn(List.of(payment));
-        when(receipts.findByInvoiceIdOrderByIssuedAtAsc(20L)).thenReturn(List.of(receipt));
+        when(payments.findByInvoiceIdOrderByOccurredAtAscIdAsc(20L)).thenReturn(List.of(payment));
+        when(receipts.findByInvoiceIdOrderByIssuedAtAscIdAsc(20L)).thenReturn(List.of(receipt));
         when(audit.timeline("RESERVATION", "9")).thenReturn(List.of(log("BOOKING", "2026-09-14T01:00:00Z")));
         when(audit.timeline("INVOICE", "20")).thenReturn(List.of(log("INVOICE", "2026-09-14T02:00:00Z")));
         when(audit.timeline("PAYMENT_TRANSACTION", "30")).thenReturn(List.of(log("PAYMENT", "2026-09-14T03:00:00Z")));

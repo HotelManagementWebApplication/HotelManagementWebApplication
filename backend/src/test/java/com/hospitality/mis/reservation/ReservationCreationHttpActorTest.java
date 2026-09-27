@@ -42,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:reservationcreationhttpactor;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:reservationcreationhttpactor;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.flyway.enabled=false",
@@ -88,7 +88,7 @@ class ReservationCreationHttpActorTest {
         when(employees.findById("frontdesk")).thenReturn(Optional.of(employee));
         when(rooms.findAllForUpdateOrdered(List.of("101"))).thenReturn(List.of(room));
         when(reservations.hasOverlap(eq("101"), any(LocalDateTime.class), any(LocalDateTime.class),
-                any(), anyList())).thenReturn(false);
+                any(), anyList(), any(LocalDateTime.class))).thenReturn(false);
         when(reservations.saveAndFlush(any(Reservation.class))).thenAnswer(invocation -> {
             Reservation saved = invocation.getArgument(0);
             ReflectionTestUtils.setField(saved, "id", 100L);

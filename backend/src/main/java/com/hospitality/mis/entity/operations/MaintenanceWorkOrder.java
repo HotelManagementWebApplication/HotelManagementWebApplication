@@ -13,32 +13,32 @@ import java.time.LocalDate;
  * không phải mô hình miền.</p>
  */
 @Entity
-@Table(name = "maintenance_work_orders")
+@Table(name = "PhieuBaoTri")
 public class MaintenanceWorkOrder {
     /** Mã phiếu bảo trì nghiệp vụ. */
     @Id
-    @Column(name = "id", length = 10)
+    @Column(name = "maPhieuBaoTri", length = 10)
     private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "room_id", nullable = false)
+    @JoinColumn(name = "maPhong", nullable = false)
     /** Phòng cần được xử lý bảo trì. */
     private Room room;
 
-    @Column(name = "maintenance_type", nullable = false)
+    @Column(name = "loaiBaoTri", nullable = false)
     /** Loại công việc bảo trì cần thực hiện. */
     private String maintenanceType;
 
-    @Column(name = "scheduled_date", nullable = false)
+    @Column(name = "ngayDuKien", nullable = false)
     /** Ngày dự kiến thực hiện công việc. */
     private LocalDate scheduledDate;
 
-    @Column(name = "status", nullable = false)
-    @Enumerated(EnumType.STRING)
+    @Column(name = "trangThai", nullable = false)
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.MaintenanceStatusConverter.class)
     /** Trạng thái vòng đời của phiếu, bắt đầu ở CHUA_XU_LY. */
     private MaintenanceStatus status = MaintenanceStatus.CHUA_XU_LY;
 
-    @Column(name = "description")
+    @Column(name = "moTa")
     /** Mô tả chi tiết triệu chứng hoặc yêu cầu xử lý. */
     private String description;
 

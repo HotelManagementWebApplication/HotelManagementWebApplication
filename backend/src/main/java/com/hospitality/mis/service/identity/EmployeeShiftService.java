@@ -18,13 +18,14 @@ public class EmployeeShiftService {
     @Transactional
     public EmployeeShiftDtos.Response assign(EmployeeShiftDtos.Request request, String actor) {
         String principal = requireEmployeeActor(actor);
+        String shiftCode = normalizeShiftCode(request.shiftCode());
         if (!request.startsAt().isBefore(request.endsAt())) throw new DomainException("INVALID_SHIFT_INTERVAL", "Giờ bắt đầu phải trước giờ kết thúc");
         if (!request.startsAt().toLocalDate().equals(request.shiftDate()))
             throw new DomainException("INVALID_SHIFT_DATE", "Ngày bắt đầu ca phải khớp shift_date");
         var employee = employees.findForUpdateByEmployeeId(request.employeeId()).orElseThrow(() -> new DomainException("EMPLOYEE_NOT_FOUND", "Không tìm thấy nhân viên"));
         if (shifts.hasOverlap(request.employeeId(), request.startsAt(), request.endsAt(), EmployeeShift.Status.CANCELLED))
             throw new DomainException("SHIFT_OVERLAP", "Nhân viên đã có ca trùng thời gian");
-        var shift = new EmployeeShift(); shift.setEmployee(employee); shift.setShiftDate(request.shiftDate()); shift.setShiftCode(request.shiftCode()); shift.setStartsAt(request.startsAt()); shift.setEndsAt(request.endsAt()); shift.setCreatedBy(principal);
+        var shift = new EmployeeShift(); shift.setEmployee(employee); shift.setShiftDate(request.shiftDate()); shift.setShiftCode(shiftCode); shift.setStartsAt(request.startsAt()); shift.setEndsAt(request.endsAt()); shift.setCreatedBy(principal);
         var saved = shifts.save(shift);
         audit.record(principal, "EMPLOYEE_SHIFT_ASSIGNED", "EMPLOYEE_SHIFT",
                 saved.getId() == null ? "new" : String.valueOf(saved.getId()), null, request.employeeId(), null);
@@ -49,12 +50,13 @@ public class EmployeeShiftService {
     @Transactional(readOnly = true)
     public EmployeeShiftDtos.CoverageResponse coverage(LocalDate date, String shiftCode, int minimumStaff) {
         if (minimumStaff < 1 || minimumStaff > 100) throw new DomainException("INVALID_MINIMUM_STAFF", "minimum_staff phải từ 1 đến 100");
+        String normalizedShiftCode = normalizeShiftCode(shiftCode);
         LocalDate selected = date == null ? LocalDate.now(clock) : date;
-        long assigned = shifts.countAvailable(selected, shiftCode, EmployeeShift.Status.CANCELLED,
+        long assigned = shifts.countAvailable(selected, normalizedShiftCode, EmployeeShift.Status.CANCELLED,
                 com.hospitality.mis.entity.identity.Employee.EmploymentStatus.WORKING,
                 com.hospitality.mis.entity.identity.Employee.EmploymentStatus.ON_LEAVE);
         long shortage = Math.max(0, minimumStaff - assigned);
-        return new EmployeeShiftDtos.CoverageResponse(selected, shiftCode, minimumStaff, assigned, shortage, shortage > 0);
+        return new EmployeeShiftDtos.CoverageResponse(selected, normalizedShiftCode, minimumStaff, assigned, shortage, shortage > 0);
     }
     @Transactional
     public EmployeeShiftDtos.Response status(Long id, String rawStatus, String actor) {
@@ -77,6 +79,7 @@ public class EmployeeShiftService {
     @Transactional
     public EmployeeShiftDtos.Response update(Long id, EmployeeShiftDtos.UpdateRequest request, String actor) {
         String principal = requireEmployeeActor(actor);
+        String shiftCode = normalizeShiftCode(request.shiftCode());
         if (!request.startsAt().isBefore(request.endsAt()) || !request.startsAt().toLocalDate().equals(request.shiftDate()))
             throw new DomainException("INVALID_SHIFT_INTERVAL", "Khoảng ca hoặc shift_date không hợp lệ");
         var shift = shifts.findForUpdate(id).orElseThrow(() -> new DomainException("SHIFT_NOT_FOUND", "Không tìm thấy ca làm việc"));
@@ -87,7 +90,7 @@ public class EmployeeShiftService {
         if (shifts.hasOverlapExcluding(employeeId, id, request.startsAt(), request.endsAt(), EmployeeShift.Status.CANCELLED))
             throw new DomainException("SHIFT_OVERLAP", "Nhân viên đã có ca trùng thời gian");
         String before = shift.getShiftCode();
-        shift.setShiftDate(request.shiftDate()); shift.setShiftCode(request.shiftCode().trim());
+        shift.setShiftDate(request.shiftDate()); shift.setShiftCode(shiftCode);
         shift.setStartsAt(request.startsAt()); shift.setEndsAt(request.endsAt());
         audit.record(principal, "EMPLOYEE_SHIFT_UPDATED", "EMPLOYEE_SHIFT", String.valueOf(id), before,
                 shift.getShiftCode(), null);
@@ -97,6 +100,16 @@ public class EmployeeShiftService {
         SecurityActor.Principal principal = SecurityActor.currentPrincipal();
         if (!principal.isEmployee()) throw new org.springframework.security.access.AccessDeniedException("Employee principal required");
         return SecurityActor.requireBoundActor(actor);
+    }
+    private static String normalizeShiftCode(String raw) {
+        String value = raw == null ? "" : raw.trim();
+        try {
+            new com.hospitality.mis.persistence.VietnameseCodeConverters.ShiftCodeConverter()
+                    .convertToDatabaseColumn(value);
+            return value;
+        } catch (IllegalArgumentException ex) {
+            throw new DomainException("INVALID_SHIFT_CODE", "Mã ca làm việc không hợp lệ");
+        }
     }
     private EmployeeShiftDtos.Response toResponse(EmployeeShift x) { return new EmployeeShiftDtos.Response(x.getId(), x.getEmployee().getEmployeeId(), x.getShiftDate(), x.getShiftCode(), x.getStartsAt(), x.getEndsAt(), x.getStatus().name(), x.getCreatedBy()); }
 }

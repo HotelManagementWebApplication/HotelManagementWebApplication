@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** Integration proof that audit filters and pagination are evaluated by the owner repository. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:audit-behavior;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:audit-behavior;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.flyway.enabled=false",

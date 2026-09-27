@@ -40,14 +40,14 @@ public class AuthErrorHandler {
     /** Gom mọi request auth sai định dạng thành một lỗi 400 không làm lộ chi tiết binding. */
     ResponseEntity<ApiError> invalidRequest(Exception exception) {
         return ResponseEntity.badRequest().body(error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST",
-                "Invalid request data"));
+                "Dữ liệu yêu cầu không hợp lệ"));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     /** Trả 403 thống nhất cho principal đã xác thực nhưng bị từ chối quyền. */
     ResponseEntity<ApiError> accessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(error(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access is denied"));
+                .body(error(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Bạn không có quyền thực hiện thao tác này"));
     }
 
     private static ApiError error(HttpStatus status, String code, String message) {

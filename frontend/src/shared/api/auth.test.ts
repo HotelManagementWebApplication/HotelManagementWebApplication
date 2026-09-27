@@ -26,4 +26,16 @@ describe("backend auth contract", () => {
     await expect(authApi.employeeProfile()).resolves.toEqual(response);
     expect(request).toHaveBeenCalledWith("/api/auth/me");
   });
+
+  it("allows SMTP-backed OTP requests enough time for Gmail delivery", async () => {
+    const request = vi.spyOn(apiClient, "request").mockResolvedValue({ message: "Sent" });
+    await authApi.sendRegistrationOtp("guest@example.test");
+    await authApi.sendForgotOtp("guest@example.test");
+    expect(request).toHaveBeenNthCalledWith(1, "/api/auth/otp/send-register", {
+      method: "POST", body: { email: "guest@example.test" }, timeoutMs: 45000,
+    });
+    expect(request).toHaveBeenNthCalledWith(2, "/api/auth/otp/send-forgot-password", {
+      method: "POST", body: { email: "guest@example.test" }, timeoutMs: 45000,
+    });
+  });
 });

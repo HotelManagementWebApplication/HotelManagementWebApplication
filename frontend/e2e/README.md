@@ -1,8 +1,8 @@
 # Live E2E contract
 
-`src/e2e/live-contract.test.ts` is a real HTTP contract suite. It calls the
+`e2e/specs/live-contract.test.ts` is a real HTTP contract suite. It calls the
 running backend and does not mock `fetch`, the application, or backend
-responses. Run it only against a disposable MySQL schema. Do not use a local or
+responses. Run it only against a disposable SQL Server database. Do not use a local or
 production schema containing data that must be preserved.
 
 ## Required variables by flow
@@ -12,29 +12,29 @@ production schema containing data that must be preserved.
   `E2E_CUSTOMER_PASSWORD`, `E2E_CUSTOMER_FULL_NAME`,
   `E2E_CUSTOMER_IDENTITY_NUMBER`, `E2E_CUSTOMER_ROOM_ID`,
   `E2E_CUSTOMER_CHECK_IN`, `E2E_CUSTOMER_CHECK_OUT`,
-  `E2E_CUSTOMER_FOREIGN_RESERVATION_ID`, `E2E_MYSQL_SCHEMA`, and
-  `E2E_MYSQL_DISPOSABLE=true`.
+  `E2E_CUSTOMER_FOREIGN_RESERVATION_ID`, `E2E_SQLSERVER_DATABASE`, and
+  `E2E_SQLSERVER_DISPOSABLE=true`.
 - Front Desk: `E2E_API_BASE_URL`, `E2E_FRONT_DESK_EMPLOYEE_ID`,
   `E2E_FRONT_DESK_PASSWORD`, `E2E_FRONT_DESK_RESERVATION_ID`,
   `E2E_FRONT_DESK_CHECK_IN_AT`, `E2E_FRONT_DESK_CHECK_OUT_AT`,
-  `E2E_MYSQL_SCHEMA`, and `E2E_MYSQL_DISPOSABLE=true`.
+  `E2E_SQLSERVER_DATABASE`, and `E2E_SQLSERVER_DISPOSABLE=true`.
 - Housekeeping/Technical/Manager: `E2E_API_BASE_URL`,
   `E2E_HOUSEKEEPING_EMPLOYEE_ID`, `E2E_HOUSEKEEPING_PASSWORD`,
   `E2E_TECHNICAL_EMPLOYEE_ID`, `E2E_TECHNICAL_PASSWORD`,
   `E2E_MANAGER_EMPLOYEE_ID`, `E2E_MANAGER_PASSWORD`, `E2E_WORK_ORDER_ID`,
-  `E2E_WORK_ORDER_ROOM_ID`, `E2E_MYSQL_SCHEMA`, and
-  `E2E_MYSQL_DISPOSABLE=true`.
+  `E2E_WORK_ORDER_ROOM_ID`, `E2E_SQLSERVER_DATABASE`, and
+  `E2E_SQLSERVER_DISPOSABLE=true`.
 - Kitchen: `E2E_API_BASE_URL`, `E2E_KITCHEN_EMPLOYEE_ID`,
   `E2E_KITCHEN_PASSWORD`, `E2E_MANAGER_EMPLOYEE_ID`,
   `E2E_MANAGER_PASSWORD`, `E2E_SERVICE_ID`, `E2E_KITCHEN_STOCK_QUANTITY`,
-  `E2E_NEW_SERVICE_PRICE`, `E2E_MYSQL_SCHEMA`, and
-  `E2E_MYSQL_DISPOSABLE=true`.
+  `E2E_NEW_SERVICE_PRICE`, `E2E_SQLSERVER_DATABASE`, and
+  `E2E_SQLSERVER_DISPOSABLE=true`.
 - Accounting/Director: `E2E_API_BASE_URL`, `E2E_ACCOUNTING_EMPLOYEE_ID`,
   `E2E_ACCOUNTING_PASSWORD`, `E2E_ACCOUNTING_INVOICE_ID`,
   `E2E_ACCOUNTING_PAYMENT_AMOUNT`, `E2E_ACCOUNTING_REFUND_AMOUNT`,
   `E2E_ACCOUNTING_REFUND_KEY`, `E2E_ACCOUNTING_REFUND_APPROVAL_ID`,
   `E2E_DIRECTOR_EMPLOYEE_ID`, `E2E_DIRECTOR_PASSWORD`,
-  `E2E_MYSQL_SCHEMA`, and `E2E_MYSQL_DISPOSABLE=true`.
+  `E2E_SQLSERVER_DATABASE`, and `E2E_SQLSERVER_DISPOSABLE=true`.
 - HR/Admin: `E2E_API_BASE_URL`, `E2E_ADMIN_EMPLOYEE_ID`,
   `E2E_ADMIN_PASSWORD`, `E2E_HR_EMPLOYEE_ID`, and `E2E_HR_PASSWORD`.
 
@@ -53,22 +53,47 @@ Date-time variables must be ISO local date-times such as
 refund amount cannot exceed the payment amount, and
 `E2E_ACCOUNTING_REFUND_KEY` must be a 1–35 character ASCII idempotency key.
 
-## Disposable MySQL and backend
+## Disposable SQL Server and backend
 
-Create or select a disposable schema whose name matches `e2e_<name>`, for
+Create or select a disposable SQL Server database whose name matches `e2e_<name>`, for
 example `e2e_live_contract_20260918`. The backend uses JPA
 `ddl-auto=validate`; Flyway applies the repository migrations on startup. The
-schema must therefore be reachable by the configured MySQL user and compatible
+database must therefore be reachable by the configured SQL Server login and compatible
 with the current migrations.
 
-This repository provides no live-E2E fixture-seeding command. Arrange real
-employee credentials and the required fixture IDs through the approved owner of
-the disposable environment. Do not fabricate credentials or IDs.
+The repository includes a deterministic fixture path for the local demo SQL Server
+container. First create a disposable schema named `e2e_<name>`, start the
+backend once so Flyway applies all migrations, then stop any backend connected
+to that schema. Run `database/demo/reset_demo.sql` followed by
+`database/demo/seed_live_e2e.sql` against that schema only. The latter refuses
+to run outside an `e2e_*` schema. The reset script supplies demo employee
+accounts (password `hotel123`); do not reuse these credentials outside local
+testing. Do not run either script against `QLKS` or a database with data to
+preserve.
+
+For the checked-in fixture, query actual identifiers after seeding rather than
+assuming auto-increment values:
+
+```sql
+SELECT maNhanVien, vaiTro FROM NhanVien
+WHERE maNhanVien IN ('FRONTDESK','HOUSEKEEP','TECHNICAL','MANAGER',
+                     'KITCHEN','ACCOUNTING','DIRECTOR','ADMIN','HR');
+SELECT maPhieuDatPhong, trangThai FROM PhieuDatPhong ORDER BY maPhieuDatPhong;
+SELECT maHoaDon, trangThai FROM HoaDon ORDER BY maHoaDon;
+SELECT maDichVu FROM DichVu WHERE maDichVu = 'BREAKFAST';
+SELECT maPhieuCongViecKyThuat FROM PhieuCongViecKyThuat
+WHERE vatTuSuDung = 'E2E_FIXTURE_TECHNICAL_ORDER';
+```
+
+`frontend/e2e/specs/live-contract.test.ts` exercises seven live HTTP scenarios
+covering public/customer, front desk, housekeeping/technical/manager, kitchen,
+accounting/director, and HR/admin behavior. It is not a browser-driven UI
+suite; report it as live HTTP/role E2E, not UI E2E.
 
 The backend uses `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` and listens on port
 8080 by default. `MIGRATION_TEST_DB_URL`, `MIGRATION_TEST_DB_USERNAME`, and
 `MIGRATION_TEST_DB_PASSWORD` are separate variables used by the backend's
-`*MySql*Test` classes; they do not configure a running backend. If you use the
+SQL Server integration tests; they do not configure a running backend. If you use the
 same disposable schema for those tests, set the migration variables to that
 schema deliberately and run them before creating live-E2E fixtures. Never
 point either path at a shared or production database.
@@ -78,9 +103,9 @@ backend in one PowerShell window. Replace the password and schema details
 locally; do not commit them or put them in a tracked file:
 
 ```powershell
-$env:DB_URL = "jdbc:mysql://localhost:3306/e2e_live_contract_20260918?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Ho_Chi_Minh"
-$env:DB_USERNAME = "root"
-$env:DB_PASSWORD = "<local-mysql-password>"
+$env:DB_URL = "jdbc:sqlserver://localhost:1433;databaseName=e2e_live_contract_20260918;encrypt=true;trustServerCertificate=true"
+$env:DB_USERNAME = "sa"
+$env:DB_PASSWORD = "<local-sqlserver-password>"
 Set-Location C:\web-hotel-mis\backend
 mvn spring-boot:run
 ```
@@ -89,9 +114,9 @@ If validating the migration-test connection separately, these are process-scoped
 variables and are not a substitute for the backend `DB_*` variables:
 
 ```powershell
-$env:MIGRATION_TEST_DB_URL = "jdbc:mysql://localhost:3306/e2e_live_contract_20260918?createDatabaseIfNotExist=false&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Ho_Chi_Minh"
-$env:MIGRATION_TEST_DB_USERNAME = "root"
-$env:MIGRATION_TEST_DB_PASSWORD = "<local-mysql-password>"
+$env:MIGRATION_TEST_DB_URL = "jdbc:sqlserver://localhost:1433;databaseName=e2e_live_contract_20260918;encrypt=true;trustServerCertificate=true"
+$env:MIGRATION_TEST_DB_USERNAME = "sa"
+$env:MIGRATION_TEST_DB_PASSWORD = "<local-sqlserver-password>"
 ```
 
 ## Configure and run
@@ -104,8 +129,8 @@ use dummy IDs, dummy passwords, or `...` values.
 Set-Location C:\web-hotel-mis\frontend
 
 $env:E2E_API_BASE_URL = "http://localhost:8080"
-$env:E2E_MYSQL_SCHEMA = "e2e_live_contract_20260918"
-$env:E2E_MYSQL_DISPOSABLE = "true"
+$env:E2E_SQLSERVER_DATABASE = "e2e_live_contract_20260918"
+$env:E2E_SQLSERVER_DISPOSABLE = "true"
 
 $env:E2E_CUSTOMER_PHONE = "<unused-real-test-phone>"
 $env:E2E_CUSTOMER_PASSWORD = "<real-disposable-customer-password>"
@@ -152,7 +177,7 @@ $env:E2E_ADMIN_PASSWORD = "<real-admin-password>"
 $env:E2E_HR_EMPLOYEE_ID = "<real-hr-employee-id>"
 $env:E2E_HR_PASSWORD = "<real-hr-password>"
 
-npm run test -- src/e2e/live-contract.test.ts
+npm run test:e2e
 ```
 
 The exact test command is run from `frontend` while the backend is running
@@ -166,7 +191,7 @@ approval.
 
 ## Cleanup
 
-Stop the backend, then remove only the disposable schema using the MySQL
+Stop the backend, then remove only the disposable database using the SQL Server
 administration process approved for your environment. Do not drop a shared,
 local, or production schema. In each PowerShell process that received
 variables, close the window or clear the process environment explicitly:
@@ -174,7 +199,7 @@ variables, close the window or clear the process environment explicitly:
 ```powershell
 $names = @(
   "DB_URL", "DB_USERNAME", "DB_PASSWORD", "MIGRATION_TEST_DB_URL", "MIGRATION_TEST_DB_USERNAME", "MIGRATION_TEST_DB_PASSWORD",
-  "E2E_API_BASE_URL", "E2E_MYSQL_SCHEMA", "E2E_MYSQL_DISPOSABLE",
+  "E2E_API_BASE_URL", "E2E_SQLSERVER_DATABASE", "E2E_SQLSERVER_DISPOSABLE",
   "E2E_CUSTOMER_PHONE", "E2E_CUSTOMER_PASSWORD", "E2E_CUSTOMER_FULL_NAME", "E2E_CUSTOMER_IDENTITY_NUMBER", "E2E_CUSTOMER_ROOM_ID", "E2E_CUSTOMER_CHECK_IN", "E2E_CUSTOMER_CHECK_OUT", "E2E_CUSTOMER_FOREIGN_RESERVATION_ID",
   "E2E_FRONT_DESK_EMPLOYEE_ID", "E2E_FRONT_DESK_PASSWORD", "E2E_FRONT_DESK_RESERVATION_ID", "E2E_FRONT_DESK_CHECK_IN_AT", "E2E_FRONT_DESK_CHECK_OUT_AT",
   "E2E_HOUSEKEEPING_EMPLOYEE_ID", "E2E_HOUSEKEEPING_PASSWORD", "E2E_TECHNICAL_EMPLOYEE_ID", "E2E_TECHNICAL_PASSWORD", "E2E_MANAGER_EMPLOYEE_ID", "E2E_MANAGER_PASSWORD", "E2E_WORK_ORDER_ID", "E2E_WORK_ORDER_ROOM_ID",

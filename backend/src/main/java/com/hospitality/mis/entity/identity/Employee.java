@@ -4,6 +4,7 @@ package com.hospitality.mis.entity.identity;
 
 import com.hospitality.mis.entity.reservation.Reservation;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 
 import jakarta.persistence.EnumType;
 
@@ -42,46 +43,46 @@ import java.time.LocalDate;
  */
 
 @Entity
-@Table(name = "employees")
+@Table(name = "NhanVien")
 public class Employee {
     public enum EmploymentStatus { WORKING, ON_LEAVE, TERMINATED }
     @Id
 
-    @Column(name = "id", length = 10, nullable = false)
+    @Column(name = "maNhanVien", length = 10, nullable = false)
     /** Mã nhân viên định danh tài khoản và khóa ngoại của các đặt phòng. */
     private String employeeId;
 
 
 
-    @Column(name = "full_name", nullable = false, length = 100, columnDefinition = "NVARCHAR(100)")
+    @Column(name = "hoVaTen", nullable = false, length = 100, columnDefinition = "NVARCHAR(100)")
     private String fullName;
 
 
 
-    @Column(name = "password", length = 255, nullable = false)
+    @Column(name = "matKhau", length = 255, nullable = false)
     /** Mật khẩu đã băm, không chứa bí mật dạng rõ. */
     private String password;
 
 
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "position", nullable = false, length = 30)
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.EmployeeRoleConverter.class)
+    @Column(name = "vaiTro", nullable = false, length = 30)
     /** Vai trò quyết định tập quyền được suy ra cho nhân viên. */
     private EmployeeRole role;
 
 
-    @Column(name = "address", length = 255, columnDefinition = "NVARCHAR(255)")
+    @Column(name = "diaChi", length = 255, columnDefinition = "NVARCHAR(255)")
     private String address;
 
 
 
-    @Column(name = "phone", length = 15, unique = true, nullable = false)
+    @Column(name = "soDienThoai", length = 15, unique = true, nullable = false)
     private String phone;
 
     @Column(name = "email", length = 150)
     private String email;
 
-    @Column(name = "must_change_password", nullable = false)
+    @Column(name = "phaiDoiMatKhau", nullable = false)
     private boolean mustChangePassword;
 
 
@@ -236,32 +237,32 @@ public class Employee {
 
 
 
-    @Column(name = "enabled", nullable = false)
+    @Column(name = "duocKichHoat", nullable = false)
     /** Cờ tài khoản được phép xác thực. */
     private boolean enabled = true;
 
-    @Column(name = "account_non_locked", nullable = false)
+    @Column(name = "taiKhoanKhongBiKhoa", nullable = false)
     /** Cờ khóa do thất bại đăng nhập; false thì cần mở khóa theo quy trình. */
     private boolean accountNonLocked = true;
 
-    @Column(name = "failed_login_attempts", nullable = false)
+    @Column(name = "soLanDangNhapThatBai", nullable = false)
     /** Số lần đăng nhập thất bại liên tiếp hiện tại. */
     private int failedLoginAttempts;
 
-    @Column(name = "last_failed_login_at")
+    @Column(name = "thoiDiemDangNhapThatBaiGanNhat")
     /** Lần gần nhất xác thực thất bại, dùng cho theo dõi bảo mật. */
     private java.time.Instant lastFailedLoginAt;
 
-    @Column(name = "last_login_at")
+    @Column(name = "thoiDiemDangNhapGanNhat")
     /** Lần gần nhất đăng nhập thành công. */
     private java.time.Instant lastLoginAt;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "employment_status", nullable = false, length = 20)
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.EmploymentStatusConverter.class)
+    @Column(name = "trangThaiLamViec", nullable = false, length = 20)
     private EmploymentStatus employmentStatus = EmploymentStatus.WORKING;
 
-    @Column(name = "leave_start") private LocalDate leaveStart;
-    @Column(name = "leave_end") private LocalDate leaveEnd;
+    @Column(name = "ngayBatDauNghi") private LocalDate leaveStart;
+    @Column(name = "ngayKetThucNghi") private LocalDate leaveEnd;
 
     @Transient
     /** Quyền suy ra từ role, không nhận trực tiếp từ dữ liệu máy khách. */

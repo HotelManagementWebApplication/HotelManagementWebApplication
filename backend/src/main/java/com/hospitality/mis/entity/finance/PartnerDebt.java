@@ -5,19 +5,20 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /** Công nợ phải trả hoặc phải thu được theo dõi với một đối tác. */
-@Entity @Table(name = "partner_debts")
+@Entity @Table(name = "CongNoDoiTac")
 public class PartnerDebt {
     /** ID công nợ do cơ sở dữ liệu sinh. */
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
-    @Column(name = "partner_name", nullable = false, length = 150) private String partnerName;
-    @Column(name = "reference_code", nullable = false, unique = true, length = 80) private String referenceCode;
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) @Column(name = "maCongNoDoiTac")
+ private Long id;
+    @Column(name = "tenDoiTac", nullable = false, length = 150) private String partnerName;
+    @Column(name = "maThamChieu", nullable = false, unique = true, length = 80) private String referenceCode;
     /** Tổng giá trị công nợ ban đầu. */
-    @Column(nullable = false, precision = 14, scale = 2) private BigDecimal amount;
+    @Column(name = "soTien", nullable = false, precision = 14, scale = 2) private BigDecimal amount;
     /** Số đã tất toán; không vượt quá tổng công nợ theo nghiệp vụ. */
-    @Column(nullable = false, precision = 14, scale = 2) private BigDecimal settledAmount = BigDecimal.ZERO;
+    @Column(name = "soTienDaThanhToan", nullable = false, precision = 14, scale = 2) private BigDecimal settledAmount = BigDecimal.ZERO;
     /** Trạng thái tiến độ tất toán của công nợ. */
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private DebtStatus status = DebtStatus.OPEN;
-    @Column(name = "recorded_at", nullable = false) private LocalDateTime recordedAt;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.DebtStatusConverter.class) @Column(name = "trangThai", nullable = false, length = 30) private DebtStatus status = DebtStatus.OPEN;
+    @Column(name = "thoiDiemGhiNhan", nullable = false) private LocalDateTime recordedAt;
     /** Các trạng thái từ mở đến tất toán hoặc hủy. */
     public enum DebtStatus {
         /** Công nợ chưa được tất toán. */

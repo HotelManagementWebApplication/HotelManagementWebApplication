@@ -40,7 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:customerreservation;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:customerreservation;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.flyway.enabled=false",
@@ -66,7 +66,7 @@ class CustomerReservationApiContractTest {
         payments.deleteAllInBatch();
         receipts.deleteAllInBatch();
         invoices.deleteAllInBatch();
-        jdbc.update("delete from reservation_rooms");
+        jdbc.update("delete from ChiTietDatPhong");
         reservations.deleteAllInBatch();
         accounts.deleteAllInBatch();
         rooms.deleteAllInBatch();
@@ -107,6 +107,23 @@ class CustomerReservationApiContractTest {
                 .andExpect(jsonPath("$.deposit_payment.payment_code").value(org.hamcrest.Matchers.startsWith("HOS-")))
                 .andReturn().getResponse().getContentAsString());
         long id = booking.get("id").asLong();
+        JsonNode replay = objectMapper.readTree(mockMvc.perform(post("/api/customer/reservations")
+                        .header(AUTHORIZATION, bearer).contentType(APPLICATION_JSON).content(json(request)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(replay.get("id").asLong()).isEqualTo(id);
+        assertThat(replay.at("/deposit_payment/payment_code").asText())
+                .isEqualTo(booking.at("/deposit_payment/payment_code").asText());
+
+        var conflictingRequest = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE,
+                List.of(new CustomerReservationDtos.RoomStay("R201",
+                        LocalDateTime.of(2031, 1, 12, 14, 0), LocalDateTime.of(2031, 1, 13, 12, 0))), "customer-book-1");
+        mockMvc.perform(post("/api/customer/reservations").header(AUTHORIZATION, bearer)
+                        .contentType(APPLICATION_JSON).content(json(conflictingRequest)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_CONFLICT"));
+        assertThat(reservations.count()).isEqualTo(1);
+
         mockMvc.perform(get("/api/customer/reservations/{id}", id).header(AUTHORIZATION, bearer))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id));
         mockMvc.perform(get("/api/customer/reservations/{id}/deposit-payment", id).header(AUTHORIZATION, bearer))

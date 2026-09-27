@@ -19,6 +19,7 @@ dist/
 .env
 .env.*
 !.env.example
+!frontend/.env.e2e.example
 application-local.yml
 application-local.yaml
 *.pem

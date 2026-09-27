@@ -103,7 +103,7 @@ public class ReceiptService {
         var invoice = invoices.findById(invoiceId)
                 .orElseThrow(() -> new DomainException("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn"));
         requireScope(invoice, SecurityActor.currentActor());
-        return receipts.findByInvoiceIdOrderByIssuedAtAsc(invoiceId).stream().map(this::toResponse).toList();
+        return receipts.findByInvoiceIdOrderByIssuedAtAscIdAsc(invoiceId).stream().map(this::toResponse).toList();
     }
     @Transactional(readOnly = true)
     public ReceiptDtos.PageResponse pageByInvoice(Long invoiceId, int page, int size) {
@@ -111,7 +111,7 @@ public class ReceiptService {
                 .orElseThrow(() -> new DomainException("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn"));
         requireScope(invoice, SecurityActor.currentActor());
         int safePage = Math.max(0, page), safeSize = Math.max(1, Math.min(100, size));
-        var result = receipts.findByInvoiceIdOrderByIssuedAtAsc(invoiceId,
+        var result = receipts.findByInvoiceIdOrderByIssuedAtAscIdAsc(invoiceId,
                 org.springframework.data.domain.PageRequest.of(safePage, safeSize));
         return new ReceiptDtos.PageResponse(result.getContent().stream().map(this::toResponse).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());

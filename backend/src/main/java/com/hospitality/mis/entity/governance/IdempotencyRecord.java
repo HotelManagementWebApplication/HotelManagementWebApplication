@@ -1,6 +1,7 @@
 package com.hospitality.mis.entity.governance;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -15,45 +16,46 @@ import java.time.LocalDateTime;
 
 /** Durable command result used to make retryable mutations safe across restarts. */
 @Entity
-@Table(name = "idempotency_records", uniqueConstraints =
-        @UniqueConstraint(name = "uk_idempotency_scope_key", columnNames = {"command_scope", "idempotency_key"}))
+@Table(name = "BanGhiChongTrung", uniqueConstraints =
+        @UniqueConstraint(name = "ukBanGhiChongTrung01", columnNames = {"phamViLenh", "khoaChongTrung"}))
 public class IdempotencyRecord {
     public enum Status { PROCESSING, COMPLETED }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "maBanGhiChongTrung")
     private Long id;
 
-    @Column(name = "command_scope", nullable = false, length = 100)
+    @Column(name = "phamViLenh", nullable = false, length = 100)
     private String scope;
 
-    @Column(name = "idempotency_key", nullable = false, length = 100)
+    @Column(name = "khoaChongTrung", nullable = false, length = 100)
     private String key;
 
-    @Column(nullable = false, length = 100)
+    @Column(name = "nguoiThucHien", nullable = false, length = 100)
     private String actor;
 
-    @Column(name = "request_hash", nullable = false, length = 64)
+    @Column(name = "maBamYeuCau", nullable = false, length = 64)
     private String requestHash;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.IdempotencyStatusConverter.class)
+    @Column(name = "trangThai", nullable = false, length = 20)
     private Status status;
 
-    @Column(name = "response_type", length = 255)
+    @Column(name = "loaiPhanHoi", length = 255)
     private String responseType;
 
-    @Column(name = "response_json", columnDefinition = "LONGTEXT")
+    @Column(name = "phanHoiJson", columnDefinition = "NVARCHAR(MAX)")
     private String responseJson;
 
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "thoiDiemTao", nullable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "completed_at")
+    @Column(name = "thoiDiemHoanThanh")
     private LocalDateTime completedAt;
 
     @Version
-    @Column(nullable = false)
+    @Column(name = "phienBan", nullable = false)
     private long version;
 
     protected IdempotencyRecord() {}

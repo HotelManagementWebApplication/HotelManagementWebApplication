@@ -4,6 +4,22 @@ export const EMPLOYEE_ROLES = [
   "ACCOUNTING", "DIRECTOR", "ADMIN", "HR", "STAFF",
 ] as const;
 export type EmployeeRole = typeof EMPLOYEE_ROLES[number];
+export const EMPLOYEE_ROLE_LABELS: Record<EmployeeRole, string> = {
+  MANAGER: "Quản lý",
+  FRONT_DESK: "Lễ tân",
+  HOUSEKEEPING: "Buồng phòng",
+  TECHNICAL: "Kỹ thuật",
+  KITCHEN: "Bếp & Nhà hàng",
+  ACCOUNTING: "Kế toán",
+  DIRECTOR: "Giám đốc",
+  ADMIN: "Quản trị hệ thống",
+  HR: "Nhân sự",
+  STAFF: "Nhân viên",
+};
+export function employeeRoleLabel(role: string | null | undefined): string {
+  if (!role) return "";
+  return EMPLOYEE_ROLE_LABELS[role as EmployeeRole] ?? role;
+}
 
 export type AuthIdentity = "customer" | "employee";
 /** Exact permission authorities exposed by the backend Permission enum. */

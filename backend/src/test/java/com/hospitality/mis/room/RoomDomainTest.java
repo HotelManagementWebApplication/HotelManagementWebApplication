@@ -9,29 +9,29 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Bảo vệ entity Room/RoomType và cột snake_case canonical. */
+/** Bảo vệ mapping vật lý tiếng Việt của entity Room/RoomType. */
 class RoomDomainTest {
     @Test
-    /** Given hai model canonical, When soi JPA annotation, Then map đúng rooms và room_types. */
+    /** Given hai model chuẩn, When soi JPA annotation, Then tên bảng khớp schema tiếng Việt. */
     void canonicalModelsAreTheSoleConcreteEntities() {
         assertThat(Room.class.isAnnotationPresent(Entity.class)).isTrue();
         assertThat(RoomType.class.isAnnotationPresent(Entity.class)).isTrue();
-        assertThat(Room.class.getAnnotation(Table.class).name()).isEqualTo("rooms");
-        assertThat(RoomType.class.getAnnotation(Table.class).name()).isEqualTo("room_types");
+        assertThat(Room.class.getAnnotation(Table.class).name()).isEqualTo("Phong");
+        assertThat(RoomType.class.getAnnotation(Table.class).name()).isEqualTo("LoaiPhong");
     }
 
     @Test
     /** Given field mapping, When đọc @Column, Then tên và length khớp schema v1. */
-    void canonicalFieldsUseV1SnakeCaseColumns() throws Exception {
-        assertColumn(Room.class, "id", "id", 10);
-        assertColumn(Room.class, "name", "name", 100);
-        assertColumn(Room.class, "floor", "floor", 0);
-        assertColumn(Room.class, "description", "description", 1200);
-        assertColumn(Room.class, "status", "status", 30);
-        assertColumn(RoomType.class, "id", "id", 10);
-        assertColumn(RoomType.class, "name", "name", 50);
-        assertColumn(RoomType.class, "dailyPrice", "daily_price", 0);
-        assertColumn(RoomType.class, "description", "description", 500);
+    void canonicalFieldsUseVietnameseColumns() throws Exception {
+        assertColumn(Room.class, "id", "maPhong", 10);
+        assertColumn(Room.class, "name", "ten", 100);
+        assertColumn(Room.class, "floor", "tang", 0);
+        assertColumn(Room.class, "description", "moTa", 1200);
+        assertColumn(Room.class, "status", "trangThai", 30);
+        assertColumn(RoomType.class, "id", "maLoaiPhong", 10);
+        assertColumn(RoomType.class, "name", "ten", 50);
+        assertColumn(RoomType.class, "dailyPrice", "giaTheoNgay", 0);
+        assertColumn(RoomType.class, "description", "moTa", 500);
     }
 
     /** Helper kiểm tra column name và length khi length được quy định. */

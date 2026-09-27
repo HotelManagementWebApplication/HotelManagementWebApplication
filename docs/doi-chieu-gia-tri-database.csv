@@ -1,0 +1,242 @@
+domain,javaOrApiValue,databaseValue,column,converter,maxLength,notes
+RoomTypeCatalogStatus,DRAFT,Bản nháp,LoaiPhong.trangThaiDanhMuc,RoomTypeCatalogStatusConverter,30,
+RoomTypeCatalogStatus,ACTIVE,Đang hoạt động,LoaiPhong.trangThaiDanhMuc,RoomTypeCatalogStatusConverter,30,
+RoomTypeCatalogStatus,REJECTED,Bị từ chối,LoaiPhong.trangThaiDanhMuc,RoomTypeCatalogStatusConverter,30,
+RoomTypeCatalogStatus,RETIRED,Ngừng kinh doanh,LoaiPhong.trangThaiDanhMuc,RoomTypeCatalogStatusConverter,30,
+RoomStatus,available,Sẵn sàng,Phong.trangThai,RoomStatusConverter,30,Mã API giữ nguyên dạng chữ thường và gạch dưới
+RoomStatus,occupied,Đang có khách,Phong.trangThai,RoomStatusConverter,30,
+RoomStatus,cleaning,Đang dọn phòng,Phong.trangThai,RoomStatusConverter,30,
+RoomStatus,maintenance,Đang bảo trì,Phong.trangThai,RoomStatusConverter,30,
+RoomStatus,out_of_service,Ngừng sử dụng,Phong.trangThai,RoomStatusConverter,30,
+RoomStatus,reserved,Đã giữ phòng,Phong.trangThai,RoomStatusConverter,30,
+RoomStatus,available,Sẵn sàng,ChiTietDatPhong.trangThai,RoomStatusConverter,30,Mã API giữ nguyên dạng chữ thường và gạch dưới
+RoomStatus,occupied,Đang có khách,ChiTietDatPhong.trangThai,RoomStatusConverter,30,
+RoomStatus,cleaning,Đang dọn phòng,ChiTietDatPhong.trangThai,RoomStatusConverter,30,
+RoomStatus,maintenance,Đang bảo trì,ChiTietDatPhong.trangThai,RoomStatusConverter,30,
+RoomStatus,out_of_service,Ngừng sử dụng,ChiTietDatPhong.trangThai,RoomStatusConverter,30,
+RoomStatus,reserved,Đã giữ phòng,ChiTietDatPhong.trangThai,RoomStatusConverter,30,
+RoomStatus,returned,Đã trả phòng,ChiTietDatPhong.trangThai,RoomStatusConverter,30,
+RoomStatus,cancelled,Đã hủy,ChiTietDatPhong.trangThai,RoomStatusConverter,30,
+MembershipTier,STANDARD,Tiêu chuẩn,KhachLuuTru.hangThanhVien,MembershipTierConverter,20,
+MembershipTier,SILVER,Bạc,KhachLuuTru.hangThanhVien,MembershipTierConverter,20,
+MembershipTier,GOLD,Vàng,KhachLuuTru.hangThanhVien,MembershipTierConverter,20,
+MembershipTier,PLATINUM,Bạch kim,KhachLuuTru.hangThanhVien,MembershipTierConverter,20,
+MembershipTier,STANDARD,Tiêu chuẩn,LichSuHangThanhVien.hangCu,MembershipTierConverter,20,
+MembershipTier,SILVER,Bạc,LichSuHangThanhVien.hangCu,MembershipTierConverter,20,
+MembershipTier,GOLD,Vàng,LichSuHangThanhVien.hangCu,MembershipTierConverter,20,
+MembershipTier,PLATINUM,Bạch kim,LichSuHangThanhVien.hangCu,MembershipTierConverter,20,
+MembershipTier,STANDARD,Tiêu chuẩn,LichSuHangThanhVien.hangMoi,MembershipTierConverter,20,
+MembershipTier,SILVER,Bạc,LichSuHangThanhVien.hangMoi,MembershipTierConverter,20,
+MembershipTier,GOLD,Vàng,LichSuHangThanhVien.hangMoi,MembershipTierConverter,20,
+MembershipTier,PLATINUM,Bạch kim,LichSuHangThanhVien.hangMoi,MembershipTierConverter,20,
+EmployeeRole,ADMIN,Quản trị viên,NhanVien.vaiTro,EmployeeRoleConverter,30,
+EmployeeRole,DIRECTOR,Giám đốc,NhanVien.vaiTro,EmployeeRoleConverter,30,
+EmployeeRole,MANAGER,Quản lý,NhanVien.vaiTro,EmployeeRoleConverter,30,
+EmployeeRole,FRONT_DESK,Lễ tân,NhanVien.vaiTro,EmployeeRoleConverter,30,
+EmployeeRole,ACCOUNTING,Kế toán,NhanVien.vaiTro,EmployeeRoleConverter,30,
+EmployeeRole,HOUSEKEEPING,Buồng phòng,NhanVien.vaiTro,EmployeeRoleConverter,30,
+EmployeeRole,TECHNICAL,Kỹ thuật,NhanVien.vaiTro,EmployeeRoleConverter,30,
+EmployeeRole,KITCHEN,Nhà bếp,NhanVien.vaiTro,EmployeeRoleConverter,30,
+EmployeeRole,STAFF,Nhân viên,NhanVien.vaiTro,EmployeeRoleConverter,30,
+EmployeeRole,HR,Nhân sự,NhanVien.vaiTro,EmployeeRoleConverter,30,
+EmploymentStatus,WORKING,Đang làm việc,NhanVien.trangThaiLamViec,EmploymentStatusConverter,20,
+EmploymentStatus,ON_LEAVE,Đang nghỉ phép,NhanVien.trangThaiLamViec,EmploymentStatusConverter,20,
+EmploymentStatus,TERMINATED,Đã nghỉ việc,NhanVien.trangThaiLamViec,EmploymentStatusConverter,20,
+ReservationStatus,DRAFT,Bản nháp,PhieuDatPhong.trangThai,ReservationStatusConverter,30,
+ReservationStatus,DEPOSIT_PAID,Đã thanh toán cọc,PhieuDatPhong.trangThai,ReservationStatusConverter,30,
+ReservationStatus,CONFIRMED,Đã xác nhận,PhieuDatPhong.trangThai,ReservationStatusConverter,30,
+ReservationStatus,CHECKED_IN,Đã nhận phòng,PhieuDatPhong.trangThai,ReservationStatusConverter,30,
+ReservationStatus,CHECKED_OUT,Đã trả phòng,PhieuDatPhong.trangThai,ReservationStatusConverter,30,
+ReservationStatus,CANCELLED,Đã hủy,PhieuDatPhong.trangThai,ReservationStatusConverter,30,
+ReservationStatus,NO_SHOW,Không đến,PhieuDatPhong.trangThai,ReservationStatusConverter,30,
+DepositPaymentStatus,NOT_REQUIRED,Không yêu cầu,PhieuDatPhong.trangThaiThanhToanCoc,DepositPaymentStatusConverter,20,
+DepositPaymentStatus,PENDING,Chờ thanh toán,PhieuDatPhong.trangThaiThanhToanCoc,DepositPaymentStatusConverter,20,
+DepositPaymentStatus,PAID,Đã thanh toán,PhieuDatPhong.trangThaiThanhToanCoc,DepositPaymentStatusConverter,20,
+DepositPaymentStatus,EXPIRED,Đã hết hạn,PhieuDatPhong.trangThaiThanhToanCoc,DepositPaymentStatusConverter,20,
+CancellationOutcome,REFUND,Hoàn tiền,PhieuDatPhong.ketQuaHuy,CancellationOutcomeConverter,30,
+CancellationOutcome,RETAIN,Không phát sinh hoàn tiền,PhieuDatPhong.ketQuaHuy,CancellationOutcomeConverter,30,
+CancellationOutcome,FORFEIT,Mất quyền hoàn tiền,PhieuDatPhong.ketQuaHuy,CancellationOutcomeConverter,30,
+PaymentMethod,CASH,Tiền mặt,HoaDon.phuongThucThanhToan,PaymentMethodConverter,30,
+PaymentMethod,CARD,Thẻ,HoaDon.phuongThucThanhToan,PaymentMethodConverter,30,
+PaymentMethod,BANK_TRANSFER,Chuyển khoản ngân hàng,HoaDon.phuongThucThanhToan,PaymentMethodConverter,30,
+PaymentMethod,CASH,Tiền mặt,GiaoDichThanhToan.phuongThuc,PaymentMethodConverter,30,
+PaymentMethod,CARD,Thẻ,GiaoDichThanhToan.phuongThuc,PaymentMethodConverter,30,
+PaymentMethod,BANK_TRANSFER,Chuyển khoản ngân hàng,GiaoDichThanhToan.phuongThuc,PaymentMethodConverter,30,
+PaymentMethod,CASH,Tiền mặt,BienLai.phuongThuc,PaymentMethodConverter,30,
+PaymentMethod,CARD,Thẻ,BienLai.phuongThuc,PaymentMethodConverter,30,
+PaymentMethod,BANK_TRANSFER,Chuyển khoản ngân hàng,BienLai.phuongThuc,PaymentMethodConverter,30,
+PaymentStatus,DA_THANH_TOAN,Đã thanh toán,HoaDon.trangThai,PaymentStatusConverter,30,
+PaymentStatus,CHUA_THANH_TOAN,Chưa thanh toán,HoaDon.trangThai,PaymentStatusConverter,30,
+PaymentStatus,DU_KIEN,Dự kiến,HoaDon.trangThai,PaymentStatusConverter,30,
+TransactionType,PAYMENT,Thanh toán,GiaoDichThanhToan.loai,TransactionTypeConverter,20,
+TransactionType,REFUND,Hoàn tiền,GiaoDichThanhToan.loai,TransactionTypeConverter,20,
+TransactionStatus,COMPLETED,Đã hoàn tất,GiaoDichThanhToan.trangThai,TransactionStatusConverter,20,
+TransactionStatus,FAILED,Thất bại,GiaoDichThanhToan.trangThai,TransactionStatusConverter,20,
+TransactionStatus,VOIDED,Đã vô hiệu,GiaoDichThanhToan.trangThai,TransactionStatusConverter,20,
+MaintenanceStatus,CHUA_XU_LY,Chưa xử lý,PhieuBaoTri.trangThai,MaintenanceStatusConverter,30,
+MaintenanceStatus,DANG_BAO_TRI,Đang bảo trì,PhieuBaoTri.trangThai,MaintenanceStatusConverter,30,
+MaintenanceStatus,DA_HOAN_THANH,Đã hoàn thành,PhieuBaoTri.trangThai,MaintenanceStatusConverter,30,
+InventoryMovementType,RECEIVE,Nhập kho,BienDongKhoDichVu.loai,InventoryMovementTypeConverter,20,
+InventoryMovementType,ISSUE,Xuất kho,BienDongKhoDichVu.loai,InventoryMovementTypeConverter,20,
+InventoryMovementType,ADJUST,Điều chỉnh,BienDongKhoDichVu.loai,InventoryMovementTypeConverter,20,
+InventoryMovementType,WASTE,Hao hụt,BienDongKhoDichVu.loai,InventoryMovementTypeConverter,20,
+InventoryMovementType,RETURN,Hoàn kho,BienDongKhoDichVu.loai,InventoryMovementTypeConverter,20,
+HousekeepingTaskStatus,NEEDS_CLEANING,Cần dọn phòng,NhiemVuBuongPhong.trangThai,HousekeepingTaskStatusConverter,30,
+HousekeepingTaskStatus,IN_PROGRESS,Đang thực hiện,NhiemVuBuongPhong.trangThai,HousekeepingTaskStatusConverter,30,
+HousekeepingTaskStatus,CLEANED,Đã dọn xong,NhiemVuBuongPhong.trangThai,HousekeepingTaskStatusConverter,30,
+HousekeepingTaskStatus,READY,Sẵn sàng,NhiemVuBuongPhong.trangThai,HousekeepingTaskStatusConverter,30,
+HousekeepingTaskStatus,WAITING_TECHNICAL,Chờ kỹ thuật,NhiemVuBuongPhong.trangThai,HousekeepingTaskStatusConverter,30,
+TechnicalWorkOrderStatus,NEW,Mới tạo,PhieuCongViecKyThuat.trangThai,TechnicalWorkOrderStatusConverter,30,
+TechnicalWorkOrderStatus,ACKNOWLEDGED,Đã tiếp nhận,PhieuCongViecKyThuat.trangThai,TechnicalWorkOrderStatusConverter,30,
+TechnicalWorkOrderStatus,IN_PROGRESS,Đang thực hiện,PhieuCongViecKyThuat.trangThai,TechnicalWorkOrderStatusConverter,30,
+TechnicalWorkOrderStatus,WAITING_ACCEPTANCE,Chờ nghiệm thu,PhieuCongViecKyThuat.trangThai,TechnicalWorkOrderStatusConverter,30,
+TechnicalWorkOrderStatus,COMPLETED,Đã hoàn thành,PhieuCongViecKyThuat.trangThai,TechnicalWorkOrderStatusConverter,30,
+TechnicalWorkOrderStatus,ROOM_RELEASED,Đã bàn giao phòng,PhieuCongViecKyThuat.trangThai,TechnicalWorkOrderStatusConverter,30,
+Priority,LOW,Thấp,PhieuCongViecKyThuat.doUuTien,PriorityConverter,20,
+Priority,MEDIUM,Trung bình,PhieuCongViecKyThuat.doUuTien,PriorityConverter,20,
+Priority,HIGH,Cao,PhieuCongViecKyThuat.doUuTien,PriorityConverter,20,
+Priority,CRITICAL,Nghiêm trọng,PhieuCongViecKyThuat.doUuTien,PriorityConverter,20,
+Priority,LOW,Thấp,YeuCauPheDuyet.mucDoRuiRo,PriorityConverter,20,
+Priority,MEDIUM,Trung bình,YeuCauPheDuyet.mucDoRuiRo,PriorityConverter,20,
+Priority,HIGH,Cao,YeuCauPheDuyet.mucDoRuiRo,PriorityConverter,20,
+Priority,CRITICAL,Nghiêm trọng,YeuCauPheDuyet.mucDoRuiRo,PriorityConverter,20,
+IncidentSeverity,LOW,Thấp,SuCoThietBi.mucDoNghiemTrong,IncidentSeverityConverter,20,
+IncidentSeverity,MEDIUM,Trung bình,SuCoThietBi.mucDoNghiemTrong,IncidentSeverityConverter,20,
+IncidentSeverity,HIGH,Cao,SuCoThietBi.mucDoNghiemTrong,IncidentSeverityConverter,20,
+IncidentSeverity,CRITICAL,Nghiêm trọng,SuCoThietBi.mucDoNghiemTrong,IncidentSeverityConverter,20,
+IncidentHandoffStatus,OPEN,Đang mở,SuCoThietBi.trangThaiBanGiao,IncidentHandoffStatusConverter,20,
+IncidentHandoffStatus,ACKNOWLEDGED,Đã tiếp nhận,SuCoThietBi.trangThaiBanGiao,IncidentHandoffStatusConverter,20,
+IncidentHandoffStatus,RESOLVED,Đã xử lý,SuCoThietBi.trangThaiBanGiao,IncidentHandoffStatusConverter,20,
+DebtStatus,OPEN,Chưa thanh toán,CongNoDoiTac.trangThai,DebtStatusConverter,30,
+DebtStatus,PARTIALLY_SETTLED,Đã thanh toán một phần,CongNoDoiTac.trangThai,DebtStatusConverter,30,
+DebtStatus,SETTLED,Đã thanh toán,CongNoDoiTac.trangThai,DebtStatusConverter,30,
+DebtStatus,VOIDED,Đã hủy,CongNoDoiTac.trangThai,DebtStatusConverter,30,
+ExpenseStatus,RECORDED,Đã ghi nhận,KhoanChi.trangThai,ExpenseStatusConverter,20,
+ExpenseStatus,APPROVED,Đã phê duyệt,KhoanChi.trangThai,ExpenseStatusConverter,20,
+ExpenseStatus,VOIDED,Đã hủy,KhoanChi.trangThai,ExpenseStatusConverter,20,
+LedgerDirection,DEBIT,Ghi nợ,ButToanTaiChinh.chieuButToan,LedgerDirectionConverter,10,
+LedgerDirection,CREDIT,Ghi có,ButToanTaiChinh.chieuButToan,LedgerDirectionConverter,10,
+InspectionType,MINIBAR,Minibar,KiemTraBuongPhong.loaiKiemTra,InspectionTypeConverter,20,
+InspectionType,ROOM_ASSET,Tài sản phòng,KiemTraBuongPhong.loaiKiemTra,InspectionTypeConverter,20,
+ItemCondition,OK,Bình thường,KiemTraBuongPhong.tinhTrangHangMuc,ItemConditionConverter,20,
+ItemCondition,DAMAGED,Hư hỏng,KiemTraBuongPhong.tinhTrangHangMuc,ItemConditionConverter,20,
+ItemCondition,MISSING,Thất lạc,KiemTraBuongPhong.tinhTrangHangMuc,ItemConditionConverter,20,
+ItemCondition,REFILLED,Đã bổ sung,KiemTraBuongPhong.tinhTrangHangMuc,ItemConditionConverter,20,
+NotificationStatus,PENDING,Chờ gửi,HangDoiThongBao.trangThai,NotificationStatusConverter,20,
+NotificationStatus,DELIVERED,Đã gửi,HangDoiThongBao.trangThai,NotificationStatusConverter,20,
+NotificationStatus,FAILED,Gửi thất bại,HangDoiThongBao.trangThai,NotificationStatusConverter,20,
+IdempotencyStatus,PROCESSING,Đang xử lý,BanGhiChongTrung.trangThai,IdempotencyStatusConverter,20,
+IdempotencyStatus,COMPLETED,Đã hoàn tất,BanGhiChongTrung.trangThai,IdempotencyStatusConverter,20,
+EmployeeShiftStatus,ASSIGNED,Đã phân công,CaLamViecNhanVien.trangThai,EmployeeShiftStatusConverter,20,
+EmployeeShiftStatus,STARTED,Đã bắt đầu,CaLamViecNhanVien.trangThai,EmployeeShiftStatusConverter,20,
+EmployeeShiftStatus,COMPLETED,Đã hoàn thành,CaLamViecNhanVien.trangThai,EmployeeShiftStatusConverter,20,
+EmployeeShiftStatus,CANCELLED,Đã hủy,CaLamViecNhanVien.trangThai,EmployeeShiftStatusConverter,20,
+LoginOutcome,SUCCEEDED,Thành công,SuKienDangNhapNhanVien.ketQua,LoginOutcomeConverter,20,
+LoginOutcome,FAILED,Thất bại,SuKienDangNhapNhanVien.ketQua,LoginOutcomeConverter,20,
+RentalType,PACKAGE,Theo gói,PhieuDatPhong.hinhThucThue,RentalTypeConverter,20,
+RentalType,HOURLY,Theo giờ,PhieuDatPhong.hinhThucThue,RentalTypeConverter,20,
+BookingSource,DIRECT,Trực tiếp,PhieuDatPhong.nguonDatPhong,BookingSourceConverter,30,Mã nhà cung cấp OTA được giữ nguyên
+BookingSource,AGODA,AGODA,PhieuDatPhong.nguonDatPhong,BookingSourceConverter,30,Mã nhà cung cấp bên ngoài được giữ nguyên
+BookingSource,BOOKING_COM,BOOKING_COM,PhieuDatPhong.nguonDatPhong,BookingSourceConverter,30,Mã nhà cung cấp bên ngoài được giữ nguyên
+BookingSource,EXPEDIA,EXPEDIA,PhieuDatPhong.nguonDatPhong,BookingSourceConverter,30,Mã nhà cung cấp bên ngoài được giữ nguyên
+BookingSource,AIRBNB,AIRBNB,PhieuDatPhong.nguonDatPhong,BookingSourceConverter,30,Mã nhà cung cấp bên ngoài được giữ nguyên
+OtaReconciliationStatus,NOT_APPLICABLE,Không áp dụng,PhieuDatPhong.trangThaiDoiSoatOta,OtaReconciliationStatusConverter,20,
+OtaReconciliationStatus,PENDING,Chờ đối soát,PhieuDatPhong.trangThaiDoiSoatOta,OtaReconciliationStatusConverter,20,
+OtaReconciliationStatus,MATCHED,Đã khớp,PhieuDatPhong.trangThaiDoiSoatOta,OtaReconciliationStatusConverter,20,
+OtaReconciliationStatus,DISPUTED,Có tranh chấp,PhieuDatPhong.trangThaiDoiSoatOta,OtaReconciliationStatusConverter,20,
+HotelServiceBookingStatus,CONFIRMED,Đã xác nhận,DatDichVuKhachSan.trangThai,HotelServiceBookingService#databaseBookingStatus,20,
+HotelServiceBookingStatus,USED,Đã sử dụng,DatDichVuKhachSan.trangThai,HotelServiceBookingService#databaseBookingStatus,20,
+HotelServiceBookingStatus,CANCELLED,Đã hủy,DatDichVuKhachSan.trangThai,HotelServiceBookingService#databaseBookingStatus,20,
+MealPeriod,LUNCH,Bữa trưa,DatDichVuKhachSan.buoiAn,HotelServiceBookingService#databaseMealPeriod,20,
+MealPeriod,DINNER,Bữa tối,DatDichVuKhachSan.buoiAn,HotelServiceBookingService#databaseMealPeriod,20,
+VatCustomerType,INDIVIDUAL,Cá nhân,HoaDonGiaTriGiaTang.loaiKhachHang,VatCustomerTypeConverter,20,
+VatCustomerType,COMPANY,Doanh nghiệp,HoaDonGiaTriGiaTang.loaiKhachHang,VatCustomerTypeConverter,20,
+VatInvoiceStatus,DRAFT,Bản nháp,HoaDonGiaTriGiaTang.trangThai,VatInvoiceStatusConverter,30,
+VatInvoiceStatus,ISSUED,Đã phát hành,HoaDonGiaTriGiaTang.trangThai,VatInvoiceStatusConverter,30,
+VatInvoiceStatus,CANCELLED,Đã hủy,HoaDonGiaTriGiaTang.trangThai,VatInvoiceStatusConverter,30,
+VatXmlStatus,NOT_EXPORTED,Chưa xuất,HoaDonGiaTriGiaTang.trangThaiXml,VatXmlStatusConverter,20,
+VatXmlStatus,EXPORTED,Đã xuất,HoaDonGiaTriGiaTang.trangThaiXml,VatXmlStatusConverter,20,
+AttendanceStatus,PRESENT,Có mặt,ChamCong.trangThai,AttendanceStatusConverter,20,
+AttendanceStatus,LATE,Đi muộn,ChamCong.trangThai,AttendanceStatusConverter,20,
+AttendanceStatus,ABSENT,Vắng mặt,ChamCong.trangThai,AttendanceStatusConverter,20,
+AttendanceStatus,ON_LEAVE,Nghỉ phép,ChamCong.trangThai,AttendanceStatusConverter,20,
+AttendanceSource,MANUAL,Nhập thủ công,ChamCong.nguonDuLieu,AttendanceSourceConverter,30,
+AttendanceSource,BIOMETRIC_IMPORT,Nhập từ máy chấm công,ChamCong.nguonDuLieu,AttendanceSourceConverter,30,
+LeaveType,ANNUAL,Nghỉ phép năm,DonNghiPhep.loaiNghiPhep,LeaveTypeConverter,30,
+LeaveType,SICK,Nghỉ ốm,DonNghiPhep.loaiNghiPhep,LeaveTypeConverter,30,
+LeaveType,SHIFT_CHANGE,Đổi ca trực,DonNghiPhep.loaiNghiPhep,LeaveTypeConverter,30,
+LeaveType,UNPAID,Việc riêng,DonNghiPhep.loaiNghiPhep,LeaveTypeConverter,30,
+LeaveStatus,PENDING,Chờ phê duyệt,DonNghiPhep.trangThai,LeaveStatusConverter,20,Mã trạng thái API giữ nguyên
+LeaveStatus,APPROVED,Đã phê duyệt,DonNghiPhep.trangThai,LeaveStatusConverter,20,Mã trạng thái API giữ nguyên
+LeaveStatus,REJECTED,Bị từ chối,DonNghiPhep.trangThai,LeaveStatusConverter,20,Mã trạng thái API giữ nguyên
+EmployeeRole,ADMIN,Quản trị viên,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
+EmployeeRole,DIRECTOR,Giám đốc,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
+EmployeeRole,MANAGER,Quản lý,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
+EmployeeRole,FRONT_DESK,Lễ tân,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
+EmployeeRole,ACCOUNTING,Kế toán,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
+EmployeeRole,HOUSEKEEPING,Buồng phòng,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
+EmployeeRole,TECHNICAL,Kỹ thuật,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
+EmployeeRole,KITCHEN,Nhà bếp,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
+EmployeeRole,STAFF,Nhân viên,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
+EmployeeRole,HR,Nhân sự,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
+ApprovalAction,ROOM_TYPE_ACTIVATE,Kích hoạt loại phòng,YeuCauPheDuyet.hanhDong,ApprovalActionConverter,50,Mã thao tác API giữ nguyên
+ApprovalAction,SERVICE_PRICE_CHANGE,Thay đổi giá dịch vụ,YeuCauPheDuyet.hanhDong,ApprovalActionConverter,50,Mã thao tác API giữ nguyên
+ApprovalAction,PAYMENT_REFUND,Hoàn tiền thanh toán,YeuCauPheDuyet.hanhDong,ApprovalActionConverter,50,Mã thao tác API giữ nguyên
+ApprovalAction,DEPOSIT_REFUND,Hoàn tiền đặt cọc,YeuCauPheDuyet.hanhDong,ApprovalActionConverter,50,Mã thao tác API giữ nguyên
+ApprovalAction,INVOICE_DELETE,Xóa hóa đơn,YeuCauPheDuyet.hanhDong,ApprovalActionConverter,50,Mã thao tác API giữ nguyên
+ApprovalAction,BILLING_ADJUSTMENT,Điều chỉnh thanh toán,YeuCauPheDuyet.hanhDong,ApprovalActionConverter,50,Mã thao tác API giữ nguyên
+ApprovalAction,PRICE_OVERRIDE,Điều chỉnh giá,YeuCauPheDuyet.hanhDong,ApprovalActionConverter,50,Mã thao tác API giữ nguyên
+ApprovalStatus,PENDING,Chờ phê duyệt,YeuCauPheDuyet.trangThai,ApprovalStatusConverter,20,Mã trạng thái API giữ nguyên
+ApprovalStatus,APPROVED,Đã phê duyệt,YeuCauPheDuyet.trangThai,ApprovalStatusConverter,20,Mã trạng thái API giữ nguyên
+ApprovalStatus,REJECTED,Bị từ chối,YeuCauPheDuyet.trangThai,ApprovalStatusConverter,20,Mã trạng thái API giữ nguyên
+ApprovalStatus,EXPIRED,Đã hết hạn,YeuCauPheDuyet.trangThai,ApprovalStatusConverter,20,Mã trạng thái API giữ nguyên
+ApprovalStatus,CONSUMED,Đã sử dụng,YeuCauPheDuyet.trangThai,ApprovalStatusConverter,20,Mã trạng thái API giữ nguyên
+ServiceCategory,business,Dịch vụ doanh nghiệp,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
+ServiceCategory,fine-dining,Nhà hàng cao cấp,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
+ServiceCategory,inroom,Dịch vụ tại phòng,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
+ServiceCategory,laundry,Giặt ủi,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
+ServiceCategory,other,Khác,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
+ServiceCategory,recreation,Giải trí,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
+ServiceCategory,spa,Spa,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
+ServiceCategory,transport,Đưa đón,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
+ShiftCode,MORNING,Ca sáng,CaLamViecNhanVien.maCa,ShiftCodeConverter,30,"Mã ca MORNING/AFTERNOON/NIGHT ánh xạ sang tiếng Việt; mã ca kỹ thuật an toàn khác được giữ nguyên"
+ShiftCode,AFTERNOON,Ca chiều,CaLamViecNhanVien.maCa,ShiftCodeConverter,30,"Mã ca MORNING/AFTERNOON/NIGHT ánh xạ sang tiếng Việt; mã ca kỹ thuật an toàn khác được giữ nguyên"
+ShiftCode,NIGHT,Ca đêm,CaLamViecNhanVien.maCa,ShiftCodeConverter,30,"Mã ca MORNING/AFTERNOON/NIGHT ánh xạ sang tiếng Việt; mã ca kỹ thuật an toàn khác được giữ nguyên"
+ShiftCode,MORNING,Ca sáng,BanGiaoTienCa.maCa,ShiftCodeConverter,30,"Mã ca MORNING/AFTERNOON/NIGHT ánh xạ sang tiếng Việt; mã ca kỹ thuật an toàn khác được giữ nguyên"
+ShiftCode,AFTERNOON,Ca chiều,BanGiaoTienCa.maCa,ShiftCodeConverter,30,"Mã ca MORNING/AFTERNOON/NIGHT ánh xạ sang tiếng Việt; mã ca kỹ thuật an toàn khác được giữ nguyên"
+ShiftCode,NIGHT,Ca đêm,BanGiaoTienCa.maCa,ShiftCodeConverter,30,"Mã ca MORNING/AFTERNOON/NIGHT ánh xạ sang tiếng Việt; mã ca kỹ thuật an toàn khác được giữ nguyên"
+StockCategory,LINEN,Đồ vải,MatHangTonKho.danhMuc,StockCategoryConverter,30,
+StockCategory,TOWELS,Khăn,MatHangTonKho.danhMuc,StockCategoryConverter,30,
+StockCategory,AMENITIES,Đồ dùng,MatHangTonKho.danhMuc,StockCategoryConverter,30,
+StockCategory,MINIBAR,Minibar,MatHangTonKho.danhMuc,StockCategoryConverter,30,
+StockCategory,GENERAL,Khác,MatHangTonKho.danhMuc,StockCategoryConverter,30,
+StockMovementType,RECEIVE,Nhập kho,BienDongTonKho.loaiBienDong,StockMovementTypeConverter,20,
+StockMovementType,RETURN,Hoàn kho,BienDongTonKho.loaiBienDong,StockMovementTypeConverter,20,
+StockMovementType,ISSUE,Xuất kho,BienDongTonKho.loaiBienDong,StockMovementTypeConverter,20,
+StockMovementType,WASTE,Hao hụt,BienDongTonKho.loaiBienDong,StockMovementTypeConverter,20,
+StockMovementType,ADJUST,Điều chỉnh,BienDongTonKho.loaiBienDong,StockMovementTypeConverter,20,
+TechnicalAssetStatus,GOOD,Tốt,TaiSanKyThuat.trangThai,TechnicalAssetStatusConverter,30,
+TechnicalAssetStatus,MAINTENANCE_NEEDED,Cần bảo trì,TaiSanKyThuat.trangThai,TechnicalAssetStatusConverter,30,
+TechnicalAssetStatus,REPAIRING,Đang sửa chữa,TaiSanKyThuat.trangThai,TechnicalAssetStatusConverter,30,
+TechnicalAssetStatus,OUT_OF_SERVICE,Ngừng sử dụng,TaiSanKyThuat.trangThai,TechnicalAssetStatusConverter,30,
+TechnicalAssetLocationType,BUILDING,Tòa nhà,TaiSanKyThuat.loaiViTri,TechnicalAssetLocationTypeConverter,20,
+TechnicalAssetLocationType,ROOM,Phòng,TaiSanKyThuat.loaiViTri,TechnicalAssetLocationTypeConverter,20,
+ServiceUnit,BOTTLE,chai,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào cũ; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,CHAI,chai,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào cũ; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,UNIT,đơn vị,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào cũ; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,TIME,lần,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào cũ; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,LẦN,lần,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào cũ; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,set,bộ,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào cũ; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,bộ,bộ,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,lần,lần,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,suất,suất,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,món,món,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,đêm,đêm,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,lượt,lượt,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,chuyến,chuyến,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,khách,khách,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,khách/ngày,khách/ngày,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,giờ,giờ,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,ngày,ngày,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,chai,chai,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,đơn vị,đơn vị,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa

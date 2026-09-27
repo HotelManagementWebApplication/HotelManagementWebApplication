@@ -5,19 +5,20 @@ import java.time.LocalDateTime;
 
 /** Bản ghi kiểm tra minibar hoặc tài sản trong một task dọn phòng. */
 @Entity
-@Table(name = "housekeeping_inspections")
+@Table(name = "KiemTraBuongPhong")
 public class HousekeepingInspection {
     public enum InspectionType { MINIBAR, ROOM_ASSET }
     public enum ItemCondition { OK, DAMAGED, MISSING, REFILLED }
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "task_id", nullable = false) private HousekeepingTask task;
-    @Enumerated(EnumType.STRING) @Column(name = "inspection_type", nullable = false, length = 20) private InspectionType inspectionType;
-    @Column(nullable = false, length = 100) private String item;
-    @Column(nullable = false) private int quantity;
-    @Enumerated(EnumType.STRING) @Column(name = "item_condition", nullable = false, length = 20) private ItemCondition itemCondition;
-    @Column(length = 500) private String note;
-    @Column(name = "completed_by", nullable = false, length = 10) private String completedBy;
-    @Column(name = "completed_at", nullable = false) private LocalDateTime completedAt;
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) @Column(name = "maKiemTraBuongPhong")
+ private Long id;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "maNhiemVuBuongPhong", nullable = false) private HousekeepingTask task;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.InspectionTypeConverter.class) @Column(name = "loaiKiemTra", nullable = false, length = 20) private InspectionType inspectionType;
+    @Column(name = "hangMuc", nullable = false, length = 100) private String item;
+    @Column(name = "soLuong", nullable = false) private int quantity;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.ItemConditionConverter.class) @Column(name = "tinhTrangHangMuc", nullable = false, length = 20) private ItemCondition itemCondition;
+    @Column(name = "ghiChu", length = 500) private String note;
+    @Column(name = "nguoiHoanThanh", nullable = false, length = 10) private String completedBy;
+    @Column(name = "thoiDiemHoanThanh", nullable = false) private LocalDateTime completedAt;
     public HousekeepingInspection() {}
     public Long getId() { return id; }
     public HousekeepingTask getTask() { return task; }

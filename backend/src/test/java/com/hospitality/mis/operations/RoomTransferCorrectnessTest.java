@@ -74,7 +74,7 @@ class RoomTransferCorrectnessTest {
         when(rooms.findAllForUpdateOrdered(List.of("101", "102"))).thenReturn(List.of(from, to));
         when(reservations.hasOverlapExcludingReservation(eq(9L), eq("102"),
                 eq(LocalDateTime.of(2031, 1, 2, 10, 30)), eq(LocalDateTime.of(2031, 1, 5, 12, 0)),
-                eq(RoomStatus.CANCELLED), anyList())).thenReturn(false);
+                eq(RoomStatus.CANCELLED), anyList(), any(LocalDateTime.class))).thenReturn(false);
         when(transfers.save(any(RoomTransfer.class))).thenAnswer(invocation -> {
             RoomTransfer saved = invocation.getArgument(0);
             saved.setTransferredAt(LocalDateTime.of(2031, 1, 2, 10, 30));
@@ -128,9 +128,10 @@ class RoomTransferCorrectnessTest {
         Reservation reservation = checkedInReservation(from, LocalDateTime.of(2031, 1, 1, 14, 0), checkout);
         when(reservations.findForUpdate(9L)).thenReturn(Optional.of(reservation));
         when(rooms.findAllForUpdateOrdered(List.of("502", "504"))).thenReturn(List.of(from, target));
-        when(reservations.hasOverlapExcludingReservation(9L, "504", transferredAt, checkout,
-                RoomStatus.CANCELLED,
-                List.of(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW, ReservationStatus.CHECKED_OUT)))
+        when(reservations.hasOverlapExcludingReservation(eq(9L), eq("504"), eq(transferredAt), eq(checkout),
+                eq(RoomStatus.CANCELLED),
+                eq(List.of(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW, ReservationStatus.CHECKED_OUT)),
+                any(LocalDateTime.class)))
                 .thenReturn(true);
 
         RoomTransferService service = new RoomTransferService(reservations, rooms, transfers, audit);

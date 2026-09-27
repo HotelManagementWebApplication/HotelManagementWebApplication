@@ -48,12 +48,12 @@ public class JpaReservationOverlapAdapter implements ReservationOverlapPort {
 
         Number count = (Number) entityManager.createNativeQuery("""
                 select count(*)
-                from reservation_rooms rr
-                join reservations r on r.id = rr.reservation_id
-                where rr.room_id = :roomId
-                  and rr.check_in < :to and rr.check_out > :from
-                  and rr.status <> 'cancelled'
-                  and r.status not in ('CANCELLED', 'NO_SHOW', 'CHECKED_OUT')
+                from ChiTietDatPhong rr
+                join PhieuDatPhong r on r.maPhieuDatPhong = rr.maPhieuDatPhong
+                where rr.maPhong = :roomId
+                  and rr.thoiDiemNhanPhong < :to and rr.thoiDiemTraPhong > :from
+                  and rr.trangThai <> N'Đã hủy'
+                  and r.trangThai not in (N'Đã hủy', N'Không đến', N'Đã trả phòng')
                 """)
                 .setParameter("roomId", roomId)
                 .setParameter("from", from)

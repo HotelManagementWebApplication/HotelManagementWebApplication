@@ -149,7 +149,7 @@ public class SecurityConfig {
     AuthenticationEntryPoint authenticationEntryPoint(ObjectMapper objectMapper) {
 
         return (request, response, exception) -> writeError(response, HttpServletResponse.SC_UNAUTHORIZED,
-                "AUTHENTICATION_REQUIRED", "Authentication is required", objectMapper);
+                "AUTHENTICATION_REQUIRED", "Bạn cần đăng nhập để thực hiện thao tác này", objectMapper);
 
     }
 
@@ -160,7 +160,7 @@ public class SecurityConfig {
     /** Trả lỗi 403 khi principal hợp lệ nhưng không có quyền vào tài nguyên. */
     AccessDeniedHandler accessDeniedHandler(ObjectMapper objectMapper) {
         return (request, response, exception) -> writeError(response, HttpServletResponse.SC_FORBIDDEN,
-                "ACCESS_DENIED", "Access is denied", objectMapper);
+                "ACCESS_DENIED", "Bạn không có quyền thực hiện thao tác này", objectMapper);
     }
 
     /** Ghi đúng schema ApiError cho lỗi phát sinh trước khi request vào controller. */

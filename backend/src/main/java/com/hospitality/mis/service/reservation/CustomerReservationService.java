@@ -18,6 +18,7 @@ import com.hospitality.mis.entity.room.RoomStatus;
 import com.hospitality.mis.entity.room.RoomTypeCatalogStatus;
 import com.hospitality.mis.middleware.security.SecurityActor;
 import com.hospitality.mis.service.governance.AuditService;
+import com.hospitality.mis.service.governance.DurableIdempotencyService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -53,6 +54,7 @@ public class CustomerReservationService {
     private Clock clock = Clock.system(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final ReservationService reservationCommands;
+    private DurableIdempotencyService durableIdempotency;
 
     @org.springframework.beans.factory.annotation.Autowired
     public CustomerReservationService(CustomerAccountRepository accounts, ReservationRepository reservations,
@@ -79,6 +81,11 @@ public class CustomerReservationService {
     @org.springframework.beans.factory.annotation.Autowired
     void setBusinessClock(Clock clock) { this.clock = clock; }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    void setDurableIdempotency(DurableIdempotencyService durableIdempotency) {
+        this.durableIdempotency = durableIdempotency;
+    }
+
     /** Tạo booking ở trạng thái DRAFT và phát hành hướng dẫn cọc đang chờ xác nhận. */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public CustomerReservationDtos.Response create(CustomerReservationDtos.CreateRequest request,
@@ -88,6 +95,21 @@ public class CustomerReservationService {
         if (request == null || request.rooms() == null || request.rooms().isEmpty()) throw error("INVALID_REQUEST", "Booking phải có ít nhất một phòng");
         String key = IdempotencySupport.requireKey(request.idempotencyKey());
         String fingerprint = fingerprint(request);
+        if (durableIdempotency != null) {
+            return durableIdempotency.executeWithReplay("customer-reservation-create", key, principal.id(), fingerprint,
+                    () -> createOnce(request, principal, key, fingerprint),
+                    () -> reservations.findByIdempotencyKey(key)
+                            .filter(existing -> existing.getCustomerAccount() != null
+                                    && Long.valueOf(principal.id()).equals(existing.getCustomerAccount().getId()))
+                            .map(this::toResponse)
+                            .orElseThrow(() -> error("IDEMPOTENCY_RESULT_NOT_FOUND", "Không tìm thấy kết quả đặt phòng đã ghi nhận")));
+        }
+        return createOnce(request, principal, key, fingerprint);
+    }
+
+    private CustomerReservationDtos.Response createOnce(CustomerReservationDtos.CreateRequest request,
+                                                         SecurityActor.Principal principal,
+                                                         String key, String fingerprint) {
         var prior = reservations.findByIdempotencyKey(key);
         if (prior.isPresent()) return retryOrConflict(prior.get(), principal.id(), fingerprint);
         if (request.rooms().size() > 3) throw error("ROOM_LIMIT_EXCEEDED", "Mỗi booking chỉ được đặt tối đa 3 phòng");
@@ -113,14 +135,14 @@ public class CustomerReservationService {
             if (room.getRoomType().getCatalogStatus() != RoomTypeCatalogStatus.ACTIVE)
                 throw error("ROOM_TYPE_NOT_ACTIVE", "Loại phòng chưa được phê duyệt: " + room.getRoomType().getId());
             if (room.getStatus().blocksAvailability()) throw error("ROOM_NOT_AVAILABLE", "Phòng không sẵn sàng: " + room.getId());
-            if (reservations.hasOverlap(room.getId(), line.expectedCheckIn(), line.expectedCheckOut(), RoomStatus.CANCELLED, IGNORED))
+            if (reservations.hasOverlap(room.getId(), line.expectedCheckIn(), line.expectedCheckOut(), RoomStatus.CANCELLED, IGNORED, now))
                 throw error("OVERBOOKING", "Phòng đã có lịch trùng: " + room.getId());
         }
 
         prior = reservations.findByIdempotencyKey(key);
         if (prior.isPresent()) return retryOrConflict(prior.get(), principal.id(), fingerprint);
         Reservation reservation = new Reservation();
-        reservation.setBookedAt(LocalDateTime.now(clock));
+        reservation.setBookedAt(now);
         reservation.setGuest(guest);
         reservation.setCustomerAccount(account);
         reservation.setDepositAmount(requiredDeposit(request, locked));
@@ -130,7 +152,7 @@ public class CustomerReservationService {
         reservation.setCanonicalRequestFingerprint(fingerprint);
         reservation.setDepositPaymentCode(newPaymentCode());
         reservation.setDepositPaymentStatus(DepositPaymentStatus.PENDING);
-        reservation.setDepositPaymentExpiresAt(LocalDateTime.now(clock).plusMinutes(depositHoldMinutes));
+        reservation.setDepositPaymentExpiresAt(now.plusMinutes(depositHoldMinutes));
         request.rooms().forEach(line -> {
             ReservationRoom rr = new ReservationRoom();
             rr.setRoom(locked.get(line.roomId().trim()));
@@ -243,32 +265,32 @@ public class CustomerReservationService {
         if (jdbc == null || reservationId == null) return List.of();
         try {
             return jdbc.query("""
-                SELECT b.id, b.reservation_id, b.room_id, b.service_id, COALESCE(s.name, b.service_id) AS service_name,
-                       b.scheduled_at, b.quantity, b.free_quantity, b.unit_price, b.meal_period, b.status, b.note
-                FROM hotel_service_bookings b
-                LEFT JOIN services s ON b.service_id = s.id
-                WHERE b.reservation_id = ?
-                ORDER BY b.scheduled_at ASC, b.id ASC
+                SELECT b.maDatDichVuKhachSan, b.maPhieuDatPhong, b.maPhong, b.maDichVu, COALESCE(s.ten, b.maDichVu) AS service_name,
+                       b.thoiDiemDuKien, b.soLuong, b.soLuongMienPhi, b.donGia, b.buoiAn, b.trangThai, b.ghiChu
+                FROM DatDichVuKhachSan b
+                LEFT JOIN DichVu s ON b.maDichVu = s.maDichVu
+                WHERE b.maPhieuDatPhong = ?
+                ORDER BY b.thoiDiemDuKien ASC, b.maDatDichVuKhachSan ASC
                 """, (rs, n) -> {
-                BigDecimal price = rs.getBigDecimal("unit_price");
-                int quantity = rs.getInt("quantity");
-                int free = rs.getInt("free_quantity");
+                BigDecimal price = rs.getBigDecimal("donGia");
+                int quantity = rs.getInt("soLuong");
+                int free = rs.getInt("soLuongMienPhi");
                 String name = rs.getString("service_name");
-                if (name == null || name.isBlank()) name = rs.getString("service_id");
+                if (name == null || name.isBlank()) name = rs.getString("maDichVu");
                 return new com.hospitality.mis.service.reservation.HotelServiceBookingService.Response(
-                        rs.getLong("id"),
-                        rs.getLong("reservation_id"),
-                        rs.getString("room_id"),
-                        rs.getString("service_id"),
+                        rs.getLong("maDatDichVuKhachSan"),
+                        rs.getLong("maPhieuDatPhong"),
+                        rs.getString("maPhong"),
+                        rs.getString("maDichVu"),
                         name,
-                        rs.getTimestamp("scheduled_at").toLocalDateTime(),
+                        rs.getTimestamp("thoiDiemDuKien").toLocalDateTime(),
                         quantity,
                         free,
                         price,
                         price.multiply(BigDecimal.valueOf(quantity - free)),
-                        rs.getString("meal_period"),
-                        rs.getString("status"),
-                        rs.getString("note")
+                        HotelServiceBookingService.mealPeriodCode(rs.getString("buoiAn")),
+                        HotelServiceBookingService.bookingStatusCode(rs.getString("trangThai")),
+                        rs.getString("ghiChu")
                 );
             }, reservationId);
         } catch (Exception e) {

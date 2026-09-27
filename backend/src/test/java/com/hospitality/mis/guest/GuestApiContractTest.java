@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
 
-        "spring.datasource.url=jdbc:h2:mem:guestapi;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:guestapi;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
 
         "spring.datasource.username=sa",
 
@@ -53,7 +53,7 @@ class GuestApiContractTest {
     /** Xóa guest/audit trước mỗi test để kết quả search không bị nhiễu. */
     @BeforeEach
     void cleanGuests() {
-        jdbc.update("delete from audit_logs");
+        jdbc.update("delete from NhatKyKiemSoat");
         guests.deleteAllInBatch();
     }
 
@@ -86,7 +86,7 @@ class GuestApiContractTest {
                 .andExpect(jsonPath("$.booking_blocked").value(false));
 
         String actor = jdbc.queryForObject(
-                "select actor from audit_logs where action = 'GUEST_CREATED' order by id desc limit 1",
+                "select top 1 nguoiThucHien from NhatKyKiemSoat where hanhDong = 'GUEST_CREATED' order by maNhatKyKiemSoat desc",
                 String.class);
         org.assertj.core.api.Assertions.assertThat(actor).isEqualTo("frontdesk");
     }

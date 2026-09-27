@@ -251,9 +251,8 @@ public class EmployeeService {
         findRequired(employeeId);
         int safePage = Math.max(0, page), safeSize = Math.max(1, Math.min(100, size));
         if (loginEvents == null) return new EmployeeAdminDtos.LoginHistoryResponse(List.of(), safePage, safeSize, 0, 0);
-        var result = loginEvents.findByEmployeeEmployeeId(employeeId,
-                org.springframework.data.domain.PageRequest.of(safePage, safeSize,
-                        org.springframework.data.domain.Sort.by("occurredAt").descending()));
+        var result = loginEvents.findByEmployeeEmployeeIdOrderByOccurredAtDescIdDesc(employeeId,
+                org.springframework.data.domain.PageRequest.of(safePage, safeSize));
         return new EmployeeAdminDtos.LoginHistoryResponse(result.getContent().stream().map(event ->
                 new EmployeeAdminDtos.LoginEventResponse(event.getId(), employeeId, event.getOccurredAt(),
                         event.getOutcome().name())).toList(), result.getNumber(), result.getSize(),

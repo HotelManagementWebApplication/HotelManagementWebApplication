@@ -32,7 +32,11 @@ public final class ServiceDtos {
                                 /** Đơn giá không âm. */
                                 @NotNull @PositiveOrZero BigDecimal price,
 
-                                /** Đơn vị tính, có thể bỏ trống. */
+                                /**
+                                 * Nhãn đơn vị tính. Bỏ trống được chuẩn hóa thành {@code lần};
+                                 * các bí danh cũ được nhận ở đầu vào và trả về dưới dạng nhãn
+                                 * tiếng Việt chuẩn.
+                                 */
                                 String unit,
                                 /** Tồn đầu kỳ không âm. */
                                 @PositiveOrZero int openingStock,

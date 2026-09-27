@@ -50,7 +50,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Integration proof for transactional outbox scope, polling, delivery and incident routing. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:notification-behavior;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:notification-behavior;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.flyway.enabled=false",
@@ -76,17 +76,17 @@ class NotificationBehaviorIntegrationTest {
     @BeforeEach
     void clean() {
         SecurityContextHolder.clearContext();
-        jdbc.update("delete from equipment_incidents");
-        jdbc.update("delete from notification_outbox");
-        jdbc.update("delete from idempotency_records");
-        jdbc.update("delete from audit_logs");
-        jdbc.update("delete from room_equipment");
-        jdbc.update("delete from reservation_rooms");
-        jdbc.update("delete from reservations");
-        jdbc.update("delete from rooms");
-        jdbc.update("delete from room_types");
-        jdbc.update("delete from guests");
-        jdbc.update("delete from employees");
+        jdbc.update("delete from SuCoThietBi");
+        jdbc.update("delete from HangDoiThongBao");
+        jdbc.update("delete from BanGhiChongTrung");
+        jdbc.update("delete from NhatKyKiemSoat");
+        jdbc.update("delete from ThietBiPhong");
+        jdbc.update("delete from ChiTietDatPhong");
+        jdbc.update("delete from PhieuDatPhong");
+        jdbc.update("delete from Phong");
+        jdbc.update("delete from LoaiPhong");
+        jdbc.update("delete from KhachLuuTru");
+        jdbc.update("delete from NhanVien");
     }
 
     @AfterEach
@@ -132,24 +132,24 @@ class NotificationBehaviorIntegrationTest {
 
     @Test
     void highSeverityIncidentWritesOutboxEventsForFrontDeskTechnicalAndManager() {
-        jdbc.update("insert into employees(id, full_name, password, position, phone, enabled, account_non_locked, failed_login_attempts, employment_status, must_change_password) values (?,?,?,?,?,?,?,?,?,?)",
-                "FD0001", "FD0001", "bcrypt-hash", "FRONT_DESK", "0909000201", true, true, 0, "WORKING", false);
-        jdbc.update("insert into guests(id, full_name, phone, identity_number, membership_tier, total_spend, late_cancellation_count, completed_stays, late_checkout_count, booking_blocked, version) values (?,?,?,?,?,?,?,?,?,?,?)",
-                910001L, "Incident guest", "0909000202", "IDINCIDENT01", "STANDARD", BigDecimal.ZERO, 0, 0, 0, false, 0L);
-        jdbc.update("insert into room_types(id, name, daily_price, hourly_price, room_type_code, max_occupancy, catalog_status) values (?,?,?,?,?,?,?)",
-                "INCTYPE", "Incident room", new BigDecimal("100000"), new BigDecimal("10000"), "STD", 2, "ACTIVE");
-        jdbc.update("insert into rooms(id, room_type_id, status, version) values (?,?,?,?)",
-                "INC01", "INCTYPE", "occupied", 0L);
-        jdbc.update("insert into room_equipment(room_id, name, original_value, purchased_on, quantity, active) values (?,?,?,?,?,?)",
+        jdbc.update("insert into NhanVien(maNhanVien, hoVaTen, matKhau, vaiTro, soDienThoai, duocKichHoat, taiKhoanKhongBiKhoa, soLanDangNhapThatBai, trangThaiLamViec, phaiDoiMatKhau) values (?,?,?,?,?,?,?,?,?,?)",
+                "FD0001", "FD0001", "bcrypt-hash", "Lễ tân", "0909000201", true, true, 0, "Đang làm việc", false);
+        jdbc.update("insert into KhachLuuTru(maKhachLuuTru, hoVaTen, soDienThoai, soGiayToTuyThan, hangThanhVien, tongChiTieu, soLanHuyMuon, soLanLuuTruHoanThanh, soLanTraPhongMuon, biChanDatPhong, phienBan) values (?,?,?,?,?,?,?,?,?,?,?)",
+                910001L, "Incident guest", "0909000202", "IDINCIDENT01", "Tiêu chuẩn", BigDecimal.ZERO, 0, 0, 0, false, 0L);
+        jdbc.update("insert into LoaiPhong(maLoaiPhong, ten, giaTheoNgay, giaTheoGio, maHangPhong, soKhachToiDa, trangThaiDanhMuc) values (?,?,?,?,?,?,?)",
+                "INCTYPE", "Incident room", new BigDecimal("100000"), new BigDecimal("10000"), "STD", 2, "Đang hoạt động");
+        jdbc.update("insert into Phong(maPhong, maLoaiPhong, trangThai, phienBan) values (?,?,?,?)",
+                "INC01", "INCTYPE", "Đang có khách", 0L);
+        jdbc.update("insert into ThietBiPhong(maPhong, ten, giaTriBanDau, ngayMua, soLuong, dangHoatDong) values (?,?,?,?,?,?)",
                 "INC01", "Television", new BigDecimal("2000000"), LocalDate.of(2025, 1, 1), 1, true);
-        jdbc.update("insert into reservations(id, guest_id, employee_id, booked_at, deposit_amount, status, rental_type, booking_source, ota_gross_revenue, ota_commission, ota_net_revenue, ota_reconciliation_status, extension_minutes, deposit_payment_status, version) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        jdbc.update("insert into PhieuDatPhong(maPhieuDatPhong, maKhachLuuTru, maNhanVien, thoiDiemDat, tienDatCoc, trangThai, hinhThucThue, nguonDatPhong, doanhThuGopOta, hoaHongOta, trangThaiDoiSoatOta, soPhutGiaHan, trangThaiThanhToanCoc, phienBan) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 910001L, 910001L, "FD0001", LocalDateTime.of(2026, 9, 16, 8, 0), BigDecimal.ZERO,
-                "CHECKED_IN", "PACKAGE", "DIRECT", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                "NOT_APPLICABLE", 0, "NOT_REQUIRED", 0L);
-        jdbc.update("insert into reservation_rooms(reservation_id, room_id, check_in, check_out, original_check_out, status, transfer_count, guest_count) values (?,?,?,?,?,?,?,?)",
+                "Đã nhận phòng", "Theo gói", "Trực tiếp", BigDecimal.ZERO, BigDecimal.ZERO,
+                "Không áp dụng", 0, "Không yêu cầu", 0L);
+        jdbc.update("insert into ChiTietDatPhong(maPhieuDatPhong, maPhong, thoiDiemNhanPhong, thoiDiemTraPhong, thoiDiemTraPhongBanDau, trangThai, soLanChuyenPhong, soLuongKhach) values (?,?,?,?,?,?,?,?)",
                 910001L, "INC01", LocalDateTime.of(2026, 9, 16, 8, 0), LocalDateTime.of(2026, 9, 17, 8, 0),
-                LocalDateTime.of(2026, 9, 17, 8, 0), "occupied", 0, 1);
-        Long equipmentId = jdbc.queryForObject("select id from room_equipment where room_id = ?", Long.class, "INC01");
+                LocalDateTime.of(2026, 9, 17, 8, 0), "Đang có khách", 0, 1);
+        Long equipmentId = jdbc.queryForObject("select maThietBiPhong from ThietBiPhong where maPhong = ?", Long.class, "INC01");
 
         authenticate("FD0001", EmployeeRole.FRONT_DESK);
         incidents.record(910001L, new EquipmentIncidentDtos.CreateRequest(

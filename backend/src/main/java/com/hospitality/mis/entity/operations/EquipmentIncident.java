@@ -17,26 +17,27 @@ import java.time.LocalDateTime;
 /** Sự cố thiết bị trong phòng, kèm giá trị và khoản bồi thường phát sinh. */
 @Entity
 
-@Table(name = "equipment_incidents")
+@Table(name = "SuCoThietBi")
 public class EquipmentIncident {
 
     /** ID sự cố do cơ sở dữ liệu sinh. */
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) @Column(name = "maSuCoThietBi")
+ private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "reservation_id", nullable = true) private Reservation reservation;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "room_id") private Room room;
-    @Column(name = "equipment_name", nullable = false, length = 100) private String equipmentName;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "maPhieuDatPhong", nullable = true) private Reservation reservation;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "maPhong") private Room room;
+    @Column(name = "tenThietBi", nullable = false, length = 100) private String equipmentName;
     /** Giá trị gốc của thiết bị tại thời điểm ghi nhận sự cố. */
-    @Column(name = "original_value", nullable = false, precision = 14, scale = 2) private BigDecimal originalValue;
-    @Column(name = "purchased_on", nullable = false) private LocalDate purchasedAt;
-    @Column(nullable = false) private int quantity;
+    @Column(name = "giaTriBanDau", nullable = false, precision = 14, scale = 2) private BigDecimal originalValue;
+    @Column(name = "ngayMua", nullable = false) private LocalDate purchasedAt;
+    @Column(name = "soLuong", nullable = false) private int quantity;
 
     /** Số tiền bồi thường được tính cho sự cố. */
-    @Column(name = "compensation", nullable = false, precision = 14, scale = 2) private BigDecimal compensation;
-    @Column(name = "created_at", nullable = false) private LocalDateTime createdAt = LocalDateTime.now();
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private IncidentSeverity severity = IncidentSeverity.MEDIUM;
-    @Enumerated(EnumType.STRING) @Column(name = "handoff_status", nullable = false, length = 20) private IncidentHandoffStatus handoffStatus = IncidentHandoffStatus.OPEN;
-    @Column(name = "handoff_note", length = 500) private String handoffNote;
+    @Column(name = "tienBoiThuong", nullable = false, precision = 14, scale = 2) private BigDecimal compensation;
+    @Column(name = "thoiDiemTao", nullable = false) private LocalDateTime createdAt = LocalDateTime.now();
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.IncidentSeverityConverter.class) @Column(name = "mucDoNghiemTrong", nullable = false, length = 20) private IncidentSeverity severity = IncidentSeverity.MEDIUM;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.IncidentHandoffStatusConverter.class) @Column(name = "trangThaiBanGiao", nullable = false, length = 20) private IncidentHandoffStatus handoffStatus = IncidentHandoffStatus.OPEN;
+    @Column(name = "ghiChuBanGiao", length = 500) private String handoffNote;
     /** Constructor rỗng dành cho JPA. */
     protected EquipmentIncident() {}
 

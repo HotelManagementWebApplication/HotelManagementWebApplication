@@ -1,57 +1,42 @@
-# Cấu trúc project
+# Cấu trúc project hiện tại
+
+Tài liệu này là bản đồ thư mục đang có trong repository, không phải kiến trúc
+đích. Trước khi tạo package/thư mục mới, kiểm tra source thực tế và cập nhật
+bản đồ này nếu cấu trúc thay đổi.
 
 ```text
 web-hotel-mis/
 ├── backend/
-│   ├── src/main/java/com/hospitality/mis/
-│   │   ├── middleware/             # JWT, actor identity, authorization
-│   │   ├── controller/             # REST controllers theo module
-│   │   ├── service/                # xử lý nghiệp vụ theo module
-│   │   ├── dao/                    # repository và persistence theo module
-│   │   ├── dto/                    # request/response DTO theo module
-│   │   ├── entity/                 # JPA entity và kiểu nghiệp vụ theo module
-│   │   ├── common/                 # API contract, lỗi, cross-cutting concerns
-│   │   ├── config/                 # Spring, database, observability
-│   ├── src/main/resources/db/migration/ # canonical Flyway schema line
-│   └── src/test/                   # unit, contract, integration and DB tests
-├── frontend/
 │   └── src/
-│       ├── app/                    # bootstrap, routing, providers
-│       ├── pages/               # UI theo capability nghiệp vụ
-│       ├── shared/                 # API client, types, components
-│       └── styles/
-├── agent/
-│   ├── app/                        # HTTP/chat entrypoint
-│   ├── agent/                      # orchestration/state machine
-│   ├── rag/                        # ingestion, retrieval, citations
-│   ├── tools/                      # typed backend API tools
-│   ├── policies/                   # safety and action policies
-│   └── tests/
-├── knowledge/sop/                  # tài liệu RAG, không chứa live data
-├── infra/                          # Docker/local infrastructure
-├── docs/                           # architecture, ADR, delivery plan
-└── scripts/                        # developer/CI scripts
+│       ├── main/java/com/hospitality/mis/
+│       │   ├── config/       # Spring, security, time and web configuration
+│       │   ├── controller/   # HTTP endpoints, grouped by domain
+│       │   ├── dao/          # Persistence repositories
+│       │   ├── dto/          # Request and response contracts
+│       │   ├── entity/       # JPA persistence models
+│       │   └── service/      # Business rules and transaction boundaries
+│       ├── main/resources/db/migration/  # Một canonical Flyway V1 cho demo DB
+│       └── test/             # Unit, API, security and SQL Server acceptance tests
+├── frontend/
+│   ├── e2e/                  # Live backend contract test instructions/specs
+│   └── src/
+│       ├── app/              # App shell, navigation, permissions and sessions
+│       ├── features/         # Customer and staff screens with focused tests
+│       └── shared/           # API callers, components, types and utilities
+├── database/demo/            # Manual demo seed and reset scripts
+├── agent/                    # Small service scaffold with health endpoint
+├── docs/                     # Current contracts, decisions and guides
+├── .github/workflows/        # CI
+└── docker-compose.yml        # SQL Server demo service
 ```
 
-Backend dùng mô hình MVC và phân tầng rõ ràng:
+## Change navigation
 
-- `middleware`: xác thực, phân quyền và xử lý request dùng chung.
-- `controller`: nhận HTTP request, validate DTO và trả JSON response.
-- `service`: xử lý nghiệp vụ và transaction boundary.
-- `dao`: truy vấn/lưu dữ liệu qua Spring Data JPA.
-- `dto`: cấu trúc dữ liệu giao tiếp API.
-- `entity`: đối tượng ánh xạ bảng dữ liệu và các kiểu nghiệp vụ liên quan.
-
-Các tầng giữ cùng tên module con, ví dụ `service/reservation` và
-`entity/reservation`, để dễ tìm kiếm.
-
-`backend/src/main/resources/db/migration/` là nơi duy nhất định nghĩa thay
-đổi schema. Backend là DB writer duy nhất; frontend và agent đi qua API.
-
-Schema hiện có 24 bảng/entity JPA, gồm 15 bảng core ban đầu và 9 bảng mở rộng
-cho tài khoản khách hàng, thanh toán, biên lai, tài chính, kho, thiết bị và
-lịch sử membership.
-
-Contract dùng chung nằm tại [docs/api-contract.md](api-contract.md) và
-[docs/authorization-matrix.md](authorization-matrix.md). `rule.md` giữ các
-quy tắc nghiệp vụ; không tạo thêm package/module cũ chỉ để chứa tài liệu.
+For a backend behavior change, trace the controller mapping to its DTO, service,
+repository/entity and focused test. Schema fixes for this disposable demo belong
+in the single canonical `backend/src/main/resources/db/migration/V1__baseline_schema.sql`;
+recreate the local database instead of adding V2/V3 migrations. For a frontend
+change, trace the screen from `src/app/App.tsx` through `src/app/navigation` or
+the relevant `src/features` module to its API caller and focused test. The
+backend remains the only writer of business data; use the [API contract](api-contract.md)
+for current wire details.

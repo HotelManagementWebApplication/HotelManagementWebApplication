@@ -1,35 +1,28 @@
 # Web frontend
 
-React/TypeScript operations UI. The frontend reads and writes business data
-only through authenticated backend API contracts; it never connects directly
-to MySQL.
+React/TypeScript application for the public customer experience and hotel staff
+stations. `src/app/App.tsx` owns authentication flow and delegates screen
+selection to `src/app/navigation/ScreenRouter.tsx`; this is not a URL-based
+router. Business screens and their colocated tests live under `src/features/`.
+Shared API callers, reusable components, types, utilities, and assets live under
+`src/shared/`. Customer session restoration is in `src/app/session/`.
 
-Initial screens:
+Run locally from this directory:
 
-1. Login and role-aware navigation.
-2. Room availability board.
-3. Guest and reservation search.
-4. Check-in/check-out and invoice preview.
-5. Chatbot panel with source citations and action confirmation.
-
-Run the production build with `npm run build` from this directory.
-
-## Backend URL for Vercel
-
-The Vercel deployment is a static frontend. Its browser cannot connect to a
-Spring Boot process at `localhost:8080` on the developer's computer, and the
-Vite proxy only exists during `npm run dev`.
-
-Expose the backend through a stable public HTTPS URL (a hosted backend is the
-production solution; a tunnel is suitable only for temporary testing), then
-configure the Vercel project environment variable before redeploying:
-
-```text
-VITE_API_BASE_URL=https://api.example.com
+```powershell
+npm ci
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-The value must be the backend origin only, without a trailing `/api`. Verify
-the backend first with `GET https://api.example.com/actuator/health`, then
-verify the public catalog with `GET https://api.example.com/api/public/rooms`.
-The backend must allow the frontend origin through `CORS_ALLOWED_ORIGINS`,
-for example `https://mamresort.vercel.app`.
+The Vite development proxy sends `/api` requests to the local backend. For a
+hosted static build, set `VITE_API_BASE_URL` to the backend origin (without a
+trailing `/api`) and configure the backend CORS allowlist for the frontend
+origin. A browser on the public internet cannot reach a developer's
+`localhost:8080`.
+
+Run frontend unit tests with `npm test` and a production build with
+`npm run build`. The live HTTP scenarios are in `e2e/specs/`; read
+[`e2e/README.md`](e2e/README.md) before running `npm run test:e2e`. They mutate
+business data and the mutating scenarios require a disposable SQL Server
+database;
+skipped scenarios are not a passing live test.

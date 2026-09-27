@@ -29,35 +29,35 @@ import jakarta.persistence.Version;
  * Chủ thể JPA cụ thể duy nhất của bảng {@code rooms}.
  */
 @Entity
-@Table(name = "rooms")
+@Table(name = "Phong")
 @Access(AccessType.FIELD)
 public class Room {
     @Id
 
-    @Column(name = "id", length = 10, nullable = false)
+    @Column(name = "maPhong", length = 10, nullable = false)
     /** Mã phòng nghiệp vụ, được dùng trong đặt phòng và tồn phòng. */
     private String id;
 
 
 
-    @Column(name = "name", length = 100)
+    @Column(name = "ten", length = 100)
     private String name;
 
 
 
-    @Column(name = "floor")
+    @Column(name = "tang")
     private Integer floor;
 
 
 
-    @Column(name = "description", length = 1200)
+    @Column(name = "moTa", length = 1200)
     private String description;
 
 
 
     @Convert(converter = RoomStatusConverter.class)
 
-    @Column(name = "status", length = 30, nullable = false)
+    @Column(name = "trangThai", length = 30, nullable = false)
     /** Trạng thái vận hành quyết định phòng có thể phân bổ hay không. */
     private RoomStatus status = RoomStatus.READY;
 
@@ -65,7 +65,7 @@ public class Room {
 
     @Version
 
-    @Column(name = "version", nullable = false)
+    @Column(name = "phienBan", nullable = false)
     /** Phiên bản lạc quan, ngăn hai thao tác đồng thời ghi đè trạng thái phòng. */
     private long version;
 
@@ -76,7 +76,7 @@ public class Room {
     }
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "room_type_id", nullable = false, foreignKey = @ForeignKey(name = "fk_rooms_room_type"))
+    @JoinColumn(name = "maLoaiPhong", nullable = false, foreignKey = @ForeignKey(name = "fkPhong01"))
     private RoomType roomType;
 
 

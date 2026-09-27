@@ -7,19 +7,20 @@ import java.time.LocalDateTime;
 
 /** Task dọn phòng có trạng thái, người phụ trách và cờ checklist/blocking rõ ràng. */
 @Entity
-@Table(name = "housekeeping_tasks")
+@Table(name = "NhiemVuBuongPhong")
 public class HousekeepingTask {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "maNhiemVuBuongPhong")
     private Long id;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "room_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "maPhong", nullable = false)
     private Room room;
-    @Column(length = 10) private String assignee;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 30) private HousekeepingTaskStatus status = HousekeepingTaskStatus.NEEDS_CLEANING;
-    @Column(name = "checklist_complete", nullable = false) private boolean checklistComplete;
-    @Column(name = "blocking_incident", nullable = false) private boolean blockingIncident;
-    @Column(length = 500) private String note;
-    @Column(name = "assigned_by", length = 10) private String assignedBy;
-    @Column(name = "updated_at", nullable = false) private LocalDateTime updatedAt = LocalDateTime.now();
+    @Column(name = "nguoiDuocPhanCong", length = 10) private String assignee;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.HousekeepingTaskStatusConverter.class) @Column(name = "trangThai", nullable = false, length = 30) private HousekeepingTaskStatus status = HousekeepingTaskStatus.NEEDS_CLEANING;
+    @Column(name = "daHoanThanhChecklist", nullable = false) private boolean checklistComplete;
+    @Column(name = "coSuCoChan", nullable = false) private boolean blockingIncident;
+    @Column(name = "ghiChu", length = 500) private String note;
+    @Column(name = "nguoiPhanCong", length = 10) private String assignedBy;
+    @Column(name = "thoiDiemCapNhat", nullable = false) private LocalDateTime updatedAt = LocalDateTime.now();
 
     public Long getId() { return id; }
     public Room getRoom() { return room; }

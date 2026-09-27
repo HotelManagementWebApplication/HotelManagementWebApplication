@@ -6,27 +6,28 @@ import java.time.LocalDateTime;
 
 /** Append-only giá đã được active trong catalog. */
 @Entity
-@Table(name = "room_type_price_history")
+@Table(name = "LichSuGiaLoaiPhong")
 public class RoomTypePriceHistory {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "maLichSuGiaLoaiPhong")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "room_type_id", nullable = false,
-            foreignKey = @ForeignKey(name = "fk_room_type_price_history_type"))
+    @JoinColumn(name = "maLoaiPhong", nullable = false,
+            foreignKey = @ForeignKey(name = "fkLichSuGiaLoaiPhong01"))
     private RoomType roomType;
 
-    @Column(name = "daily_price", nullable = false, precision = 12, scale = 2)
+    @Column(name = "giaTheoNgay", nullable = false, precision = 12, scale = 2)
     private BigDecimal dailyPrice;
 
-    @Column(name = "changed_by", nullable = false, length = 50)
+    @Column(name = "nguoiThayDoi", nullable = false, length = 50)
     private String changedBy;
 
-    @Column(name = "approval_id")
+    @Column(name = "maYeuCauPheDuyet")
     private Long approvalId;
 
-    @Column(name = "effective_at", nullable = false)
+    @Column(name = "thoiDiemHieuLuc", nullable = false)
     private LocalDateTime effectiveAt;
 
     protected RoomTypePriceHistory() {}

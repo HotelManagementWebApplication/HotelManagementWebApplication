@@ -11,10 +11,10 @@ import jakarta.persistence.Table;
  * a command transaction or create an insert deadlock.
  */
 @Entity
-@Table(name = "idempotency_lock_buckets")
+@Table(name = "NhomKhoaChongTrung")
 public class IdempotencyLockBucket {
     @Id
-    @Column(name = "bucket_id")
+    @Column(name = "maNhomKhoa")
     private short id;
 
     protected IdempotencyLockBucket() {}

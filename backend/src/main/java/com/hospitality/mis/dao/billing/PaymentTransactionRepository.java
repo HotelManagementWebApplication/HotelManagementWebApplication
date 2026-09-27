@@ -15,10 +15,10 @@ import com.hospitality.mis.entity.billing.PaymentMethod;
 public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, Long> {
     java.util.Optional<PaymentTransaction> findByExternalEventId(String externalEventId);
     /** Lấy sổ giao dịch của hóa đơn theo thứ tự thời gian phát sinh để dựng lịch sử thanh toán. */
-    List<PaymentTransaction> findByInvoiceIdOrderByOccurredAtAsc(Long invoiceId);
+    List<PaymentTransaction> findByInvoiceIdOrderByOccurredAtAscIdAsc(Long invoiceId);
 
     /** Phân trang payment trong phạm vi một invoice tại DB. */
-    Page<PaymentTransaction> findByInvoiceIdOrderByOccurredAtAsc(Long invoiceId, Pageable pageable);
+    Page<PaymentTransaction> findByInvoiceIdOrderByOccurredAtAscIdAsc(Long invoiceId, Pageable pageable);
 
     /** Lọc các giao dịch của hóa đơn theo trạng thái xử lý hiện tại. */
     List<PaymentTransaction> findByInvoiceIdAndStatus(Long invoiceId, TransactionStatus status);
@@ -48,16 +48,16 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     /** Tính tiền mặt thuần của nhân viên trong khoảng nửa kín (fromAt, toAt]. */
     @org.springframework.data.jpa.repository.Query(value = """
-            select coalesce(sum(case when type = 'PAYMENT' then amount else -amount end), 0)
-            from payment_transactions
-            where actor_id = :actor and method = 'CASH' and status = 'COMPLETED'
-              and occurred_at > :fromAt and occurred_at <= :toAt
+            select coalesce(sum(case when loai = N'Thanh toán' then soTien else -soTien end), 0)
+            from GiaoDichThanhToan
+            where maNguoiThucHien = :actor and phuongThuc = N'Tiền mặt' and trangThai = N'Đã hoàn tất'
+              and thoiDiemPhatSinh > :fromAt and thoiDiemPhatSinh <= :toAt
             """, nativeQuery = true)
     BigDecimal netCashByActorBetween(@org.springframework.data.repository.query.Param("actor") String actor,
                                      @org.springframework.data.repository.query.Param("fromAt") LocalDateTime fromAt,
                                      @org.springframework.data.repository.query.Param("toAt") LocalDateTime toAt);
 
-    @org.springframework.data.jpa.repository.Query("select p from PaymentTransaction p where (:invoiceId is null or p.invoice.id = :invoiceId) and (:method is null or p.method = :method) and (:type is null or p.type = :type) and (:status is null or p.status = :status) and (:fromAt is null or p.occurredAt >= :fromAt) and (:toAt is null or p.occurredAt < :toAt)")
+    @org.springframework.data.jpa.repository.Query("select p from PaymentTransaction p where (:invoiceId is null or p.invoice.id = :invoiceId) and (:method is null or p.method = :method) and (:type is null or p.type = :type) and (:status is null or p.status = :status) and (:fromAt is null or p.occurredAt >= :fromAt) and (:toAt is null or p.occurredAt < :toAt) order by p.occurredAt asc, p.id asc")
     Page<PaymentTransaction> search(@org.springframework.data.repository.query.Param("invoiceId") Long invoiceId,
                                     @org.springframework.data.repository.query.Param("method") PaymentMethod method,
                                     @org.springframework.data.repository.query.Param("type") TransactionType type,

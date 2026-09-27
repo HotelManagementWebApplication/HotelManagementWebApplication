@@ -97,7 +97,6 @@ public class FinanceService {
                     throw new DomainException("INVALID_DENOMINATION", "Mệnh giá và số lượng tiền phải lớn hơn 0");
                 var denomination = new CashHandoverDenomination();
                 denomination.setDenomination(line.denomination()); denomination.setQuantity(line.quantity());
-                denomination.setAmount(line.denomination().multiply(BigDecimal.valueOf(line.quantity())));
                 h.addDenomination(denomination);
             }
         }
@@ -327,6 +326,12 @@ public class FinanceService {
         if (request == null || blank(request.shiftCode()) || blank(request.fromActor()) || blank(request.toActor())
                 || request.actualAmount() == null)
             throw new DomainException("INVALID_HANDOVER", "Bàn giao phải có ca, actor và số tiền");
+        try {
+            new com.hospitality.mis.persistence.VietnameseCodeConverters.ShiftCodeConverter()
+                    .convertToDatabaseColumn(request.shiftCode().trim());
+        } catch (IllegalArgumentException ex) {
+            throw new DomainException("INVALID_HANDOVER_SHIFT", "Mã ca bàn giao không hợp lệ");
+        }
         if (request.actualAmount().signum() < 0)
             throw new DomainException("INVALID_HANDOVER_AMOUNT", "Số tiền bàn giao không thể âm");
         if (request.fromActor().trim().equals(request.toActor().trim()))

@@ -64,7 +64,7 @@ class RoomEquipmentControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.message").value("Invalid request data"))
+                .andExpect(jsonPath("$.message").value("Dữ liệu yêu cầu không hợp lệ"))
                 .andExpect(jsonPath("$.details").isArray())
                 .andExpect(jsonPath("$.error").doesNotExist());
 
@@ -86,7 +86,7 @@ class RoomEquipmentControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.message").value("Invalid request data"))
+                .andExpect(jsonPath("$.message").value("Dữ liệu yêu cầu không hợp lệ"))
                 .andExpect(jsonPath("$.details").isArray())
                 .andExpect(jsonPath("$.error").doesNotExist());
 

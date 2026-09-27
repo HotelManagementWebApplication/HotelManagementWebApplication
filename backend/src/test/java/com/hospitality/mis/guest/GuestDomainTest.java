@@ -44,14 +44,14 @@ class GuestDomainTest {
 
     void canonicalModelIsTheSoleConcreteGuestEntity() throws Exception {
         assertThat(Guest.class.isAnnotationPresent(Entity.class)).isTrue();
-        assertThat(Guest.class.getAnnotation(Table.class).name()).isEqualTo("guests");
+        assertThat(Guest.class.getAnnotation(Table.class).name()).isEqualTo("KhachLuuTru");
 
 
-        assertThat(columnName("id")).isEqualTo("id");
-        assertThat(columnName("fullName")).isEqualTo("full_name");
-        assertThat(columnName("identityNumber")).isEqualTo("identity_number");
-        assertThat(columnName("membershipTier")).isEqualTo("membership_tier");
-        assertThat(columnName("totalSpend")).isEqualTo("total_spend");
+        assertThat(columnName("id")).isEqualTo("maKhachLuuTru");
+        assertThat(columnName("fullName")).isEqualTo("hoVaTen");
+        assertThat(columnName("identityNumber")).isEqualTo("soGiayToTuyThan");
+        assertThat(columnName("membershipTier")).isEqualTo("hangThanhVien");
+        assertThat(columnName("totalSpend")).isEqualTo("tongChiTieu");
     }
 
 
@@ -144,7 +144,7 @@ class GuestDomainTest {
 
     void guestReservationRelationshipIsInverseAndNonDestructive() throws Exception {
 
-        assertThat(Guest.class.getAnnotation(Table.class).name()).isEqualTo("guests");
+        assertThat(Guest.class.getAnnotation(Table.class).name()).isEqualTo("KhachLuuTru");
     }
 
 

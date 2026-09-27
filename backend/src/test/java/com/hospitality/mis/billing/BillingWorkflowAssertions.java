@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 
-/** HTTP -> dịch vụ thật -> repository thật. Chạy trên cả H2 và MySQL. */
+/** HTTP -> dịch vụ thật -> repository thật. Chạy trên cả H2 và SQL Server. */
 @Transactional
 @WithMockUser(username = "clerk", roles = "FRONT_DESK")
 public abstract class BillingWorkflowAssertions {

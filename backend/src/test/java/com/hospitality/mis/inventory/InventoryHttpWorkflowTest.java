@@ -1,9 +1,12 @@
 package com.hospitality.mis.inventory;
 
 import com.hospitality.mis.dao.billing.ServiceRepository;
+import com.hospitality.mis.dao.governance.ApprovalRepository;
 import com.hospitality.mis.dao.operations.InventoryMovementRepository;
 import com.hospitality.mis.entity.billing.Service;
+import com.hospitality.mis.entity.governance.ApprovalRequest;
 import com.hospitality.mis.entity.operations.InventoryMovement;
+import com.hospitality.mis.service.governance.ApprovalService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +16,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -23,7 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** HTTP -> service -> repository thật cho contract movement, stock guard và DB report. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:inventoryworkflow;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:inventoryworkflow;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=", "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
@@ -32,10 +36,12 @@ class InventoryHttpWorkflowTest {
     @Autowired MockMvc mvc;
     @Autowired ServiceRepository services;
     @Autowired InventoryMovementRepository movements;
+    @Autowired ApprovalRepository approvals;
 
     @BeforeEach
     void seed() {
         movements.deleteAllInBatch();
+        approvals.deleteAllInBatch();
         services.deleteAllInBatch();
         Service service = new Service();
         service.setId("MINI"); service.setName("Minibar water"); service.setPrice(new BigDecimal("10000"));
@@ -141,6 +147,35 @@ class InventoryHttpWorkflowTest {
             assertThat(movement.getReason()).isEqualTo("SERVICE_OPENING_STOCK");
             assertThat(movement.getActorId()).isEqualTo("kitchen");
         });
+    }
+
+    @Test
+    @WithMockUser(username = "kitchen", roles = "KITCHEN")
+    void kitchenCanReadOnlyItsOwnServicePriceRequestHistory() throws Exception {
+        Instant now = Instant.now();
+        ApprovalRequest ownPending = approval("kitchen", "SERVICE_PRICE_CHANGE", "MINI", "{\"price\":12000}", "kitchen-price-pending", now);
+        ApprovalRequest ownApproved = approval("kitchen", "SERVICE_PRICE_CHANGE", "MINI", "{\"price\":13000}", "kitchen-price-approved", now);
+        ownApproved.approve("manager", now);
+        approvals.saveAllAndFlush(java.util.List.of(ownPending, ownApproved,
+                approval("another-kitchen", "SERVICE_PRICE_CHANGE", "MINI", "{\"price\":14000}", "other-price", now),
+                approval("kitchen", "PAYMENT_REFUND", "MINI", "{\"amount\":100}", "other-action", now)));
+
+        mvc.perform(get("/api/services/price-requests"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].requester").value("kitchen"))
+                .andExpect(jsonPath("$[1].requester").value("kitchen"));
+    }
+
+    @Test
+    @WithMockUser(username = "frontdesk", roles = "FRONT_DESK")
+    void kitchenPriceRequestHistoryIsNotExposedToRolesWithoutPriceRequestPermission() throws Exception {
+        mvc.perform(get("/api/services/price-requests")).andExpect(status().isForbidden());
+    }
+
+    private ApprovalRequest approval(String requester, String action, String target, String payload, String key, Instant now) {
+        return new ApprovalRequest(requester, action, target, payload, ApprovalService.fingerprintFor(payload),
+                null, "Demo approval history", now.plusSeconds(3600), key, now);
     }
 
     private void movement(String type, int quantity, String reason, String key) throws Exception {

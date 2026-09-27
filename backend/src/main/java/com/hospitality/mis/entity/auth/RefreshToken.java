@@ -11,43 +11,44 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 @Entity
-@Table(name = "refresh_tokens")
+@Table(name = "MaLamMoiDangNhap")
 /** Phiên refresh token đã phát hành, dùng để xoay vòng và thu hồi phiên đăng nhập. */
 public class RefreshToken {
     /** Khóa kỹ thuật của bản ghi token. */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "maMaLamMoiDangNhap")
     private Long id;
 
-    @Column(name = "employee_id", length = 10)
+    @Column(name = "maNhanVien", length = 10)
     /** Mã nhân viên sở hữu token; loại trừ khi token thuộc tài khoản khách. */
     private String employeeId;
 
-    @Column(name = "customer_account_id")
+    @Column(name = "maTaiKhoanKhachHang")
     /** ID tài khoản khách sở hữu token; loại trừ khi token thuộc nhân viên. */
     private Long customerAccountId;
 
-    @Column(name = "token_hash", nullable = false, unique = true, length = 64)
+    @Column(name = "maBamToken", nullable = false, unique = true, length = 64)
     /** Băm SHA-256 của token bí mật, không lưu token gốc. */
     private String tokenHash;
 
-    @Column(name = "family_id", nullable = false, length = 36)
+    @Column(name = "maNhomPhien", nullable = false, length = 36)
     /** Nhóm token dùng để thu hồi cả chuỗi khi phát hiện reuse. */
     private String familyId;
 
-    @Column(name = "issued_at", nullable = false)
+    @Column(name = "thoiDiemPhatHanh", nullable = false)
     /** Thời điểm token bắt đầu có hiệu lực. */
     private Instant issuedAt;
 
-    @Column(name = "expires_at", nullable = false)
+    @Column(name = "thoiDiemHetHan", nullable = false)
     /** Thời điểm token hết hạn, sau đó không được làm mới phiên. */
     private Instant expiresAt;
 
-    @Column(name = "revoked_at")
+    @Column(name = "thoiDiemThuHoi")
     /** Thời điểm token bị thu hồi; null nghĩa là chưa thu hồi. */
     private Instant revokedAt;
 
-    @Column(name = "replaced_by_hash", length = 64)
+    @Column(name = "maBamThayThe", length = 64)
     /** Băm token kế tiếp trong lần xoay vòng; giúp truy vết chuỗi thay thế. */
     private String replacedByHash;
 

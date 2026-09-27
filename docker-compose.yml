@@ -1,22 +1,38 @@
 services:
-  mysql:
-    container_name: web-hotel-mis-mysql-3307
-    image: mysql:8.4
+  sqlserver:
+    container_name: web-hotel-mis-sqlserver-1433
+    image: mcr.microsoft.com/mssql/server:2022-latest
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-QLKS}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-hotel_mis_local}
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD:
+      MSSQL_PID: Developer
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
-      - "3307:3306"
+      - "1433:1433"
     volumes:
-      - hotel-mysql:/var/lib/mysql
+      - hotel-sqlserver:/var/opt/mssql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
-      interval: 5s
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" -b -o /dev/null"]
+      interval: 10s
       timeout: 5s
-      retries: 20
+      retries: 30
+
+  sqlserver-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: "no"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - >-
+        /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -b
+        -Q "IF DB_ID(N'QLKS') IS NULL CREATE DATABASE [QLKS] COLLATE Vietnamese_100_CI_AI;"
 
 volumes:
-  hotel-mysql:
-    name: web-hotel-mis_hotel-mysql
-    external: true
+  hotel-sqlserver:
+    name: web-hotel-mis_hotel-sqlserver

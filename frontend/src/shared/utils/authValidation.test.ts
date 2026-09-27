@@ -61,7 +61,7 @@ describe("formatAuthError", () => {
     const badRequest = new ApiError(400, { code: "PHONE_INVALID", message: "Phone is invalid" });
     expect(formatAuthError(badRequest)).toBe("Tài khoản không hợp lệ");
 
-    const invalidReq = new ApiError(400, { code: "INVALID_REQUEST", message: "Invalid request data" });
+    const invalidReq = new ApiError(400, { code: "INVALID_REQUEST", message: "Dữ liệu yêu cầu không hợp lệ" });
     expect(formatAuthError(invalidReq)).toBe("Tài khoản không hợp lệ");
   });
 

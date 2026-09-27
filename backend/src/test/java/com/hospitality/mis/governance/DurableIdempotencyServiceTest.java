@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:durable-idempotency;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:durable-idempotency;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=",
         "spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"
 })
@@ -39,7 +39,7 @@ class DurableIdempotencyServiceTest {
         approvals.deleteAllInBatch();
         records.deleteAll();
         for (int value = 0; value < 64; value++) {
-            jdbc.update("MERGE INTO idempotency_lock_buckets(bucket_id) KEY(bucket_id) VALUES (?)", value);
+            jdbc.update("MERGE INTO NhomKhoaChongTrung(maNhomKhoa) KEY(maNhomKhoa) VALUES (?)", value);
         }
     }
 
@@ -65,11 +65,11 @@ class DurableIdempotencyServiceTest {
                     return new TestResponse(savedApproval.getId().intValue(), "activated");
                 }));
 
-        assertThat(jdbc.queryForObject("select status from idempotency_records "
-                + "where command_scope = ? and idempotency_key = ?", String.class,
-                "room-type-activate", "clear-regression")).isEqualTo("COMPLETED");
-        assertThat(jdbc.queryForObject("select response_json from idempotency_records "
-                + "where command_scope = ? and idempotency_key = ?", String.class,
+        assertThat(jdbc.queryForObject("select trangThai from BanGhiChongTrung "
+                + "where phamViLenh = ? and khoaChongTrung = ?", String.class,
+                "room-type-activate", "clear-regression")).isEqualTo("Đã hoàn tất");
+        assertThat(jdbc.queryForObject("select phanHoiJson from BanGhiChongTrung "
+                + "where phamViLenh = ? and khoaChongTrung = ?", String.class,
                 "room-type-activate", "clear-regression")).contains("activated");
 
         TestResponse replay = transactions.execute(status -> service.execute("room-type-activate",
@@ -137,8 +137,8 @@ class DurableIdempotencyServiceTest {
 
     @Test
     void concurrentUniqueClaimWorksWithoutLockBucketRows() throws Exception {
-        jdbc.update("delete from idempotency_lock_buckets");
-        long bucketsBefore = jdbc.queryForObject("select count(*) from idempotency_lock_buckets", Long.class);
+        jdbc.update("delete from NhomKhoaChongTrung");
+        long bucketsBefore = jdbc.queryForObject("select count(*) from NhomKhoaChongTrung", Long.class);
         assertThat(bucketsBefore).isZero();
         AtomicInteger executions = new AtomicInteger();
         CountDownLatch ready = new CountDownLatch(2);
@@ -165,7 +165,7 @@ class DurableIdempotencyServiceTest {
             assertThat(second.get(10, TimeUnit.SECONDS)).isEqualTo(new TestResponse(1, "ok"));
         }
         assertThat(executions).hasValue(1);
-        assertThat(jdbc.queryForObject("select count(*) from idempotency_lock_buckets", Long.class))
+        assertThat(jdbc.queryForObject("select count(*) from NhomKhoaChongTrung", Long.class))
                 .isEqualTo(bucketsBefore);
     }
 

@@ -1,60 +1,71 @@
 # web-hotel-mis
 
-Hotel MIS web application: a Spring Boot API, a React/TypeScript frontend and
-an agent integration boundary. This repository is the canonical source for
-the web system.
+Hotel MIS for one hotel: a Spring Boot API, React/TypeScript web app, Microsoft
+SQL Server schema, and an agent health-check scaffold. This repository is the source of
+truth for application code and database migrations.
 
-## Repository layout
+## Repository map
 
 ```text
-backend/              Spring Boot modular monolith and database migrations
-frontend/             React/TypeScript operations UI
-agent/                Chat orchestration, RAG and typed API tools
-knowledge/sop/        Versioned SOP and policy documents for RAG
-docs/                 Architecture, decisions and delivery guidance
-infra/                Local infrastructure notes
-scripts/              Developer and CI helper scripts
-docker-compose.yml    Local MySQL 8.4 service
+backend/              Spring Boot API, tests, and Flyway migrations
+frontend/             React/TypeScript customer and staff screens
+database/demo/        Manual local demo seed/reset files
+agent/                Health-check scaffold; not a production assistant
+docs/                 Architecture, API contract, operations plan, and guides
+.github/workflows/    CI configuration
+docker-compose.yml    Local SQL Server service
 ```
 
-## Runtime boundaries
+## Data and runtime boundaries
 
-1. The backend API is the only business-data boundary for the frontend and
-   agent.
-2. The backend is the only component allowed to write the MySQL database.
-   Frontend, agent and operational tools use authenticated API use cases.
-3. Agents never connect to MySQL or generate production SQL. Structured live
-   data is read through typed API tools; RAG is reserved for versioned
-   documents and policies.
-4. All database changes are Flyway migrations. Hibernate runs with
-   `ddl-auto=validate` and never changes the schema.
-
-## Canonical schema
-
-The schema contract starts at
-`backend/src/main/resources/db/migration/V1__baseline_schema.sql`. This
-Flyway line is the canonical schema V1 for the web system; later versioned
-migrations extend that same contract. A clean database must apply the complete
-ordered migration line before the application starts.
+- The backend API is the only business-data writer. Frontend and agent code do
+  not connect directly to SQL Server.
+- Flyway migrations under `backend/src/main/resources/db/migration/` own schema
+  changes. Hibernate validates mappings; it does not create or update schema.
+- Demo reset scripts are destructive and local-only. Read
+  [`database/demo/README.md`](database/demo/README.md) before using them; never
+  point them at shared or production data.
+- Production credentials and secrets belong in a secret manager, not in source
+  files, `.env` files, or command history.
 
 ## Local development
 
+Start SQL Server from the repository root, then run the backend and frontend in
+separate terminals:
+
 ```powershell
-docker compose up -d mysql
+docker compose up -d
 cd backend
 mvn spring-boot:run
 ```
 
-Set `DB_URL`, `DB_USERNAME` and `DB_PASSWORD` when using a database other than
-the local Compose service. Do not commit credentials or `.env` files.
+```powershell
+cd frontend
+npm ci
+npm run dev -- --host 127.0.0.1 --port 5173
+```
 
-## Verification
+Set `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` for the backend when using a
+database other than the local Compose service. The frontend uses the Vite API
+proxy during local development; hosted builds need a reachable HTTPS backend
+configured with `VITE_API_BASE_URL`.
 
-Backend CI provisions a clean MySQL 8.4 instance, runs the full Maven test
-suite with the real-MySQL migration test enabled, applies Flyway, and verifies
-Hibernate mappings with `ddl-auto=validate`. Frontend CI runs the production
-build.
+Local/demo SMTP uses the owner-managed fallback values in `application.yml`.
+Those two lines are deliberately protected by `AGENTS.md`, `rule.md` and a
+regression test; do not change them without an explicit owner request.
 
-See [docs/architecture.md](docs/architecture.md),
-[docs/file-structure.md](docs/file-structure.md) and
-[docs/backend-plan.md](docs/backend-plan.md).
+The project has completed its SQL Server cutover. Docker Compose contains only
+the SQL Server service; the disposable demo database is `QLKS`.
+
+## Verification and canonical docs
+
+CI configuration lives in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+See [architecture](docs/architecture.md), the
+[API contract](docs/api-contract.md), the
+[frontend surface inventory](docs/ui-action-matrix.md), and the
+[SQL Server closeout criteria](docs/ke-hoach-chuyen-doi-sql-server.md).
+The current SQL Server closeout criteria are in
+[`docs/ke-hoach-chuyen-doi-sql-server.md`](docs/ke-hoach-chuyen-doi-sql-server.md).
+Live E2E setup
+and disposable-database requirements are documented in
+[`frontend/e2e/README.md`](frontend/e2e/README.md).

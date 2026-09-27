@@ -14,17 +14,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /** Bảo vệ mapping reservation và state machine không mở lại terminal state. */
 class ReservationDomainTest {
     @Test
-    /** Given entity canonical, When soi bảng/cột, Then mapping khớp schema v1 snake_case. */
-    void canonicalOwnersUseV1SnakeCaseTablesAndColumns() throws Exception {
+    /** Given entity canonical, When soi bảng/cột, Then mapping khớp schema vật lý tiếng Việt. */
+    void canonicalOwnersUseVietnameseTableAndColumnNames() throws Exception {
         assertThat(Reservation.class.isAnnotationPresent(Entity.class)).isTrue();
-        assertThat(Reservation.class.getAnnotation(Table.class).name()).isEqualTo("reservations");
-        assertThat(ReservationRoom.class.getAnnotation(Table.class).name()).isEqualTo("reservation_rooms");
-        assertColumn(Reservation.class, "depositAmount", "deposit_amount");
-        assertColumn(Reservation.class, "actualCheckIn", "actual_check_in");
-        assertColumn(Reservation.class, "idempotencyKey", "idempotency_key");
-        assertColumn(ReservationRoom.class, "checkIn", "check_in");
-        assertColumn(ReservationRoom.class, "checkOut", "check_out");
-        assertColumn(ReservationRoom.class, "transferCount", "transfer_count");
+        assertThat(Reservation.class.getAnnotation(Table.class).name()).isEqualTo("PhieuDatPhong");
+        assertThat(ReservationRoom.class.getAnnotation(Table.class).name()).isEqualTo("ChiTietDatPhong");
+        assertColumn(Reservation.class, "depositAmount", "tienDatCoc");
+        assertColumn(Reservation.class, "actualCheckIn", "thoiDiemNhanPhongThucTe");
+        assertColumn(Reservation.class, "idempotencyKey", "khoaChongTrung");
+        assertColumn(ReservationRoom.class, "checkIn", "thoiDiemNhanPhong");
+        assertColumn(ReservationRoom.class, "checkOut", "thoiDiemTraPhong");
+        assertColumn(ReservationRoom.class, "transferCount", "soLanChuyenPhong");
     }
 
     @Test

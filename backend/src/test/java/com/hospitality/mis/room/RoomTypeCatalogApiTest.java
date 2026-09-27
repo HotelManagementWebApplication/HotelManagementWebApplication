@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** P1.1 contract: loại phòng phải qua draft/approval trước khi public. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:roomtypecatalog;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:roomtypecatalog;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=",
         "spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"
 })
@@ -47,8 +47,8 @@ class RoomTypeCatalogApiTest {
         priceHistory.deleteAllInBatch();
         roomTypes.deleteAllInBatch();
         approvals.deleteAllInBatch();
-        jdbc.update("delete from idempotency_records");
-        jdbc.update("delete from audit_logs");
+        jdbc.update("delete from BanGhiChongTrung");
+        jdbc.update("delete from NhatKyKiemSoat");
     }
 
     @Test

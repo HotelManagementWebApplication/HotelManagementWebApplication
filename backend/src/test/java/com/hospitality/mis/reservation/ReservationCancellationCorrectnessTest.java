@@ -143,7 +143,7 @@ class ReservationCancellationCorrectnessTest {
         blocked.getRooms().get(0).getRoom().setStatus(com.hospitality.mis.entity.room.RoomStatus.READY);
         when(reservations.findForUpdate(10L)).thenReturn(Optional.of(blocked));
         when(rooms.findAllForUpdateOrdered(List.of("101"))).thenReturn(List.of(blocked.getRooms().get(0).getRoom()));
-        when(reservations.hasOverlapExcludingReservation(eq(10L), eq("101"), eq(now), eq(now.plusHours(4)), any(), any()))
+        when(reservations.hasOverlapExcludingReservation(eq(10L), eq("101"), eq(now), eq(now.plusHours(4)), any(), any(), any()))
                 .thenReturn(true);
         assertThatThrownBy(() -> service.checkIn(10L, new ReservationDtos.CheckInRequest(now), "frontdesk", "check-in-overlap"))
                 .extracting("code").isEqualTo("OVERBOOKING");

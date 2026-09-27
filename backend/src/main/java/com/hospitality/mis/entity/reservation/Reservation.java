@@ -15,59 +15,62 @@ import java.util.Set;
 
 /** Chủ thể chuẩn của aggregate đặt phòng và bảng {@code reservations}. */
 @Entity
-@Table(name = "reservations")
+@Table(name = "PhieuDatPhong")
 @Access(AccessType.FIELD)
 public class Reservation {
     /** ID đặt phòng dùng làm khóa của các quan hệ chi tiết. */
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
+    @Column(name = "maPhieuDatPhong", nullable = false)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "guest_id", nullable = false)
+    @JoinColumn(name = "maKhachLuuTru", nullable = false)
     /** Khách đứng tên đặt phòng. */
     private Guest guest;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "employee_id", nullable = true)
+    @JoinColumn(name = "maNhanVien", nullable = true)
     /** Nhân viên tạo/quản lý đặt phòng. */
     private Employee employee;
 
     /** Tài khoản customer tạo booking; null với booking do nhân viên tạo tại quầy. */
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "customer_account_id", nullable = true)
+    @JoinColumn(name = "maTaiKhoanKhachHang", nullable = true)
     private CustomerAccount customerAccount;
 
-    @Column(name = "booked_at", nullable = false) private LocalDateTime bookedAt = LocalDateTime.now();
-    @Column(name = "deposit_amount", nullable = false, precision = 12, scale = 2) private BigDecimal depositAmount = BigDecimal.ZERO;
+    @Column(name = "thoiDiemDat", nullable = false) private LocalDateTime bookedAt = LocalDateTime.now();
+    @Column(name = "tienDatCoc", nullable = false, precision = 12, scale = 2) private BigDecimal depositAmount = BigDecimal.ZERO;
     /** Trạng thái vòng đời; chỉ transitionTo được phép áp dụng chuyển trạng thái hợp lệ. */
-    @Enumerated(EnumType.STRING) @Column(name = "status", nullable = false, length = 30) private ReservationStatus status = ReservationStatus.DRAFT;
-    @Column(name = "rental_type", nullable = false, length = 20) private String rentalType = "PACKAGE";
-    @Column(name = "booking_source", nullable = false, length = 30) private String bookingSource = "DIRECT";
-    @Column(name = "ota_gross_revenue", nullable = false, precision = 14, scale = 2) private BigDecimal otaGrossRevenue = BigDecimal.ZERO;
-    @Column(name = "ota_commission", nullable = false, precision = 14, scale = 2) private BigDecimal otaCommission = BigDecimal.ZERO;
-    @Column(name = "ota_net_revenue", nullable = false, precision = 14, scale = 2) private BigDecimal otaNetRevenue = BigDecimal.ZERO;
-    @Column(name = "ota_reconciliation_status", nullable = false, length = 20) private String otaReconciliationStatus = "NOT_APPLICABLE";
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.ReservationStatusConverter.class) @Column(name = "trangThai", nullable = false, length = 30) private ReservationStatus status = ReservationStatus.DRAFT;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseCodeConverters.RentalTypeConverter.class)
+    @Column(name = "hinhThucThue", nullable = false, length = 20) private String rentalType = "PACKAGE";
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseCodeConverters.BookingSourceConverter.class)
+    @Column(name = "nguonDatPhong", nullable = false, length = 30) private String bookingSource = "DIRECT";
+    @Column(name = "doanhThuGopOta", nullable = false, precision = 14, scale = 2) private BigDecimal otaGrossRevenue = BigDecimal.ZERO;
+    @Column(name = "hoaHongOta", nullable = false, precision = 14, scale = 2) private BigDecimal otaCommission = BigDecimal.ZERO;
+    @Transient private BigDecimal otaNetRevenue = BigDecimal.ZERO;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseCodeConverters.OtaReconciliationStatusConverter.class)
+    @Column(name = "trangThaiDoiSoatOta", nullable = false, length = 20) private String otaReconciliationStatus = "NOT_APPLICABLE";
     /** Thời điểm nhận phòng thực tế, null trước khi check-in. */
-    @Column(name = "actual_check_in") private LocalDateTime actualCheckIn;
+    @Column(name = "thoiDiemNhanPhongThucTe") private LocalDateTime actualCheckIn;
     /** Thời điểm trả phòng thực tế, null trước khi check-out. */
-    @Column(name = "actual_check_out") private LocalDateTime actualCheckOut;
+    @Column(name = "thoiDiemTraPhongThucTe") private LocalDateTime actualCheckOut;
     /** Số phút gia hạn đã được chấp nhận cho đặt phòng. */
-    @Column(name = "extension_minutes", nullable = false) private int extensionMinutes;
+    @Column(name = "soPhutGiaHan", nullable = false) private int extensionMinutes;
     /** Khóa yêu cầu tạo/cập nhật duy nhất để chống xử lý lặp. */
-    @Column(name = "idempotency_key", length = 100, unique = true) private String idempotencyKey;
+    @Column(name = "khoaChongTrung", length = 100) private String idempotencyKey;
     /** Mã/hướng dẫn cọc phát hành cho booking online, không phải bằng chứng đã thanh toán. */
-    @Column(name = "deposit_payment_code", length = 40, unique = true) private String depositPaymentCode;
-    @Column(name = "deposit_payment_expires_at") private LocalDateTime depositPaymentExpiresAt;
-    @Enumerated(EnumType.STRING) @Column(name = "deposit_payment_status", nullable = false, length = 20)
+    @Column(name = "maThanhToanDatCoc", length = 40) private String depositPaymentCode;
+    @Column(name = "thoiDiemHetHanThanhToanCoc") private LocalDateTime depositPaymentExpiresAt;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.DepositPaymentStatusConverter.class) @Column(name = "trangThaiThanhToanCoc", nullable = false, length = 20)
     private DepositPaymentStatus depositPaymentStatus = DepositPaymentStatus.NOT_REQUIRED;
     /** Phiên bản lạc quan, bảo vệ đặt phòng trước cập nhật đồng thời. */
-    @Version @Column(name = "version", nullable = false) private long version;
+    @Version @Column(name = "phienBan", nullable = false) private long version;
 
     /** Lý do và kết quả quyết toán hủy phải tồn tại sau khi tải lại booking. */
-    @Column(name = "cancellation_reason", length = 500) private String cancellationReason;
-    @Enumerated(EnumType.STRING)
-    @Column(name = "cancellation_outcome", length = 20) private CancellationOutcome cancellationOutcome;
+    @Column(name = "lyDoHuy", length = 500) private String cancellationReason;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.CancellationOutcomeConverter.class)
+    @Column(name = "ketQuaHuy", length = 30) private CancellationOutcome cancellationOutcome;
     @Transient private String canonicalRequestFingerprint;
 
     @OneToMany(mappedBy = "reservation", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
@@ -89,7 +92,10 @@ public class Reservation {
     public String getBookingSource() { return bookingSource; }
     public BigDecimal getOtaGrossRevenue() { return otaGrossRevenue; }
     public BigDecimal getOtaCommission() { return otaCommission; }
-    public BigDecimal getOtaNetRevenue() { return otaNetRevenue; }
+    public BigDecimal getOtaNetRevenue() {
+        if (otaGrossRevenue == null || otaCommission == null) return BigDecimal.ZERO;
+        return otaGrossRevenue.subtract(otaCommission).max(BigDecimal.ZERO);
+    }
     public String getOtaReconciliationStatus() { return otaReconciliationStatus; }
     public LocalDateTime getActualCheckIn() { return actualCheckIn; }
     public LocalDateTime getActualCheckOut() { return actualCheckOut; }
@@ -113,7 +119,7 @@ public class Reservation {
     public void setBookingSource(String value) { bookingSource = value == null || value.isBlank() ? "DIRECT" : value.trim().toUpperCase(); }
     public void setOtaGrossRevenue(BigDecimal value) { otaGrossRevenue = value == null ? BigDecimal.ZERO : value; }
     public void setOtaCommission(BigDecimal value) { otaCommission = value == null ? BigDecimal.ZERO : value; }
-    public void setOtaNetRevenue(BigDecimal value) { otaNetRevenue = value == null ? BigDecimal.ZERO : value; }
+    public void setOtaNetRevenue(BigDecimal value) { otaNetRevenue = getOtaNetRevenue(); }
     public void setOtaReconciliationStatus(String value) { otaReconciliationStatus = value == null || value.isBlank() ? "NOT_APPLICABLE" : value.trim().toUpperCase(); }
     public void setIdempotencyKey(String value) { idempotencyKey = value; }
     public void setDepositPaymentCode(String value) { depositPaymentCode = value; }

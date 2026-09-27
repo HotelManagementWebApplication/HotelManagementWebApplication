@@ -88,7 +88,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
 
-        "spring.datasource.url=jdbc:h2:mem:securitytest;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:securitytest;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
 
         "spring.datasource.username=sa",
 
@@ -145,7 +145,7 @@ class SecurityIntegrationTest {
 
         employees.deleteAll();
 
-        jdbc.update("delete from audit_logs");
+        jdbc.update("delete from NhatKyKiemSoat");
         employees.save(employee("admin", "admin-password", EmployeeRole.ADMIN, "0900000000"));
         employees.save(employee("director", "director-password", EmployeeRole.DIRECTOR, "0900000010"));
         employees.save(employee("manager", "manager-password", EmployeeRole.MANAGER, "0900000001"));
@@ -170,7 +170,7 @@ class SecurityIntegrationTest {
                 .andExpect(jsonPath("$.timestamp").isNotEmpty())
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
-                .andExpect(jsonPath("$.message").value("Authentication is required"))
+                .andExpect(jsonPath("$.message").value("Bạn cần đăng nhập để thực hiện thao tác này"))
                 .andExpect(jsonPath("$.details").isArray())
                 .andExpect(jsonPath("$.error").doesNotExist());
     }
@@ -386,7 +386,7 @@ class SecurityIntegrationTest {
         assertThat(locked.isAccountNonLocked()).isFalse();
         assertThat(locked.getLastFailedLoginAt()).isNotNull();
         assertThat(jdbc.queryForObject(
-                "select count(*) from audit_logs where actor = 'staff' and action = 'LOGIN_FAILED'",
+                "select count(*) from NhatKyKiemSoat where nguoiThucHien = 'staff' and hanhDong = 'LOGIN_FAILED'",
                 Integer.class)).isEqualTo(5);
         mockMvc.perform(post("/api/auth/login")
                         .contentType(APPLICATION_JSON)
@@ -531,7 +531,7 @@ class SecurityIntegrationTest {
                 .andExpect(jsonPath("$.timestamp").isNotEmpty())
                 .andExpect(jsonPath("$.status").value(403))
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
-                .andExpect(jsonPath("$.message").value("Access is denied"))
+                .andExpect(jsonPath("$.message").value("Bạn không có quyền thực hiện thao tác này"))
                 .andExpect(jsonPath("$.details").isArray())
                 .andExpect(jsonPath("$.error").doesNotExist());
 
@@ -583,7 +583,7 @@ class SecurityIntegrationTest {
 
         String actor = jdbc.queryForObject(
 
-                "select actor from audit_logs where action = 'APPROVAL_REQUESTED' order by id desc limit 1",
+                "select top 1 nguoiThucHien from NhatKyKiemSoat where hanhDong = 'APPROVAL_REQUESTED' order by maNhatKyKiemSoat desc",
                 String.class);
 
         assertEquals("frontdesk", actor);

@@ -33,7 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** HTTP proof for the current employee, shift and governance authorization contract. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:employee-admin-http;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:employee-admin-http;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.flyway.enabled=false",
@@ -53,12 +53,12 @@ class EmployeeAdminGovernanceHttpIntegrationTest {
 
     @BeforeEach
     void cleanAndSeed() {
-        jdbc.update("delete from employee_shifts");
-        jdbc.update("delete from employee_login_events");
-        jdbc.update("delete from refresh_tokens");
-        jdbc.update("delete from approval_requests");
-        jdbc.update("delete from audit_logs");
-        jdbc.update("delete from employees");
+        jdbc.update("delete from CaLamViecNhanVien");
+        jdbc.update("delete from SuKienDangNhapNhanVien");
+        jdbc.update("delete from MaLamMoiDangNhap");
+        jdbc.update("delete from YeuCauPheDuyet");
+        jdbc.update("delete from NhatKyKiemSoat");
+        jdbc.update("delete from NhanVien");
         save("director", EmployeeRole.DIRECTOR, "director-password");
         save("admin", EmployeeRole.ADMIN, "admin-password");
         save("manager", EmployeeRole.MANAGER, "manager-password");

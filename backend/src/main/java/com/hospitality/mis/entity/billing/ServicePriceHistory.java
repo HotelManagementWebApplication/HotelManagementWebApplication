@@ -5,14 +5,15 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "service_price_history")
+@Table(name = "LichSuGiaDichVu")
 public class ServicePriceHistory {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "service_id", nullable = false) private Service service;
-    @Column(nullable = false, precision = 10, scale = 2) private BigDecimal price;
-    @Column(name = "changed_by", nullable = false, length = 50) private String changedBy;
-    @Column(name = "approval_id") private Long approvalId;
-    @Column(name = "effective_at", nullable = false) private LocalDateTime effectiveAt;
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) @Column(name = "maLichSuGiaDichVu")
+ private Long id;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "maDichVu", nullable = false) private Service service;
+    @Column(name = "gia", nullable = false, precision = 10, scale = 2) private BigDecimal price;
+    @Column(name = "nguoiThayDoi", nullable = false, length = 50) private String changedBy;
+    @Column(name = "maYeuCauPheDuyet") private Long approvalId;
+    @Column(name = "thoiDiemHieuLuc", nullable = false) private LocalDateTime effectiveAt;
     protected ServicePriceHistory() {}
     public ServicePriceHistory(Service service, BigDecimal price, String changedBy, Long approvalId, LocalDateTime effectiveAt) {
         this.service = service; this.price = price; this.changedBy = changedBy; this.approvalId = approvalId; this.effectiveAt = effectiveAt;

@@ -5,15 +5,16 @@ import java.time.Instant;
 
 /** Append-only security history for every employee login attempt. */
 @Entity
-@Table(name = "employee_login_events")
+@Table(name = "SuKienDangNhapNhanVien")
 public class EmployeeLoginEvent {
     public enum Outcome { SUCCEEDED, FAILED }
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) @Column(name = "maSuKienDangNhap")
+ private Long id;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
-    @JoinColumn(name = "employee_id", nullable = false) private Employee employee;
-    @Column(name = "occurred_at", nullable = false) private Instant occurredAt;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private Outcome outcome;
+    @JoinColumn(name = "maNhanVien", nullable = false) private Employee employee;
+    @Column(name = "thoiDiemPhatSinh", nullable = false) private Instant occurredAt;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.LoginOutcomeConverter.class) @Column(name = "ketQua", nullable = false, length = 20) private Outcome outcome;
     public Long getId() { return id; }
     public Employee getEmployee() { return employee; }
     public void setEmployee(Employee employee) { this.employee = employee; }

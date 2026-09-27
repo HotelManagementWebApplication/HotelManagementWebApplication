@@ -4,18 +4,20 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "notification_outbox")
+@Table(name = "HangDoiThongBao")
 public class NotificationOutbox {
     public enum Status { PENDING, DELIVERED, FAILED }
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
-    @Column(nullable = false, length = 100) private String topic;
-    @Column(name = "recipient_role", nullable = false, length = 30) private String recipientRole;
-    @Lob @Column(nullable = false, columnDefinition = "TEXT") private String payload;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private Status status = Status.PENDING;
-    @Column(name = "dedupe_key", nullable = false, unique = true, length = 150) private String dedupeKey;
-    @Column(name = "available_at", nullable = false) private LocalDateTime availableAt;
-    @Column(name = "created_at", nullable = false) private LocalDateTime createdAt;
-    @Column(name = "delivered_at") private LocalDateTime deliveredAt;
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) @Column(name = "maThongBao")
+ private Long id;
+    @Column(name = "chuDe", nullable = false, length = 100) private String topic;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseCodeConverters.EmployeeRoleCodeConverter.class)
+    @Column(name = "vaiTroNguoiNhan", nullable = false, length = 30) private String recipientRole;
+    @Column(name = "noiDung", nullable = false, columnDefinition = "NVARCHAR(MAX)") private String payload;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.NotificationStatusConverter.class) @Column(name = "trangThai", nullable = false, length = 20) private Status status = Status.PENDING;
+    @Column(name = "khoaChongLap", nullable = false, unique = true, length = 150) private String dedupeKey;
+    @Column(name = "thoiDiemCoTheGui", nullable = false) private LocalDateTime availableAt;
+    @Column(name = "thoiDiemTao", nullable = false) private LocalDateTime createdAt;
+    @Column(name = "thoiDiemGui") private LocalDateTime deliveredAt;
     public Long getId() { return id; } public String getTopic() { return topic; } public String getRecipientRole() { return recipientRole; }
     public String getPayload() { return payload; } public Status getStatus() { return status; } public String getDedupeKey() { return dedupeKey; }
     public LocalDateTime getAvailableAt() { return availableAt; } public LocalDateTime getCreatedAt() { return createdAt; } public LocalDateTime getDeliveredAt() { return deliveredAt; }

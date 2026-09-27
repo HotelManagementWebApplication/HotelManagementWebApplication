@@ -4,14 +4,19 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hospitality.mis.common.exception.DomainException;
 import com.hospitality.mis.dao.governance.IdempotencyRecordRepository;
+import com.hospitality.mis.dao.governance.IdempotencyLockBucketRepository;
 import com.hospitality.mis.entity.governance.IdempotencyRecord;
 import com.hospitality.mis.service.reservation.IdempotencySupport;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -23,13 +28,17 @@ import java.util.function.Supplier;
  */
 @Service
 public class DurableIdempotencyService {
+    private static final ConcurrentHashMap<String, ReentrantLock> FALLBACK_LOCKS = new ConcurrentHashMap<>();
     private final IdempotencyRecordRepository records;
+    private final IdempotencyLockBucketRepository lockBuckets;
     private final ObjectMapper objectMapper;
     private final Clock businessClock;
 
     public DurableIdempotencyService(IdempotencyRecordRepository records,
+                                     IdempotencyLockBucketRepository lockBuckets,
                                      ObjectMapper objectMapper, Clock businessClock) {
         this.records = records;
+        this.lockBuckets = lockBuckets;
         this.objectMapper = objectMapper;
         this.businessClock = businessClock;
     }
@@ -39,11 +48,9 @@ public class DurableIdempotencyService {
                          Class<T> responseType, Supplier<T> command) {
         String normalizedKey = IdempotencySupport.requireKey(key);
         requireMetadata(scope, actor, requestHash, responseType, command);
-        boolean existedBeforeClaim = records.existsByScopeAndKey(scope, normalizedKey);
-        claim(scope, normalizedKey, actor, requestHash);
-        IdempotencyRecord record = records.findForUpdate(scope, normalizedKey)
-                .orElseThrow(() -> new IllegalStateException("Idempotency claim không tạo hoặc đọc được bản ghi"));
-        if (existedBeforeClaim || record.getStatus() == IdempotencyRecord.Status.COMPLETED) {
+        Claim claim = claimOrLoad(scope, normalizedKey, actor, requestHash);
+        IdempotencyRecord record = claim.record();
+        if (!claim.fresh() || record.getStatus() == IdempotencyRecord.Status.COMPLETED) {
             return replay(record, actor, requestHash, responseType);
         }
         T result = command.get();
@@ -68,11 +75,9 @@ public class DurableIdempotencyService {
         String normalizedKey = IdempotencySupport.requireKey(key);
         requireMetadata(scope, actor, requestHash, Object.class, command);
         Objects.requireNonNull(replayLoader, "replayLoader");
-        boolean existedBeforeClaim = records.existsByScopeAndKey(scope, normalizedKey);
-        claim(scope, normalizedKey, actor, requestHash);
-        IdempotencyRecord record = records.findForUpdate(scope, normalizedKey)
-                .orElseThrow(() -> new IllegalStateException("Idempotency claim không tạo hoặc đọc được bản ghi"));
-        if (existedBeforeClaim || record.getStatus() == IdempotencyRecord.Status.COMPLETED) {
+        Claim claim = claimOrLoad(scope, normalizedKey, actor, requestHash);
+        IdempotencyRecord record = claim.record();
+        if (!claim.fresh() || record.getStatus() == IdempotencyRecord.Status.COMPLETED) {
             validateExisting(record, actor, requestHash);
             return replayLoader.get();
         }
@@ -115,7 +120,53 @@ public class DurableIdempotencyService {
         Objects.requireNonNull(command, "command");
     }
 
-    private void claim(String scope, String key, String actor, String requestHash) {
-        records.claim(scope, key, actor, requestHash, LocalDateTime.now(businessClock));
+    /**
+     * SQL Server has no INSERT ... ON DUPLICATE KEY UPDATE syntax. A fixed
+     * lock stripe gives the same atomic claim semantics while remaining valid
+     * on SQL Server, H2 and any JPA-supported database.
+     */
+    private Claim claimOrLoad(String scope, String key, String actor, String requestHash) {
+        short bucket = (short) Math.floorMod((scope + "\u0000" + key).hashCode(), 64);
+        if (lockBuckets.lock(bucket).isEmpty()) {
+            // A few legacy H2 tests intentionally remove infrastructure rows.
+            // Production V1 always seeds all 64 rows; this synchronized fallback
+            // preserves the old unique-key behavior for that isolated fixture.
+            return claimWithoutBucket(scope, key, actor, requestHash);
+        }
+        var existing = records.findForUpdate(scope, key);
+        if (existing.isPresent()) return new Claim(existing.get(), false);
+        IdempotencyRecord created = records.saveAndFlush(
+                new IdempotencyRecord(scope, key, actor, requestHash, LocalDateTime.now(businessClock)));
+        return new Claim(created, true);
     }
+
+    private Claim claimWithoutBucket(String scope, String key, String actor, String requestHash) {
+        String lockKey = scope + "\u0000" + key;
+        ReentrantLock fallbackLock = FALLBACK_LOCKS.computeIfAbsent(lockKey, ignored -> new ReentrantLock());
+        fallbackLock.lock();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    fallbackLock.unlock();
+                    FALLBACK_LOCKS.remove(lockKey, fallbackLock);
+                }
+            });
+        }
+        try {
+            var existing = records.findForUpdate(scope, key);
+            if (existing.isPresent()) return new Claim(existing.get(), false);
+            IdempotencyRecord created = records.saveAndFlush(
+                    new IdempotencyRecord(scope, key, actor, requestHash, LocalDateTime.now(businessClock)));
+            return new Claim(created, true);
+        } catch (RuntimeException exception) {
+            if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+                fallbackLock.unlock();
+                FALLBACK_LOCKS.remove(lockKey, fallbackLock);
+            }
+            throw exception;
+        }
+    }
+
+    private record Claim(IdempotencyRecord record, boolean fresh) {}
 }

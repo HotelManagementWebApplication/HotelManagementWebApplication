@@ -187,12 +187,14 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      * @param to thời điểm kết thúc khoảng mới
      * @param cancelledRoom trạng thái dòng phòng đã hủy cần loại trừ
      * @param ignoredReservations các trạng thái đặt phòng không chiếm chỗ
+     * @param now thời điểm hiện tại theo múi giờ ứng dụng, dùng để loại trừ bản nháp đã hết hạn
      * @return true nếu có ít nhất một dòng phòng giao nhau
      */
-    @Query("select count(rr) > 0 from ReservationRoom rr where rr.room.id = :roomId and rr.checkIn < :to and rr.checkOut > :from and rr.status <> :cancelledRoom and rr.reservation.status not in :ignoredReservations and not (rr.reservation.status = com.hospitality.mis.entity.reservation.ReservationStatus.DRAFT and rr.reservation.customerAccount is not null and rr.reservation.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING and rr.reservation.depositPaymentExpiresAt <= CURRENT_TIMESTAMP)")
+    @Query("select count(rr) > 0 from ReservationRoom rr where rr.room.id = :roomId and rr.checkIn < :to and rr.checkOut > :from and rr.status <> :cancelledRoom and rr.reservation.status not in :ignoredReservations and not (rr.reservation.status = com.hospitality.mis.entity.reservation.ReservationStatus.DRAFT and rr.reservation.customerAccount is not null and rr.reservation.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING and rr.reservation.depositPaymentExpiresAt <= :now)")
     boolean hasOverlap(@Param("roomId") String roomId, @Param("from") LocalDateTime from,
                        @Param("to") LocalDateTime to, @Param("cancelledRoom") RoomStatus cancelledRoom,
-                       @Param("ignoredReservations") List<ReservationStatus> ignoredReservations);
+                       @Param("ignoredReservations") List<ReservationStatus> ignoredReservations,
+                       @Param("now") LocalDateTime now);
 
 
 
@@ -206,9 +208,10 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      * @param to thời điểm kết thúc khoảng mới
      * @param cancelledRoom trạng thái dòng phòng đã hủy cần loại trừ
      * @param ignoredReservations các trạng thái đặt phòng không chiếm chỗ
+     * @param now thời điểm hiện tại theo múi giờ ứng dụng, dùng để loại trừ bản nháp đã hết hạn
      * @return true nếu còn đặt phòng khác giao nhau
      */
-    @Query("select count(rr) > 0 from ReservationRoom rr where rr.room.id = :roomId and rr.checkIn < :to and rr.checkOut > :from and rr.reservation.id <> :excludedReservationId and rr.status <> :cancelledRoom and rr.reservation.status not in :ignoredReservations and not (rr.reservation.status = com.hospitality.mis.entity.reservation.ReservationStatus.DRAFT and rr.reservation.customerAccount is not null and rr.reservation.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING and rr.reservation.depositPaymentExpiresAt <= CURRENT_TIMESTAMP)")
+    @Query("select count(rr) > 0 from ReservationRoom rr where rr.room.id = :roomId and rr.checkIn < :to and rr.checkOut > :from and rr.reservation.id <> :excludedReservationId and rr.status <> :cancelledRoom and rr.reservation.status not in :ignoredReservations and not (rr.reservation.status = com.hospitality.mis.entity.reservation.ReservationStatus.DRAFT and rr.reservation.customerAccount is not null and rr.reservation.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING and rr.reservation.depositPaymentExpiresAt <= :now)")
     boolean hasOverlapExcludingReservation(@Param("excludedReservationId") Long excludedReservationId,
 
                                            @Param("roomId") String roomId,
@@ -218,6 +221,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
                                            @Param("to") LocalDateTime to,
 
                                            @Param("cancelledRoom") RoomStatus cancelledRoom,
-                                           @Param("ignoredReservations") List<ReservationStatus> ignoredReservations);
+                                           @Param("ignoredReservations") List<ReservationStatus> ignoredReservations,
+                                           @Param("now") LocalDateTime now);
 
 }

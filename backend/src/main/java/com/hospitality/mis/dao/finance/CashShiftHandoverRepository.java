@@ -20,7 +20,7 @@ public interface CashShiftHandoverRepository extends JpaRepository<CashShiftHand
 
     /** Lấy lần bàn giao gần nhất do một nhân viên bàn giao thực hiện. */
     Optional<CashShiftHandover> findFirstByFromActorOrderByHandedOverAtDesc(String fromActor);
-    @Query("select h from CashShiftHandover h where (:shiftCode is null or h.shiftCode = :shiftCode) and (:actor is null or h.fromActor = :actor or h.toActor = :actor) and (:fromAt is null or h.handedOverAt >= :fromAt) and (:toAt is null or h.handedOverAt < :toAt)")
+    @Query("select h from CashShiftHandover h where (:shiftCode is null or h.shiftCode = :shiftCode) and (:actor is null or h.fromActor = :actor or h.toActor = :actor) and (:fromAt is null or h.handedOverAt >= :fromAt) and (:toAt is null or h.handedOverAt < :toAt) order by h.handedOverAt desc, h.id desc")
     Page<CashShiftHandover> search(@Param("shiftCode") String shiftCode, @Param("actor") String actor,
                                    @Param("fromAt") LocalDateTime fromAt, @Param("toAt") LocalDateTime toAt,
                                    Pageable pageable);

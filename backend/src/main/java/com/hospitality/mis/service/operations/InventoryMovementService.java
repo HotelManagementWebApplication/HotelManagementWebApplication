@@ -42,7 +42,7 @@ public class InventoryMovementService {
         IdempotencySupport.requireKey(key);
         // Lock the business aggregate before DurableIdempotencyService inserts its record.
         // Every inventory command for one service therefore follows service -> idempotency,
-        // avoiding the inverse wait graph under InnoDB contention.
+        // avoiding an inverse SQL Server lock wait graph under contention.
         services.findWithLockById(request.serviceId())
                 .orElseThrow(() -> new DomainException("SERVICE_NOT_FOUND", "Không tìm thấy dịch vụ"));
         String fingerprint = IdempotencySupport.fingerprint("INVENTORY|" + request.serviceId() + "|" + request.type()

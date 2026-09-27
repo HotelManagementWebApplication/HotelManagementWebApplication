@@ -69,9 +69,9 @@ public final class CustomerAccountDtos {
             GuestDtos.Response guest) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    /** Request đăng nhập của khách bằng số điện thoại và mật khẩu bắt buộc. */
+    /** Request đăng nhập của khách bằng số điện thoại hoặc email và mật khẩu bắt buộc. */
     public record LoginRequest(
-            /** Số điện thoại định danh tài khoản. */
+            /** Số điện thoại hoặc email định danh tài khoản; giữ tên field để tương thích API. */
             @NotBlank String phone,
             /** Mật khẩu dùng xác thực. */
             @NotBlank String password) {}

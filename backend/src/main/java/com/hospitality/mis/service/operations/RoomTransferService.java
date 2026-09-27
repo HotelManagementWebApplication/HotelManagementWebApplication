@@ -90,7 +90,8 @@ public class RoomTransferService {
                 throw new DomainException("INVALID_TRANSFER_TIME", "Thời điểm chuyển phải nằm trong kỳ lưu trú");
             if (reservations.hasOverlapExcludingReservation(reservationId, to.getId(), transferredAt,
                     detail.getCheckOut(), RoomStatus.CANCELLED,
-                    List.of(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW, ReservationStatus.CHECKED_OUT)))
+                    List.of(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW, ReservationStatus.CHECKED_OUT),
+                    LocalDateTime.now(clock)))
                 throw new DomainException("OVERBOOKING", "Phòng đích đã có người đặt trong thời gian lưu trú còn lại");
 
             Room from = detail.getRoom();

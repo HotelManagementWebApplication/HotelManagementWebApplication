@@ -27,7 +27,7 @@ export class ApiError extends Error {
   readonly details?: unknown;
 
   constructor(status: number, payload?: ApiErrorDto, message?: string) {
-    super(message ?? payload?.message ?? `API request failed (${status})`);
+    super(message ?? payload?.message ?? `Yêu cầu đến máy chủ không thành công (${status})`);
     this.name = "ApiError";
     this.status = status;
     this.code = payload?.code;
@@ -41,6 +41,10 @@ export class ApiError extends Error {
   get isRateLimited() { return this.status === 429; }
 }
 
+/** Chỉ đưa thông báo có cấu trúc từ API ra giao diện; lỗi kỹ thuật dùng câu dự phòng tiếng Việt. */
+export const apiErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof ApiError && error.message ? error.message : fallback;
+
 /**
  * The Vercel build is a static frontend. It cannot reach a backend listening
  * on the developer machine, and a failed browser fetch otherwise only shows
@@ -49,13 +53,13 @@ export class ApiError extends Error {
  * console contains the actionable cause.
  */
 function apiUnavailableError(baseUrl: string, cause: unknown): ApiError {
-  const target = baseUrl || "the current website";
-  const causeMessage = cause instanceof Error && cause.message ? ` (${cause.message})` : "";
+  const target = baseUrl || "trang web hiện tại";
+  if (cause instanceof Error) console.error("Không thể kết nối máy chủ:", cause);
   return new ApiError(
     0,
     {
       code: "API_UNAVAILABLE",
-      message: `Không thể kết nối API tại ${target}. Backend production phải có URL public HTTPS; localhost chỉ dùng cho môi trường local.${causeMessage}`,
+      message: `Không thể kết nối dịch vụ tại ${target}. Vui lòng kiểm tra máy chủ và thử lại.`,
     },
   );
 }

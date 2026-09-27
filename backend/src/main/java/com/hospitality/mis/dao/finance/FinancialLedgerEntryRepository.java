@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDateTime;
 
 public interface FinancialLedgerEntryRepository extends JpaRepository<FinancialLedgerEntry, Long> {
-    @Query("select e from FinancialLedgerEntry e where e.finalized = true and (:entryType is null or e.entryType = :entryType) and (:fromAt is null or e.occurredAt >= :fromAt) and (:toAt is null or e.occurredAt < :toAt)")
+    @Query("select e from FinancialLedgerEntry e where e.finalized = true and (:entryType is null or e.entryType = :entryType) and (:fromAt is null or e.occurredAt >= :fromAt) and (:toAt is null or e.occurredAt < :toAt) order by e.occurredAt desc, e.id desc")
     Page<FinancialLedgerEntry> search(@Param("entryType") String entryType, @Param("fromAt") LocalDateTime fromAt,
                                       @Param("toAt") LocalDateTime toAt, Pageable pageable);
 

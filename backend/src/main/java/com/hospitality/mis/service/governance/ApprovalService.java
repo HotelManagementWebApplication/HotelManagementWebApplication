@@ -154,6 +154,14 @@ public class ApprovalService {
         return approvals.findByStatusOrderByIdDesc(selected);
     }
 
+    /** Bếp được xem toàn bộ lịch sử đề xuất giá của chính nhân viên yêu cầu, không xem hàng chờ chung. */
+    @Transactional
+    public List<ApprovalRequest> requestedServicePriceChanges(String requester) {
+        String actor = SecurityActor.requireBoundActor(requester);
+        expirePending(Instant.now(clock));
+        return approvals.findByRequesterAndActionOrderByIdDesc(actor, "SERVICE_PRICE_CHANGE");
+    }
+
     @Transactional
     public org.springframework.data.domain.Page<ApprovalRequest> page(String status, String action, String targetId, int page, int size) {
         expirePending(Instant.now(clock));
@@ -232,7 +240,7 @@ public class ApprovalService {
         Instant now = Instant.now(clock);
         /*
          * Find only the candidate ID without a lock.  The conditional UPDATE is
-         * the concurrency arbiter: InnoDB serializes the write and exactly one
+         * the concurrency arbiter: SQL Server serializes the write and exactly one
          * transaction can change APPROVED to CONSUMED.
          */
         Long candidateId = approvals.findApprovedForActivationId(action, targetId,

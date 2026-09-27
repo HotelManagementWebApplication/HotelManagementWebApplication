@@ -14,22 +14,22 @@ import java.time.LocalDate;
  * khi danh mục dịch vụ được cập nhật sau đó.</p>
  */
 @Entity
-@Table(name = "service_usages")
+@Table(name = "SuDungDichVu")
 @IdClass(ServiceUsageId.class)
 @Access(AccessType.FIELD)
 public class ServiceUsage {
     /** Đặt phòng phát sinh dịch vụ; cùng với service và usedOn tạo khóa ghép. */
-    @Id @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "reservation_id")
+    @Id @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "maPhieuDatPhong")
     private Reservation reservation;
     /** Dịch vụ được sử dụng trong ngày; cùng một dịch vụ/ngày không lặp trong đặt phòng. */
-    @Id @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "service_id")
+    @Id @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "maDichVu")
     private Service service;
     /** Ngày nghiệp vụ dùng để phân biệt các lần dùng dịch vụ. */
-    @Id @Column(name = "used_on") private LocalDate usedOn;
+    @Id @Column(name = "ngaySuDung") private LocalDate usedOn;
     /** Số lượng dùng, được tính với đơn giá chụp tại thời điểm tạo dòng. */
-    @Column(name = "quantity", nullable = false) private Integer quantity = 0;
+    @Column(name = "soLuong", nullable = false) private Integer quantity = 0;
     /** Đơn giá bất biến theo lịch sử hóa đơn, không tự đổi theo Service.price. */
-    @Column(name = "unit_price", nullable = false, precision = 12, scale = 2) private BigDecimal unitPrice;
+    @Column(name = "donGia", nullable = false, precision = 12, scale = 2) private BigDecimal unitPrice;
 
     /** Constructor rỗng dành cho JPA. */
     public ServiceUsage() {}

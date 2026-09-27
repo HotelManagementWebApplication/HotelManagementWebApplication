@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest(properties = {
 
-        "spring.datasource.url=jdbc:h2:mem:identitymapping;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:identitymapping;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
 
         "spring.datasource.username=sa",
 
@@ -97,14 +97,14 @@ class IdentityPersistenceTest {
     /** Given entity/relationship annotations, When phản chiếu mapping, Then owner và constraint đúng schema. */
     void employeeIsTheConcreteJpaOwner() throws Exception {
         assertThat(Employee.class.isAnnotationPresent(Entity.class)).isTrue();
-        assertThat(Employee.class.getAnnotation(Table.class).name()).isEqualTo("employees");
+        assertThat(Employee.class.getAnnotation(Table.class).name()).isEqualTo("NhanVien");
 
-        assertColumn("employeeId", "id", 10);
-        assertColumn("fullName", "full_name", 0);
-        assertColumn("password", "password", 255);
-        assertColumn("role", "position", 0);
-        assertColumn("address", "address", 0);
-        assertColumn("phone", "phone", 15);
+        assertColumn("employeeId", "maNhanVien", 10);
+        assertColumn("fullName", "hoVaTen", 100);
+        assertColumn("password", "matKhau", 255);
+        assertColumn("role", "vaiTro", 30);
+        assertColumn("address", "diaChi", 255);
+        assertColumn("phone", "soDienThoai", 15);
 
         Column phone = Employee.class.getDeclaredField("phone").getAnnotation(Column.class);
         assertThat(phone.nullable()).isFalse();
@@ -115,7 +115,7 @@ class IdentityPersistenceTest {
         assertThat(reservationEmployee.getType()).isEqualTo(Employee.class);
         assertThat(reservationEmployee.getAnnotation(ManyToOne.class)).isNotNull();
 
-        assertThat(reservationEmployee.getAnnotation(JoinColumn.class).name()).isEqualTo("employee_id");
+        assertThat(reservationEmployee.getAnnotation(JoinColumn.class).name()).isEqualTo("maNhanVien");
 
 
         Field employeeReservations = Employee.class.getDeclaredField("reservations");

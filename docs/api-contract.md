@@ -93,6 +93,29 @@ Các capability kiểm tra thêm vai trò/phạm vi: approver phải khác reque
 refund approval chỉ `DIRECTOR`; activation room/service cần role được phép;
 assignee/manager giới hạn mutation task/work order.
 
+### Quy tắc thực thi và kiểm thử quyền
+
+- Controller kiểm tra capability cho endpoint; service vẫn phải kiểm tra
+  ownership, trạng thái, actor, approval và các bất biến nghiệp vụ. Ẩn nút trên
+  frontend không phải là biện pháp bảo mật.
+- Actor nội bộ lấy từ principal đã xác thực. Không tin `employee_id` hoặc actor
+  do client gửi để thay người đang đăng nhập.
+- Customer chỉ truy cập dữ liệu thuộc tài khoản của mình qua customer API; không
+  dùng các reservation API nội bộ. Public API chỉ trả các DTO công khai được
+  khai báo riêng.
+- `401` biểu thị thiếu/sai xác thực; `403` biểu thị đã xác thực nhưng thiếu
+  capability hoặc không đúng scope. Từ chối quyền phải xảy ra trước khi service
+  thực hiện hiệu ứng nghiệp vụ, kể cả khi request có khóa idempotency cũ.
+- Security regression tests cần có role được phép, role bị từ chối, anonymous
+  và truy cập chéo ownership/scope. Các điểm kiểm tra chính hiện nằm trong
+  `DepartmentAuthorizationMatrixTest`, `CustomerReservationApiContractTest` và
+  `SecurityIntegrationTest`.
+- JWT access token gắn với refresh-token family/session còn hiệu lực. Logout,
+  khóa tài khoản hoặc phát hiện refresh-token replay phải khiến token cũ không
+  được chấp nhận ở request tiếp theo.
+- Các sự kiện từ chối quyền có thể được audit; log không được chứa token,
+  query string nhạy cảm hoặc request body.
+
 ## Endpoint catalog
 
 ### Auth và employee
@@ -206,6 +229,12 @@ nhận.
 | `POST /api/invoices/reservation/{reservationId}/deposit/refund` | Không body | `PAYMENT_WRITE`; luồng approval refund phải do Director xử lý |
 | `POST /api/invoices/{invoiceId}/adjust` | Body `delta`, `reason`; header bắt buộc `Idempotency-Key` | `BILLING_WRITE`; exact approval payload cần khớp |
 
+`GET /api/reservations/{id}` trả thêm `service_usages[]` cho các dịch vụ ghi
+trực tiếp vào đặt phòng. Mỗi dòng có `service_id`, `service_name`, `used_on`,
+`quantity`, `unit_price` tại thời điểm sử dụng và `amount`; response phân trang
+vẫn giữ gọn. Biên lai lễ tân kết hợp các dòng này với dịch vụ đặt trước đã dùng
+để đối chiếu chi tiết tổng tiền dịch vụ trên hóa đơn.
+
 Payment transaction không nhận `idempotency_key` trong JSON. `Idempotency-Key` là
 HTTP header bắt buộc; backend lưu actor JWT và fingerprint canonical gồm
 `invoice_id`, `amount`, `method`, `type`, `reference` (reference null được chuẩn
@@ -301,6 +330,7 @@ generic PATCH. Create/update/accept/release đều yêu cầu `Idempotency-Key` 
 | `GET /api/governance/approvals` | Query `status`, `action`, `target_id`, `requester`, `from`, `to`, `risk`, `page`, `size` | `APPROVAL_APPROVE`; không filter mở rộng trả array, có filter trả page với metadata `totalElements`, `totalPages` |
 | `POST /api/governance/approvals/{id}/approve` | Không body; header tùy chọn `Idempotency-Key` | `APPROVAL_APPROVE`, khác requester |
 | `POST /api/governance/approvals/{id}/reject` | Không body; header tùy chọn `Idempotency-Key` | `APPROVAL_APPROVE`, khác requester |
+
 | `GET /api/governance/audit` | Query `action`, `entity_type`, `entity_id`, `correlation_key`, `from`, `to`, `page`, `size` | `AUDIT_READ` |
 | `GET /api/governance/notifications/outbox` | Query `role` | `NOTIFICATION_READ`; role bị giới hạn theo JWT |
 | `POST /api/governance/notifications/outbox/{id}/delivered` | Không body | `NOTIFICATION_WRITE` |
@@ -321,6 +351,19 @@ generic PATCH. Create/update/accept/release đều yêu cầu `Idempotency-Key` 
 | `POST /api/hr/shifts` | Body `employee_id`, `shift_date`, `shift_code`, `starts_at`, `ends_at` | `SHIFT_WRITE`; actor được ghi nhận bởi service, không có idempotency header |
 | `PATCH /api/hr/shifts/{id}/status` | Body `status` | `SHIFT_WRITE` |
 | `PUT /api/hr/shifts/{id}` | Body `shift_date`, `shift_code`, `starts_at`, `ends_at` | `SHIFT_WRITE` |
+
+`unit` của dịch vụ là nhãn hiển thị dạng chuỗi, không phải enum hoặc mã API ổn
+định. Giá trị bỏ trống được chuẩn hóa thành `lần`. Các bí danh đầu vào cũ
+`BOTTLE`/`CHAI`, `UNIT`, `TIME`/`LẦN` và `set`/`SET` lần lượt được chuẩn hóa
+thành `chai`, `đơn vị`, `lần` và `bộ`. Phản hồi API và dữ liệu lưu trong
+`DichVu.donViTinh` đều dùng nhãn tiếng Việt chuẩn; API không cam kết trả lại
+đúng bí danh đã nhận. Giá trị ngoài miền cho phép trả 422
+`INVALID_SERVICE_UNIT` trước khi ghi.
+
+Các path hiện mang tên `partner-debts`/`settlements` là tên kỹ thuật đang tồn
+tại. Trong phạm vi nghiệp vụ hiện hành, dữ liệu này là công nợ nhà cung cấp
+hàng hóa/vật tư; không phải tiền thuê mặt bằng, nhượng quyền hay hoa hồng của
+đối tác thương mại.
 
 Các mutation finance (`cash-handovers`, `expenses`, `partner-debts` và
 `partner-debts/{id}/settle`) dùng `Idempotency-Key` để durable-replay theo scope,
@@ -389,25 +432,27 @@ canonical lower_snake_case. Giá trị uppercase, có khoảng trắng hoặc m�
 từ chối (`INVALID_ROOM_STATUS`/fail-fast converter). Frontend không được dùng
 `ready`, `vacant`, `ood` hay nhãn dịch làm giá trị API.
 
-## Proof gate MySQL/Flyway/JPA
+## Proof gate SQL Server/Flyway/JPA
 
 Contract production-like chỉ được gọi là đã chứng minh khi gate sau chạy trên
-MySQL thật, không bỏ qua acceptance test:
+SQL Server 2022 thật, không bỏ qua acceptance test:
 
-1. Khởi động MySQL 8.4 bằng `docker-compose.yml` hoặc CI service, với
+1. Khởi động SQL Server 2022 bằng `docker-compose.yml` hoặc CI service, với
    `MIGRATION_TEST_DB_URL`, `MIGRATION_TEST_DB_USERNAME`,
    `MIGRATION_TEST_DB_PASSWORD` trỏ tới schema sạch.
-2. Chạy Flyway thật với migration `V1` đến `V19`; `spring.flyway.enabled=true`.
+2. Chạy Flyway thật với canonical demo baseline `V1` trên database rỗng;
+   `spring.flyway.enabled=true`.
 3. Chạy ứng dụng/test với `spring.jpa.hibernate.ddl-auto=validate` (không
    `create`, `create-drop` hay `update`). `application.yml` production đã đặt
    `ddl-auto: validate` và Flyway locations là `classpath:db/migration`.
-4. `MySqlMigrationTest` phải xác nhận database product là MySQL, Flyway
+4. `SqlServerMigrationTest` phải xác nhận database product là Microsoft SQL Server, Flyway
    validation thành công, không còn migration pending và Hibernate mappings
-   validate; các MySQL acceptance test phải thực sự được enable bằng biến môi
+   validate; các SQL Server acceptance test phải thực sự được enable bằng biến môi
    trường.
 
-Đây là điều kiện chứng minh, không phải kết quả đã đạt của lượt cập nhật tài
-liệu này. Không được ghi “tests/build pass” nếu chưa có log của đúng gate.
+Gate này được CI bắt buộc chạy bằng SQL Server service và đã được tái hiện local
+với 2.107 test backend, không có failure, error hoặc skipped test. Không được
+ghi “tests/build pass” cho thay đổi tương lai nếu chưa có log của đúng gate.
 
 ## Blockers còn mở
 
@@ -425,5 +470,3 @@ liệu này. Không được ghi “tests/build pass” nếu chưa có log củ
   thêm retry hoặc approval semantics cho chúng. Ngược lại, các finance mutation
   hiện có (`cash-handovers`, `expenses`, `partner-debts`, `settle`) đều bắt buộc
   `Idempotency-Key` và bind actor/payload theo mô tả ở trên.
-- MySQL/Flyway/`ddl-auto=validate` proof gate chưa được chứng minh trong tài liệu
-  này; trạng thái chỉ được đổi khi có log thực tế.

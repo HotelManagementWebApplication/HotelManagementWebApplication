@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -14,7 +15,7 @@ import java.io.UnsupportedEncodingException;
 
 /**
  * Dịch vụ gửi email thông báo và mã OTP qua Gmail SMTP.
- * Tự động chuyển về chế độ DEV (ghi log console) nếu chưa cấu hình thông tin Gmail.
+ * Gửi thất bại thì trả lỗi cho caller, không báo thành công giả hoặc ghi OTP ra log.
  */
 @Service
 public class EmailService {
@@ -24,6 +25,9 @@ public class EmailService {
 
     @Value("${spring.mail.username:}")
     private String mailUsername;
+
+    @Value("${spring.mail.password:}")
+    private String mailPassword;
 
     public EmailService(@Autowired(required = false) JavaMailSender mailSender) {
         this.mailSender = mailSender;
@@ -39,7 +43,7 @@ public class EmailService {
                 "Cảm ơn quý khách đã chọn MaM Hotel. Vui lòng sử dụng mã OTP dưới đây để hoàn tất việc đăng ký tài khoản:",
                 otp
         );
-        sendHtmlEmail(toEmail, subject, htmlContent, otp);
+        sendHtmlEmail(toEmail, subject, htmlContent);
     }
 
     /**
@@ -52,16 +56,12 @@ public class EmailService {
                 "Chúng tôi nhận được yêu cầu đặt lại mật khẩu từ quý khách. Vui lòng sử dụng mã OTP dưới đây để tiếp tục:",
                 otp
         );
-        sendHtmlEmail(toEmail, subject, htmlContent, otp);
+        sendHtmlEmail(toEmail, subject, htmlContent);
     }
 
-    private void sendHtmlEmail(String toEmail, String subject, String htmlContent, String otp) {
-        // Kiểm tra xem đã cấu hình tài khoản Gmail chưa
-        if (mailSender == null || mailUsername == null || mailUsername.trim().isEmpty()) {
-            log.warn("=== [DEV OTP] CHƯA CẤU HÌNH GMAIL SMTP (spring.mail.username trống) ===");
-            log.warn("=== [DEV OTP] Người nhận: {} | Mục đích: {} | MÃ OTP: [{}] ===", toEmail, subject, otp);
-            log.warn("=== Mã OTP này có hiệu lực trong 2 phút ===");
-            return;
+    private void sendHtmlEmail(String toEmail, String subject, String htmlContent) {
+        if (mailSender == null || isBlank(mailUsername) || isBlank(mailPassword)) {
+            throw new EmailDeliveryException("Email OTP chưa được cấu hình SMTP.");
         }
 
         try {
@@ -74,11 +74,14 @@ public class EmailService {
 
             mailSender.send(message);
             log.info("Đã gửi email OTP thành công đến: {}", toEmail);
-        } catch (MessagingException | UnsupportedEncodingException | RuntimeException ex) {
-            log.error("Không thể gửi email OTP qua Gmail SMTP tới {}: {}. Sử dụng mã OTP trong log để kiểm thử.",
-                    toEmail, ex.getMessage());
-            log.warn("=== [DEV OTP FALLBACK] Người nhận: {} | MÃ OTP: [{}] ===", toEmail, otp);
+        } catch (MessagingException | UnsupportedEncodingException | MailException ex) {
+            log.error("Không thể gửi email OTP qua SMTP tới {} ({}).", toEmail, ex.getClass().getSimpleName());
+            throw new EmailDeliveryException("Không thể gửi email xác thực lúc này. Vui lòng thử lại sau.", ex);
         }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private String buildEmailTemplate(String title, String description, String otp) {

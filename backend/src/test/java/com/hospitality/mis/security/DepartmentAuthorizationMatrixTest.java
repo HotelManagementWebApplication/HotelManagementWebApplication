@@ -59,7 +59,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /** Ma trận cho phép/từ chối HTTP độc lập; các dịch vụ giả lập giúp tách RBAC của endpoint khỏi các quy tắc nghiệp vụ. */
 @SpringBootTest(properties = {
-    "spring.datasource.url=jdbc:h2:mem:departmentmatrix;MODE=MySQL;DB_CLOSE_DELAY=-1",
+    "spring.datasource.url=jdbc:h2:mem:departmentmatrix;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
     "spring.datasource.username=sa", "spring.datasource.password=",
     "spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"
 })
@@ -233,6 +233,7 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/services/S1/price/submit", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{\"price\":120,\"reason\":\"Cost update\"}"),
             new Endpoint("POST", "/api/services/S1/price/activate", "ADMIN,DIRECTOR,MANAGER", "{\"price\":120,\"reason\":\"Cost update\"}"),
             new Endpoint("GET", "/api/services/S1/price-history", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
+            new Endpoint("GET", "/api/services/price-requests", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{}"),
             new Endpoint("GET", "/api/operations/restaurant/service-bookings?date=2026-10-01", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{}"),
             new Endpoint("POST", "/api/operations/restaurant/service-bookings/1/use", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{}"),
             new Endpoint("GET", "/api/operations/maintenance/room/101", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),

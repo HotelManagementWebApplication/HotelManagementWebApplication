@@ -5,16 +5,16 @@ import java.math.BigDecimal;
 
 /** Chi tiết mệnh giá của một biên bản bàn giao két tiền. */
 @Entity
-@Table(name = "cash_handover_denominations")
+@Table(name = "ChiTietTienBanGiao")
 public class CashHandoverDenomination {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "maChiTietTienBanGiao")
     private Long id;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "handover_id", nullable = false)
+    @JoinColumn(name = "maBanGiaoTienCa", nullable = false)
     private CashShiftHandover handover;
-    @Column(nullable = false, precision = 12, scale = 2) private BigDecimal denomination;
-    @Column(nullable = false) private int quantity;
-    @Column(nullable = false, precision = 14, scale = 2) private BigDecimal amount;
+    @Column(name = "menhGia", nullable = false, precision = 12, scale = 2) private BigDecimal denomination;
+    @Column(name = "soLuong", nullable = false) private int quantity;
     public Long getId() { return id; }
     public CashShiftHandover getHandover() { return handover; }
     public void setHandover(CashShiftHandover v) { handover = v; }
@@ -22,6 +22,9 @@ public class CashHandoverDenomination {
     public void setDenomination(BigDecimal v) { denomination = v; }
     public int getQuantity() { return quantity; }
     public void setQuantity(int v) { quantity = v; }
-    public BigDecimal getAmount() { return amount; }
-    public void setAmount(BigDecimal v) { amount = v; }
+    @Transient public BigDecimal getAmount() {
+        if (denomination == null || quantity <= 0) return BigDecimal.ZERO;
+        return denomination.multiply(BigDecimal.valueOf(quantity));
+    }
+    public void setAmount(BigDecimal ignored) { /* Tổng tiền luôn được suy ra từ mệnh giá và số lượng. */ }
 }

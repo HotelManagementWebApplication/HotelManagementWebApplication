@@ -7,13 +7,13 @@ describe("kitchen/accounting API contract", () => {
   beforeEach(() => { request.mockReset(); request.mockResolvedValue([]); });
 
   it("uses the audited endpoint paths and snake_case query names", async () => {
-    await kitchenAccountingApi.services(); await kitchenAccountingApi.lowStock();
+    await kitchenAccountingApi.services(); await kitchenAccountingApi.lowStock(); await kitchenAccountingApi.priceRequests();
     await kitchenAccountingApi.inventoryMovements("mini bar"); await kitchenAccountingApi.inventoryReport("mini bar", { from: "2026-09-01", to: "2026-09-18" });
     await kitchenAccountingApi.priceHistory("mini bar"); await kitchenAccountingApi.invoices({ reservation_id: 7 });
     await kitchenAccountingApi.payments({ invoice_id: 4, page: 2 }); await kitchenAccountingApi.receipts({ issued_by: "e1" });
     await kitchenAccountingApi.expenses(); await kitchenAccountingApi.partnerDebts(); await kitchenAccountingApi.settlements(3); await kitchenAccountingApi.ledger({ entry_type: "PAYMENT" }); await kitchenAccountingApi.reconciliation({ from: "2026-09-01" });
     expect(request.mock.calls.map(call => call[0])).toEqual([
-      "/api/services", "/api/services/low-stock", "/api/services/mini%20bar/inventory-movements", "/api/services/mini%20bar/inventory-movements/inventory-report?from=2026-09-01&to=2026-09-18", "/api/services/mini%20bar/price-history", "/api/invoices?reservation_id=7", "/api/finance/payments?invoice_id=4&page=2", "/api/finance/receipts?issued_by=e1", "/api/finance/expenses", "/api/finance/partner-debts", "/api/finance/partner-debts/3/settlements", "/api/finance/ledger?entry_type=PAYMENT", "/api/finance/reconciliation?from=2026-09-01",
+      "/api/services", "/api/services/low-stock", "/api/services/price-requests", "/api/services/mini%20bar/inventory-movements", "/api/services/mini%20bar/inventory-movements/inventory-report?from=2026-09-01&to=2026-09-18", "/api/services/mini%20bar/price-history", "/api/invoices?reservation_id=7", "/api/finance/payments?invoice_id=4&page=2", "/api/finance/receipts?issued_by=e1", "/api/finance/expenses", "/api/finance/partner-debts", "/api/finance/partner-debts/3/settlements", "/api/finance/ledger?entry_type=PAYMENT", "/api/finance/reconciliation?from=2026-09-01",
     ]);
   });
 

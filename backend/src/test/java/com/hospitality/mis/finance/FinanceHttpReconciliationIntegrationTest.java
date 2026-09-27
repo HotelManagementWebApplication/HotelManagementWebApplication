@@ -36,7 +36,7 @@ import com.jayway.jsonpath.JsonPath;
 
 /** HTTP -> finance services -> DB aggregates for reconciliation and invoice-scoped pages. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:financeworkflow;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:financeworkflow;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=", "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })

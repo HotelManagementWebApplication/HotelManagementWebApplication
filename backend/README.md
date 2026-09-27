@@ -1,82 +1,52 @@
 # Hotel MIS backend
 
-Spring Boot 3.4 modular monolith (Java 24) for the Hotel MIS web system. The
-canonical Java package is `com.hospitality.mis`; backend code is organized into
-`middleware`, `controller`, `service`, `dao`, `dto` and `entity` layers, grouped
-by business module.
+Spring Boot API for the Hotel MIS. Java code lives under
+`src/main/java/com/hospitality/mis`, grouped into `controller`, `service`,
+`dao`, `dto`, `entity`, and `config` packages.
 
 ## Chạy local
 
-1. Khởi động MySQL local:
-   `docker compose up -d mysql`.
-2. Cấu hình `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`; không commit credential.
-3. Chạy `mvn spring-boot:run` trong thư mục `backend`.
-
-Flyway quản lý schema theo thứ tự `V1` đến phiên bản hiện tại. V1 tại
-`src/main/resources/db/migration/V1__baseline_schema.sql` là canonical schema
-V1; các migration sau mở rộng cùng một schema contract. Hibernate chỉ validate
-mapping bằng `ddl-auto=validate`, không tự tạo hoặc sửa bảng.
-
-## Acceptance MySQL
-
-Các test `*MySql*Test` phải chạy trên một schema tạm, tách biệt và có thể bỏ đi;
-không trỏ `MIGRATION_TEST_DB_URL` vào schema local/production đang chứa dữ liệu.
-Ví dụ PowerShell:
+Start local SQL Server from the repository root, clear any stale database
+variables from the current PowerShell session, then run from this directory.
+The backend accepts only `jdbc:sqlserver://` URLs and SQL Server credentials.
 
 ```powershell
-$env:MIGRATION_TEST_DB_URL = "jdbc:mysql://localhost:3306/QLKS_P0_ACCEPTANCE?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Ho_Chi_Minh"
-$env:MIGRATION_TEST_DB_USERNAME = "root"
-$env:MIGRATION_TEST_DB_PASSWORD = "<local-password>"
-mvn '-Dtest=MySqlMigrationTest,MySqlBillingConcurrencyTest,MySqlBillingWorkflowTest,MySqlSecuritySmokeTest' test
+docker compose -f ..\docker-compose.yml up -d
+Remove-Item Env:DB_URL, Env:DB_USERNAME, Env:DB_PASSWORD -ErrorAction SilentlyContinue
+$env:DB_URL = "jdbc:sqlserver://localhost:1433;databaseName=QLKS;encrypt=true;trustServerCertificate=true"
+$env:DB_USERNAME = "sa"
+$env:DB_PASSWORD = "<local-sqlserver-password>"
+mvn spring-boot:run
 ```
 
-Migration đã được Flyway áp dụng là immutable. Mọi thay đổi schema tiếp theo
-phải nằm trong migration phiên bản mới; không dùng `flyway repair` để che checksum
-mismatch khi file migration bị sửa.
+Flyway applies the single canonical demo baseline `V1__baseline_schema.sql`
+from `src/main/resources/db/migration/`; Hibernate uses `ddl-auto=validate` and
+does not create or update tables. This database is disposable demo data: schema
+fixes belong in V1 and the local database is recreated. Do not add V2/V3 for
+demo-only schema fixes.
 
-## API lõi
+## Lần theo một thay đổi nghiệp vụ
 
-- `GET /api/rooms`, `GET /api/rooms/availability?from=&to=&type=`
-- `POST /api/guests`, `GET /api/guests?q=`, `GET /api/guests/{id}`
-- `POST /api/reservations`, `GET /api/reservations?status=&guest_id=&page=0&size=20`, `GET /api/reservations/{id}`
-- `POST /api/reservations/{id}/check-in`
-- `POST /api/reservations/{id}/check-out`
-- `POST /api/reservations/{id}/extend`, `/cancel`, `/services`
-- `GET /api/invoices/reservation/{reservationId}`
-- `GET /api/services`, `POST /api/services`, `POST /api/services/{id}/stock`
-- `POST /api/governance/approvals`, `POST /api/governance/approvals/{id}/approve`
-- `GET/POST /api/invoices/{invoiceId}/payments`, `GET/POST /api/invoices/{invoiceId}/receipts`
+1. Find the endpoint in the domain controller and read its request/response DTO.
+2. Follow the service method for validation, authorization scope, state changes,
+   and transaction boundaries.
+3. Check the DAO/repository and entity to see how state is persisted.
+4. If schema behavior changes, inspect/add a Flyway migration.
+5. Update the focused test and the [API contract](../docs/api-contract.md) if
+   the externally visible behavior changes.
 
-Các use case ghi dữ liệu đều có transaction. Tạo đặt phòng khóa từng phòng
-bằng pessimistic lock, kiểm tra khoảng giao nhau
-`existingIn < requestedOut && existingOut > requestedIn`, hỗ trợ idempotency
-qua `idempotencyKey`, giới hạn 3 phòng và thuê giờ tối thiểu 3 giờ.
+Controllers should not write to the database directly, and entities should not
+be returned as API responses. Authenticated actor identity comes from the
+security context, not a client-supplied actor field.
 
-## Policy mặc định
+## SQL Server acceptance tests
 
-`HOTEL_HOURLY_MINIMUM=3`, miễn checkout trễ đến 12:20, phí trễ theo các mốc
-15/20/50/100% và giảm VIP theo hạng Silver/Gold/Platinum. Checkout lập hóa đơn
-theo số dư còn phải thu; payment transaction mới ghi nhận tiền thực thu. Có
-thể override các policy kỹ thuật bằng biến môi trường; các ngưỡng chưa chốt
-được giữ ngoài code nghiệp vụ.
+Tests requiring SQL Server must use a separate disposable database. Set
+`MIGRATION_TEST_DB_URL`, `MIGRATION_TEST_DB_USERNAME`, and
+`MIGRATION_TEST_DB_PASSWORD` explicitly; these variables are separate from the
+running application's `DB_*` settings. Never point an acceptance test at a
+shared or production schema. The live HTTP contract scenarios have a separate
+setup and safety guide at [`frontend/e2e/README.md`](../frontend/e2e/README.md).
 
-## Authentication, JWT và RBAC
-
-`POST /api/auth/login` và `POST /api/auth/refresh` là các endpoint công khai để
-cấp hoặc làm mới cặp access/refresh token. Access token là JWT Bearer; các API
-còn lại yêu cầu `Authorization: Bearer <token>`.
-
-JWT dùng mã nhân viên trong `sub`. Spring Security tạo authenticated principal
-từ JWT và nạp lại quyền cùng trạng thái tài khoản từ identity store. RBAC dùng
-các role như `MANAGER`, `FRONT_DESK`, `ACCOUNTING` và `HOUSEKEEPING`; việc cấp
-nhân viên hoặc đặt lại mật khẩu yêu cầu `MANAGER`.
-
-Actor audit lấy từ authenticated principal trong security context.
-`X-Actor-Id`, nếu client gửi, chỉ là header do client cung cấp và không được
-tin cậy hoặc dùng làm identity/audit actor.
-
-## Database ownership
-
-Backend là DB writer duy nhất. Mọi ghi dữ liệu nghiệp vụ phải đi qua
-application service, transaction boundary, authorization và audit policy; các
-client không được dùng credential MySQL để ghi trực tiếp.
+The backend is the only business-data writer. Frontend, agent, and operational
+clients must use authorized backend use cases rather than direct SQL Server writes.

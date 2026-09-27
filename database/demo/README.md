@@ -1,29 +1,27 @@
-# Demo database reset
+# Dựng lại cơ sở dữ liệu minh họa
 
-These scripts are manual-only. The application must not drop or seed the
-database during startup.
+Chỉ chạy các tập lệnh này theo cách thủ công. Ứng dụng không được xóa hoặc nạp
+dữ liệu vào cơ sở dữ liệu khi khởi động.
 
-## Clean database flow
+## Dựng cấu trúc cơ sở dữ liệu sạch
 
-1. Create an empty MySQL 8.4 schema.
+1. Tạo một cơ sở dữ liệu SQL Server 2022 rỗng.
 
 ```sql
-CREATE DATABASE QLKS
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE [QLKS] COLLATE Vietnamese_100_CI_AI;
 ```
 
-2. Run the backend with Flyway enabled and Hibernate validation enabled.
+2. Chạy máy chủ ứng dụng với Flyway được bật và Hibernate ở chế độ kiểm tra cấu trúc.
 
 ```powershell
-$env:DB_URL="jdbc:mysql://localhost:3307/QLKS?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Ho_Chi_Minh"
-$env:DB_USERNAME="root"
-$env:DB_PASSWORD="<database-password>"
+$env:DB_URL="jdbc:sqlserver://localhost:1433;databaseName=QLKS;encrypt=true;trustServerCertificate=true"
+$env:DB_USERNAME="sa"
+$env:DB_PASSWORD="<mat-khau-sa>"
 cd backend
 mvn spring-boot:run
 ```
 
-Expected configuration:
+Cấu hình cần có:
 
 ```yaml
 spring:
@@ -34,70 +32,80 @@ spring:
       ddl-auto: validate
 ```
 
-Do not use `ddl-auto=create`, `ddl-auto=update`, or startup scripts that drop
-the schema.
+Không dùng `ddl-auto=create`, `ddl-auto=update` hoặc tập lệnh khởi động có thao
+tác xóa lược đồ.
 
-## Reset demo data
+## Dựng lại dữ liệu minh họa (thao tác xóa dữ liệu)
 
-After Flyway has migrated the schema, run:
+`reset_demo.sql` xóa trực tiếp rồi nạp lại dữ liệu vào nhiều bảng nghiệp vụ.
+Chạy trực tiếp tệp SQL sẽ bỏ qua bước kiểm tra trước bằng PowerShell ở dưới.
+Chỉ chạy lệnh trực tiếp trên lược đồ cục bộ đã biết là rỗng và có thể hủy; tuyệt
+đối không chạy trên cơ sở dữ liệu dùng chung, chứa dữ liệu cần giữ hoặc đang vận
+hành thật. Khi thiết lập cục bộ thông thường, hãy dùng tập lệnh có bước bảo vệ.
+
+Sau khi Flyway đã cập nhật lược đồ, chạy:
 
 ```powershell
-mysql -h localhost -P 3307 -u root -p QLKS < database/demo/reset_demo.sql
+docker cp database/demo/reset_demo.sql web-hotel-mis-sqlserver-1433:/tmp/reset_demo.sql
+docker exec web-hotel-mis-sqlserver-1433 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$env:MSSQL_SA_PASSWORD" -C -d QLKS -b -I -i /tmp/reset_demo.sql
 ```
 
-Use direct file redirection as shown above; do not pipe `Get-Content` into the
-MySQL client on Windows PowerShell, because that can transcode Vietnamese text
-before MySQL receives it.
+Dùng `docker cp` rồi `sqlcmd -i`; không chuyển đầu ra của `Get-Content` qua pipe
+vào `sqlcmd` trong Windows PowerShell vì BOM/mã hóa có thể làm hỏng ký tự Unicode.
 
-`reset_demo.sql` clears and reseeds the complete demo fixture: rooms, guests,
-services, reservations, hourly booking hold, invoices, payments, receipts,
-housekeeping/technical tasks, inventory, finance, hotel-operated service
-bookings, supplier debts, and pending approvals. It also includes one future
-`DEPOSIT_PAID` overnight booking for testing advance service reservations.
-Dates are generated from `CURDATE()` so the fixture remains
-usable when the demo is run later.
+`reset_demo.sql` xóa và nạp lại đầy đủ dữ liệu minh họa: phòng, khách lưu trú,
+dịch vụ, phiếu đặt phòng, phiếu giữ phòng theo giờ, hóa đơn, giao dịch thanh
+toán, biên lai, công việc buồng phòng/kỹ thuật, kho, tài chính, lượt đặt dịch
+vụ do khách sạn cung cấp, công nợ nhà cung cấp và yêu cầu phê duyệt đang chờ.
+Tệp cũng tạo một phiếu đặt phòng qua đêm trong tương lai ở trạng thái
+`DEPOSIT_PAID` để kiểm tra việc đặt dịch vụ trước. Ngày được tính từ
+`CAST(SYSDATETIME() AS date)` để dữ liệu vẫn dùng được khi dựng lại bản minh họa vào thời điểm khác.
 
-For normal local startup, use the guarded script below instead of resetting by
-hand. It seeds only when all four core tables are empty; it refuses to reset a
-partially populated database:
+Khi khởi chạy cục bộ thông thường, dùng tập lệnh có bước bảo vệ dưới đây. Tập
+lệnh kiểm tra mọi bảng dữ liệu trong lược đồ đích, chỉ bỏ qua bảng lịch sử
+migration của Flyway. Tập lệnh nhận diện 64 dòng cố định trong
+`NhomKhoaChongTrung` là dữ liệu hạ tầng khởi tạo lược đồ, chỉ nạp dữ liệu khi
+các bảng nghiệp vụ đang rỗng, không đụng vào cơ sở dữ liệu minh họa đã có dữ
+liệu và từ chối dựng lại cơ sở dữ liệu mới chỉ có một phần dữ liệu:
 
 ```powershell
-docker compose up -d mysql
-# Start backend once so Flyway creates/updates QLKS, then run:
+docker compose up -d
+# Khởi chạy máy chủ một lần để Flyway tạo/cập nhật QLKS, sau đó dừng máy chủ và
+# mọi tiến trình khác đang ghi vào cơ sở dữ liệu trước khi chạy tập lệnh dựng lại:
 .\database\demo\ensure_demo_data.ps1
 ```
 
-The Compose file always uses the persistent Docker volume
-`web-hotel-mis_hotel-mysql` on MySQL port `3307`. `docker compose down -v` cannot
-remove this external volume, so restarting the container does not switch to a
-different empty database.
+Tệp Compose luôn dùng vùng lưu trữ Docker bền vững
+`web-hotel-mis_hotel-sqlserver` trên cổng SQL Server `1433`. Lệnh `docker compose down -v`
+không xóa được vùng lưu trữ bên ngoài này; vì vậy khởi động lại vùng chứa không
+đồng nghĩa với chuyển sang một cơ sở dữ liệu rỗng khác.
 
-Demo logins created by this script:
+Thông tin đăng nhập minh họa do tập lệnh tạo:
 
-- Customer: `0901234567 / hotel123`
-- Employees: `FRONTDESK`, `HOUSEKEEP`, `TECHNICAL`, `ACCOUNTING`, `KITCHEN`,
-  `MANAGER`, `DIRECTOR`, `ADMIN`, `HR`, `STAFF` — all use `hotel123`.
+- Khách hàng: `0901234567 / hotel123`
+- Nhân viên: `FRONTDESK`, `HOUSEKEEP`, `TECHNICAL`, `ACCOUNTING`, `KITCHEN`,
+  `MANAGER`, `DIRECTOR`, `ADMIN`, `HR`, `STAFF` — tất cả dùng `hotel123`.
 
-The SQL stores only BCrypt hashes; it does not store plaintext passwords.
+SQL chỉ lưu giá trị băm BCrypt, không lưu mật khẩu dạng văn bản thuần.
 
-## Admin bootstrap
+## Khởi tạo tài khoản quản trị
 
-Provision employee login accounts through the security/admin bootstrap path for
-the target environment. If a SQL-based emergency bootstrap is approved, pass
-only a BCrypt hash from an environment secret into that one-off command; do not
-write plaintext passwords into SQL files.
+Tạo tài khoản đăng nhập nhân viên thông qua luồng khởi tạo quản trị/bảo mật của
+môi trường đích. Nếu được duyệt cách khởi tạo khẩn cấp bằng SQL, chỉ truyền giá
+trị băm BCrypt lấy từ bí mật môi trường vào lệnh dùng một lần; không ghi mật
+khẩu dạng văn bản thuần vào tệp SQL.
 
-Example for a precomputed hash stored in `DEMO_ADMIN_BCRYPT_HASH`:
+Ví dụ với giá trị băm tạo sẵn được lưu trong `DEMO_ADMIN_BCRYPT_HASH`:
 
 ```powershell
 if ($env:DEMO_ADMIN_BCRYPT_HASH -notmatch '^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$') {
-  throw "DEMO_ADMIN_BCRYPT_HASH must be a BCrypt hash"
+  throw "DEMO_ADMIN_BCRYPT_HASH phải là giá trị băm BCrypt"
 }
 
-mysql -h localhost -u root -p QLKS --execute "
-INSERT INTO employees (id, full_name, password, position, phone)
-VALUES ('NV_ADMIN', 'Demo Admin', '$env:DEMO_ADMIN_BCRYPT_HASH', 'QUAN_LY', '0900000000')
-ON DUPLICATE KEY UPDATE
-  password = VALUES(password),
-  position = VALUES(position)"
+sqlcmd -S localhost -U sa -P $env:MSSQL_SA_PASSWORD -C -d QLKS -Q "
+IF EXISTS (SELECT 1 FROM NhanVien WHERE maNhanVien=N'NV_ADMIN')
+  UPDATE NhanVien SET matKhau=N'$env:DEMO_ADMIN_BCRYPT_HASH', vaiTro=N'Quản lý' WHERE maNhanVien=N'NV_ADMIN';
+ELSE
+  INSERT INTO NhanVien (maNhanVien, hoVaTen, matKhau, vaiTro, soDienThoai)
+  VALUES (N'NV_ADMIN', N'Demo Admin', N'$env:DEMO_ADMIN_BCRYPT_HASH', N'Quản lý', N'0900000000');"
 ```

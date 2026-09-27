@@ -5,18 +5,19 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /** Dòng biến động tồn kho của một dịch vụ, do một tác nhân ghi nhận. */
-@Entity @Table(name = "inventory_movements")
+@Entity @Table(name = "BienDongKhoDichVu")
 public class InventoryMovement {
     /** ID dòng biến động do cơ sở dữ liệu sinh. */
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
-    @ManyToOne(optional = false, fetch = FetchType.LAZY) @JoinColumn(name = "service_id", nullable = false) private Service service;
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) @Column(name = "maBienDongKhoDichVu")
+ private Long id;
+    @ManyToOne(optional = false, fetch = FetchType.LAZY) @JoinColumn(name = "maDichVu", nullable = false) private Service service;
     /** Loại biến động: nhập, xuất hoặc điều chỉnh. */
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private MovementType type;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.InventoryMovementTypeConverter.class) @Column(name = "loai", nullable = false, length = 20) private MovementType type;
     /** Số lượng thay đổi của lần ghi nhận. */
-    @Column(nullable = false) private int quantity;
-    @Column(nullable = false, length = 50) private String actorId;
-    @Column(nullable = false) private LocalDateTime occurredAt;
-    @Column(length = 255) private String reason;
+    @Column(name = "soLuong", nullable = false) private int quantity;
+    @Column(name = "maNguoiThucHien", nullable = false, length = 50) private String actorId;
+    @Column(name = "thoiDiemPhatSinh", nullable = false) private LocalDateTime occurredAt;
+    @Column(name = "lyDo", length = 255) private String reason;
     /** Các nguyên nhân nghiệp vụ làm thay đổi tồn kho. */
     /** Nhập hàng làm tăng tồn kho. */
     public enum MovementType {

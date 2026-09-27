@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = {
 
-        "spring.datasource.url=jdbc:h2:mem:hotelmis;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:hotelmis;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
 
         "spring.datasource.username=sa",
 

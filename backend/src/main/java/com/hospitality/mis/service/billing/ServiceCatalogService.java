@@ -59,8 +59,8 @@ public class ServiceCatalogService {
         if (services.existsById(request.id())) throw new DomainException("SERVICE_EXISTS", "Mã dịch vụ đã tồn tại");
 
         var service = new Service(); service.setId(request.id()); service.setName(request.name()); service.setPrice(request.price());
-        service.setUnit(request.unit() == null || request.unit().isBlank() ? "LẦN" : request.unit());
-        service.setCategory(request.category() == null || request.category().isBlank() ? "other" : request.category().trim());
+        service.setUnit(normalizeUnit(request.unit()));
+        service.setCategory(normalizeCategory(request.category()));
         service.setDescription(trimToNull(request.description()));
         service.setImageUrl(trimToNull(request.imageUrl()));
         service.setStockQuantity(0); service.setSafetyThreshold(request.safetyThreshold()); services.saveAndFlush(service);
@@ -125,6 +125,11 @@ public class ServiceCatalogService {
                 .map(x -> new ServiceDtos.PriceHistoryResponse(x.getId(), x.getService().getId(), x.getPrice(), x.getChangedBy(), x.getApprovalId(), x.getEffectiveAt())).toList();
     }
 
+    @Transactional
+    public List<com.hospitality.mis.entity.governance.ApprovalRequest> priceRequestsFor(String actor) {
+        return approvals.requestedServicePriceChanges(actor);
+    }
+
     @Transactional(readOnly = true)
     public List<ServiceDtos.Response> lowStock() {
         return services.findLowStock().stream().map(this::toResponse).toList();
@@ -137,6 +142,27 @@ public class ServiceCatalogService {
     private static String trimToNull(String value) {
         if (value == null || value.isBlank()) return null;
         return value.trim();
+    }
+
+    private static String normalizeCategory(String value) {
+        String category = value == null || value.isBlank() ? "other" : value.trim();
+        try {
+            new com.hospitality.mis.persistence.VietnameseCodeConverters.ServiceCategoryConverter()
+                    .convertToDatabaseColumn(category);
+            return category;
+        } catch (IllegalArgumentException ex) {
+            throw new DomainException("INVALID_SERVICE_CATEGORY", "Nhóm dịch vụ không hợp lệ");
+        }
+    }
+
+    private static String normalizeUnit(String value) {
+        String unit = value == null || value.isBlank() ? "lần" : value.trim();
+        try {
+            return new com.hospitality.mis.persistence.VietnameseCodeConverters.ServiceUnitConverter()
+                    .convertToDatabaseColumn(unit);
+        } catch (IllegalArgumentException ex) {
+            throw new DomainException("INVALID_SERVICE_UNIT", "Đơn vị tính không được hỗ trợ");
+        }
     }
 
     /** Payload canonical chỉ gồm field thực sự được mutate; lý do thuộc metadata approval. */

@@ -73,7 +73,7 @@ class ReservationServiceGuestPortTest {
         when(sharedGuests.findSharedById(41L)).thenReturn(Optional.of(guest));
         when(employees.findById("frontdesk")).thenReturn(Optional.of(employee));
         when(rooms.findAllForUpdateOrdered(List.of("101"))).thenReturn(List.of(room));
-        when(reservations.hasOverlap(eq("101"), any(), any(), any(), any())).thenReturn(false);
+        when(reservations.hasOverlap(eq("101"), any(), any(), any(), any(), any())).thenReturn(false);
         when(reservations.saveAndFlush(any(Reservation.class))).thenAnswer(invocation -> {
             Reservation saved = invocation.getArgument(0);
             ReflectionTestUtils.setField(saved, "id", 100L);

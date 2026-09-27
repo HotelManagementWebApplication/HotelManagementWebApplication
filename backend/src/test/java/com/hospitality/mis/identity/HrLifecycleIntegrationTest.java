@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Integration proof for HR lifecycle, role authority, login history and shift rules. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:hr-lifecycle;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:hr-lifecycle;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.flyway.enabled=false",
@@ -47,11 +47,11 @@ class HrLifecycleIntegrationTest {
     @BeforeEach
     void clean() {
         SecurityContextHolder.clearContext();
-        jdbc.update("delete from audit_logs");
-        jdbc.update("delete from employee_shifts");
-        jdbc.update("delete from employee_login_events");
-        jdbc.update("delete from refresh_tokens");
-        jdbc.update("delete from employees");
+        jdbc.update("delete from NhatKyKiemSoat");
+        jdbc.update("delete from CaLamViecNhanVien");
+        jdbc.update("delete from SuKienDangNhapNhanVien");
+        jdbc.update("delete from MaLamMoiDangNhap");
+        jdbc.update("delete from NhanVien");
     }
 
     @AfterEach

@@ -9,26 +9,26 @@ import java.time.LocalDateTime;
 
 /** Chủ thể chuẩn của một phòng được đặt trong một đặt phòng. */
 @Entity
-@Table(name = "reservation_rooms")
+@Table(name = "ChiTietDatPhong")
 @IdClass(ReservationRoomId.class)
 @Access(AccessType.FIELD)
 public class ReservationRoom {
     /** Đặt phòng chứa dòng phòng này; cùng room tạo khóa ghép. */
-    @Id @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "reservation_id", nullable = false)
+    @Id @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "maPhieuDatPhong", nullable = false)
     private Reservation reservation;
     /** Phòng được phân bổ cho đặt phòng; cùng reservation tạo khóa ghép. */
-    @Id @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "room_id", nullable = false)
+    @Id @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "maPhong", nullable = false)
     private Room room;
     /** Khoảng thời gian lưu trú dự kiến/thực tế của riêng phòng này. */
-    @Column(name = "check_in", nullable = false) private LocalDateTime checkIn;
-    @Column(name = "check_out", nullable = false) private LocalDateTime checkOut;
+    @Column(name = "thoiDiemNhanPhong", nullable = false) private LocalDateTime checkIn;
+    @Column(name = "thoiDiemTraPhong", nullable = false) private LocalDateTime checkOut;
     /** Thời điểm trả phòng trước mọi lần gia hạn. Được giữ bất biến để tính phí độc lập cho từng phòng. */
-    @Column(name = "original_check_out", nullable = false) private LocalDateTime originalCheckOut;
+    @Column(name = "thoiDiemTraPhongBanDau", nullable = false) private LocalDateTime originalCheckOut;
     @Convert(converter = com.hospitality.mis.dao.room.RoomStatusConverter.class)
-    @Column(name = "status", nullable = false, length = 30) private RoomStatus status = RoomStatus.RESERVED;
+    @Column(name = "trangThai", nullable = false, length = 30) private RoomStatus status = RoomStatus.RESERVED;
     /** Số lần đổi phòng đã thực hiện cho dòng đặt phòng. */
-    @Column(name = "transfer_count", nullable = false) private int transferCount;
-    @Column(name = "guest_count", nullable = false) private int guestCount = 1;
+    @Column(name = "soLanChuyenPhong", nullable = false) private int transferCount;
+    @Column(name = "soLuongKhach", nullable = false) private int guestCount = 1;
     public Reservation getReservation() { return reservation; }
     public Room getRoom() { return room; }
     public LocalDateTime getCheckIn() { return checkIn; }

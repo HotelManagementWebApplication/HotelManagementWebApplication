@@ -7,6 +7,7 @@ import jakarta.persistence.Access;
 import jakarta.persistence.AccessType;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 
@@ -37,78 +38,78 @@ import java.util.Objects;
  * Chủ thể JPA cụ thể duy nhất của bảng {@code guests}.
  */
 @Entity
-@Table(name = "guests")
+@Table(name = "KhachLuuTru")
 @Access(AccessType.FIELD)
 public class Guest {
     @Id
 
     @GeneratedValue(strategy = GenerationType.IDENTITY)
 
-    @Column(name = "id", nullable = false)
+    @Column(name = "maKhachLuuTru", nullable = false)
     /** ID khách dùng làm khóa quan hệ với đặt phòng và tài khoản. */
     private Long id;
 
 
 
-    @Column(name = "full_name", nullable = false, length = 100)
+    @Column(name = "hoVaTen", nullable = false, length = 100)
     private String fullName;
 
 
 
-    @Column(name = "address", length = 255)
+    @Column(name = "diaChi", length = 255)
     private String address;
 
 
 
-    @Column(name = "phone", nullable = false, unique = true, length = 15)
+    @Column(name = "soDienThoai", nullable = false, unique = true, length = 15)
     private String phone;
 
 
 
-    @Column(name = "email", unique = true, length = 100)
+    @Column(name = "email", length = 100)
     private String email;
 
 
 
-    @Column(name = "identity_number", nullable = false, unique = true, length = 12)
+    @Column(name = "soGiayToTuyThan", nullable = false, unique = true, length = 12)
     private String identityNumber;
 
 
 
-    @Column(name = "birth_year")
+    @Column(name = "namSinh")
     private Integer birthYear;
 
 
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.MembershipTierConverter.class)
 
-    @Column(name = "membership_tier", nullable = false, length = 20)
+    @Column(name = "hangThanhVien", nullable = false, length = 20)
     /** Hạng thành viên hiện tại, được cập nhật bởi chính sách lưu trú. */
     private MembershipTier membershipTier = MembershipTier.STANDARD;
 
 
 
-    @Column(name = "total_spend", nullable = false, precision = 14, scale = 2)
+    @Column(name = "tongChiTieu", nullable = false, precision = 14, scale = 2)
     /** Tổng chi tiêu đã quyết toán suốt đời của khách. */
     private BigDecimal totalSpend = BigDecimal.ZERO;
 
 
 
-    @Column(name = "late_cancellation_count", nullable = false)
+    @Column(name = "soLanHuyMuon", nullable = false)
     /** Số lần hủy muộn dùng để giảm hạng và chặn đặt phòng. */
     private int lateCancellationCount;
 
-    @Column(name = "completed_stays", nullable = false)
+    @Column(name = "soLanLuuTruHoanThanh", nullable = false)
     /** Số lần lưu trú hoàn tất dùng để xét hạng. */
     private int completedStays;
 
-    @Column(name = "late_checkout_count", nullable = false)
+    @Column(name = "soLanTraPhongMuon", nullable = false)
     /** Số lần trả phòng muộn dùng cho quy tắc giảm hạng. */
     private int lateCheckoutCount;
 
 
 
-    @Column(name = "booking_blocked", nullable = false)
+    @Column(name = "biChanDatPhong", nullable = false)
     /** Cờ chặn đặt phòng; chỉ được mở lại bởi quy trình nghiệp vụ phù hợp. */
     private boolean bookingBlocked;
 
@@ -116,7 +117,7 @@ public class Guest {
 
     @Version
 
-    @Column(name = "version", nullable = false)
+    @Column(name = "phienBan", nullable = false)
     /** Phiên bản lạc quan, ngăn cập nhật đồng thời làm mất số liệu khách. */
     private long version;
 

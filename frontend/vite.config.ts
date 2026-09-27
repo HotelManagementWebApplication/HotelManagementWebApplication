@@ -7,6 +7,7 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
     globals: true,
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
   server: {
     port: 5173,

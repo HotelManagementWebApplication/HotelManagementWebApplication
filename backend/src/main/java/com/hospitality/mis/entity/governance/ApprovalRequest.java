@@ -1,6 +1,7 @@
 package com.hospitality.mis.entity.governance;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -14,7 +15,7 @@ import java.time.Instant;
 
 /** Một quyết định phê duyệt duy nhất cho một thay đổi cụ thể. */
 @Entity
-@Table(name = "approval_requests")
+@Table(name = "YeuCauPheDuyet")
 public class ApprovalRequest {
     /** Tập hằng trạng thái điều khiển vòng đời một yêu cầu phê duyệt. */
     public static final String PENDING = "PENDING";
@@ -29,59 +30,63 @@ public class ApprovalRequest {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "maYeuCauPheDuyet")
     private Long id;
 
-    @Column(nullable = false, length = 50)
+    @Column(name = "nguoiYeuCau", nullable = false, length = 50)
     /** Chủ thể yêu cầu phê duyệt. */
     private String requester;
 
-    @Column(nullable = false, length = 50)
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseCodeConverters.ApprovalActionConverter.class)
+    @Column(name = "hanhDong", nullable = false, length = 50)
     /** Tên hành động nhạy cảm cần phê duyệt. */
     private String action;
 
-    @Column(name = "target_id", nullable = false, length = 100)
+    @Column(name = "maDoiTuong", nullable = false, length = 100)
     /** ID đối tượng mà hành động sẽ thay đổi. */
     private String targetId;
 
     @Lob
-    @Column(name = "mutation_payload", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "duLieuThayDoi", nullable = false, columnDefinition = "NVARCHAR(MAX)")
     /** Nội dung thay đổi đã yêu cầu, được thực thi sau phê duyệt. */
     private String mutationPayload;
 
-    @Column(name = "payload_fingerprint", nullable = false, length = 64)
+    @Column(name = "dauVanTayDuLieu", nullable = false, length = 64)
     /** Dấu vân tay payload để phê duyệt không bị dùng cho payload khác. */
     private String payloadFingerprint;
 
-    @Column(precision = 19, scale = 4)
+    @Column(name = "soTien", precision = 19, scale = 4)
     private BigDecimal amount;
 
-    @Column(nullable = false, length = 500)
+    @Column(name = "lyDo", nullable = false, length = 500)
     private String reason;
 
-    @Column(nullable = false, length = 20)
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseCodeConverters.ApprovalStatusConverter.class)
+    @Column(name = "trangThai", nullable = false, length = 20)
     /** Trạng thái vòng đời; chỉ các phương thức chuyển trạng thái được phép thay đổi. */
     private String status = PENDING;
 
-    @Column(nullable = false, length = 20)
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseCodeConverters.PriorityConverter.class)
+    @Column(name = "mucDoRuiRo", nullable = false, length = 20)
     private String risk = "LOW";
 
-    @Column(name = "requested_at", nullable = false)
+    @Column(name = "thoiDiemYeuCau", nullable = false)
     private Instant requestedAt;
 
-    @Column(length = 50)
+    @Column(name = "nguoiPheDuyet", length = 50)
     private String approver;
 
-    @Column(name = "decided_at")
+    @Column(name = "thoiDiemQuyetDinh")
     private Instant decidedAt;
 
-    @Column(name = "expires_at", nullable = false)
+    @Column(name = "thoiDiemHetHan", nullable = false)
     /** Thời điểm hết hạn; quá thời điểm này yêu cầu không còn được dùng. */
     private Instant expiresAt;
 
-    @Column(name = "consumed_at")
+    @Column(name = "thoiDiemSuDung")
     private Instant consumedAt;
 
-    @Column(name = "correlation_key", length = 100)
+    @Column(name = "khoaLienKet", length = 100)
     /** Khóa liên kết yêu cầu với chuỗi thao tác hoặc audit bên ngoài. */
     private String correlationKey;
 
