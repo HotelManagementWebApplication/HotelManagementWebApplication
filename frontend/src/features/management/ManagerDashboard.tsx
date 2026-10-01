@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo } from "react";
 import { hrGovernanceApi } from "../../shared/api/hrGovernance";
+import { enterpriseApi } from "../../shared/api/enterprise";
 import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
 import { frontDeskApi } from "../../shared/api/frontDesk";
 import { kitchenAccountingApi } from "../../shared/api/kitchenAccounting";
 import { authApi } from "../../shared/api/auth";
 import { EmployeeProfileDropdown } from "../../shared/components/EmployeeProfileDropdown";
 import type { Approval as ApiApproval, EmployeeAdmin } from "../../shared/types/hrGovernance";
+import type { LeaveRequest } from "../../shared/types/enterprise";
 import type { EquipmentIncident, HousekeepingTask, Room as ApiRoom, TechnicalWorkOrder } from "../../shared/types/housekeepingTechnical";
 import type { Invoice as ApiInvoice } from "../../shared/types/frontDesk";
 import type { Expense } from "../../shared/types/kitchenAccounting";
@@ -28,7 +30,7 @@ type ManagerRole = "manager" | "director";
 interface Approval {
   id: string; dept: string; deptColor: string; emoji: string;
   title: string; detail: string[]; time: string; badge: string; badgeColor: string;
-  kind: "service-price" | "refund" | "technical-release" | "expense";
+  kind: "service-price" | "refund" | "technical-release" | "expense" | "leave";
   rawWorkOrderId?: number;
 }
 
@@ -601,9 +603,60 @@ function ReportsScreen({ invoices = [], rooms = [], expenses = [] }: { invoices?
   );
 }
 
-function OperationsScreen({ rooms }: { rooms: ApiRoom[] }) {
+function OperationsScreen({
+  rooms, tasks, employees, workOrders, onNavigateApprovals, onTaskCreated, onTaskReady,
+}: {
+  rooms: ApiRoom[];
+  tasks: HousekeepingTask[];
+  employees: EmployeeAdmin[];
+  workOrders: TechnicalWorkOrder[];
+  onNavigateApprovals: () => void;
+  onTaskCreated: (task: HousekeepingTask) => void;
+  onTaskReady: (task: HousekeepingTask) => void;
+}) {
   const actionRooms = rooms.filter(room => room.status === "cleaning" || room.status === "maintenance");
-  const [released, setReleased] = useState<string[]>([]);
+  const [assignees, setAssignees] = useState<Record<string, string>>({});
+  const [savingRoom, setSavingRoom] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const housekeepingEmployees = employees.filter(employee => employee.role === "HOUSEKEEPING"
+    && employee.enabled && employee.employment_status === "WORKING");
+
+  const latestTaskForRoom = (roomId: string) => tasks
+    .filter(task => task.room_id === roomId)
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+
+  const updateRoomTask = async (task: HousekeepingTask) => {
+    setSavingRoom(task.room_id);
+    setError("");
+    try {
+      const updated = await housekeepingTechnicalApi.updateTask(task.id, { status: "READY" });
+      onTaskReady(updated);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Không thể xác nhận checklist phòng.");
+    } finally {
+      setSavingRoom(null);
+    }
+  };
+
+  const assignPostRepairCleaning = async (room: ApiRoom) => {
+    const assignee = assignees[room.id];
+    if (!assignee) return;
+    setSavingRoom(room.id);
+    setError("");
+    try {
+      const task = await housekeepingTechnicalApi.createTask({
+        room_id: room.id,
+        assignee,
+        note: "Dọn phòng và hoàn tất checklist sau khi bảo trì được nghiệm thu.",
+      });
+      onTaskCreated(task);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Không thể giao checklist buồng phòng sau sửa chữa.");
+    } finally {
+      setSavingRoom(null);
+    }
+  };
+
   return (
     <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(150px,1fr))",gap:12,marginBottom:16}}>
@@ -622,19 +675,50 @@ function OperationsScreen({ rooms }: { rooms: ApiRoom[] }) {
       <div style={{background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,overflow:"hidden"}}>
         <div style={{padding:"14px 16px",borderBottom:"1px solid #E2E8F0"}}>
           <p style={{fontSize:14,fontWeight:700,color:"#0F172A"}}>Hàng đợi nghiệm thu để mở phòng</p>
-          <p style={{fontSize:11,color:"#64748B",marginTop:2}}>Quản lý kiểm tra thực tế trước khi chuyển phòng về trạng thái sẵn sàng.</p>
+          <p style={{fontSize:11,color:"#64748B",marginTop:2}}>Chỉ checklist đã hoàn tất hoặc quy trình sửa chữa đã nghiệm thu mới được chuyển tiếp.</p>
         </div>
+        {error && <p role="alert" style={{padding:"10px 16px",color:"#B91C1C",fontSize:12,background:"#FEF2F2"}}>{error}</p>}
         {actionRooms.map(room=>{
-          const done = released.includes(room.id);
-          return <div key={room.id} style={{display:"grid",gridTemplateColumns:"80px 1.2fr 1fr 190px",gap:12,alignItems:"center",padding:"12px 16px",borderBottom:"1px solid #F1F5F9"}}>
+          const task = latestTaskForRoom(room.id);
+          const roomRepairs = workOrders.filter(order => order.room_id === room.id);
+          const waitingAcceptance = roomRepairs.some(order => order.status === "WAITING_ACCEPTANCE");
+          const repairsAccepted = roomRepairs.some(order => order.status === "COMPLETED")
+            && roomRepairs.every(order => order.status === "COMPLETED" || order.status === "ROOM_RELEASED");
+          const canMarkReady = room.status === "cleaning" && task?.status === "CLEANED"
+            && task.checklist_complete && !task.blocking_incident;
+          const canAssignCleaning = room.status === "maintenance" && !task && repairsAccepted;
+          let statusText = room.status === "cleaning" ? "Chờ checklist buồng phòng" : "Chờ hoàn tất sửa chữa";
+          if (waitingAcceptance) statusText = "Chờ quản lý nghiệm thu kỹ thuật";
+          else if (room.status === "maintenance" && task?.checklist_complete) statusText = "Checklist xong · chờ kỹ thuật mở phòng";
+          else if (canAssignCleaning) statusText = "Sửa chữa đã nghiệm thu · cần checklist buồng phòng";
+          else if (task?.status === "IN_PROGRESS" || task?.status === "NEEDS_CLEANING") statusText = "Buồng phòng đang xử lý checklist";
+
+          return <div key={room.id} style={{display:"grid",gridTemplateColumns:"80px 1.2fr 1.5fr minmax(180px,1fr)",gap:12,alignItems:"center",padding:"12px 16px",borderBottom:"1px solid #F1F5F9"}}>
             <strong style={{fontSize:15}}>P.{room.name}</strong>
             <span style={{fontSize:12,color:"#475569"}}>{roomTypeLabel(room.room_type_name)} · Tầng {room.floor}</span>
-            <span style={{fontSize:11,fontWeight:600,color:room.status==="maintenance"?"#DC2626":"#D97706"}}>{room.status==="maintenance"?"Kỹ thuật báo hoàn thành":"Buồng phòng báo đã dọn"}</span>
-            <button disabled={done} onClick={()=>setReleased(items=>[...items,room.id])} style={{height:32,borderRadius:8,border:"none",background:done?"#DCFCE7":"#0F172A",color:done?"#166534":"#FFF",fontSize:11,fontWeight:700,cursor:done?"default":"pointer"}}>
-              {done?"Đã nghiệm thu & mở phòng":"Nghiệm thu & mở phòng"}
-            </button>
+            <span style={{fontSize:11,fontWeight:600,color:room.status==="maintenance"?"#DC2626":"#D97706"}}>{statusText}</span>
+            {canMarkReady ? (
+              <button disabled={savingRoom === room.id} onClick={() => void updateRoomTask(task)} style={{height:34,borderRadius:8,border:"none",background:"#0F172A",color:"#FFF",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                {savingRoom === room.id ? "Đang lưu…" : "Xác nhận checklist & sẵn sàng"}
+              </button>
+            ) : canAssignCleaning ? (
+              <div style={{display:"flex",gap:6}}>
+                <select aria-label={`Nhân viên buồng phòng phòng ${room.name}`} value={assignees[room.id] ?? ""} onChange={event => setAssignees(previous => ({...previous, [room.id]: event.target.value}))} style={{minWidth:0,flex:1,height:34,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 6px",fontSize:11}}>
+                  <option value="">Chọn nhân viên</option>
+                  {housekeepingEmployees.map(employee => <option key={employee.employee_id} value={employee.employee_id}>{employee.full_name}</option>)}
+                </select>
+                <button disabled={!assignees[room.id] || savingRoom === room.id} onClick={() => void assignPostRepairCleaning(room)} style={{height:34,padding:"0 9px",borderRadius:8,border:"none",background:"#0F172A",color:"#FFF",fontSize:10,fontWeight:700,cursor:"pointer",opacity:!assignees[room.id] || savingRoom === room.id ? 0.5 : 1}}>
+                  {savingRoom === room.id ? "Đang giao…" : "Giao checklist"}
+                </button>
+              </div>
+            ) : waitingAcceptance ? (
+              <button onClick={onNavigateApprovals} style={{height:34,borderRadius:8,border:"1px solid #FED7AA",background:"#FFF7ED",color:"#9A3412",fontSize:11,fontWeight:700,cursor:"pointer"}}>Mở phê duyệt kỹ thuật</button>
+            ) : (
+              <span style={{fontSize:10,color:"#64748B"}}>{room.status === "maintenance" && housekeepingEmployees.length === 0 ? "Chưa có nhân viên buồng phòng hoạt động" : "Đang chờ bộ phận phụ trách"}</span>
+            )}
           </div>;
         })}
+        {actionRooms.length === 0 && <p style={{padding:"30px 16px",textAlign:"center",fontSize:12,color:"#64748B"}}>Không có phòng đang chờ vệ sinh hoặc nghiệm thu kỹ thuật.</p>}
       </div>
     </div>
   );
@@ -699,6 +783,7 @@ function IncidentsScreen({ incidents }: { incidents: EquipmentIncident[] }) {
 export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; onBack: () => void }) {
   const [page, setPage] = useState<NavPage>("overview");
   const [liveApprovals, setLiveApprovals] = useState<Approval[]>([]);
+  const [liveLeaveRequests, setLiveLeaveRequests] = useState<LeaveRequest[]>([]);
   const [liveRooms, setLiveRooms] = useState<ApiRoom[]>([]);
   const [liveEmployees, setLiveEmployees] = useState<EmployeeAdmin[]>([]);
   const [liveTasks, setLiveTasks] = useState<HousekeepingTask[]>([]);
@@ -765,6 +850,10 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
       })
       .catch(err => { console.warn("Backend approval queue unavailable:", err); if (active) setLiveApprovals([]); });
 
+    enterpriseApi.leaves("PENDING")
+      .then(rows => { if (active) setLiveLeaveRequests(rows); })
+      .catch(err => { console.warn("Backend leave approval queue unavailable:", err); if (active) setLiveLeaveRequests([]); });
+
     // Load operational state
     Promise.all([
       housekeepingTechnicalApi.rooms(),
@@ -825,13 +914,45 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
       }));
   }, [liveTechnicalOrders]);
 
+  const leaveApprovals: Approval[] = useMemo(() => liveLeaveRequests.map(request => {
+    const employee = liveEmployees.find(item => item.employee_id === request.employee_id);
+    const leaveType = request.leave_type === "SHIFT_CHANGE" ? "Đổi ca trực"
+      : request.leave_type === "SICK" ? "Nghỉ ốm"
+      : request.leave_type === "ANNUAL" ? "Nghỉ phép năm" : "Việc riêng";
+    return {
+      id: `leave-${request.id}`,
+      dept: "Nhân sự",
+      deptColor: "#7C3AED",
+      emoji: "👥",
+      title: `${leaveType}: ${employee?.full_name ?? request.employee_id}`,
+      detail: [`Thời gian: ${request.start_date} – ${request.end_date}`, request.reason],
+      time: request.created_at,
+      badge: "Chờ duyệt",
+      badgeColor: "#7C3AED",
+      kind: "leave",
+    };
+  }), [liveLeaveRequests, liveEmployees]);
+
   const allApprovals = useMemo(() => {
-    return [...liveApprovals, ...technicalApprovals];
-  }, [liveApprovals, technicalApprovals]);
+    return [...liveApprovals, ...leaveApprovals, ...technicalApprovals];
+  }, [liveApprovals, leaveApprovals, technicalApprovals]);
 
   const pendingCount = approvalsForRole(role, allApprovals).length;
 
   const handleApprovalDecision = async (id: string, action: ApprovalDecision) => {
+    if (id.startsWith("leave-")) {
+      const leaveId = Number(id.slice("leave-".length));
+      if (!Number.isSafeInteger(leaveId)) return false;
+      try {
+        if (action === "approved") await enterpriseApi.approveLeave(leaveId);
+        else await enterpriseApi.rejectLeave(leaveId);
+        setLiveLeaveRequests(previous => previous.filter(request => request.id !== leaveId));
+        return true;
+      } catch (err) {
+        console.warn("Unable to persist leave approval decision:", err);
+        return false;
+      }
+    }
     if (id.startsWith("tech-")) {
       const orderId = Number(id.replace("tech-", ""));
       const targetOrder = liveTechnicalOrders.find(o => o.id === orderId);
@@ -1060,7 +1181,24 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
           {page==="overview"   && <OverviewScreen role={role} approvalsData={allApprovals} rooms={liveRooms} invoices={liveInvoices} incidents={liveIncidents} techOrders={liveTechnicalOrders} onDecision={handleApprovalDecision} onNavApprovals={() => setPage("approvals")} />}
           {page==="approvals"  && <ApprovalsScreen role={role} approvalsData={allApprovals} onDecision={handleApprovalDecision} />}
           {page==="reports"    && <ReportsScreen invoices={liveInvoices} rooms={liveRooms} expenses={liveExpenses} />}
-          {page==="operations" && <OperationsScreen rooms={liveRooms} />}
+          {page==="operations" && <OperationsScreen
+            rooms={liveRooms}
+            tasks={liveTasks}
+            employees={liveEmployees}
+            workOrders={liveTechnicalOrders}
+            onNavigateApprovals={() => setPage("approvals")}
+            onTaskCreated={task => {
+              setLiveTasks(previous => [task, ...previous.filter(item => item.id !== task.id)]);
+              setLiveRooms(previous => previous.map(room => room.id === task.room_id ? { ...room, status: "cleaning" } : room));
+            }}
+            onTaskReady={task => {
+              setLiveTasks(previous => previous.map(item => item.id === task.id ? task : item));
+              const repairPendingRelease = liveTechnicalOrders.some(order => order.room_id === task.room_id && order.status === "COMPLETED");
+              setLiveRooms(previous => previous.map(room => room.id === task.room_id
+                ? { ...room, status: repairPendingRelease ? "maintenance" : "available" }
+                : room));
+            }}
+          />}
           {page==="staff"      && <StaffOperationsScreen employees={liveEmployees} tasks={liveTasks} />}
           {page==="incidents"  && <IncidentsScreen incidents={liveIncidents} />}
         </div>

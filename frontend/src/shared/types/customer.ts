@@ -3,6 +3,8 @@ import type { CustomerProfileDto } from "./api";
 export type RentalType = "HOURLY" | "PACKAGE";
 export type ReservationStatus = "DRAFT" | "DEPOSIT_PAID" | "CONFIRMED" | "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED" | "NO_SHOW";
 export type DepositPaymentStatus = "NOT_REQUIRED" | "PENDING" | "PAID" | "EXPIRED";
+export type CustomerPaymentMethod = "VNPAY" | "PAY_AT_HOTEL";
+export type VnpayPaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "EXPIRED" | "CANCELLED";
 
 export interface CustomerRegistrationRequest { phone: string; password: string; full_name: string; identity_number: string; email?: string; otp?: string; }
 export interface CustomerLoginRequest { phone: string; password: string; }
@@ -16,8 +18,26 @@ export interface CustomerRoomStay {
   expected_check_out: string;
   guest_count?: number;
 }
-export interface CustomerReservationCreateRequest { rental_type: RentalType; booking_source?: string; rooms: CustomerRoomStay[]; idempotency_key: string; }
+export interface CustomerReservationCreateRequest { rental_type: RentalType; booking_source?: string; rooms: CustomerRoomStay[]; idempotency_key: string; payment_method: CustomerPaymentMethod; confirmation_email?: string; }
 export interface CustomerPaymentInstruction { payment_code: string; amount: number; status: DepositPaymentStatus; expires_at: string; instruction: string; }
+export interface VnpayCheckout {
+  attempt_id: number;
+  reservation_id: number;
+  transaction_reference: string;
+  amount: number;
+  status: VnpayPaymentStatus;
+  expires_at: string;
+  payment_url: string;
+}
+export interface VnpayPaymentAttempt {
+  attempt_id: number;
+  reservation_id: number;
+  transaction_reference: string;
+  amount: number;
+  status: VnpayPaymentStatus;
+  expires_at: string;
+  response_code?: string | null;
+}
 export interface CustomerReservation {
   id: number;
   status: ReservationStatus;

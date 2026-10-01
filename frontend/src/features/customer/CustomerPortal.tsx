@@ -22,6 +22,7 @@ import { RoomDetailPage } from "./components/RoomDetailPage";
 import { LuxuryBookingModal } from "./components/LuxuryBookingModal";
 import { LuxuryFnBView, type FnbService } from "./components/LuxuryFnBView";
 import { CustomerProfileDropdown } from "./components/CustomerProfileDropdown";
+import { VnpayPaymentResultPage } from "./components/VnpayPaymentResultPage";
 import { localDateValue } from "../../shared/utils/localDate";
 
 interface CustomerPortalProps {
@@ -71,6 +72,7 @@ const mapPublicRoom = (room: PublicRoomSummary | PublicRoomAvailability | Public
     pricePerNight: room.daily_price,
     pricePerHour: room.hourly_price,
     status: displayRoomStatus(status, available),
+    availableForBooking: available,
     cleanStatus: status === "cleaning" ? "in-progress" : "clean",
     view: room.view || "—",
     beds: room.bed_type || "—",
@@ -91,6 +93,13 @@ const serviceTagColor: Record<string, string> = {
   transport: "#3B82F6", laundry: "#3B82F6", recreation: "#F97316", business: "#B8944A",
 };
 
+interface CustomerBookingIdentity {
+  fullName: string;
+  phone: string;
+  identityNumber: string;
+  email: string;
+}
+
 
 
 export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthenticated }: CustomerPortalProps) {
@@ -99,6 +108,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [customerDisplayName, setCustomerDisplayName] = useState<string>("");
+  const [customerBookingIdentity, setCustomerBookingIdentity] = useState<CustomerBookingIdentity | null>(null);
   const [bookingConfirmation, setBookingConfirmation] = useState<{
     code: string;
     reservationId: number;
@@ -113,20 +123,28 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
     depositAmount: number;
     paymentCode: string;
     paymentStatus: string;
+    paymentMethod: "vnpay" | "hotel";
   } | null>(null);
 
   // Sync customer display name
   useEffect(() => {
     if (!isAuthenticated) {
       setCustomerDisplayName("");
+      setCustomerBookingIdentity(null);
       return;
     }
 
     authApi.customerProfile()
-      .then((p) => {
+      .then(p => {
         if (p?.guest?.full_name) setCustomerDisplayName(p.guest.full_name);
+        setCustomerBookingIdentity({
+          fullName: p.guest.full_name,
+          phone: p.account.phone || p.guest.phone,
+          identityNumber: p.guest.identity_number,
+          email: p.guest.email || "",
+        });
       })
-      .catch(() => {});
+      .catch(() => setCustomerBookingIdentity(null));
   }, [isAuthenticated]);
 
   // Search Dates & Guests
@@ -283,13 +301,31 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
       .catch(err => console.warn("Backend room detail query failed:", err));
   };
 
-  const handleOpenBooking = (room: Room) => {
+  const handleOpenBooking = async (room: Room) => {
     if (!isAuthenticated) {
       sessionStorage.setItem("pending_booking_room_id", room.id);
       onLogin();
       return;
     }
-    setSelectedRoom(room);
+    if (!checkIn || !checkOut || new Date(checkIn) >= new Date(checkOut)) {
+      window.alert("Ngày trả phòng phải sau ngày nhận phòng.");
+      return;
+    }
+    try {
+      const result = await publicApi.availability(`${checkIn}T14:00:00`, `${checkOut}T12:00:00`, undefined, 0, 100);
+      const matchingRoom = result.find((candidate) => candidate.room_id === room.id);
+      if (matchingRoom && !matchingRoom.available) {
+        setRoomList(result.map(mapPublicRoom));
+        window.alert(`Phòng ${room.number} không còn trống trong khoảng thời gian đã chọn.`);
+        return;
+      }
+      setSelectedRoom(matchingRoom ? mapPublicRoom(matchingRoom) : room);
+    } catch (error) {
+      // Availability is a guardrail; the reservation API remains the final authority
+      // for concurrent bookings, so keep the booking flow usable if this read fails.
+      console.warn("Availability pre-check failed:", error);
+      setSelectedRoom(room);
+    }
     setBookingModalOpen(true);
   };
 
@@ -333,11 +369,8 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
     hourlyCheckIn?: string;
     hourlyCheckOut?: string;
     guests: number;
-    guestName: string;
-    guestId: string;
-    phone: string;
     email: string;
-    paymentMethod: "cash" | "card" | "transfer";
+    paymentMethod: "vnpay" | "hotel";
   }) => {
     if (!isAuthenticated) {
       sessionStorage.setItem("pending_booking_room_id", bookingData.room.id);
@@ -369,6 +402,8 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             guest_count: bookingData.guests,
           }],
           idempotency_key: `book-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          payment_method: bookingData.paymentMethod === "vnpay" ? "VNPAY" : "PAY_AT_HOTEL",
+          confirmation_email: bookingData.email.trim() || undefined,
       });
 
       if (!res?.id) throw new Error("Không thể hoàn tất đặt phòng. Vui lòng thử lại.");
@@ -387,9 +422,20 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         depositAmount: Number(res.deposit_amount ?? 0),
         paymentCode: res.deposit_payment?.payment_code ?? "",
         paymentStatus: res.deposit_payment?.status ?? "PENDING",
+        paymentMethod: bookingData.paymentMethod,
       });
       setBookingModalOpen(false);
       setIsDetailView(false);
+      if (bookingData.paymentMethod === "vnpay") {
+        try {
+          const checkout = await customerApi.createVnpayCheckout(res.id);
+          window.location.assign(checkout.payment_url);
+          return;
+        } catch (paymentError) {
+          window.alert(apiErrorMessage(paymentError,
+            "Booking đã được tạo nhưng chưa thể mở VNPay. Bạn có thể bấm Thanh toán qua VNPay để thử lại."));
+        }
+      }
     } catch (e) {
       console.warn("Reservation submit failed:", e);
       if (
@@ -401,7 +447,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         onLogin();
         return;
       }
-      window.alert("Không thể tạo đặt phòng. Vui lòng thử lại.");
+      window.alert(apiErrorMessage(e, "Không thể tạo đặt phòng. Vui lòng thử lại."));
     } finally {
       setBookingLoading(false);
     }
@@ -438,6 +484,19 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
   const loadServiceBookings = useCallback((reservationId: number) => customerApi.serviceBookings(reservationId), []);
   const cancelServiceBooking = useCallback((bookingId: number) => customerApi.cancelServiceBooking(bookingId), []);
 
+  const openVnpayCheckout = useCallback(async (reservationId: number) => {
+    try {
+      const checkout = await customerApi.createVnpayCheckout(reservationId);
+      window.location.assign(checkout.payment_url);
+    } catch (error) {
+      window.alert(apiErrorMessage(error, "Không thể mở cổng thanh toán VNPay."));
+    }
+  }, []);
+
+  if (window.location.pathname === "/payment/vnpay-result") {
+    return <VnpayPaymentResultPage isAuthenticated={isAuthenticated} onLogin={onLogin} />;
+  }
+
   // 1. Success confirmation screen
   if (bookingConfirmation) {
     return (
@@ -454,8 +513,9 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             Hân hạnh Đón tiếp Quý khách
           </h2>
           <p className="text-sm text-[#78716C] mb-8 font-light">
-            Đặt phòng đã được tạo và đang chờ thanh toán tiền cọc.
-            Sau khi cổng thanh toán xác nhận cọc, booking mới xuất hiện trong danh sách “Khách đến hôm nay” của lễ tân.
+            {bookingConfirmation.paymentMethod === "vnpay"
+              ? "Đặt phòng đang được giữ trong 15 phút để quý khách hoàn tất tiền cọc qua VNPay."
+              : "Yêu cầu đã được gửi tới lễ tân. Phòng chỉ được giữ sau khi lễ tân xác nhận."}
           </p>
 
           <div className="bg-[#FAF8F5] rounded-2xl p-6 mb-8 text-left border border-[#E7E2D6] space-y-3">
@@ -468,7 +528,9 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             <div className="flex justify-between items-center text-sm">
               <span className="text-[#78716C]">Trạng thái booking:</span>
               <span className="font-semibold text-amber-700">
-                Chờ thanh toán cọc ({bookingConfirmation.paymentStatus})
+                {bookingConfirmation.paymentMethod === "vnpay"
+                  ? `Chờ thanh toán cọc (${bookingConfirmation.paymentStatus})`
+                  : "Chờ lễ tân xác nhận"}
               </span>
             </div>
             <div className="flex justify-between items-center text-sm">
@@ -512,10 +574,12 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           </div>
 
           <button
-            onClick={() => setBookingConfirmation(null)}
+            onClick={() => bookingConfirmation.paymentMethod === "vnpay"
+              ? void openVnpayCheckout(bookingConfirmation.reservationId)
+              : setBookingConfirmation(null)}
             className="w-full py-4 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs uppercase tracking-[0.2em] font-semibold transition-all duration-300 rounded-xl shadow-md cursor-pointer"
           >
-            Quay về Trang chủ
+            {bookingConfirmation.paymentMethod === "vnpay" ? "Thanh toán qua VNPay" : "Quay về Trang chủ"}
           </button>
         </div>
       </div>
@@ -577,14 +641,17 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
                     setPortalView("fnb");
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
+                  onPayReservation={(reservationId) => void openVnpayCheckout(reservationId)}
                 />
               </div>
             )}
             <button
               onClick={() => handleOpenBooking(selectedRoom)}
-              className="px-5 py-2.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-[#1C1917] hover:bg-[#8C6D37] text-white transition cursor-pointer"
+              disabled={selectedRoom.availableForBooking === false}
+              title={selectedRoom.availableForBooking === false ? "Phòng không còn trống trong khoảng thời gian đã chọn" : undefined}
+              className="px-5 py-2.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-[#1C1917] hover:bg-[#8C6D37] disabled:bg-[#D6D3D1] disabled:text-[#78716C] disabled:cursor-not-allowed text-white transition cursor-pointer"
             >
-              Đặt phòng này
+              {selectedRoom.availableForBooking === false ? "Hết phòng" : "Đặt phòng này"}
             </button>
           </div>
         </nav>
@@ -607,6 +674,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           onConfirm={handleConfirmBooking}
           loading={bookingLoading}
           isAuthenticated={isAuthenticated}
+          customerIdentity={customerBookingIdentity ?? undefined}
           onLogin={onLogin}
         />
       </div>
@@ -739,6 +807,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
                     setPortalView("fnb");
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
+                  onPayReservation={(reservationId) => void openVnpayCheckout(reservationId)}
                 />
               </div>
 
@@ -856,6 +925,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           onConfirm={handleConfirmBooking}
           loading={bookingLoading}
           isAuthenticated={isAuthenticated}
+          customerIdentity={customerBookingIdentity ?? undefined}
           onLogin={onLogin}
         />
       )}

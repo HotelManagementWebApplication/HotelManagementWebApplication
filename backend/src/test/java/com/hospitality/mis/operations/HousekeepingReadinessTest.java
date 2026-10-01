@@ -38,6 +38,7 @@ class HousekeepingReadinessTest {
     @Mock HousekeepingChecklistTemplateRepository templates;
     @Mock HousekeepingChecklistResultRepository results;
     @Mock EquipmentIncidentRepository incidents;
+    @Mock TechnicalWorkOrderRepository workOrders;
     @Mock DurableIdempotencyService durableIdempotency;
     private HousekeepingService service;
     private HousekeepingTask task;
@@ -45,7 +46,7 @@ class HousekeepingReadinessTest {
 
     @BeforeEach
     void setUp() {
-        service = new HousekeepingService(tasks, rooms, audit, templates, results, incidents,
+        service = new HousekeepingService(tasks, rooms, audit, templates, results, incidents, workOrders,
                 Clock.fixed(Instant.parse("2026-09-14T03:00:00Z"), ZoneId.of("Asia/Ho_Chi_Minh")), durableIdempotency);
         when(durableIdempotency.execute(anyString(), anyString(), anyString(), anyString(),
                 eq(HousekeepingDtos.Response.class), any())).thenAnswer(invocation ->

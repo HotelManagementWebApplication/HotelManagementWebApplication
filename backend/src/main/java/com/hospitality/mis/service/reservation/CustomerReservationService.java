@@ -10,6 +10,7 @@ import com.hospitality.mis.entity.auth.CustomerAccount;
 import com.hospitality.mis.entity.guest.BookingPolicy;
 import com.hospitality.mis.entity.guest.Guest;
 import com.hospitality.mis.entity.reservation.DepositPaymentStatus;
+import com.hospitality.mis.entity.reservation.CustomerPaymentMethod;
 import com.hospitality.mis.entity.reservation.Reservation;
 import com.hospitality.mis.entity.reservation.ReservationRoom;
 import com.hospitality.mis.entity.reservation.ReservationStatus;
@@ -150,9 +151,17 @@ public class CustomerReservationService {
         reservation.setBookingSource(request.bookingSource());
         reservation.setIdempotencyKey(key);
         reservation.setCanonicalRequestFingerprint(fingerprint);
-        reservation.setDepositPaymentCode(newPaymentCode());
-        reservation.setDepositPaymentStatus(DepositPaymentStatus.PENDING);
-        reservation.setDepositPaymentExpiresAt(now.plusMinutes(depositHoldMinutes));
+        reservation.setCustomerPaymentMethod(request.paymentMethod());
+        reservation.setConfirmationEmail(request.confirmationEmail());
+        if (request.paymentMethod() == CustomerPaymentMethod.VNPAY) {
+            reservation.setDepositPaymentCode(newPaymentCode());
+            reservation.setDepositPaymentStatus(DepositPaymentStatus.PENDING);
+            reservation.setDepositPaymentExpiresAt(now.plusMinutes(depositHoldMinutes));
+        } else {
+            reservation.setDepositPaymentCode(null);
+            reservation.setDepositPaymentStatus(DepositPaymentStatus.NOT_REQUIRED);
+            reservation.setDepositPaymentExpiresAt(null);
+        }
         request.rooms().forEach(line -> {
             ReservationRoom rr = new ReservationRoom();
             rr.setRoom(locked.get(line.roomId().trim()));
@@ -254,7 +263,10 @@ public class CustomerReservationService {
         String rooms = request.rooms().stream().map(x -> x.roomId().trim() + "@" + x.expectedCheckIn() + "/" + x.expectedCheckOut() + "/" + (x.guestCount() == null ? 1 : x.guestCount()))
                 .sorted().reduce((a, b) -> a + ";" + b).orElse("");
         return IdempotencySupport.fingerprint("CUSTOMER_CREATE|rental=" + request.rentalType().name()
-                + "|source=" + normalizedBookingSource(request.bookingSource()) + "|rooms=" + rooms);
+                + "|source=" + normalizedBookingSource(request.bookingSource())
+                + "|payment=" + request.paymentMethod().name()
+                + "|email=" + (request.confirmationEmail() == null ? "" : request.confirmationEmail().trim().toLowerCase(Locale.ROOT))
+                + "|rooms=" + rooms);
     }
 
     private String normalizedBookingSource(String source) {
@@ -304,7 +316,9 @@ public class CustomerReservationService {
                 && !r.getDepositPaymentExpiresAt().isAfter(LocalDateTime.now(clock))) paymentStatus = DepositPaymentStatus.EXPIRED;
         var payment = new CustomerReservationDtos.PaymentInstruction(r.getDepositPaymentCode(), r.getDepositAmount(),
                 paymentStatus, r.getDepositPaymentExpiresAt(),
-                "Dùng mã này khi thanh toán tiền cọc tại kênh thanh toán của khách sạn.");
+                r.getCustomerPaymentMethod() == CustomerPaymentMethod.PAY_AT_HOTEL
+                        ? "Yêu cầu đang chờ lễ tân xác nhận; phòng chưa được giữ trước khi xác nhận."
+                        : "Thanh toán 50% tiền cọc qua cổng VNPay để xác nhận giữ phòng.");
 
         BigDecimal totalRoomsAmount = BigDecimal.ZERO;
         List<CustomerReservationDtos.RoomLine> roomLines = new java.util.ArrayList<>();

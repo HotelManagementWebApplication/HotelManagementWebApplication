@@ -15,6 +15,7 @@ import com.hospitality.mis.dto.reservation.ReservationDtos;
 import com.hospitality.mis.dto.billing.DepositPaymentWebhookDtos;
 import com.hospitality.mis.entity.room.Room;
 import com.hospitality.mis.entity.room.RoomType;
+import com.hospitality.mis.entity.reservation.CustomerPaymentMethod;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -95,9 +96,10 @@ class CustomerReservationApiContractTest {
                         .content(json(new CustomerAccountDtos.LoginRequest("0900000201", "customer-password"))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         String bearer = "Bearer " + login.get("access_token").asText();
-        var request = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE,
+        var request = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE, "DIRECT",
                 List.of(new CustomerReservationDtos.RoomStay("R201",
-                        LocalDateTime.of(2031, 1, 10, 14, 0), LocalDateTime.of(2031, 1, 11, 12, 0))), "customer-book-1");
+                        LocalDateTime.of(2031, 1, 10, 14, 0), LocalDateTime.of(2031, 1, 11, 12, 0))), "customer-book-1",
+                CustomerPaymentMethod.VNPAY, null);
         JsonNode booking = objectMapper.readTree(mockMvc.perform(post("/api/customer/reservations")
                         .header(AUTHORIZATION, bearer).contentType(APPLICATION_JSON).content(json(request)))
                 .andExpect(status().isCreated())
@@ -115,9 +117,10 @@ class CustomerReservationApiContractTest {
         assertThat(replay.at("/deposit_payment/payment_code").asText())
                 .isEqualTo(booking.at("/deposit_payment/payment_code").asText());
 
-        var conflictingRequest = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE,
+        var conflictingRequest = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE, "DIRECT",
                 List.of(new CustomerReservationDtos.RoomStay("R201",
-                        LocalDateTime.of(2031, 1, 12, 14, 0), LocalDateTime.of(2031, 1, 13, 12, 0))), "customer-book-1");
+                        LocalDateTime.of(2031, 1, 12, 14, 0), LocalDateTime.of(2031, 1, 13, 12, 0))), "customer-book-1",
+                CustomerPaymentMethod.VNPAY, null);
         mockMvc.perform(post("/api/customer/reservations").header(AUTHORIZATION, bearer)
                         .contentType(APPLICATION_JSON).content(json(conflictingRequest)))
                 .andExpect(status().isUnprocessableEntity())
@@ -147,9 +150,10 @@ class CustomerReservationApiContractTest {
                         .content(json(new CustomerAccountDtos.LoginRequest("0900000202", "customer-password"))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         String bearer = "Bearer " + login.get("access_token").asText();
-        var create = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE,
+        var create = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE, "DIRECT",
                 List.of(new CustomerReservationDtos.RoomStay("R201",
-                        LocalDateTime.of(2031, 2, 10, 14, 0), LocalDateTime.of(2031, 2, 11, 12, 0))), "callback-book-1");
+                        LocalDateTime.of(2031, 2, 10, 14, 0), LocalDateTime.of(2031, 2, 11, 12, 0))), "callback-book-1",
+                CustomerPaymentMethod.VNPAY, null);
         JsonNode booking = objectMapper.readTree(mockMvc.perform(post("/api/customer/reservations")
                         .header(AUTHORIZATION, bearer).contentType(APPLICATION_JSON).content(json(create)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());

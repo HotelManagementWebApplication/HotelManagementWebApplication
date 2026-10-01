@@ -5,11 +5,14 @@ package com.hospitality.mis.dao.room;
 import com.hospitality.mis.dao.room.ReservationOverlapPort;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 
 
@@ -28,7 +31,13 @@ public class JpaReservationOverlapAdapter implements ReservationOverlapPort {
     @PersistenceContext
     private EntityManager entityManager;
 
+    /** Đồng hồ nghiệp vụ để việc hết hạn giữ phòng nhất quán với các service đặt phòng. */
+    private Clock clock = Clock.system(ZoneId.of("Asia/Ho_Chi_Minh"));
+
     public JpaReservationOverlapAdapter() {}
+
+    @Autowired
+    void setBusinessClock(Clock clock) { this.clock = clock; }
 
 
     @Override
@@ -54,10 +63,19 @@ public class JpaReservationOverlapAdapter implements ReservationOverlapPort {
                   and rr.thoiDiemNhanPhong < :to and rr.thoiDiemTraPhong > :from
                   and rr.trangThai <> N'Đã hủy'
                   and r.trangThai not in (N'Đã hủy', N'Không đến', N'Đã trả phòng')
+                  and (
+                        r.trangThai <> N'Bản nháp'
+                        or r.maTaiKhoanKhachHang is null
+                        or (
+                            r.trangThaiThanhToanCoc = N'Chờ thanh toán'
+                            and r.thoiDiemHetHanThanhToanCoc > :now
+                        )
+                  )
                 """)
                 .setParameter("roomId", roomId)
                 .setParameter("from", from)
                 .setParameter("to", to)
+                .setParameter("now", LocalDateTime.now(clock))
                 .getSingleResult();
         return count.longValue() > 0;
     }

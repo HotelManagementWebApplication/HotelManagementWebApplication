@@ -355,6 +355,20 @@ public class ReservationService {
                 IdempotencySupport.fingerprint("CONFIRM|" + id), ReservationDtos.Response.class, () -> {
                     Reservation r = locked(id);
                     requireState(r, ReservationStatus.DRAFT);
+                    if (r.getCustomerAccount() != null
+                            && r.getCustomerPaymentMethod() == CustomerPaymentMethod.VNPAY
+                            && r.getDepositPaymentStatus() != DepositPaymentStatus.PAID) {
+                        throw error("DEPOSIT_PAYMENT_REQUIRED", "Booking VNPay chỉ được xác nhận sau khi thanh toán cọc thành công");
+                    }
+                    List<String> roomIds = r.getRooms().stream().map(line -> line.getRoom().getId()).sorted().toList();
+                    rooms.findAllForUpdateOrdered(roomIds);
+                    LocalDateTime now = LocalDateTime.now(clock);
+                    for (ReservationRoom line : r.getRooms()) {
+                        if (reservations.hasOverlapExcludingReservation(r.getId(), line.getRoom().getId(),
+                                line.getCheckIn(), line.getCheckOut(), RoomStatus.CANCELLED, IGNORED, now)) {
+                            throw error("OVERBOOKING", "Phòng " + line.getRoom().getId() + " đã được giữ bởi booking khác");
+                        }
+                    }
                     r.transitionTo(ReservationStatus.CONFIRMED);
                     r.getRooms().forEach(line -> { line.setStatus(RoomStatus.RESERVED); line.getRoom().setStatus(RoomStatus.RESERVED); });
                     audit.record(principal, "RESERVATION_CONFIRMED", "RESERVATION", id.toString(), ReservationStatus.DRAFT.name(), ReservationStatus.CONFIRMED.name(), null);
@@ -578,6 +592,7 @@ public class ReservationService {
                 r.getRooms().stream().map(x -> new ReservationDtos.RoomLine(x.getRoom().getId(), x.getCheckIn(),
                         x.getCheckOut(), r.getActualCheckIn(), r.getActualCheckOut())).toList(),
                 r.getCancellationReason(), r.getCancellationOutcome(), r.getBookingSource(), r.getOtaGrossRevenue(),
-                r.getOtaCommission(), r.getOtaNetRevenue(), r.getOtaReconciliationStatus(), serviceUsages);
+                r.getOtaCommission(), r.getOtaNetRevenue(), r.getOtaReconciliationStatus(), serviceUsages,
+                r.getCustomerPaymentMethod(), r.getDepositPaymentStatus());
     }
 }

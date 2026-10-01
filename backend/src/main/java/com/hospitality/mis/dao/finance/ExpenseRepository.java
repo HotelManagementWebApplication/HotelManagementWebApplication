@@ -16,7 +16,7 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
     /** Lấy toàn bộ khoản chi theo thời điểm thanh toán giảm dần. */
     List<Expense> findAllByOrderByPaidAtDesc();
-    @Query("select e from Expense e where (:category is null or e.category = :category) and (:status is null or e.status = :status) and (:fromAt is null or e.paidAt >= :fromAt) and (:toAt is null or e.paidAt < :toAt) order by e.paidAt desc, e.id desc")
+    @Query("select e from Expense e where (:category is null or e.category = :category) and (:status is null or e.status = :status) and (:fromAt is null or e.paidAt >= :fromAt) and (:toAt is null or e.paidAt < :toAt)")
     Page<Expense> search(@Param("category") String category, @Param("status") Expense.ExpenseStatus status,
                          @Param("fromAt") LocalDateTime fromAt, @Param("toAt") LocalDateTime toAt, Pageable pageable);
 }

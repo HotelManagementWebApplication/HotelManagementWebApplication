@@ -57,7 +57,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
                                      @org.springframework.data.repository.query.Param("fromAt") LocalDateTime fromAt,
                                      @org.springframework.data.repository.query.Param("toAt") LocalDateTime toAt);
 
-    @org.springframework.data.jpa.repository.Query("select p from PaymentTransaction p where (:invoiceId is null or p.invoice.id = :invoiceId) and (:method is null or p.method = :method) and (:type is null or p.type = :type) and (:status is null or p.status = :status) and (:fromAt is null or p.occurredAt >= :fromAt) and (:toAt is null or p.occurredAt < :toAt) order by p.occurredAt asc, p.id asc")
+    @org.springframework.data.jpa.repository.Query("select p from PaymentTransaction p where (:invoiceId is null or p.invoice.id = :invoiceId) and (:method is null or p.method = :method) and (:type is null or p.type = :type) and (:status is null or p.status = :status) and (:fromAt is null or p.occurredAt >= :fromAt) and (:toAt is null or p.occurredAt < :toAt)")
     Page<PaymentTransaction> search(@org.springframework.data.repository.query.Param("invoiceId") Long invoiceId,
                                     @org.springframework.data.repository.query.Param("method") PaymentMethod method,
                                     @org.springframework.data.repository.query.Param("type") TransactionType type,

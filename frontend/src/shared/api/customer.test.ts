@@ -7,10 +7,10 @@ afterEach(() => vi.restoreAllMocks());
 describe("customer ownership contract", () => {
   it("posts the exact registration and booking payload, including idempotency key", async () => {
     const request = vi.spyOn(apiClient, "request").mockResolvedValue({ id: 42 });
-    const body = { rental_type: "PACKAGE" as const, rooms: [{ room_id: "R201", expected_check_in: "2031-01-10T14:00:00", expected_check_out: "2031-01-11T12:00:00" }], idempotency_key: "booking-1" };
+    const body = { rental_type: "PACKAGE" as const, rooms: [{ room_id: "R201", expected_check_in: "2031-01-10T14:00:00", expected_check_out: "2031-01-11T12:00:00" }], idempotency_key: "booking-1", payment_method: "VNPAY" as const };
     await customerApi.register({ phone: "0900000201", password: "customer-password", full_name: "Online Guest", identity_number: "ID0900000201" });
     await customerApi.createReservation(body);
-    expect(request).toHaveBeenNthCalledWith(1, "/api/auth/customers/register", { method: "POST", body: { phone: "0900000201", password: "customer-password", full_name: "Online Guest", identity_number: "ID0900000201" } });
+    expect(request).toHaveBeenNthCalledWith(1, "/api/auth/customers/register", { method: "POST", body: { phone: "0900000201", password: "customer-password", full_name: "Online Guest", identity_number: "ID0900000201" }, skipAuth: true });
     expect(request).toHaveBeenNthCalledWith(2, "/api/customer/reservations", { method: "POST", body, idempotencyKey: "booking-1" });
   });
 

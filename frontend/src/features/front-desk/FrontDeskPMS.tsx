@@ -36,6 +36,7 @@ interface Room {
   folioCurrency?: "$" | "VND";
   vipTier?: VipTier; notes?: string[];
   reservationId?: number; guestId?: number; reservationStatus?: ReservationStatus;
+  depositPaymentStatus?: string;
 }
 
 interface ArrivingGuest {
@@ -50,6 +51,7 @@ interface DepartureGuest {
 interface OverviewArrival { id: string; name: string; room: string; type: string; booking: string; eta: string; vip: string | null; status: "expected" | "early"; }
 interface LiveAlert { id: string; type: "error" | "warning" | "info" | "success"; msg: string; time: string; }
 interface LiveActivity { id: string; time: string; msg: string; icon: string; }
+interface AtHotelBookingRequest { reservation: Reservation; guest?: Guest; }
 
 /* ══════════════════════════════════════════════════════════
    STATUS CONFIGS
@@ -250,6 +252,7 @@ function RoomCard({ room, selected, onClick }: { room: Room; selected: boolean; 
   const isOOO = room.occStatus === "ood";
   const isReserved = room.occStatus === "reserved";
   const isOcc = room.occStatus === "occupied" || isDND;
+  const awaitsFrontDesk = room.reservationStatus === "DRAFT" && room.depositPaymentStatus === "NOT_REQUIRED";
 
   let bIcon: React.ElementType | null = null, bMsg = "";
   if (isOOO)                               { bIcon = XCircle;      bMsg = "Bảo trì / Ngoài hoạt động"; }
@@ -259,7 +262,7 @@ function RoomCard({ room, selected, onClick }: { room: Room; selected: boolean; 
   else if (!isOcc && room.cleanStatus === "dirty")    { bIcon = ClipboardList;bMsg = "Cần dọn phòng"; }
   else if (!isOcc)                         { bIcon = BedDouble;    bMsg = "Sẵn sàng đón khách"; }
 
-  const hasGuestInfo = (isOcc || isReserved) && !isDND && Boolean(room.guestName);
+  const hasGuestInfo = (isOcc || isReserved || awaitsFrontDesk) && !isDND && Boolean(room.guestName);
 
   return (
     <div onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
@@ -290,6 +293,11 @@ function RoomCard({ room, selected, onClick }: { room: Room; selected: boolean; 
               Nhận: {fmtDateTime(room.checkIn)} | Trả: {fmtDateTime(room.checkOut)}
             </p>
           )}
+          {awaitsFrontDesk && (
+            <p style={{ fontSize:11,color:"#B45309",paddingLeft:16,marginTop:4,fontWeight:700 }}>
+              Chờ lễ tân xác nhận · chưa giữ phòng
+            </p>
+          )}
         </div>
       ) : (
         <div style={{ display:"flex",alignItems:"center",gap:5 }}>
@@ -310,10 +318,12 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
   const reservationId = reservationIdFromRoom(room);
   const validReservation = Number.isSafeInteger(reservationId) && reservationId > 0;
   const isCheckedIn = room.reservationStatus === "CHECKED_IN";
+  const awaitsFrontDesk = room.reservationStatus === "DRAFT"
+    && room.depositPaymentStatus === "NOT_REQUIRED";
   const canTransferCurrentRoom = validReservation && isCheckedIn
     && room.occStatus === "occupied" && room.cleanStatus === "clean";
   const canCheckIn = validReservation && (room.reservationStatus === "CONFIRMED" || room.reservationStatus === "DEPOSIT_PAID" || room.occStatus === "reserved" || (!room.reservationStatus && room.occStatus === "vacant" && Boolean(room.guestName)));
-  const canConfirm = validReservation && room.reservationStatus === "DRAFT";
+  const canConfirm = validReservation && awaitsFrontDesk;
   const canCancel = validReservation && ["DRAFT", "DEPOSIT_PAID", "CONFIRMED"].includes(room.reservationStatus || "");
   const canNoShow = validReservation && ["DEPOSIT_PAID", "CONFIRMED"].includes(room.reservationStatus || "");
 
@@ -401,14 +411,15 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
   const loadDetails = useCallback(async () => {
     if (!validReservation) return;
     const [catalogResult, timelineResult, invoiceResult, bookingsResult, reservationResult] = await Promise.allSettled([
-      frontDeskApi.services(), frontDeskApi.timeline(reservationId), frontDeskApi.invoice(reservationId),
+      frontDeskApi.services(), frontDeskApi.timeline(reservationId),
+      isCheckedIn ? frontDeskApi.invoice(reservationId) : Promise.resolve(null),
       frontDeskApi.serviceBookings(reservationId), frontDeskApi.reservation(reservationId),
     ]);
     if (catalogResult.status === "fulfilled") setServices(catalogResult.value.filter(item => item.active !== false));
     if (bookingsResult.status === "fulfilled") setServiceBookings(bookingsResult.value);
     if (timelineResult.status === "fulfilled") setTimeline(timelineResult.value);
     if (reservationResult.status === "fulfilled") setReservationDetails(reservationResult.value);
-    if (invoiceResult.status === "fulfilled") {
+    if (invoiceResult.status === "fulfilled" && invoiceResult.value) {
       setInvoice(invoiceResult.value);
       try {
         const [payRes, recRes] = await Promise.allSettled([
@@ -419,11 +430,11 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
         if (recRes.status === "fulfilled") setReceipts(Array.isArray(recRes.value) ? recRes.value : (recRes.value as any)?.items ?? []);
       } catch {}
     }
-  }, [reservationId, validReservation]);
+  }, [isCheckedIn, reservationId, validReservation]);
 
   useEffect(() => {
     setFeedback(null); setOperation(null); setCheckoutStep("idle"); setIssuedReceipt(null);
-    setReservationDetails(null); setServiceBookings([]); setServices([]);
+    setReservationDetails(null); setServiceBookings([]); setServices([]); setInvoice(null); setPayments([]); setReceipts([]);
     setTransferRoom(""); setTransferReason(""); setExtendAt(""); setCancelReason("");
     setAvailableTransferRoomIds(null); setLoadingTransferRooms(false);
     setIncidentEquipName(""); setIncidentQuantity(1); setMembershipHistory(null);
@@ -670,6 +681,11 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
             <div style={{ display:"flex",gap:6,marginTop:8 }}>
               <OccBadge s={room.occStatus} /> <ClnBadge s={room.cleanStatus} />
             </div>
+            {awaitsFrontDesk && (
+              <p style={{fontSize:11,fontWeight:700,color:"#B45309",marginTop:7}}>
+                Chờ lễ tân xác nhận · chưa giữ phòng
+              </p>
+            )}
           </div>
           <div style={{ display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6 }}>
             <button onClick={onClose}
@@ -1101,7 +1117,7 @@ function KpiBar({ rooms, arrivals, departures }: { rooms: Room[]; arrivals: numb
 /* ══════════════════════════════════════════════════════════
    OVERVIEW SCREEN
 ══════════════════════════════════════════════════════════ */
-function OverviewScreen({ arrivals, departures, alerts = [], activities = [], dataState, dataError, onRetry, onOpenRoom, actorName }: { arrivals: OverviewArrival[]; departures: DepartureGuest[]; alerts?: LiveAlert[]; activities?: LiveActivity[]; dataState: "loading" | "live" | "fallback"; dataError: string | null; onRetry: () => void; onOpenRoom: (roomId: string) => void; actorName: string }) {
+function OverviewScreen({ arrivals, departures, alerts = [], activities = [], pendingAtHotelRequests = [], requestDataError, requestActionError, confirmingRequestId, onConfirmBookingRequest, dataState, dataError, onRetry, onOpenRoom, actorName }: { arrivals: OverviewArrival[]; departures: DepartureGuest[]; alerts?: LiveAlert[]; activities?: LiveActivity[]; pendingAtHotelRequests?: AtHotelBookingRequest[]; requestDataError: string | null; requestActionError: string | null; confirmingRequestId: number | null; onConfirmBookingRequest: (id: number) => void; dataState: "loading" | "live" | "fallback"; dataError: string | null; onRetry: () => void; onOpenRoom: (roomId: string) => void; actorName: string }) {
   const now = new Date();
   const timeStr = now.toLocaleTimeString("vi-VN", { hour:"2-digit",minute:"2-digit" });
   const dateStr = now.toLocaleDateString("vi-VN", { weekday:"long",day:"numeric",month:"long",year:"numeric" });
@@ -1130,6 +1146,31 @@ function OverviewScreen({ arrivals, departures, alerts = [], activities = [], da
 
       <div style={{ padding:20,display:"flex",flexDirection:"column",gap:16 }}>
         <div role={dataState==="fallback"?"alert":"status"} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"9px 12px",borderRadius:9,background:dataState==="live"?"#F0FDF4":dataState==="loading"?"#EFF6FF":"#FFFBEB",border:`1px solid ${dataState==="live"?"#BBF7D0":dataState==="loading"?"#BFDBFE":"#FDE68A"}`,fontSize:12,color:"#334155"}}><span>{dataState==="live"?"● Dữ liệu đang được cập nhật":dataState==="loading"?"Đang cập nhật thông tin vận hành…":`Không tải được thông tin vận hành. ${dataError??""}`}</span>{dataState==="fallback"&&<button onClick={onRetry} style={{fontWeight:700,color:"#1D4ED8",whiteSpace:"nowrap"}}>Thử lại</button>}</div>
+        {(pendingAtHotelRequests.length > 0 || requestDataError || requestActionError) && <section aria-label="Yêu cầu đặt phòng chờ xác nhận" style={{ background:"#FFF",borderRadius:12,border:"1px solid #FDE68A",overflow:"hidden" }}>
+          <div style={{ padding:"14px 16px",borderBottom:"1px solid #FEF3C7",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12 }}>
+            <div>
+              <p style={{ fontSize:13,fontWeight:700,color:"#0F172A" }}>Yêu cầu đặt phòng chờ lễ tân xác nhận</p>
+              <p style={{ fontSize:11,color:"#64748B",marginTop:3 }}>Các yêu cầu này chưa giữ phòng. Chỉ chuyển sang “Đã giữ phòng” sau khi xác nhận.</p>
+            </div>
+            <span style={{ padding:"3px 9px",borderRadius:99,background:"#FEF3C7",color:"#92400E",fontSize:12,fontWeight:700 }}>{pendingAtHotelRequests.length}</span>
+          </div>
+          {requestDataError && <p role="alert" style={{ padding:"10px 16px",color:"#BE123C",fontSize:12 }}>{requestDataError}</p>}
+          {requestActionError && <p role="alert" style={{ padding:"10px 16px",color:"#BE123C",fontSize:12 }}>{requestActionError}</p>}
+          {pendingAtHotelRequests.map(({ reservation, guest }) => {
+            const stay = reservation.rooms[0];
+            return <div key={reservation.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,padding:"12px 16px",borderTop:"1px solid #F1F5F9" }}>
+              <div style={{ minWidth:0 }}>
+                <p style={{ fontSize:13,fontWeight:700,color:"#0F172A" }}>{guest?.full_name ?? `Khách #${reservation.guest_id}`} <span style={{ fontSize:11,fontWeight:500,color:"#64748B" }}>{guest?.phone ?? "Chưa có số điện thoại"}</span></p>
+                <p style={{ marginTop:4,fontSize:12,color:"#475569" }}>BK-{reservation.id} · Phòng {stay?.room_id ?? "—"} · {stay ? `${fmtDateTime(stay.expected_check_in)} → ${fmtDateTime(stay.expected_check_out)}` : "Thiếu lịch lưu trú"}</p>
+                <p style={{ marginTop:3,fontSize:11,color:"#64748B" }}>Đặt lúc {fmtDateTime(reservation.booked_at)} · Tiền cọc dự kiến {fmtVND(reservation.deposit)}</p>
+              </div>
+              <button type="button" disabled={confirmingRequestId === reservation.id} onClick={() => onConfirmBookingRequest(reservation.id)} style={{ flexShrink:0,padding:"9px 13px",borderRadius:8,background:confirmingRequestId === reservation.id?"#94A3B8":"#16A34A",color:"#FFF",fontSize:12,fontWeight:700,cursor:confirmingRequestId === reservation.id?"wait":"pointer" }}>
+                {confirmingRequestId === reservation.id ? "Đang xác nhận…" : "Xác nhận giữ phòng"}
+              </button>
+            </div>;
+          })}
+          {!requestDataError && pendingAtHotelRequests.length === 0 && <p style={{ padding:"12px 16px",fontSize:12,color:"#64748B" }}>Đang tải yêu cầu đặt phòng…</p>}
+        </section>}
         {/* Alerts */}
         <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
           {alerts.length === 0 ? (
@@ -2412,6 +2453,10 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
   const [liveDepartures, setLiveDepartures] = useState<DepartureGuest[]>([]);
   const [liveAlerts, setLiveAlerts] = useState<LiveAlert[]>([]);
   const [liveActivities, setLiveActivities] = useState<LiveActivity[]>([]);
+  const [pendingAtHotelRequests, setPendingAtHotelRequests] = useState<AtHotelBookingRequest[]>([]);
+  const [requestDataError, setRequestDataError] = useState<string | null>(null);
+  const [requestActionError, setRequestActionError] = useState<string | null>(null);
+  const [confirmingRequestId, setConfirmingRequestId] = useState<number | null>(null);
   const [dataState, setDataState] = useState<"loading" | "live" | "fallback">("loading");
   const [dataError, setDataError] = useState<string | null>(null);
   const [focusRoomId, setFocusRoomId] = useState<string | null>(null);
@@ -2420,16 +2465,45 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
   const [sidebarProfileOpen, setSidebarProfileOpen] = useState(false);
   const requestSequence = useRef(0);
   const checkInKeys = useRef(new Map<number, string>());
+  const confirmKeys = useRef(new Map<number, string>());
 
   const loadDashboard = useCallback(async (query = "") => {
     const sequence = ++requestSequence.current;
     setDataState(previous=>previous==="live"?"live":"loading");
     try {
-      const dashboard: Dashboard = await frontDeskApi.dashboard(query.trim() ? { q: query.trim() } : {});
+      const loadPendingRequests = async (): Promise<AtHotelBookingRequest[]> => {
+        const firstPage = await frontDeskApi.reservations({ status:"DRAFT", page:0, size:100 });
+        const drafts = [...firstPage.items];
+        for (let page = 1; page < firstPage.total_pages; page += 1) {
+          const nextPage = await frontDeskApi.reservations({ status:"DRAFT", page, size:100 });
+          drafts.push(...nextPage.items);
+        }
+        const requests = drafts.filter(reservation => reservation.status === "DRAFT" && reservation.customer_payment_method === "PAY_AT_HOTEL");
+        if (requests.length === 0) return [];
+        const guests = await frontDeskApi.guests();
+        const guestsById = new Map(guests.map(guest => [guest.id, guest]));
+        return requests
+          .map(reservation => ({ reservation, guest: guestsById.get(reservation.guest_id) }))
+          .sort((a, b) => Date.parse(b.reservation.booked_at) - Date.parse(a.reservation.booked_at));
+      };
+      const [dashboardResult, requestResult] = await Promise.allSettled([
+        frontDeskApi.dashboard(query.trim() ? { q: query.trim() } : {}),
+        loadPendingRequests(),
+      ]);
       if (sequence !== requestSequence.current) return;
+      if (requestResult.status === "fulfilled") {
+        setPendingAtHotelRequests(requestResult.value);
+        setRequestDataError(null);
+      } else {
+        setPendingAtHotelRequests([]);
+        setRequestDataError(`Không tải được yêu cầu chờ xác nhận: ${apiErrorText(requestResult.reason)}`);
+      }
+      if (dashboardResult.status === "rejected") throw dashboardResult.reason;
+      const dashboard: Dashboard = dashboardResult.value;
       // Ưu tiên khách đang ở/đến hôm nay; dùng booking sắp tới để card phòng vẫn thể hiện
       // phòng đã được giữ mà không làm sai KPI "khách đến hôm nay".
-      const stays = [...dashboard.current_stays, ...dashboard.arrivals, ...dashboard.departures, ...(dashboard.upcoming_stays ?? [])];
+      const stays = [...dashboard.current_stays, ...dashboard.arrivals, ...dashboard.departures,
+        ...(dashboard.upcoming_stays ?? []), ...dashboard.unpaid_deposits];
       const findStay = (roomId: string) => stays.find(item => item.room_ids.includes(roomId));
       const mappedRooms = dashboard.rooms.map((raw): Room => {
         const status = raw.status.toUpperCase();
@@ -2449,6 +2523,7 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
           folioTotal: stay ? stay.invoice_balance + stay.deposit_amount : undefined,
           folioDeposit: stay?.deposit_amount, folioCurrency: "VND",
           reservationId: stay?.reservation_id, guestId: stay?.guest_id, reservationStatus: stay?.status,
+          depositPaymentStatus: stay?.deposit_payment_status,
         };
       });
       const toArriving = (item: DashboardItem): ArrivingGuest => ({
@@ -2498,6 +2573,22 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
     if (!guest.reservationId) throw new Error("Không tìm thấy mã đặt phòng.");
     await handleCheckInById(guest.reservationId);
   };
+
+  const handleConfirmAtHotelRequest = useCallback(async (reservationId: number) => {
+    const idempotencyKey = confirmKeys.current.get(reservationId) ?? newFrontDeskIdempotencyKey();
+    confirmKeys.current.set(reservationId, idempotencyKey);
+    setConfirmingRequestId(reservationId);
+    setRequestActionError(null);
+    try {
+      await frontDeskApi.confirm(reservationId, idempotencyKey);
+      confirmKeys.current.delete(reservationId);
+      await loadDashboard(search);
+    } catch (error) {
+      setRequestActionError(`Không thể xác nhận BK-${reservationId}: ${apiErrorText(error)}`);
+    } finally {
+      setConfirmingRequestId(null);
+    }
+  }, [loadDashboard, search]);
 
   const openRoom = (roomId: string) => { setFocusRoomId(roomId); setPage("rooms"); };
 
@@ -2589,7 +2680,7 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
       <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0 }}>
         <TopHeader search={search} setSearch={setSearch} actorName={actorName} onLogout={onBack} />
         <KpiBar rooms={displayRooms} arrivals={displayArriving.length} departures={displayDepartures.length} />
-        {page==="overview" && <OverviewScreen arrivals={displayOverviewArrivals} departures={displayDepartures} alerts={displayAlerts} activities={displayActivities} dataState={dataState} dataError={dataError} onRetry={()=>void loadDashboard(search)} onOpenRoom={openRoom} actorName={actorName} />}
+        {page==="overview" && <OverviewScreen arrivals={displayOverviewArrivals} departures={displayDepartures} alerts={displayAlerts} activities={displayActivities} pendingAtHotelRequests={pendingAtHotelRequests} requestDataError={requestDataError} requestActionError={requestActionError} confirmingRequestId={confirmingRequestId} onConfirmBookingRequest={id=>void handleConfirmAtHotelRequest(id)} dataState={dataState} dataError={dataError} onRetry={()=>void loadDashboard(search)} onOpenRoom={openRoom} actorName={actorName} />}
         {page==="rooms"    && <RoomMapScreen rooms={displayRooms} focusRoomId={focusRoomId} onRefresh={()=>loadDashboard(search)} onCheckIn={handleCheckInById} />}
         {page==="guests"   && <GuestsScreen staying={displayStaying} arriving={displayArriving} departures={displayDepartures} onCheckIn={handleCheckIn} onOpenRoom={openRoom} onRefresh={()=>void loadDashboard(search)} />}
         {page==="shift"    && <ShiftScreen actorId={actorId} arrivalCount={displayArriving.length} departureCount={displayDepartures.length} />}

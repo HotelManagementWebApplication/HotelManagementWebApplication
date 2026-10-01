@@ -113,8 +113,8 @@ public class EnterpriseExtensionService {
     @Transactional
     public List<EnterpriseDtos.AttendanceResponse> importAttendance(EnterpriseDtos.AttendanceImportRequest request, String actor) {
         for (var row : request.records()) {
-            String status = ATTENDANCE_STATUS.convertToDatabaseColumn(code(row.status()));
-            String source = ATTENDANCE_SOURCE.convertToDatabaseColumn(row.source() == null ? "MANUAL" : code(row.source()));
+            String status = attendanceStatus(row.status());
+            String source = attendanceSource(row.source());
             int changed = jdbc.update("UPDATE ChamCong WITH (UPDLOCK, HOLDLOCK) SET thoiDiemVaoCa=?, thoiDiemRaCa=?, trangThai=?, nguonDuLieu=?, maSuKienThietBi=?, ghiChu=?, nguoiNhap=?, thoiDiemNhap=CURRENT_TIMESTAMP WHERE maNhanVien=? AND ngayLamViec=?",
                     row.clockIn(), row.clockOut(), status, source, row.deviceEventId(), row.note(), actor, row.employeeId(), row.workDate());
             if (changed == 0) {
@@ -123,6 +123,28 @@ public class EnterpriseExtensionService {
             }
         }
         return attendance(null);
+    }
+
+    private static String attendanceStatus(String value) {
+        try {
+            return ATTENDANCE_STATUS.convertToDatabaseColumn(code(value));
+        } catch (IllegalArgumentException exception) {
+            throw new DomainException(
+                    "INVALID_ATTENDANCE_STATUS",
+                    "Trạng thái chấm công không hợp lệ; dùng PRESENT, LATE, ABSENT hoặc ON_LEAVE"
+            );
+        }
+    }
+
+    private static String attendanceSource(String value) {
+        try {
+            return ATTENDANCE_SOURCE.convertToDatabaseColumn(value == null ? "MANUAL" : code(value));
+        } catch (IllegalArgumentException exception) {
+            throw new DomainException(
+                    "INVALID_ATTENDANCE_SOURCE",
+                    "Nguồn chấm công không hợp lệ; dùng MANUAL hoặc BIOMETRIC_IMPORT"
+            );
+        }
     }
 
     @Transactional(readOnly = true)

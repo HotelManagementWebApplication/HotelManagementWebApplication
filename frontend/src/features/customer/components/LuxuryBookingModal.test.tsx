@@ -22,13 +22,14 @@ describe("LuxuryBookingModal", () => {
     fireEvent.change(datetime, { target: { value: "2031-01-10T14:00" } });
     fireEvent.change(screen.getByPlaceholderText("Nguyễn Văn A"), { target: { value: "Nguyễn Văn An" } });
     fireEvent.change(screen.getByPlaceholderText("0901 234 567"), { target: { value: "0901234567" } });
-    fireEvent.click(screen.getByRole("button", { name: /xác nhận & hoàn tất/i }));
+    fireEvent.click(screen.getByRole("button", { name: /tiếp tục đến cổng vnpay/i }));
 
     await waitFor(() => expect(onConfirm).toHaveBeenCalled());
     expect(onConfirm.mock.calls[0][0]).toMatchObject({
       mode: "hour",
       hourlyCheckIn: "2031-01-10T14:00",
       hourlyCheckOut: "2031-01-10T17:00",
+      paymentMethod: "vnpay",
     });
   });
 });

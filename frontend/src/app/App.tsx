@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { RoleId } from "../shared/types/domain";
-import { apiClient } from "../shared/api/client";
+import { ApiError, apiClient } from "../shared/api/client";
 import { authApi } from "../shared/api/auth";
 import { classifyAccount, formatAuthError } from "../shared/utils/authValidation";
 import { resolveEmployeeDestination, staffAccounts, type View } from "./navigation/staffAccounts";
@@ -11,6 +11,35 @@ export default function App() {
   const [view, setView] = useState<View>("customer");
   const [role, setRole] = useState<RoleId>("reception");
   const [customerAuthenticated, setCustomerAuthenticated] = useCustomerSession();
+  const [employeeSessionRestored, setEmployeeSessionRestored] = useState(
+    () => apiClient.store.getIdentity?.() !== "employee",
+  );
+
+  useEffect(() => {
+    if (apiClient.store.getIdentity?.() !== "employee" || !apiClient.store.get()?.access_token) {
+      setEmployeeSessionRestored(true);
+      return;
+    }
+
+    let active = true;
+    authApi.employeeProfile()
+      .then(profile => {
+        if (!active) return;
+        const destination = resolveEmployeeDestination(profile.role);
+        setRole(destination.role);
+        setView(destination.view);
+      })
+      .catch(error => {
+        if (!active) return;
+        if (error instanceof ApiError && error.isUnauthorized) apiClient.store.clear();
+        setView("login");
+      })
+      .finally(() => {
+        if (active) setEmployeeSessionRestored(true);
+      });
+
+    return () => { active = false; };
+  }, []);
 
   const login = async (identity: string, password: string): Promise<string | null> => {
     const trimmed = identity.trim();
@@ -49,18 +78,21 @@ export default function App() {
       if (token?.access_token) {
         apiClient.store.set(token);
         apiClient.store.setIdentity?.("employee");
+        let profile: Awaited<ReturnType<typeof authApi.employeeProfile>> | null = null;
         try {
-          const profile = await authApi.employeeProfile();
-          if (profile?.role) {
-            const destination = resolveEmployeeDestination(profile.role, staffAccount);
-            setRole(destination.role);
-            setView(destination.view);
-            return null;
+          profile = await authApi.employeeProfile();
+        } catch (profileError) {
+          if (!staffAccount || (profileError instanceof ApiError && profileError.isUnauthorized)) {
+            return formatAuthError(profileError);
           }
-        } catch {
-          // Preserve the existing fallback when the profile request is unavailable.
         }
-        return null;
+        if (profile?.role || staffAccount) {
+          const destination = resolveEmployeeDestination(profile?.role ?? "", staffAccount);
+          setRole(destination.role);
+          setView(destination.view);
+          return null;
+        }
+        return "Không xác định được vai trò nhân viên. Vui lòng thử lại.";
       }
     } catch (backendError) {
       console.warn("Backend employee login failed:", backendError);
@@ -79,6 +111,18 @@ export default function App() {
     setCustomerAuthenticated(false);
     setView("customer");
   };
+
+  if (!employeeSessionRestored) {
+    return (
+      <main
+        className="min-h-screen flex items-center justify-center bg-[#f8f7f4] text-[#8c6d37]"
+        role="status"
+        aria-live="polite"
+      >
+        Đang khôi phục phiên đăng nhập…
+      </main>
+    );
+  }
 
   return (
     <ScreenRouter

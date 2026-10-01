@@ -12,6 +12,7 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
 
 /**
  * Dịch vụ gửi email thông báo và mã OTP qua Gmail SMTP.
@@ -57,6 +58,26 @@ public class EmailService {
                 otp
         );
         sendHtmlEmail(toEmail, subject, htmlContent);
+    }
+
+    /** Gửi xác nhận sau khi cổng thanh toán đã ghi nhận tiền cọc. */
+    public void sendBookingDepositConfirmation(String toEmail, Long reservationId, BigDecimal amount,
+                                               String roomSummary, String paymentReference) {
+        String formattedAmount = amount == null ? "0 ₫"
+                : String.format(java.util.Locale.forLanguageTag("vi-VN"), "%,.0f ₫", amount);
+        String html = """
+            <!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"></head>
+            <body style="font-family:Arial,sans-serif;background:#f6f3ed;padding:24px;color:#292524">
+              <div style="max-width:560px;margin:auto;background:white;border:1px solid #e7e0d3;border-radius:16px;padding:28px">
+                <div style="font-size:22px;font-weight:700">MaM Hotel</div>
+                <p style="color:#8c6d37;font-weight:700">Thanh toán tiền cọc thành công</p>
+                <p>Booking <strong>BK-%s</strong> đã được xác nhận giữ phòng.</p>
+                <p>Phòng: <strong>%s</strong><br>Số tiền cọc: <strong>%s</strong><br>Mã giao dịch: <strong>%s</strong></p>
+                <p style="font-size:13px;color:#78716c">Khoản cọc này sẽ được trừ khỏi tổng hóa đơn khi trả phòng.</p>
+              </div>
+            </body></html>
+            """.formatted(reservationId, roomSummary, formattedAmount, paymentReference);
+        sendHtmlEmail(toEmail, "MaM Hotel - Xác nhận thanh toán cọc BK-" + reservationId, html);
     }
 
     private void sendHtmlEmail(String toEmail, String subject, String htmlContent) {

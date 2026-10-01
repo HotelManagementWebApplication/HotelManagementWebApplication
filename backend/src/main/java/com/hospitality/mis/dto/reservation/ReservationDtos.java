@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.hospitality.mis.entity.reservation.ReservationStatus;
 import com.hospitality.mis.entity.reservation.CancellationOutcome;
+import com.hospitality.mis.entity.reservation.CustomerPaymentMethod;
+import com.hospitality.mis.entity.reservation.DepositPaymentStatus;
 import jakarta.validation.Valid;
 
 import jakarta.validation.constraints.NotBlank;
@@ -162,25 +164,11 @@ public final class ReservationDtos {
                            String cancellationReason, CancellationOutcome cancellationOutcome,
                            String bookingSource, BigDecimal otaGrossRevenue, BigDecimal otaCommission,
                            BigDecimal otaNetRevenue, String otaReconciliationStatus,
-                           List<ServiceUsageLine> serviceUsages) {
+                           List<ServiceUsageLine> serviceUsages,
+                           CustomerPaymentMethod customerPaymentMethod,
+                           DepositPaymentStatus depositPaymentStatus) {
         public Response {
             serviceUsages = serviceUsages == null ? List.of() : List.copyOf(serviceUsages);
-        }
-        /** Constructor dùng khi response chưa có thông tin hủy. */
-        public Response(Long id, Long guestId, String employeeId, ReservationStatus status, RentalType rentalType,
-                        BigDecimal deposit, LocalDateTime bookedAt, LocalDateTime actualCheckIn,
-                        LocalDateTime actualCheckOut, List<RoomLine> rooms) {
-            this(id, guestId, employeeId, status, rentalType, deposit, bookedAt, actualCheckIn,
-                    actualCheckOut, rooms, null, null, "DIRECT", BigDecimal.ZERO, BigDecimal.ZERO,
-                    BigDecimal.ZERO, "NOT_APPLICABLE", List.of());
-        }
-        public Response(Long id, Long guestId, String employeeId, ReservationStatus status, RentalType rentalType,
-                        BigDecimal deposit, LocalDateTime bookedAt, LocalDateTime actualCheckIn,
-                        LocalDateTime actualCheckOut, List<RoomLine> rooms, String cancellationReason,
-                        CancellationOutcome cancellationOutcome) {
-            this(id, guestId, employeeId, status, rentalType, deposit, bookedAt, actualCheckIn, actualCheckOut,
-                    rooms, cancellationReason, cancellationOutcome, "DIRECT", BigDecimal.ZERO, BigDecimal.ZERO,
-                    BigDecimal.ZERO, "NOT_APPLICABLE", List.of());
         }
     }
 

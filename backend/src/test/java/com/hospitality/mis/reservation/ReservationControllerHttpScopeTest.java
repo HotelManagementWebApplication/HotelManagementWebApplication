@@ -81,7 +81,8 @@ class ReservationControllerHttpScopeTest {
     void nextShiftCanReadReservation() throws Exception {
         mockMvc.perform(get("/api/reservations/{id}", 7L))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.employee_id").value("frontdesk"));
+                .andExpect(jsonPath("$.employee_id").value("frontdesk"))
+                .andExpect(jsonPath("$.deposit_payment_status").value("NOT_REQUIRED"));
     }
 
     /** Manager có global read scope. */
@@ -116,6 +117,9 @@ class ReservationControllerHttpScopeTest {
     private static ReservationDtos.Response responseOwnedBy(String employeeId) {
         return new ReservationDtos.Response(7L, 11L, employeeId,
                 com.hospitality.mis.entity.reservation.ReservationStatus.CONFIRMED,
-                ReservationDtos.RentalType.PACKAGE, BigDecimal.ZERO, null, null, null, List.of());
+                ReservationDtos.RentalType.PACKAGE, BigDecimal.ZERO, null, null, null, List.of(),
+                null, null, "DIRECT", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                "NOT_APPLICABLE", List.of(), null,
+                com.hospitality.mis.entity.reservation.DepositPaymentStatus.NOT_REQUIRED);
     }
 }

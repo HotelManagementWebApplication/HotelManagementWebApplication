@@ -140,8 +140,7 @@ public class TechnicalWorkOrderService {
         var room = rooms.findForUpdate(order.getRoom().getId()).orElseThrow(() -> new DomainException("ROOM_NOT_FOUND", "Không tìm thấy phòng"));
         if (orders.existsByRoomIdAndStatusInAndIdNot(room.getId(),
                 List.of(TechnicalWorkOrderStatus.NEW, TechnicalWorkOrderStatus.ACKNOWLEDGED,
-                        TechnicalWorkOrderStatus.IN_PROGRESS, TechnicalWorkOrderStatus.WAITING_ACCEPTANCE,
-                        TechnicalWorkOrderStatus.COMPLETED), order.getId()))
+                        TechnicalWorkOrderStatus.IN_PROGRESS, TechnicalWorkOrderStatus.WAITING_ACCEPTANCE), order.getId()))
             throw new DomainException("TECHNICAL_WORK_ORDER_NOT_READY", "Phòng còn work order kỹ thuật chưa hoàn tất");
         if (room.getStatus() == RoomStatus.OCCUPIED) throw new DomainException("ROOM_OCCUPIED", "Không thể release phòng đang có khách");
         LocalDateTime now = LocalDateTime.now(clock);

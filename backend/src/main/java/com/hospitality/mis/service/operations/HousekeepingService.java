@@ -5,6 +5,7 @@ import com.hospitality.mis.dao.operations.HousekeepingTaskRepository;
 import com.hospitality.mis.dao.operations.HousekeepingChecklistResultRepository;
 import com.hospitality.mis.dao.operations.HousekeepingChecklistTemplateRepository;
 import com.hospitality.mis.dao.operations.EquipmentIncidentRepository;
+import com.hospitality.mis.dao.operations.TechnicalWorkOrderRepository;
 import com.hospitality.mis.dao.room.RoomRepository;
 import com.hospitality.mis.dto.operations.HousekeepingDtos;
 import com.hospitality.mis.entity.operations.HousekeepingTask;
@@ -35,16 +36,17 @@ public class HousekeepingService {
     private final HousekeepingChecklistTemplateRepository templates;
     private final HousekeepingChecklistResultRepository results;
     private final EquipmentIncidentRepository incidents;
+    private final TechnicalWorkOrderRepository workOrders;
     private final Clock clock;
     private final DurableIdempotencyService durableIdempotency;
 
     public HousekeepingService(HousekeepingTaskRepository tasks, RoomRepository rooms, AuditService audit,
                                HousekeepingChecklistTemplateRepository templates,
                                HousekeepingChecklistResultRepository results,
-                               EquipmentIncidentRepository incidents, Clock clock,
+                               EquipmentIncidentRepository incidents, TechnicalWorkOrderRepository workOrders, Clock clock,
                                DurableIdempotencyService durableIdempotency) {
         this.tasks = tasks; this.rooms = rooms; this.audit = audit; this.templates = templates;
-        this.results = results; this.incidents = incidents; this.clock = clock;
+        this.results = results; this.incidents = incidents; this.workOrders = workOrders; this.clock = clock;
         this.durableIdempotency = durableIdempotency;
     }
 
@@ -60,7 +62,9 @@ public class HousekeepingService {
             var room = rooms.findForUpdate(request.roomId()).orElseThrow(() -> new DomainException("ROOM_NOT_FOUND", "Không tìm thấy phòng"));
             if (room.getStatus() == RoomStatus.OCCUPIED)
                 throw new DomainException("ROOM_OCCUPIED", "Không thể tạo task dọn phòng khi phòng đang có khách");
-            if (room.getStatus() == RoomStatus.MAINTENANCE || room.getStatus() == RoomStatus.OUT_OF_SERVICE)
+            boolean postRepairCleaning = room.getStatus() == RoomStatus.MAINTENANCE && hasAcceptedRepairs(request.roomId());
+            if ((room.getStatus() == RoomStatus.MAINTENANCE && !postRepairCleaning)
+                    || room.getStatus() == RoomStatus.OUT_OF_SERVICE)
                 throw new DomainException("ROOM_MAINTENANCE_LOCKED", "Không thể tạo task dọn phòng khi phòng đang bị khóa kỹ thuật");
             var task = new HousekeepingTask(); task.setRoom(room); task.setAssignee(request.assignee().trim());
             task.setAssignedBy(boundActor); task.setNote(request.note()); task.setStatus(HousekeepingTaskStatus.NEEDS_CLEANING);
@@ -107,7 +111,11 @@ public class HousekeepingService {
                 throw new DomainException("ROOM_MAINTENANCE_LOCKED", "Phòng đang bị maintenance khóa");
         }
         var before = task.getStatus(); task.setStatus(next); task.setUpdatedAt(LocalDateTime.now(clock));
-        room.setStatus(next == HousekeepingTaskStatus.READY ? RoomStatus.READY
+        boolean pendingTechnicalRelease = next == HousekeepingTaskStatus.READY
+                && workOrders.findByRoomIdOrderByUpdatedAtDesc(room.getId()).stream()
+                .anyMatch(order -> order.getStatus() == com.hospitality.mis.entity.operations.TechnicalWorkOrderStatus.COMPLETED);
+        room.setStatus(next == HousekeepingTaskStatus.READY
+                ? pendingTechnicalRelease ? RoomStatus.MAINTENANCE : RoomStatus.READY
                 : next == HousekeepingTaskStatus.WAITING_TECHNICAL ? RoomStatus.MAINTENANCE : RoomStatus.CLEANING);
         audit.record(actor, "HOUSEKEEPING_TASK_STATUS_CHANGED", "HOUSEKEEPING_TASK", id.toString(), before.name(), next.name(), null);
         return toResponse(task);
@@ -116,6 +124,14 @@ public class HousekeepingService {
     private boolean hasBlockingIncident(String roomId) {
         return incidents.existsByRoomIdAndSeverityInAndHandoffStatusNot(
                 roomId, List.of(IncidentSeverity.HIGH, IncidentSeverity.CRITICAL), IncidentHandoffStatus.RESOLVED);
+    }
+
+    private boolean hasAcceptedRepairs(String roomId) {
+        var repairs = workOrders.findByRoomIdOrderByUpdatedAtDesc(roomId);
+        return !repairs.isEmpty()
+                && repairs.stream().anyMatch(order -> order.getStatus() == com.hospitality.mis.entity.operations.TechnicalWorkOrderStatus.COMPLETED)
+                && repairs.stream().allMatch(order -> order.getStatus() == com.hospitality.mis.entity.operations.TechnicalWorkOrderStatus.COMPLETED
+                || order.getStatus() == com.hospitality.mis.entity.operations.TechnicalWorkOrderStatus.ROOM_RELEASED);
     }
 
     private HousekeepingDtos.Response executeIdempotent(String scope, String key, String actor, String fingerprint,

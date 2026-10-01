@@ -22,7 +22,7 @@ public interface PartnerDebtRepository extends JpaRepository<PartnerDebt, Long> 
 
     /** Lấy sổ công nợ theo thời điểm ghi nhận mới nhất trước. */
     List<PartnerDebt> findAllByOrderByRecordedAtDesc();
-    @Query("select d from PartnerDebt d where (:partner is null or lower(d.partnerName) like lower(concat('%', :partner, '%'))) and (:status is null or d.status = :status) and (:fromAt is null or d.recordedAt >= :fromAt) and (:toAt is null or d.recordedAt < :toAt) order by d.recordedAt desc, d.id desc")
+    @Query("select d from PartnerDebt d where (:partner is null or lower(d.partnerName) like lower(concat('%', :partner, '%'))) and (:status is null or d.status = :status) and (:fromAt is null or d.recordedAt >= :fromAt) and (:toAt is null or d.recordedAt < :toAt)")
     Page<PartnerDebt> search(@Param("partner") String partner, @Param("status") PartnerDebt.DebtStatus status,
                              @Param("fromAt") LocalDateTime fromAt, @Param("toAt") LocalDateTime toAt, Pageable pageable);
 

@@ -8,6 +8,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Email;
+import com.hospitality.mis.entity.reservation.CustomerPaymentMethod;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,12 +23,9 @@ public final class CustomerReservationDtos {
             @NotNull ReservationDtos.RentalType rentalType,
             String bookingSource,
             @NotEmpty @Valid List<RoomStay> rooms,
-            @NotBlank String idempotencyKey) {
-        /** Giữ tương thích với các caller Java cũ chưa truyền nguồn đặt phòng. */
-        public CreateRequest(ReservationDtos.RentalType rentalType, List<RoomStay> rooms, String idempotencyKey) {
-            this(rentalType, "DIRECT", rooms, idempotencyKey);
-        }
-    }
+            @NotBlank String idempotencyKey,
+            @NotNull CustomerPaymentMethod paymentMethod,
+            @Email String confirmationEmail) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record RoomStay(

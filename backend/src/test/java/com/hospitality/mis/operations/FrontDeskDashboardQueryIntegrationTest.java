@@ -93,6 +93,21 @@ class FrontDeskDashboardQueryIntegrationTest {
     }
 
     @Test
+    void dashboardUpcomingBucketIncludesReservedStayAlreadyStartedButNotCheckedIn() {
+        Guest guest = guest("Overdue Arrival Guest", "0900000113", "010000000013");
+        Reservation overdue = reservation(guest, room("R208"), ReservationStatus.DEPOSIT_PAID,
+                BUSINESS_DATE.minusDays(1).atTime(14, 0), BUSINESS_DATE.plusDays(1).atTime(12, 0));
+
+        entityManager.flush();
+        entityManager.clear();
+
+        var page = reservations.dashboardIds("", null, "UPCOMING",
+                BUSINESS_DATE.atStartOfDay(), BUSINESS_DATE.plusDays(1).atStartOfDay(), PageRequest.of(0, 20));
+
+        assertThat(page.getContent()).containsExactly(overdue.getId());
+    }
+
+    @Test
     void dashboardIncidentQueryIsStableAndBoundedByRequestedPage() {
         Guest guest = guest("Incident Guest", "0900000121", "010000000021");
         Reservation reservation = reservation(guest, room("R301"), ReservationStatus.CHECKED_IN,

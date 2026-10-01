@@ -82,7 +82,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             + "or (:bucket = 'CURRENT' and r.status = com.hospitality.mis.entity.reservation.ReservationStatus.CHECKED_IN) "
             + "or (:bucket = 'UPCOMING' and r.status in (com.hospitality.mis.entity.reservation.ReservationStatus.CONFIRMED, com.hospitality.mis.entity.reservation.ReservationStatus.DEPOSIT_PAID) "
             + "and exists (select upcomingRoom from ReservationRoom upcomingRoom where upcomingRoom.reservation = r "
-            + "and upcomingRoom.status = com.hospitality.mis.entity.room.RoomStatus.RESERVED and upcomingRoom.checkIn >= :toAt)) "
+            + "and upcomingRoom.status = com.hospitality.mis.entity.room.RoomStatus.RESERVED and upcomingRoom.checkOut > :fromAt "
+            + "and (upcomingRoom.checkIn < :fromAt or upcomingRoom.checkIn >= :toAt))) "
             + "or (:bucket = 'UNPAID_DEPOSITS' and (r.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING "
             + "or (r.depositAmount > 0 and r.depositPaymentStatus <> com.hospitality.mis.entity.reservation.DepositPaymentStatus.PAID))) "
             + "or (:bucket = 'INVOICE_BALANCES' and dashboardInvoice is not null and dashboardInvoice.amountDue > 0)) "
@@ -104,7 +105,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
                     + "or (:bucket = 'CURRENT' and r.status = com.hospitality.mis.entity.reservation.ReservationStatus.CHECKED_IN) "
                     + "or (:bucket = 'UPCOMING' and r.status in (com.hospitality.mis.entity.reservation.ReservationStatus.CONFIRMED, com.hospitality.mis.entity.reservation.ReservationStatus.DEPOSIT_PAID) "
                     + "and exists (select upcomingRoom from ReservationRoom upcomingRoom where upcomingRoom.reservation = r "
-                    + "and upcomingRoom.status = com.hospitality.mis.entity.room.RoomStatus.RESERVED and upcomingRoom.checkIn >= :toAt)) "
+                    + "and upcomingRoom.status = com.hospitality.mis.entity.room.RoomStatus.RESERVED and upcomingRoom.checkOut > :fromAt "
+                    + "and (upcomingRoom.checkIn < :fromAt or upcomingRoom.checkIn >= :toAt))) "
                     + "or (:bucket = 'UNPAID_DEPOSITS' and (r.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING "
                     + "or (r.depositAmount > 0 and r.depositPaymentStatus <> com.hospitality.mis.entity.reservation.DepositPaymentStatus.PAID))) "
                     + "or (:bucket = 'INVOICE_BALANCES' and dashboardInvoice is not null and dashboardInvoice.amountDue > 0))")
@@ -190,7 +192,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      * @param now thời điểm hiện tại theo múi giờ ứng dụng, dùng để loại trừ bản nháp đã hết hạn
      * @return true nếu có ít nhất một dòng phòng giao nhau
      */
-    @Query("select count(rr) > 0 from ReservationRoom rr where rr.room.id = :roomId and rr.checkIn < :to and rr.checkOut > :from and rr.status <> :cancelledRoom and rr.reservation.status not in :ignoredReservations and not (rr.reservation.status = com.hospitality.mis.entity.reservation.ReservationStatus.DRAFT and rr.reservation.customerAccount is not null and rr.reservation.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING and rr.reservation.depositPaymentExpiresAt <= :now)")
+    @Query("select count(rr) > 0 from ReservationRoom rr where rr.room.id = :roomId and rr.checkIn < :to and rr.checkOut > :from and rr.status <> :cancelledRoom and rr.reservation.status not in :ignoredReservations and (rr.reservation.status <> com.hospitality.mis.entity.reservation.ReservationStatus.DRAFT or rr.reservation.customerAccount is null or (rr.reservation.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING and rr.reservation.depositPaymentExpiresAt > :now))")
     boolean hasOverlap(@Param("roomId") String roomId, @Param("from") LocalDateTime from,
                        @Param("to") LocalDateTime to, @Param("cancelledRoom") RoomStatus cancelledRoom,
                        @Param("ignoredReservations") List<ReservationStatus> ignoredReservations,
@@ -211,7 +213,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      * @param now thời điểm hiện tại theo múi giờ ứng dụng, dùng để loại trừ bản nháp đã hết hạn
      * @return true nếu còn đặt phòng khác giao nhau
      */
-    @Query("select count(rr) > 0 from ReservationRoom rr where rr.room.id = :roomId and rr.checkIn < :to and rr.checkOut > :from and rr.reservation.id <> :excludedReservationId and rr.status <> :cancelledRoom and rr.reservation.status not in :ignoredReservations and not (rr.reservation.status = com.hospitality.mis.entity.reservation.ReservationStatus.DRAFT and rr.reservation.customerAccount is not null and rr.reservation.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING and rr.reservation.depositPaymentExpiresAt <= :now)")
+    @Query("select count(rr) > 0 from ReservationRoom rr where rr.room.id = :roomId and rr.checkIn < :to and rr.checkOut > :from and rr.reservation.id <> :excludedReservationId and rr.status <> :cancelledRoom and rr.reservation.status not in :ignoredReservations and (rr.reservation.status <> com.hospitality.mis.entity.reservation.ReservationStatus.DRAFT or rr.reservation.customerAccount is null or (rr.reservation.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING and rr.reservation.depositPaymentExpiresAt > :now))")
     boolean hasOverlapExcludingReservation(@Param("excludedReservationId") Long excludedReservationId,
 
                                            @Param("roomId") String roomId,

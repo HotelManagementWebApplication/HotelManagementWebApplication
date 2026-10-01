@@ -109,7 +109,10 @@ class DepartmentAuthorizationMatrixTest {
         when(approvalAuthorization.canApprove(anyLong(), anyString())).thenReturn(true);
         when(mock15.get(1L)).thenReturn(new ReservationDtos.Response(1L, 1L, "actor",
             ReservationStatus.CONFIRMED, ReservationDtos.RentalType.PACKAGE,
-            java.math.BigDecimal.ZERO, null, null, null, List.of()));
+            java.math.BigDecimal.ZERO, null, null, null, List.of(), null,
+            null, "DIRECT", java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO,
+            java.math.BigDecimal.ZERO, "NOT_APPLICABLE", List.of(), null,
+            com.hospitality.mis.entity.reservation.DepositPaymentStatus.NOT_REQUIRED));
         when(mock21.get(any(), any(), any(), anyInt(), anyInt())).thenReturn(
             new com.hospitality.mis.dto.operations.FrontDeskDashboardDtos.Response(
                 java.time.LocalDate.now(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),

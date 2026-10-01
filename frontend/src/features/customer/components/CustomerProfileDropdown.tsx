@@ -21,8 +21,6 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  Copy,
-  Check,
   UtensilsCrossed,
   Users,
   Layers,
@@ -42,20 +40,30 @@ interface CustomerProfileDropdownProps {
   onLogout: () => void;
   onProfileUpdated?: (name: string) => void;
   onNavigateToServices?: () => void;
+  onPayReservation?: (reservationId: number) => void;
 }
 
 type TabType = "overview" | "edit" | "password" | "bookings";
 
 const fmtVND = (n: number) => (n ?? 0).toLocaleString("vi-VN") + " ₫";
 
-const getReservationStatusMeta = (status: string) => {
+const getReservationStatusMeta = (reservation: CustomerReservation) => {
+  const status = reservation.status;
   switch (status?.toUpperCase()) {
     case "DRAFT":
+      if (reservation.deposit_payment?.status === "NOT_REQUIRED") {
+        return {
+          label: "Chờ lễ tân xác nhận",
+          badgeClass: "bg-amber-50 text-amber-800 border-amber-300",
+          dotClass: "bg-amber-500",
+          desc: "Yêu cầu chưa giữ phòng; lễ tân sẽ kiểm tra khả dụng trước khi xác nhận.",
+        };
+      }
       return {
         label: "Chờ thanh toán cọc",
         badgeClass: "bg-amber-50 text-amber-800 border-amber-300",
         dotClass: "bg-amber-500",
-        desc: "Đơn đang giữ phòng, vui lòng hoàn tất chuyển khoản tiền cọc.",
+        desc: "Đơn đang giữ phòng, vui lòng hoàn tất tiền cọc qua VNPay.",
       };
     case "DEPOSIT_PAID":
       return {
@@ -170,6 +178,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
   onLogout,
   onProfileUpdated,
   onNavigateToServices,
+  onPayReservation,
 }) => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<TabType>("overview");
@@ -202,19 +211,9 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
   const [loadingReservations, setLoadingReservations] = useState(false);
   const [bookingFilter, setBookingFilter] = useState<"all" | "active" | "past">("all");
   const [expandedResId, setExpandedResId] = useState<number | null>(null);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [cancellingReservationId, setCancellingReservationId] = useState<number | null>(null);
   const [cancelError, setCancelError] = useState("");
 
-  const handleCopyCode = (code: string) => {
-    try {
-      navigator.clipboard?.writeText(code);
-      setCopiedCode(code);
-      setTimeout(() => setCopiedCode(null), 2000);
-    } catch {
-      // ignore
-    }
-  };
 
   const handleCancelReservation = async (reservation: CustomerReservation) => {
     const policy = cancellationPolicy(reservation);
@@ -873,7 +872,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
                 })
                 .map((res) => {
                   const isExpanded = expandedResId === res.id;
-                  const statusMeta = getReservationStatusMeta(res.status);
+                  const statusMeta = getReservationStatusMeta(res);
                   const primaryRoom = res.rooms?.[0];
                   const totalRooms = res.rooms?.length || 1;
                   const totalAmount =
@@ -1183,42 +1182,11 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
                               </div>
                             </div>
 
-                            {/* Payment Instruction box if PENDING / DRAFT */}
+                            {/* Retry VNPay trên cùng booking trong thời gian giữ phòng. */}
                             {(res.status === "DRAFT" || res.deposit_payment?.status === "PENDING") && res.deposit_payment?.payment_code && (
-                              <div className="mt-2 p-2.5 bg-white rounded-lg border border-amber-200 text-[11px] space-y-1.5 text-amber-900">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-semibold text-amber-800 flex items-center gap-1">
-                                    <AlertCircle size={12} className="text-amber-600" />
-                                    Nội dung chuyển khoản cọc:
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleCopyCode(res.deposit_payment.payment_code);
-                                    }}
-                                    className="text-[10px] font-semibold text-[#8C6D37] hover:underline flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-300/60 cursor-pointer"
-                                  >
-                                    {copiedCode === res.deposit_payment.payment_code ? (
-                                      <>
-                                        <Check size={11} className="text-emerald-600" />
-                                        <span className="text-emerald-700">Đã chép</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Copy size={11} />
-                                        <span>Sao chép</span>
-                                      </>
-                                    )}
-                                  </button>
-                                </div>
-
-                                <div className="font-mono text-xs font-bold text-[#1C1917] bg-[#FAF8F5] p-1.5 rounded border border-stone-200 text-center tracking-wider select-all">
-                                  {res.deposit_payment.payment_code}
-                                </div>
-
+                              <div className="mt-2 p-2.5 bg-white rounded-lg border border-amber-200 text-[11px] space-y-2 text-amber-900">
                                 <div className="flex justify-between items-center text-[10px] text-stone-500 pt-0.5">
-                                  <span>Số tiền cọc cần chuyển:</span>
+                                  <span>Tiền cọc qua VNPay:</span>
                                   <strong className="text-[#8C6D37]">{fmtVND(res.deposit_amount || 0)}</strong>
                                 </div>
 
@@ -1226,6 +1194,19 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
                                   <p className="text-[10px] text-amber-700">
                                     Hạn chuyển cọc: {formatDateTimeVi(res.deposit_payment.expires_at)}
                                   </p>
+                                )}
+                                {onPayReservation && (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      onClose();
+                                      onPayReservation(res.id);
+                                    }}
+                                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#1C1917] px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-[#8C6D37]"
+                                  >
+                                    <CreditCard size={13} /> Thanh toán qua VNPay
+                                  </button>
                                 )}
                               </div>
                             )}

@@ -70,7 +70,7 @@ class SqlServerMigrationTest {
     }
 
     @Test
-    /** Metadata phải khớp trọn bộ 51 bảng và quy ước PascalCase/camelCase đã chốt. */
+    /** Metadata phải khớp trọn bộ bảng và quy ước PascalCase/camelCase đã chốt. */
     void physicalSchemaMatchesTheVietnameseNamingContract() throws Exception {
         Set<String> expectedTables = Set.of(
                 "BanGhiChongTrung", "BanGiaoTienCa", "BienDongKhoDichVu", "BienDongTonKho", "BienLai",
@@ -82,7 +82,7 @@ class SqlServerMigrationTest {
                 "MatHangTonKho", "MauChecklistBuongPhong", "NhanVien", "NhatKyKiemSoat", "NhiemVuBuongPhong",
                 "NhomKhoaChongTrung", "PhieuBaoTri", "PhieuCongViecKyThuat", "PhieuDatPhong", "Phong",
                 "SuCoThietBi", "SuDungDichVu", "SuKienDangNhapNhanVien", "TaiKhoanKhachHang", "TaiSanKyThuat",
-                "ThanhToanCongNoDoiTac", "ThietBiPhong", "TienNghi", "YeuCauPheDuyet");
+                "ThanhToanCongNoDoiTac", "ThietBiPhong", "TienNghi", "YeuCauPheDuyet", "YeuCauThanhToanVnpay");
 
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
             Set<String> actualTables = new HashSet<>();
@@ -103,11 +103,11 @@ class SqlServerMigrationTest {
                 }
             }
 
-            assertThat(actualTables).hasSize(51);
-            assertColumnCount(statement, 459);
-            assertConstraintCount(statement, "FOREIGN KEY", 51);
-            assertConstraintCount(statement, "UNIQUE", 25);
-            assertConstraintCount(statement, "CHECK", 122);
+            assertThat(actualTables).hasSize(52);
+            assertColumnCount(statement, 474);
+            assertConstraintCount(statement, "FOREIGN KEY", 52);
+            assertConstraintCount(statement, "UNIQUE", 26);
+            assertConstraintCount(statement, "CHECK", 127);
 
             try (var result = statement.executeQuery("select constraint_name from information_schema.table_constraints "
                     + "where table_schema='dbo' and LTRIM(RTRIM(constraint_type)) <> 'PRIMARY KEY'")) {
@@ -239,6 +239,60 @@ class SqlServerMigrationTest {
             statement.executeUpdate("delete from KhachLuuTru where maKhachLuuTru=" + guestId);
             statement.executeUpdate("delete from Phong where maPhong=N'AUDIT-R'");
             statement.executeUpdate("delete from LoaiPhong where maLoaiPhong=N'AUDIT-RT'");
+        }
+    }
+
+    @Test
+    /** Booking online trả tại khách sạn chỉ chiếm lịch sau khi lễ tân xác nhận. */
+    void payAtHotelDraftDoesNotBlockUntilFrontDeskConfirms() throws Exception {
+        LocalDateTime from = LocalDateTime.of(2035, 2, 10, 14, 0);
+        LocalDateTime to = LocalDateTime.of(2035, 2, 11, 12, 0);
+        try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+            try {
+                statement.executeUpdate("insert into LoaiPhong(maLoaiPhong,ten,giaTheoNgay) "
+                        + "values(N'AUDPHRT',N'Audit pay hotel',100000)");
+                statement.executeUpdate("insert into Phong(maPhong,maLoaiPhong,trangThai) "
+                        + "values(N'AUDPHR',N'AUDPHRT',N'Sẵn sàng')");
+                statement.executeUpdate("insert into KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) "
+                        + "values(N'Audit pay hotel','0999999997','999999999997')");
+                long guestId;
+                try (var result = statement.executeQuery("select maKhachLuuTru from KhachLuuTru "
+                        + "where soDienThoai='0999999997'")) {
+                    assertThat(result.next()).isTrue();
+                    guestId = result.getLong(1);
+                }
+                statement.executeUpdate("insert into TaiKhoanKhachHang(maKhachLuuTru,soDienThoai,matKhau) "
+                        + "values(" + guestId + ",'0999999997','not-a-password')");
+                long customerAccountId;
+                try (var result = statement.executeQuery("select cast(scope_identity() as bigint)")) {
+                    assertThat(result.next()).isTrue();
+                    customerAccountId = result.getLong(1);
+                }
+                statement.executeUpdate("insert into PhieuDatPhong(maKhachLuuTru,maTaiKhoanKhachHang,trangThai,"
+                        + "trangThaiThanhToanCoc,phuongThucBaoDam) values(" + guestId + ","
+                        + customerAccountId + ",N'Bản nháp',N'Không yêu cầu',N'Tại khách sạn')");
+                long reservationId;
+                try (var result = statement.executeQuery("select cast(scope_identity() as bigint)")) {
+                    assertThat(result.next()).isTrue();
+                    reservationId = result.getLong(1);
+                }
+                statement.executeUpdate("insert into ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,"
+                        + "thoiDiemTraPhong,thoiDiemTraPhongBanDau,trangThai) values(" + reservationId
+                        + ",N'AUDPHR','2035-02-10 14:00:00','2035-02-11 12:00:00',"
+                        + "'2035-02-11 12:00:00',N'Đã giữ phòng')");
+
+                assertThat(reservationOverlap.hasOverlap("AUDPHR", from, to)).isFalse();
+                statement.executeUpdate("update PhieuDatPhong set trangThai=N'Đã xác nhận' "
+                        + "where maPhieuDatPhong=" + reservationId);
+                assertThat(reservationOverlap.hasOverlap("AUDPHR", from, to)).isTrue();
+            } finally {
+                statement.executeUpdate("delete from PhieuDatPhong where maKhachLuuTru in "
+                        + "(select maKhachLuuTru from KhachLuuTru where soDienThoai='0999999997')");
+                statement.executeUpdate("delete from TaiKhoanKhachHang where soDienThoai='0999999997'");
+                statement.executeUpdate("delete from KhachLuuTru where soDienThoai='0999999997'");
+                statement.executeUpdate("delete from Phong where maPhong=N'AUDPHR'");
+                statement.executeUpdate("delete from LoaiPhong where maLoaiPhong=N'AUDPHRT'");
+            }
         }
     }
 

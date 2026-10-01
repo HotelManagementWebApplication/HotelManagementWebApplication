@@ -18,6 +18,13 @@ describe("ApiClient", () => {
     expect(init.headers).toMatchObject({ Authorization: "Bearer old", "Content-Type": "application/json", "Idempotency-Key": "key-1" });
   });
 
+  it("does not attach a stale bearer token to public requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(200, { ok: true })); vi.stubGlobal("fetch", fetchMock);
+    await new ApiClient("https://api.test", store()).request("/api/public/rooms", { skipAuth: true });
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.headers).not.toHaveProperty("Authorization");
+  });
+
   it("refreshes once for concurrent 401s and retries both requests", async () => {
     let calls = 0; const fetchMock = vi.fn().mockImplementation((url: string) => { calls++; if (url.endsWith("/api/auth/refresh")) return Promise.resolve(response(200, token("new", "new-refresh"))); return Promise.resolve(calls <= 2 ? response(401) : response(200, { ok: true })); }); vi.stubGlobal("fetch", fetchMock);
     const client = new ApiClient("https://api.test", store());

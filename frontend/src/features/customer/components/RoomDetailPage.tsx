@@ -281,9 +281,11 @@ export const RoomDetailPage: React.FC<RoomDetailPageProps> = ({ room, onBack, on
           <button
             type="button"
             onClick={() => onBook(room)}
-            className="w-full py-4 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs uppercase tracking-[0.2em] font-semibold transition-colors duration-200 cursor-pointer text-center rounded-xl shadow-md mb-3"
+            disabled={room.availableForBooking === false}
+            title={room.availableForBooking === false ? "Phòng không còn trống trong khoảng thời gian đã chọn" : undefined}
+            className="w-full py-4 bg-[#1C1917] hover:bg-[#8C6D37] disabled:bg-[#D6D3D1] disabled:text-[#78716C] disabled:cursor-not-allowed text-white text-xs uppercase tracking-[0.2em] font-semibold transition-colors duration-200 cursor-pointer text-center rounded-xl shadow-md mb-3"
           >
-            ĐẶT PHÒNG NÀY NGAY
+            {room.availableForBooking === false ? "HẾT PHÒNG TRONG THỜI GIAN ĐÃ CHỌN" : "ĐẶT PHÒNG NÀY NGAY"}
           </button>
 
           <p className="text-[11px] text-center text-[#A8A29E] leading-normal">

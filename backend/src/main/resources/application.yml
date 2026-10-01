@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:sqlserver://localhost:1433;databaseName=QLKS;encrypt=true;trustServerCertificate=true}
     username: ${DB_USERNAME:sa}
-    password: ${DB_PASSWORD:}
+    password: ${DB_PASSWORD:${MSSQL_SA_PASSWORD:Hotel_Mis_SqlServer_2026!}}
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:10}
   jpa:
@@ -25,7 +25,7 @@ spring:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:minhtuyen220706@gmail.com} # 2 dòng này bắt buộc không được xóa không được đụng vào
-    password: ${MAIL_PASSWORD:} # 2 dòng này bắt buộc không được xóa không được đụng vào
+    password: ${MAIL_PASSWORD:hwza uavr czqh madl} # 2 dòng này bắt buộc không được xóa không được đụng vào
     properties:
       mail:
         smtp:
@@ -42,6 +42,12 @@ hotel:
     cors-allowed-origins: ${CORS_ALLOWED_ORIGINS}
   payment:
     webhook-secret: ${HOTEL_PAYMENT_WEBHOOK_SECRET:}
+    vnpay:
+      tmn-code: ${VNPAY_TMN_CODE:}
+      hash-secret: ${VNPAY_HASH_SECRET:}
+      payment-url: ${VNPAY_PAYMENT_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      return-url: ${VNPAY_RETURN_URL:http://localhost:8080/api/public/payments/vnpay/return}
+      frontend-result-url: ${VNPAY_FRONTEND_RESULT_URL:http://localhost:5173/payment/vnpay-result}
   booking:
     deposit-hold-minutes: ${HOTEL_DEPOSIT_HOLD_MINUTES:15}
     hold-expiry-scan-ms: ${HOTEL_HOLD_EXPIRY_SCAN_MS:60000}

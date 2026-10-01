@@ -407,6 +407,13 @@ UPDATE Phong SET trangThai = CASE maPhong
     ELSE trangThai
 END;
 
+-- Customer demo bookings with a deposit code are VNPay bookings. Keep the
+-- payment channel explicit so the customer portal and checkout guard agree.
+UPDATE PhieuDatPhong
+SET phuongThucBaoDam = N'VNPay'
+WHERE maPhieuDatPhong IN (5, 6)
+  AND maThanhToanDatCoc IS NOT NULL;
+
 INSERT INTO SuDungDichVu (maPhieuDatPhong, maDichVu, ngaySuDung, soLuong, donGia) VALUES
     (1, N'BREAKFAST', DATEADD(DAY, -1, CAST(SYSDATETIME() AS date)), 2, 0.00),
     (1, N'SPAMASS', CAST(SYSDATETIME() AS date), 1, 980000.00),

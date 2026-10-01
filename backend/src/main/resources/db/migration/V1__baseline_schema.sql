@@ -130,6 +130,8 @@ CREATE TABLE PhieuDatPhong (
     maThanhToanDatCoc NVARCHAR(40),
     thoiDiemHetHanThanhToanCoc DATETIME2(6),
     trangThaiThanhToanCoc NVARCHAR(20) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Không yêu cầu',
+    phuongThucBaoDam NVARCHAR(20) COLLATE Vietnamese_100_CS_AS,
+    emailXacNhan NVARCHAR(150),
     nguonDatPhong NVARCHAR(30) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Trực tiếp',
     doanhThuGopOta DECIMAL(14,2) NOT NULL DEFAULT 0,
     hoaHongOta DECIMAL(14,2) NOT NULL DEFAULT 0,
@@ -144,7 +146,8 @@ CREATE TABLE PhieuDatPhong (
     CONSTRAINT chkPhieuDatPhong04 CHECK (ketQuaHuy IS NULL OR ketQuaHuy IN (N'Hoàn tiền', N'Không phát sinh hoàn tiền', N'Mất quyền hoàn tiền')),
     CONSTRAINT chkPhieuDatPhong05 CHECK (
         thoiDiemNhanPhongThucTe IS NULL OR thoiDiemTraPhongThucTe IS NULL OR thoiDiemTraPhongThucTe >= thoiDiemNhanPhongThucTe
-    )
+    ),
+    CONSTRAINT chkPhieuDatPhong06 CHECK (phuongThucBaoDam IS NULL OR phuongThucBaoDam IN (N'VNPay', N'Tại khách sạn'))
 );
 
 CREATE INDEX idxPhieuDatPhong01 ON PhieuDatPhong (maKhachLuuTru, thoiDiemDat);
@@ -399,6 +402,35 @@ CREATE TABLE TaiKhoanKhachHang (
 ALTER TABLE PhieuDatPhong
     ADD CONSTRAINT fkPhieuDatPhong03
         FOREIGN KEY (maTaiKhoanKhachHang) REFERENCES TaiKhoanKhachHang (maTaiKhoanKhachHang);
+
+CREATE TABLE YeuCauThanhToanVnpay (
+    maYeuCauThanhToanVnpay BIGINT IDENTITY(1,1) NOT NULL,
+    maPhieuDatPhong BIGINT NOT NULL,
+    maThamChieuMerchant NVARCHAR(100) NOT NULL,
+    soTien DECIMAL(12,2) NOT NULL,
+    trangThai NVARCHAR(20) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Chờ thanh toán',
+    thoiDiemTao DATETIME2(6) NOT NULL,
+    thoiDiemHetHan DATETIME2(6) NOT NULL,
+    thoiDiemHoanTat DATETIME2(6),
+    maGiaoDichVnpay NVARCHAR(100),
+    maNganHang NVARCHAR(20),
+    loaiThe NVARCHAR(20),
+    maPhanHoi NVARCHAR(10),
+    phienBan BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT pkYeuCauThanhToanVnpay PRIMARY KEY (maYeuCauThanhToanVnpay),
+    CONSTRAINT ukYeuCauThanhToanVnpay01 UNIQUE (maThamChieuMerchant),
+    CONSTRAINT fkYeuCauThanhToanVnpay01 FOREIGN KEY (maPhieuDatPhong)
+        REFERENCES PhieuDatPhong (maPhieuDatPhong),
+    CONSTRAINT chkYeuCauThanhToanVnpay01 CHECK (soTien > 0),
+    CONSTRAINT chkYeuCauThanhToanVnpay02 CHECK (thoiDiemHetHan > thoiDiemTao),
+    CONSTRAINT chkYeuCauThanhToanVnpay03 CHECK (phienBan >= 0),
+    CONSTRAINT chkYeuCauThanhToanVnpay04 CHECK (trangThai IN (N'Chờ thanh toán', N'Thành công', N'Thất bại', N'Đã hết hạn', N'Đã hủy'))
+);
+
+CREATE INDEX idxYeuCauThanhToanVnpay01
+    ON YeuCauThanhToanVnpay (maPhieuDatPhong, thoiDiemTao DESC);
+CREATE INDEX idxYeuCauThanhToanVnpay02
+    ON YeuCauThanhToanVnpay (trangThai, thoiDiemHetHan);
 
 CREATE TABLE GiaoDichThanhToan (
     maGiaoDichThanhToan BIGINT IDENTITY(1,1) NOT NULL,

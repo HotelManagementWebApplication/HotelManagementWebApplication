@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Hotel_Mis_SqlServer_2026!}
       MSSQL_PID: Developer
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     ports:
@@ -25,7 +25,7 @@ services:
       sqlserver:
         condition: service_healthy
     environment:
-      MSSQL_SA_PASSWORD:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Hotel_Mis_SqlServer_2026!}
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     entrypoint: ["/bin/bash", "-c"]
     command:

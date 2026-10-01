@@ -1,6 +1,8 @@
 package com.hospitality.mis.service.reservation;
 
 import com.hospitality.mis.dao.reservation.ReservationRepository;
+import com.hospitality.mis.dao.billing.VnpayPaymentAttemptRepository;
+import com.hospitality.mis.entity.billing.VnpayPaymentStatus;
 import com.hospitality.mis.entity.reservation.DepositPaymentStatus;
 import com.hospitality.mis.entity.reservation.ReservationStatus;
 import com.hospitality.mis.service.governance.AuditService;
@@ -16,11 +18,14 @@ import java.time.Clock;
 public class CustomerReservationExpiryService {
     private final ReservationRepository reservations;
     private final AuditService audit;
+    private final VnpayPaymentAttemptRepository vnpayAttempts;
     private Clock clock = Clock.system(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
 
-    public CustomerReservationExpiryService(ReservationRepository reservations, AuditService audit) {
+    public CustomerReservationExpiryService(ReservationRepository reservations, AuditService audit,
+                                            VnpayPaymentAttemptRepository vnpayAttempts) {
         this.reservations = reservations;
         this.audit = audit;
+        this.vnpayAttempts = vnpayAttempts;
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -34,6 +39,11 @@ public class CustomerReservationExpiryService {
                     || reservation.getDepositPaymentStatus() != DepositPaymentStatus.PENDING) continue;
             reservation.transitionTo(ReservationStatus.CANCELLED);
             reservation.setDepositPaymentStatus(DepositPaymentStatus.EXPIRED);
+            for (var attempt : vnpayAttempts.findByReservationIdAndStatus(
+                    reservation.getId(), VnpayPaymentStatus.PENDING)) {
+                attempt.setStatus(VnpayPaymentStatus.EXPIRED);
+                attempt.setCompletedAt(LocalDateTime.now(clock));
+            }
             audit.record("SYSTEM", "CUSTOMER_RESERVATION_HOLD_EXPIRED", "RESERVATION",
                     reservation.getId().toString(), "PENDING", "EXPIRED", "DEPOSIT_HOLD_TIMEOUT");
         }

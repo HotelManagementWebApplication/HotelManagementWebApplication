@@ -1,4 +1,6 @@
 export type ReservationStatus = "DRAFT" | "DEPOSIT_PAID" | "CONFIRMED" | "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED" | "NO_SHOW";
+export type CustomerPaymentMethod = "VNPAY" | "PAY_AT_HOTEL";
+export type DepositPaymentStatus = "NOT_REQUIRED" | "PENDING" | "PAID" | "EXPIRED";
 export type RentalType = "PACKAGE" | "HOURLY";
 export type PaymentMethod = "CASH" | "CARD" | "BANK_TRANSFER";
 export type PaymentStatus = "DA_THANH_TOAN" | "CHUA_THANH_TOAN" | "DU_KIEN";
@@ -9,7 +11,7 @@ export interface Guest { id: number; full_name: string; birth_year: number | nul
 export interface GuestCreate { full_name: string; birth_year?: number; identity_number: string; phone: string; email?: string; address?: string; }
 export interface MembershipHistoryEntry { guest_id: number; from_tier: string; to_tier: string; reason: string; changed_at: string; }
 export interface RoomLine { room_id: string; expected_check_in: string; expected_check_out: string; actual_check_in: string | null; actual_check_out: string | null; }
-export interface Reservation { id: number; guest_id: number; employee_id: string; status: ReservationStatus; rental_type: RentalType; booking_source?: string; ota_gross_revenue?: number | null; ota_commission?: number | null; ota_net_revenue?: number | null; ota_reconciliation_status?: string; deposit: number; booked_at: string; actual_check_in: string | null; actual_check_out: string | null; rooms: RoomLine[]; cancellation_reason: string | null; cancellation_outcome: string | null; service_usages?: { service_id: string; service_name: string; used_on: string; quantity: number; unit_price: number; amount: number }[]; }
+export interface Reservation { id: number; guest_id: number; employee_id: string | null; status: ReservationStatus; rental_type: RentalType; booking_source?: string; ota_gross_revenue?: number | null; ota_commission?: number | null; ota_net_revenue?: number | null; ota_reconciliation_status?: string; customer_payment_method: CustomerPaymentMethod | null; deposit_payment_status: DepositPaymentStatus; deposit: number; booked_at: string; actual_check_in: string | null; actual_check_out: string | null; rooms: RoomLine[]; cancellation_reason: string | null; cancellation_outcome: string | null; service_usages?: { service_id: string; service_name: string; used_on: string; quantity: number; unit_price: number; amount: number }[]; }
 export interface Page<T> { items: T[]; page: number; size: number; total_elements: number; total_pages: number; }
 export interface DashboardItem { reservation_id: number; guest_id: number; guest_name: string; guest_phone: string; status: ReservationStatus; check_in: string; check_out: string; room_ids: string[]; deposit_amount: number; deposit_payment_status: string; invoice_balance: number; }
 export interface RoomSummary { room_id: string; name: string; status: string; room_type_id: string; room_type_name: string; floor: number; daily_price: number; bed_type: string | null; }
