@@ -28,3 +28,9 @@ application-local.yaml
 # Local data
 *.log
 coverage/
+
+# Local runtimes & helper scripts
+oracleJdk-27/
+.venv.yml
+run-backend.ps1
+run-frontend.ps1
