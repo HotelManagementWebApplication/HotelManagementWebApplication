@@ -1,13 +1,10 @@
 package com.hospitality.mis.service.billing;
 
 import com.hospitality.mis.common.exception.DomainException;
-import com.hospitality.mis.dao.billing.InvoiceRepository;
 import com.hospitality.mis.dao.billing.PaymentTransactionRepository;
 import com.hospitality.mis.dao.reservation.ReservationRepository;
 import com.hospitality.mis.dto.billing.DepositPaymentWebhookDtos;
-import com.hospitality.mis.entity.billing.Invoice;
 import com.hospitality.mis.entity.billing.PaymentMethod;
-import com.hospitality.mis.entity.billing.PaymentStatus;
 import com.hospitality.mis.entity.billing.PaymentTransaction;
 import com.hospitality.mis.entity.reservation.DepositPaymentStatus;
 import com.hospitality.mis.entity.reservation.Reservation;
@@ -30,18 +27,19 @@ import java.util.HexFormat;
 @Service
 public class DepositPaymentWebhookService {
     private final ReservationRepository reservations;
-    private final InvoiceRepository invoices;
     private final PaymentTransactionRepository transactions;
+    private final DepositPaymentFinalizer finalizer;
     private final AuditService audit;
     private final String secret;
     private Clock clock = Clock.system(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
 
-    public DepositPaymentWebhookService(ReservationRepository reservations, InvoiceRepository invoices,
-                                        PaymentTransactionRepository transactions, AuditService audit,
+    public DepositPaymentWebhookService(ReservationRepository reservations,
+                                        PaymentTransactionRepository transactions, DepositPaymentFinalizer finalizer,
+                                        AuditService audit,
                                         @Value("${hotel.payment.webhook-secret:}") String secret) {
         this.reservations = reservations;
-        this.invoices = invoices;
         this.transactions = transactions;
+        this.finalizer = finalizer;
         this.audit = audit;
         this.secret = secret;
     }
@@ -66,40 +64,12 @@ public class DepositPaymentWebhookService {
             throw error("DEPOSIT_ALREADY_PAID", "Tiền cọc đã được xác nhận");
         if (reservation.getDepositPaymentExpiresAt() != null && !reservation.getDepositPaymentExpiresAt().isAfter(LocalDateTime.now(clock)))
             throw error("PAYMENT_CODE_EXPIRED", "Mã thanh toán cọc đã hết hạn");
-        if (request.amount().compareTo(reservation.getDepositAmount()) != 0)
+        BigDecimal expectedAmount = reservation.getPendingChangeType() == null
+                ? reservation.getDepositAmount() : reservation.getPendingAdditionalDeposit();
+        if (request.amount().compareTo(expectedAmount) != 0)
             throw error("PAYMENT_AMOUNT_MISMATCH", "Số tiền cọc không khớp booking");
-
-        Invoice invoice = invoices.findByReservationId(reservation.getId()).orElseGet(() -> {
-            Invoice created = new Invoice();
-            created.setReservation(reservation);
-            created.setIssuedAt(LocalDateTime.now(clock));
-            return created;
-        });
-        invoice.setDepositPaid(request.amount());
-        invoice.setAmountDue(BigDecimal.ZERO);
-        invoice.setStatus(PaymentStatus.DU_KIEN);
-        invoice.setPaymentMethod(PaymentMethod.BANK_TRANSFER);
-        invoice = invoices.saveAndFlush(invoice);
-
-        PaymentTransaction payment = new PaymentTransaction();
-        payment.setInvoice(invoice);
-        payment.setAmount(request.amount());
-        payment.setMethod(PaymentMethod.BANK_TRANSFER);
-        payment.setType(PaymentTransaction.TransactionType.PAYMENT);
-        payment.setStatus(PaymentTransaction.TransactionStatus.COMPLETED);
-        payment.setReference(request.reference().trim());
-        payment.setOccurredAt(LocalDateTime.now(clock));
-        payment.setActorId("PAYMENT_GATEWAY");
-        payment.setExternalEventId(eventId);
-        payment.setIdempotencyKey(PaymentTransaction.storageIdempotencyKey("GATEWAY:" + eventId,
-                "PAYMENT_GATEWAY", request.amount(), payment.getMethod(), payment.getType(), payment.getReference()));
-        payment = transactions.saveAndFlush(payment);
-
-        reservation.setDepositPaymentStatus(DepositPaymentStatus.PAID);
-        if (reservation.getStatus() == ReservationStatus.DRAFT) reservation.transitionTo(ReservationStatus.DEPOSIT_PAID);
-        reservations.saveAndFlush(reservation);
-        audit.record("PAYMENT_GATEWAY", "DEPOSIT_PAYMENT_CONFIRMED", "RESERVATION",
-                reservation.getId().toString(), "PENDING", "PAID", eventId);
+        PaymentTransaction payment = finalizer.complete(reservation, request.amount(), PaymentMethod.BANK_TRANSFER,
+                request.reference().trim(), eventId, "PAYMENT_GATEWAY");
         return response(reservation, payment);
     }
 

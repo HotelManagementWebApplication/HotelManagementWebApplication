@@ -961,13 +961,14 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             <img src="/hotel_logo.png" alt="MaM Hotel" className="w-10 h-auto object-contain drop-shadow" />
             <div>
               <p className="font-display text-xl text-white">MaM Hotel</p>
-              <p className="text-xs text-[#D4AF6E] tracking-widest uppercase">Hội An, Việt Nam</p>
+              <p className="text-xs text-[#D4AF6E] tracking-widest uppercase">Vũng Tàu, Việt Nam</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-white/60">
+            <span className="flex items-center gap-1.5"><MapPin size={13} className="text-[#D4AF6E]" /> Số 1 VVN, Vũng Tàu</span>
             <span className="flex items-center gap-1.5"><Phone size={13} className="text-[#D4AF6E]" /> Hotline: 1900 6789</span>
-          <span className="flex items-center gap-1.5"><Mail size={13} className="text-[#D4AF6E]" /> retreat@mamresort.vn</span>
+            <span className="flex items-center gap-1.5"><Mail size={13} className="text-[#D4AF6E]" /> retreat@mamresort.vn</span>
             <span className="flex items-center gap-1.5"><Globe size={13} className="text-[#D4AF6E]" /> www.mamresort.vn</span>
           </div>
 

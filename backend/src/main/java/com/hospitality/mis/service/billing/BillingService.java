@@ -182,7 +182,10 @@ public class BillingService {
         if (deposit.signum() == 0) return;
         String actor = SecurityActor.currentActor();
         requireScope(reservation, actor);
-        if (invoices.findByReservationId(reservation.getId()).isPresent()) return;
+        if (invoices.findByReservationId(reservation.getId()).isPresent()) {
+            reservation.setDepositPaymentStatus(com.hospitality.mis.entity.reservation.DepositPaymentStatus.PAID);
+            return;
+        }
         Invoice invoice = new Invoice(); invoice.setReservation(reservation); invoice.setIssuedAt(LocalDateTime.now(clock)); invoice.setDepositPaid(deposit);
         invoice.setAmountDue(BigDecimal.ZERO); invoice.setStatus(PaymentStatus.DU_KIEN); invoice = invoices.saveAndFlush(invoice);
 
@@ -205,6 +208,7 @@ public class BillingService {
                 FinancialLedgerEntry.Direction.DEBIT, persistedReceipt.getAmount(), actor, persistedReceipt.getIssuedAt(), persistedReceipt.getMethod().name());
         audit.record(actor, "DEPOSIT_PAYMENT_RECORDED", "PAYMENT_TRANSACTION", String.valueOf(payment.getId()), null,
                 deposit.toPlainString(), "DEPOSIT_RECEIPT:" + receipt.getReceiptNumber());
+        reservation.setDepositPaymentStatus(com.hospitality.mis.entity.reservation.DepositPaymentStatus.PAID);
     }
 
     /** Hoàn tiền cọc tự động khi hủy đúng hạn theo policy 48 giờ; không lặp lại theo reservation. */

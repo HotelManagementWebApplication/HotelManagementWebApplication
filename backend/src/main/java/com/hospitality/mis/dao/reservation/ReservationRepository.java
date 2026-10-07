@@ -154,8 +154,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     /** Lấy các booking customer giữ phòng quá hạn dưới khóa ghi để giải phóng an toàn. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select r from Reservation r where r.status = com.hospitality.mis.entity.reservation.ReservationStatus.DRAFT "
-            + "and r.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING "
+    @Query("select r from Reservation r where r.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING "
+            + "and (r.status = com.hospitality.mis.entity.reservation.ReservationStatus.DRAFT or r.pendingChangeType is not null) "
             + "and r.depositPaymentExpiresAt <= :now order by r.id")
     List<Reservation> findExpiredCustomerHoldsForUpdate(@Param("now") LocalDateTime now);
 

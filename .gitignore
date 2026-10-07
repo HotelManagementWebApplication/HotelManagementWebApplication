@@ -3,6 +3,7 @@ target/
 **/target/
 *.class
 **/__pycache__/
+*.egg-info/
 
 # Frontend
 node_modules/

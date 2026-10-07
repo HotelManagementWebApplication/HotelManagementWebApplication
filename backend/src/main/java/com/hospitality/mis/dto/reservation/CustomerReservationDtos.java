@@ -61,6 +61,24 @@ public final class CustomerReservationDtos {
             LocalDateTime expiresAt,
             String instruction) {}
 
+    public enum ChangeType { EXTEND, RESCHEDULE }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record ChangeRequest(
+            @NotNull ChangeType type,
+            LocalDateTime newCheckIn,
+            @NotNull LocalDateTime newCheckOut) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record PendingChange(
+            ChangeType type,
+            LocalDateTime previousCheckIn,
+            LocalDateTime previousCheckOut,
+            LocalDateTime newCheckIn,
+            LocalDateTime newCheckOut,
+            BigDecimal additionalDeposit,
+            LocalDateTime paymentExpiresAt) {}
+
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Response(
             Long id,
@@ -74,26 +92,27 @@ public final class CustomerReservationDtos {
             PaymentInstruction depositPayment,
             List<com.hospitality.mis.service.reservation.HotelServiceBookingService.Response> services,
             String cancellationReason,
-            com.hospitality.mis.entity.reservation.CancellationOutcome cancellationOutcome) {
+            com.hospitality.mis.entity.reservation.CancellationOutcome cancellationOutcome,
+            PendingChange pendingChange) {
         /** Giữ tương thích với các caller Java cũ */
         public Response(Long id, ReservationStatus status, ReservationDtos.RentalType rentalType,
                         String bookingSource, BigDecimal depositAmount, BigDecimal totalAmount,
                         LocalDateTime bookedAt, List<RoomLine> rooms, PaymentInstruction depositPayment) {
-            this(id, status, rentalType, bookingSource, depositAmount, totalAmount, bookedAt, rooms, depositPayment, List.of(), null, null);
+            this(id, status, rentalType, bookingSource, depositAmount, totalAmount, bookedAt, rooms, depositPayment, List.of(), null, null, null);
         }
         public Response(Long id, ReservationStatus status, ReservationDtos.RentalType rentalType,
                         String bookingSource, BigDecimal depositAmount, LocalDateTime bookedAt,
                         List<RoomLine> rooms, PaymentInstruction depositPayment) {
             this(id, status, rentalType, bookingSource, depositAmount,
                  depositAmount != null ? depositAmount.multiply(BigDecimal.valueOf(2)) : BigDecimal.ZERO,
-                 bookedAt, rooms, depositPayment, List.of(), null, null);
+                 bookedAt, rooms, depositPayment, List.of(), null, null, null);
         }
         public Response(Long id, ReservationStatus status, ReservationDtos.RentalType rentalType,
                         BigDecimal depositAmount, LocalDateTime bookedAt, List<RoomLine> rooms,
                         PaymentInstruction depositPayment) {
             this(id, status, rentalType, "DIRECT", depositAmount,
                  depositAmount != null ? depositAmount.multiply(BigDecimal.valueOf(2)) : BigDecimal.ZERO,
-                 bookedAt, rooms, depositPayment, List.of(), null, null);
+                 bookedAt, rooms, depositPayment, List.of(), null, null, null);
         }
     }
 }

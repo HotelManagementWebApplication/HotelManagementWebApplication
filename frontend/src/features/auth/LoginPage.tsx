@@ -369,7 +369,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
                 MaM Hotel
               </span>
               <span className="text-[10px] uppercase tracking-[0.35em] text-[#E6CA85] font-semibold block mt-1.5">
-                Beachfront Retreat &amp; Spa · Biển Hội An
+                Beachfront Retreat &amp; Spa · Biển Vũng Tàu
               </span>
             </div>
           </div>

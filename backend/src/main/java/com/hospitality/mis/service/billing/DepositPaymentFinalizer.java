@@ -52,8 +52,10 @@ public class DepositPaymentFinalizer {
         if (prior.isPresent()) return prior.get();
         if (reservation.getDepositPaymentStatus() == DepositPaymentStatus.PAID)
             throw new DomainException("DEPOSIT_ALREADY_PAID", "Tiền cọc đã được xác nhận");
-        if (amount == null || reservation.getDepositAmount() == null
-                || amount.compareTo(reservation.getDepositAmount()) != 0)
+        boolean extensionDeposit = reservation.getPendingChangeType() != null;
+        BigDecimal expectedAmount = extensionDeposit
+                ? reservation.getPendingAdditionalDeposit() : reservation.getDepositAmount();
+        if (amount == null || expectedAmount == null || amount.compareTo(expectedAmount) != 0)
             throw new DomainException("PAYMENT_AMOUNT_MISMATCH", "Số tiền cọc không khớp booking");
 
         LocalDateTime now = LocalDateTime.now(clock);
@@ -63,7 +65,8 @@ public class DepositPaymentFinalizer {
             created.setIssuedAt(now);
             return created;
         });
-        invoice.setDepositPaid(amount);
+        BigDecimal depositPaidBefore = invoice.getDepositPaid() == null ? BigDecimal.ZERO : invoice.getDepositPaid();
+        invoice.setDepositPaid(extensionDeposit ? depositPaidBefore.add(amount) : amount);
         invoice.setAmountDue(BigDecimal.ZERO);
         invoice.setStatus(PaymentStatus.DU_KIEN);
         invoice.setPaymentMethod(method);
@@ -79,11 +82,13 @@ public class DepositPaymentFinalizer {
         payment.setOccurredAt(now);
         payment.setActorId(actor);
         payment.setExternalEventId(externalEventId);
-        payment.setIdempotencyKey(PaymentTransaction.storageIdempotencyKey("GATEWAY:" + externalEventId,
+        payment.setIdempotencyKey(PaymentTransaction.storageIdempotencyKey(gatewayKey(externalEventId),
                 actor, amount, method, payment.getType(), reference));
         payment = transactions.saveAndFlush(payment);
 
-        String receiptNumber = "DEP-VNPAY-" + reservation.getId();
+        String receiptNumber = extensionDeposit
+                ? "DEP-VNPAY-" + reservation.getId() + "-" + payment.getId()
+                : "DEP-VNPAY-" + reservation.getId();
         if (receipts.findByReceiptNumber(receiptNumber).isEmpty()) {
             Receipt receipt = new Receipt();
             receipt.setReceiptNumber(receiptNumber);
@@ -102,9 +107,22 @@ public class DepositPaymentFinalizer {
         reservation.setDepositPaymentStatus(DepositPaymentStatus.PAID);
         if (reservation.getStatus() == ReservationStatus.DRAFT)
             reservation.transitionTo(ReservationStatus.DEPOSIT_PAID);
+        if (extensionDeposit) {
+            long addedMinutes = java.time.Duration.between(
+                    reservation.getPendingPreviousCheckOut(), reservation.getRooms().get(0).getCheckOut()).toMinutes();
+            reservation.setExtensionMinutes(Math.addExact(reservation.getExtensionMinutes(), Math.toIntExact(addedMinutes)));
+            reservation.clearPendingChange();
+            reservation.setDepositPaymentCode(null);
+            reservation.setDepositPaymentExpiresAt(null);
+        }
         reservations.saveAndFlush(reservation);
-        audit.record(actor, "DEPOSIT_PAYMENT_CONFIRMED", "RESERVATION",
+        audit.record(actor, extensionDeposit ? "EXTENSION_DEPOSIT_PAYMENT_CONFIRMED" : "DEPOSIT_PAYMENT_CONFIRMED", "RESERVATION",
                 reservation.getId().toString(), "PENDING", "PAID", externalEventId);
         return payment;
+    }
+
+    private String gatewayKey(String externalEventId) {
+        String fingerprint = com.hospitality.mis.service.reservation.IdempotencySupport.fingerprint(externalEventId);
+        return "GW-" + fingerprint.substring(0, 28);
     }
 }

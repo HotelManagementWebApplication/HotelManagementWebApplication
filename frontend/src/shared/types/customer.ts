@@ -20,6 +20,17 @@ export interface CustomerRoomStay {
 }
 export interface CustomerReservationCreateRequest { rental_type: RentalType; booking_source?: string; rooms: CustomerRoomStay[]; idempotency_key: string; payment_method: CustomerPaymentMethod; confirmation_email?: string; }
 export interface CustomerPaymentInstruction { payment_code: string; amount: number; status: DepositPaymentStatus; expires_at: string; instruction: string; }
+export type CustomerStayChangeType = "EXTEND" | "RESCHEDULE";
+export interface CustomerStayChangeRequest { type: CustomerStayChangeType; new_check_in?: string; new_check_out: string; }
+export interface CustomerPendingChange {
+  type: "EXTEND";
+  previous_check_in: string;
+  previous_check_out: string;
+  new_check_in: string;
+  new_check_out: string;
+  additional_deposit: number;
+  payment_expires_at: string;
+}
 export interface VnpayCheckout {
   attempt_id: number;
   reservation_id: number;
@@ -50,6 +61,7 @@ export interface CustomerReservation {
   deposit_payment: CustomerPaymentInstruction;
   cancellation_reason?: string | null;
   cancellation_outcome?: "REFUND" | "RETAIN" | "FORFEIT" | null;
+  pending_change?: CustomerPendingChange | null;
   services?: HotelServiceBooking[];
 }
 export interface HotelServiceBookingRequest { reservation_id: number; room_id: string; service_id: string; scheduled_at: string; quantity: number; meal_period?: "LUNCH" | "DINNER"; note?: string; }

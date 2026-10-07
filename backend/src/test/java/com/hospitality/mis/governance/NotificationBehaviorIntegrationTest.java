@@ -142,10 +142,10 @@ class NotificationBehaviorIntegrationTest {
                 "INC01", "INCTYPE", "Đang có khách", 0L);
         jdbc.update("insert into ThietBiPhong(maPhong, ten, giaTriBanDau, ngayMua, soLuong, dangHoatDong) values (?,?,?,?,?,?)",
                 "INC01", "Television", new BigDecimal("2000000"), LocalDate.of(2025, 1, 1), 1, true);
-        jdbc.update("insert into PhieuDatPhong(maPhieuDatPhong, maKhachLuuTru, maNhanVien, thoiDiemDat, tienDatCoc, trangThai, hinhThucThue, nguonDatPhong, doanhThuGopOta, hoaHongOta, trangThaiDoiSoatOta, soPhutGiaHan, trangThaiThanhToanCoc, phienBan) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        jdbc.update("insert into PhieuDatPhong(maPhieuDatPhong, maKhachLuuTru, maNhanVien, thoiDiemDat, tienDatCoc, trangThai, hinhThucThue, nguonDatPhong, doanhThuGopOta, hoaHongOta, trangThaiDoiSoatOta, soPhutGiaHan, trangThaiThanhToanCoc, tienDatCocBoSung, phienBan) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 910001L, 910001L, "FD0001", LocalDateTime.of(2026, 9, 16, 8, 0), BigDecimal.ZERO,
                 "Đã nhận phòng", "Theo gói", "Trực tiếp", BigDecimal.ZERO, BigDecimal.ZERO,
-                "Không áp dụng", 0, "Không yêu cầu", 0L);
+                "Không áp dụng", 0, "Không yêu cầu", BigDecimal.ZERO, 0L);
         jdbc.update("insert into ChiTietDatPhong(maPhieuDatPhong, maPhong, thoiDiemNhanPhong, thoiDiemTraPhong, thoiDiemTraPhongBanDau, trangThai, soLanChuyenPhong, soLuongKhach) values (?,?,?,?,?,?,?,?)",
                 910001L, "INC01", LocalDateTime.of(2026, 9, 16, 8, 0), LocalDateTime.of(2026, 9, 17, 8, 0),
                 LocalDateTime.of(2026, 9, 17, 8, 0), "Đang có khách", 0, 1);

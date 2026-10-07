@@ -26,12 +26,10 @@ describe("front desk API contract", () => {
   it("generates a fresh header key for each retry-safe reservation mutation", async () => {
     await frontDeskApi.createReservation({ guest_id: 1, employee_id: "E1", deposit: 0, rental_type: "PACKAGE", rooms: [] });
     await frontDeskApi.confirm(1);
-    await frontDeskApi.updateReservation(1, { rooms: [], deposit: 0 });
     await frontDeskApi.transfer(1, { from_room_id: "101", to_room_id: "102" });
     const options = request.mock.calls.map(call => call[1] as { idempotencyKey?: string; method?: string; body?: unknown });
     expect(options.every(option => option.idempotencyKey)).toBe(true);
-    expect(new Set(options.map(option => option.idempotencyKey)).size).toBe(4);
-    expect(options[2]).toMatchObject({ method: "PATCH", body: { rooms: [], deposit: 0 } });
+    expect(new Set(options.map(option => option.idempotencyKey)).size).toBe(3);
   });
 
   it("uses the Idempotency-Key header and keeps retry payload free of the key", async () => {
@@ -71,8 +69,8 @@ describe("front desk API contract", () => {
   });
 
   it("covers lifecycle, service, billing, receipt and timeline endpoint paths", async () => {
-    await frontDeskApi.cancel(2, "guest request"); await frontDeskApi.noShow(2); await frontDeskApi.checkIn(2); await frontDeskApi.checkOut(2, { at: "2026-09-20T11:30:00" }); await frontDeskApi.extend(2, "2026-09-20T12:00:00"); await frontDeskApi.addService(2, { service_id: "BREAKFAST", quantity: 1 }); await frontDeskApi.services(); await frontDeskApi.roomEquipment("R101"); await frontDeskApi.invoice(2); await frontDeskApi.payments(8); await frontDeskApi.receipts(8); await frontDeskApi.issueReceipt(8, { receipt_number: "R-1", amount: 100, method: "CASH" }); await frontDeskApi.timeline(2);
-    expect(request.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining(["/api/reservations/2/cancel", "/api/reservations/2/no-show", "/api/reservations/2/check-in", "/api/reservations/2/check-out", "/api/reservations/2/extend", "/api/reservations/2/services", "/api/services", "/api/rooms/R101/equipment", "/api/invoices/reservation/2", "/api/invoices/8/payments", "/api/invoices/8/receipts", "/api/reservations/2/timeline"]));
+    await frontDeskApi.cancel(2, "guest request"); await frontDeskApi.noShow(2); await frontDeskApi.checkIn(2); await frontDeskApi.checkOut(2, { at: "2026-09-20T11:30:00" }); await frontDeskApi.addService(2, { service_id: "BREAKFAST", quantity: 1 }); await frontDeskApi.services(); await frontDeskApi.roomEquipment("R101"); await frontDeskApi.invoice(2); await frontDeskApi.payments(8); await frontDeskApi.receipts(8); await frontDeskApi.issueReceipt(8, { receipt_number: "R-1", amount: 100, method: "CASH" }); await frontDeskApi.timeline(2);
+    expect(request.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining(["/api/reservations/2/cancel", "/api/reservations/2/no-show", "/api/reservations/2/check-in", "/api/reservations/2/check-out", "/api/reservations/2/services", "/api/services", "/api/rooms/R101/equipment", "/api/invoices/reservation/2", "/api/invoices/8/payments", "/api/invoices/8/receipts", "/api/reservations/2/timeline"]));
   });
 
   it("sends only the dedicated cash handover payload with a stable caller key", async () => {

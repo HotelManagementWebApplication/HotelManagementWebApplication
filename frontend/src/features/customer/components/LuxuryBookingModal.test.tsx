@@ -14,7 +14,9 @@ describe("LuxuryBookingModal", () => {
     const onConfirm = vi.fn().mockResolvedValue(undefined);
     const { container } = render(
       <LuxuryBookingModal room={room} isOpen onClose={vi.fn()} checkIn="2031-01-10" checkOut="2031-01-12"
-        guests={1} isAuthenticated onConfirm={onConfirm} />,
+        guests={1} isAuthenticated
+        customerIdentity={{ fullName: "Nguyễn Văn An", phone: "0901234567", identityNumber: "012345678901", email: "an@example.com" }}
+        onConfirm={onConfirm} />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /theo giờ/i }));

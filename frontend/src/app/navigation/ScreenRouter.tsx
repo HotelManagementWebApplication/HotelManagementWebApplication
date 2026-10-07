@@ -11,6 +11,7 @@ import ManagerDashboard from "../../features/management/ManagerDashboard";
 import HRStation from "../../features/hr/HRStation";
 import AdminStation from "../../features/admin/AdminStation";
 import StaffPortal from "../../features/staff-portal/StaffPortal";
+import { CustomerChatWidget } from "../../features/customer/components/CustomerChatWidget";
 
 interface ScreenRouterProps {
   view: View;
@@ -43,11 +44,14 @@ export function ScreenRouter({
   if (view === "staff") return <StaffPortal role={role} onBack={onLogout} />;
 
   return (
-    <CustomerPortal
-      onBack={onCustomerBack}
-      onLogin={onOpenLogin}
-      onLogout={onLogout}
-      isAuthenticated={customerAuthenticated}
-    />
+    <>
+      <CustomerPortal
+        onBack={onCustomerBack}
+        onLogin={onOpenLogin}
+        onLogout={onLogout}
+        isAuthenticated={customerAuthenticated}
+      />
+      <CustomerChatWidget />
+    </>
   );
 }

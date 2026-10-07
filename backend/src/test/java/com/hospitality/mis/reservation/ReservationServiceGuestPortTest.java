@@ -12,6 +12,9 @@ import com.hospitality.mis.dao.reservation.ReservationRepository;
 import com.hospitality.mis.dto.reservation.ReservationDtos;
 import com.hospitality.mis.service.reservation.ReservationService;
 import com.hospitality.mis.entity.reservation.Reservation;
+import com.hospitality.mis.entity.reservation.ReservationRoom;
+import com.hospitality.mis.entity.reservation.DepositPaymentStatus;
+import com.hospitality.mis.entity.reservation.CustomerPaymentMethod;
 import com.hospitality.mis.dao.room.RoomRepository;
 import com.hospitality.mis.dao.operations.InventoryMovementRepository;
 import com.hospitality.mis.entity.room.Room;
@@ -95,6 +98,34 @@ class ReservationServiceGuestPortTest {
         assertThat(saved.getValue().getGuest()).isSameAs(guest);
         assertThat(response.guestId()).isEqualTo(41L);
         assertThat(response.employeeId()).isEqualTo("frontdesk");
+    }
+
+    @Test
+    /** Xác nhận tại quầy đồng nghĩa lễ tân đã thu cọc: trạng thái và sổ cọc phải cùng được cập nhật. */
+    void confirmPayAtHotelBookingRecordsPaidDeposit() {
+        Reservation reservation = new Reservation();
+        ReflectionTestUtils.setField(reservation, "id", 101L);
+        reservation.setGuest(guest(42L));
+        reservation.setDepositAmount(new BigDecimal("1200000.00"));
+        reservation.setCustomerPaymentMethod(CustomerPaymentMethod.PAY_AT_HOTEL);
+        reservation.setDepositPaymentStatus(DepositPaymentStatus.NOT_REQUIRED);
+        Room room = new Room();
+        room.setId("101");
+        ReservationRoom line = new ReservationRoom();
+        line.setRoom(room);
+        line.setCheckIn(LocalDateTime.of(2026, 11, 10, 14, 0));
+        line.setCheckOut(LocalDateTime.of(2026, 11, 12, 12, 0));
+        reservation.addRoom(line);
+
+        when(reservations.findForUpdate(101L)).thenReturn(Optional.of(reservation));
+        when(rooms.findAllForUpdateOrdered(List.of("101"))).thenReturn(List.of(room));
+        when(reservations.hasOverlapExcludingReservation(eq(101L), eq("101"), any(), any(), any(), any(), any()))
+                .thenReturn(false);
+
+        service().confirm(101L, "frontdesk", "confirm-paid-101");
+
+        assertThat(reservation.getDepositPaymentStatus()).isEqualTo(DepositPaymentStatus.PAID);
+        verify(billing).registerDeposit(reservation);
     }
 
     /** Dựng service thật với toàn bộ dependency mock của reservation create. */

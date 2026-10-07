@@ -21,11 +21,14 @@ describe("customer ownership contract", () => {
     await customerApi.reservation(42);
     await customerApi.depositPayment(42);
     await customerApi.cancelReservation(42, "Đổi kế hoạch", "customer-cancel-42");
+    const change = { type: "EXTEND" as const, new_check_in: "2031-01-11T12:00:00", new_check_out: "2031-01-13T12:00:00" };
+    await customerApi.changeReservationStay(42, change, "customer-change-42");
     expect(request).toHaveBeenNthCalledWith(1, "/api/auth/customers/me");
     expect(request).toHaveBeenNthCalledWith(2, "/api/customer/reservations");
     expect(request).toHaveBeenNthCalledWith(3, "/api/customer/reservations/42");
     expect(request).toHaveBeenNthCalledWith(4, "/api/customer/reservations/42/deposit-payment");
     expect(request).toHaveBeenNthCalledWith(5, "/api/customer/reservations/42/cancel", { method: "POST", body: { reason: "Đổi kế hoạch" }, idempotencyKey: "customer-cancel-42" });
+    expect(request).toHaveBeenNthCalledWith(6, "/api/customer/reservations/42/stay-change", { method: "POST", body: change, idempotencyKey: "customer-change-42" });
   });
 
   it("routes hotel service booking, listing and cancellation through the customer's booking", async () => {

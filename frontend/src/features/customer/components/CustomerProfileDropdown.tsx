@@ -30,7 +30,7 @@ import {
 import { customerApi } from "../../../shared/api/customer";
 import { authApi } from "../../../shared/api/auth";
 import type { CustomerProfileDto } from "../../../shared/types/api";
-import type { CustomerReservation } from "../../../shared/types/customer";
+import type { CustomerReservation, CustomerStayChangeType } from "../../../shared/types/customer";
 import { apiErrorMessage } from "../../../shared/api/client";
 import { formatDateTimeVi, formatDateVi } from "../../../shared/utils/localDate";
 
@@ -46,6 +46,13 @@ interface CustomerProfileDropdownProps {
 type TabType = "overview" | "edit" | "password" | "bookings";
 
 const fmtVND = (n: number) => (n ?? 0).toLocaleString("vi-VN") + " ₫";
+const toDateTimeInput = (value?: string) => value ? value.slice(0, 16) : "";
+const withSeconds = (value: string) => value.length === 16 ? `${value}:00` : value;
+const localInputAfter = (value: string, milliseconds: number) => {
+  const date = new Date(new Date(value).getTime() + milliseconds);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
 
 const getReservationStatusMeta = (reservation: CustomerReservation) => {
   const status = reservation.status;
@@ -77,7 +84,7 @@ const getReservationStatusMeta = (reservation: CustomerReservation) => {
         label: "Đã xác nhận phòng",
         badgeClass: "bg-emerald-50 text-emerald-800 border-emerald-300",
         dotClass: "bg-emerald-500",
-        desc: "Đơn đặt phòng đã được xác nhận chính thức.",
+        desc: "Đơn đặt phòng và tiền cọc đã được xác nhận chính thức.",
       };
     case "CHECKED_IN":
       return {
@@ -213,6 +220,12 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
   const [expandedResId, setExpandedResId] = useState<number | null>(null);
   const [cancellingReservationId, setCancellingReservationId] = useState<number | null>(null);
   const [cancelError, setCancelError] = useState("");
+  const [stayChange, setStayChange] = useState<{ reservationId: number; type: CustomerStayChangeType } | null>(null);
+  const [changeCheckIn, setChangeCheckIn] = useState("");
+  const [changeCheckOut, setChangeCheckOut] = useState("");
+  const [changingReservationId, setChangingReservationId] = useState<number | null>(null);
+  const [changeError, setChangeError] = useState("");
+  const [changeSuccess, setChangeSuccess] = useState("");
 
 
   const handleCancelReservation = async (reservation: CustomerReservation) => {
@@ -232,6 +245,56 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
       setCancelError(apiErrorMessage(error, "Không thể hủy đặt phòng. Vui lòng thử lại."));
     } finally {
       setCancellingReservationId(null);
+    }
+  };
+
+  const openStayChange = (reservation: CustomerReservation, type: CustomerStayChangeType) => {
+    const room = reservation.rooms?.[0];
+    if (!room) return;
+    setStayChange({ reservationId: reservation.id, type });
+    setChangeError("");
+    setChangeSuccess("");
+    if (type === "EXTEND") {
+      setChangeCheckIn(toDateTimeInput(room.expected_check_out));
+      setChangeCheckOut(localInputAfter(room.expected_check_out, 24 * 60 * 60 * 1000));
+    } else {
+      setChangeCheckIn(toDateTimeInput(room.expected_check_in));
+      setChangeCheckOut(toDateTimeInput(room.expected_check_out));
+    }
+  };
+
+  const handleRescheduleCheckIn = (reservation: CustomerReservation, value: string) => {
+    setChangeCheckIn(value);
+    const room = reservation.rooms?.[0];
+    if (!room || !value) return;
+    const duration = new Date(room.expected_check_out).getTime() - new Date(room.expected_check_in).getTime();
+    setChangeCheckOut(localInputAfter(value, duration));
+  };
+
+  const submitStayChange = async (reservation: CustomerReservation) => {
+    if (!stayChange || !changeCheckOut || (stayChange.type === "RESCHEDULE" && !changeCheckIn)) return;
+    setChangingReservationId(reservation.id);
+    setChangeError("");
+    setChangeSuccess("");
+    try {
+      const updated = await customerApi.changeReservationStay(
+        reservation.id,
+        {
+          type: stayChange.type,
+          new_check_in: withSeconds(changeCheckIn),
+          new_check_out: withSeconds(changeCheckOut),
+        },
+        `stay-change-${crypto.randomUUID()}`,
+      );
+      setReservations(rows => rows.map(row => row.id === updated.id ? updated : row));
+      setStayChange(null);
+      setChangeSuccess(stayChange.type === "EXTEND"
+        ? "Đã giữ phần ngày thêm. Vui lòng thanh toán cọc bổ sung trước khi hết hạn."
+        : "Đã đổi ngày lưu trú thành công.");
+    } catch (error) {
+      setChangeError(apiErrorMessage(error, "Không thể thay đổi lịch lưu trú. Vui lòng kiểm tra ngày và thử lại."));
+    } finally {
+      setChangingReservationId(null);
     }
   };
 
@@ -1173,21 +1236,23 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
                                   {fmtVND(res.deposit_amount || 0)}
                                 </span>
                                 <span className="block text-[10px] text-stone-500">
-                                  {res.deposit_payment?.status === "PAID"
+                                  {res.pending_change
+                                    ? "✓ Đã cọc ban đầu · chờ cọc bổ sung"
+                                    : res.deposit_payment?.status === "PAID"
                                     ? "✓ Đã thanh toán cọc"
                                     : res.deposit_payment?.status === "PENDING"
                                     ? "⏳ Chờ thanh toán cọc"
-                                    : "Không yêu cầu cọc"}
+                                    : "Chờ xác nhận cọc tại khách sạn"}
                                 </span>
                               </div>
                             </div>
 
                             {/* Retry VNPay trên cùng booking trong thời gian giữ phòng. */}
-                            {(res.status === "DRAFT" || res.deposit_payment?.status === "PENDING") && res.deposit_payment?.payment_code && (
+                            {!res.pending_change && (res.status === "DRAFT" || res.deposit_payment?.status === "PENDING") && res.deposit_payment?.payment_code && (
                               <div className="mt-2 p-2.5 bg-white rounded-lg border border-amber-200 text-[11px] space-y-2 text-amber-900">
                                 <div className="flex justify-between items-center text-[10px] text-stone-500 pt-0.5">
-                                  <span>Tiền cọc qua VNPay:</span>
-                                  <strong className="text-[#8C6D37]">{fmtVND(res.deposit_amount || 0)}</strong>
+                                  <span>{res.pending_change ? "Cọc bổ sung qua VNPay:" : "Tiền cọc qua VNPay:"}</span>
+                                  <strong className="text-[#8C6D37]">{fmtVND(res.deposit_payment?.amount || 0)}</strong>
                                 </div>
 
                                 {res.deposit_payment?.expires_at && (
@@ -1212,7 +1277,103 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
                             )}
                           </div>
 
-                          {["DRAFT", "DEPOSIT_PAID", "CONFIRMED"].includes(res.status) && (() => {
+                          {/* SECTION 4: CUSTOMER-OWNED STAY CHANGE */}
+                          {changeError && expandedResId === res.id && (
+                            <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-[11px] text-red-700">{changeError}</p>
+                          )}
+                          {changeSuccess && expandedResId === res.id && (
+                            <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-[11px] text-emerald-800">{changeSuccess}</p>
+                          )}
+
+                          {res.pending_change ? (
+                            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-900">
+                              <p className="font-semibold">Đang giữ ngày thêm đến {formatDateTimeVi(res.pending_change.payment_expires_at)}</p>
+                              <p className="mt-1 leading-relaxed">
+                                Phần lưu trú được nối tiếp từ {formatDateTimeVi(res.pending_change.previous_check_out)} đến {formatDateTimeVi(res.pending_change.new_check_out)}.
+                                Cọc bổ sung: <strong>{fmtVND(res.pending_change.additional_deposit)}</strong>.
+                              </p>
+                              {onPayReservation && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => { event.stopPropagation(); onClose(); onPayReservation(res.id); }}
+                                  className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber-900 px-3 py-2 font-semibold text-white transition hover:bg-amber-800"
+                                >
+                                  <CreditCard size={13} /> Thanh toán cọc bổ sung
+                                </button>
+                              )}
+                            </div>
+                          ) : ["DEPOSIT_PAID", "CONFIRMED"].includes(res.status)
+                              && res.deposit_payment?.status === "PAID"
+                              && res.rental_type === "PACKAGE"
+                              && Boolean(res.rooms?.[0]?.expected_check_in)
+                              && new Date(res.rooms[0].expected_check_in).getTime() - Date.now() > 48 * 60 * 60 * 1000 ? (
+                            <div className="rounded-xl border border-[#D8C7A5] bg-white p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-xs font-semibold text-[#1C1917]">Điều chỉnh lịch lưu trú</p>
+                                  <p className="mt-0.5 text-[10px] leading-relaxed text-stone-500">Chỉ thực hiện trước check-in hơn 48 giờ và khi phòng còn trống, sẵn sàng.</p>
+                                </div>
+                                <Calendar size={16} className="shrink-0 text-[#8C6D37]" />
+                              </div>
+                              <div className="mt-2 grid grid-cols-2 gap-2">
+                                <button type="button" onClick={() => openStayChange(res, "EXTEND")} className="rounded-lg border border-[#C9AE78] bg-[#FAF5EB] px-2 py-2 text-[11px] font-semibold text-[#755725] hover:bg-[#F2E8D3]">
+                                  Thêm ngày
+                                </button>
+                                <button type="button" onClick={() => openStayChange(res, "RESCHEDULE")} className="rounded-lg border border-stone-300 bg-white px-2 py-2 text-[11px] font-semibold text-stone-700 hover:bg-stone-50">
+                                  Đổi ngày
+                                </button>
+                              </div>
+
+                              {stayChange?.reservationId === res.id && (
+                                <div className="mt-3 space-y-2 rounded-lg border border-stone-200 bg-[#FAF8F5] p-2.5">
+                                  <p className="text-[11px] font-semibold text-stone-800">
+                                    {stayChange.type === "EXTEND" ? "Thêm ngày nối tiếp booking" : "Dời lịch, giữ nguyên số đêm"}
+                                  </p>
+                                  <label className="block text-[10px] font-medium text-stone-600">
+                                    {stayChange.type === "EXTEND" ? "Ngày bắt đầu phần thêm (cố định)" : "Check-in mới"}
+                                    <input
+                                      aria-label={stayChange.type === "EXTEND" ? "Ngày bắt đầu phần thêm" : "Check-in mới"}
+                                      type="datetime-local"
+                                      value={changeCheckIn}
+                                      readOnly={stayChange.type === "EXTEND"}
+                                      onChange={(event) => handleRescheduleCheckIn(res, event.target.value)}
+                                      className="mt-1 h-9 w-full rounded-lg border border-stone-300 bg-white px-2 text-[11px] read-only:bg-stone-100"
+                                    />
+                                  </label>
+                                  <label className="block text-[10px] font-medium text-stone-600">
+                                    Check-out mới
+                                    <input
+                                      aria-label="Check-out mới"
+                                      type="datetime-local"
+                                      min={stayChange.type === "EXTEND" ? changeCheckIn : undefined}
+                                      value={changeCheckOut}
+                                      readOnly={stayChange.type === "RESCHEDULE"}
+                                      onChange={(event) => setChangeCheckOut(event.target.value)}
+                                      className="mt-1 h-9 w-full rounded-lg border border-stone-300 bg-white px-2 text-[11px] read-only:bg-stone-100"
+                                    />
+                                  </label>
+                                  <p className="text-[10px] leading-relaxed text-stone-500">
+                                    {stayChange.type === "EXTEND"
+                                      ? "Phần thêm luôn bắt đầu đúng giờ checkout cũ; hệ thống sẽ tính cọc bổ sung 50%."
+                                      : "Check-out được tự tính để giữ nguyên số đêm của booking hiện tại."}
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <button type="button" onClick={() => setStayChange(null)} className="rounded-lg border border-stone-300 bg-white px-2 py-2 text-[11px] font-semibold text-stone-600">Đóng</button>
+                                    <button
+                                      type="button"
+                                      disabled={changingReservationId === res.id || !changeCheckOut}
+                                      onClick={() => void submitStayChange(res)}
+                                      className="rounded-lg bg-[#1C1917] px-2 py-2 text-[11px] font-semibold text-white disabled:cursor-wait disabled:opacity-60"
+                                    >
+                                      {changingReservationId === res.id ? "Đang kiểm tra…" : "Kiểm tra & xác nhận"}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+
+                          {!res.pending_change && ["DRAFT", "DEPOSIT_PAID", "CONFIRMED"].includes(res.status) && (() => {
                             const policy = cancellationPolicy(res);
                             return (
                               <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-3">

@@ -6,6 +6,7 @@ import com.hospitality.mis.service.billing.BillingService;
 import com.hospitality.mis.service.billing.PaymentTransactionService;
 import com.hospitality.mis.service.billing.ReceiptService;
 import com.hospitality.mis.service.billing.ServiceCatalogService;
+import com.hospitality.mis.service.billing.VnpayPaymentService;
 import com.hospitality.mis.service.finance.FinanceService;
 import com.hospitality.mis.service.governance.ApprovalService;
 import com.hospitality.mis.service.governance.AuditService;
@@ -34,6 +35,7 @@ import com.hospitality.mis.service.room.RoomTypeCatalogService;
 import com.hospitality.mis.middleware.security.ApprovalAuthorization;
 import com.hospitality.mis.dto.reservation.ReservationDtos;
 import com.hospitality.mis.entity.reservation.ReservationStatus;
+import com.hospitality.mis.entity.billing.VnpayPaymentStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -100,9 +102,10 @@ class DepartmentAuthorizationMatrixTest {
     @MockBean EmployeeShiftService mock28;
     @MockBean HousekeepingInspectionService mock29;
     @MockBean HotelServiceBookingService mock30;
+    @MockBean VnpayPaymentService mock31;
     @MockBean ApprovalAuthorization approvalAuthorization;
     /** Gom các business mock để reset invocation và chứng minh deny không gọi nghiệp vụ. */
-    private List<Object> businessMocks() { return List.of(mock0, mock1, mock2, mock3, mock4, mock5, mock6, mock7, mock8, mock9, mock10, mock11, mock12, mock13, mock14, mock15, mock16, mock17, mock18, mock19, mock20, mock21, mock22, mock23, mock24, mock25, mock26, mock27, mock28, mock29, mock30); }
+    private List<Object> businessMocks() { return List.of(mock0, mock1, mock2, mock3, mock4, mock5, mock6, mock7, mock8, mock9, mock10, mock11, mock12, mock13, mock14, mock15, mock16, mock17, mock18, mock19, mock20, mock21, mock22, mock23, mock24, mock25, mock26, mock27, mock28, mock29, mock30, mock31); }
 
     /** Stub response tối thiểu để matrix chỉ đo RBAC, không đo business rules. */
     @BeforeEach void responses() {
@@ -132,6 +135,14 @@ class DepartmentAuthorizationMatrixTest {
         when(mock27.results(anyLong())).thenReturn(List.of());
         when(mock28.list(any(), any())).thenReturn(List.of());
         when(mock29.list(anyLong())).thenReturn(List.of());
+        when(mock31.createCheckout(anyLong(), anyString(), anyString())).thenReturn(
+            new com.hospitality.mis.dto.billing.VnpayPaymentDtos.CheckoutResponse(
+                1L, 1L, "matrix-payment", java.math.BigDecimal.ONE, VnpayPaymentStatus.PENDING,
+                java.time.LocalDateTime.now().plusMinutes(15), "https://example.test/pay"));
+        when(mock31.latest(anyLong(), anyString())).thenReturn(
+            new com.hospitality.mis.dto.billing.VnpayPaymentDtos.StatusResponse(
+                1L, 1L, "matrix-payment", java.math.BigDecimal.ONE, VnpayPaymentStatus.PENDING,
+                java.time.LocalDateTime.now().plusMinutes(15), null));
         businessMocks().forEach(x -> clearInvocations(x));
     }
 
@@ -205,12 +216,10 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/reservations", "MANAGER,FRONT_DESK", "{\"guest_id\":1,\"employee_id\":\"actor\",\"deposit\":0,\"rental_type\":\"PACKAGE\",\"rooms\":[{\"room_id\":\"101\",\"expected_check_in\":\"2026-10-01T12:00:00\",\"expected_check_out\":\"2026-10-02T12:00:00\"}]}"),
             new Endpoint("POST", "/api/reservations/1/check-in", "MANAGER,FRONT_DESK", "{}"),
             new Endpoint("POST", "/api/reservations/1/confirm", "MANAGER,FRONT_DESK", "{}"),
-            new Endpoint("PATCH", "/api/reservations/1", "MANAGER,FRONT_DESK", "{\"rooms\":[{\"room_id\":\"101\",\"expected_check_in\":\"2026-10-01T12:00:00\",\"expected_check_out\":\"2026-10-02T12:00:00\"}]}"),
             new Endpoint("GET", "/api/reservations/1/timeline", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
             new Endpoint("POST", "/api/reservations/1/check-out", "MANAGER,FRONT_DESK", "{}"),
             new Endpoint("POST", "/api/reservations/1/cancel", "MANAGER,FRONT_DESK", "{\"reason\":\"Cancelled\"}"),
             new Endpoint("POST", "/api/reservations/1/no-show", "MANAGER,FRONT_DESK", "{}"),
-            new Endpoint("POST", "/api/reservations/1/extend", "MANAGER,FRONT_DESK", "{\"new_expected_check_out\":\"2026-10-03T12:00:00\"}"),
             new Endpoint("POST", "/api/reservations/1/services", "MANAGER,FRONT_DESK", "{\"service_id\":\"S1\",\"quantity\":1}"),
             new Endpoint("POST", "/api/reservations/1/equipment-incidents", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING", "{\"room_id\":\"101\",\"equipment_name\":\"TV\",\"original_value\":100,\"purchased_at\":\"2026-01-01\",\"quantity\":1}"),
             new Endpoint("POST", "/api/operations/reservations/1/equipment-incidents", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING", "{\"room_id\":\"101\",\"equipment_name\":\"TV\",\"original_value\":100,\"purchased_at\":\"2026-01-01\",\"quantity\":1}"),
@@ -268,11 +277,14 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("PUT", "/api/auth/customers/me", "CUSTOMER", "{\"full_name\":\"Test\",\"identity_number\":\"123456789012\"}"),
             new Endpoint("POST", "/api/auth/customers/password", "CUSTOMER", "{\"password\":\"valid-password\"}"),
             new Endpoint("POST", "/api/auth/employees/auto-provision", "ADMIN,DIRECTOR,MANAGER", "{\"role\":\"STAFF\",\"full_name\":\"Test\",\"phone\":\"0900000000\",\"email\":\"test@hotel.com\"}"),
-            new Endpoint("POST", "/api/customer/reservations", "CUSTOMER", "{\"rental_type\":\"PACKAGE\",\"rooms\":[{\"room_id\":\"101\",\"expected_check_in\":\"2026-10-01T12:00:00\",\"expected_check_out\":\"2026-10-02T12:00:00\"}],\"idempotency_key\":\"customer-key\"}"),
+            new Endpoint("POST", "/api/customer/reservations", "CUSTOMER", "{\"rental_type\":\"PACKAGE\",\"rooms\":[{\"room_id\":\"101\",\"expected_check_in\":\"2026-10-01T12:00:00\",\"expected_check_out\":\"2026-10-02T12:00:00\"}],\"idempotency_key\":\"customer-key\",\"payment_method\":\"VNPAY\"}"),
             new Endpoint("GET", "/api/customer/reservations", "CUSTOMER", "{}"),
             new Endpoint("GET", "/api/customer/reservations/1", "CUSTOMER", "{}"),
             new Endpoint("GET", "/api/customer/reservations/1/deposit-payment", "CUSTOMER", "{}"),
             new Endpoint("POST", "/api/customer/reservations/1/cancel", "CUSTOMER", "{\"reason\":\"Khách đổi kế hoạch\"}"),
+            new Endpoint("POST", "/api/customer/reservations/1/stay-change", "CUSTOMER", "{\"type\":\"EXTEND\",\"new_check_in\":\"2026-10-02T12:00:00\",\"new_check_out\":\"2026-10-03T12:00:00\"}"),
+            new Endpoint("POST", "/api/customer/reservations/1/vnpay-payments", "CUSTOMER", "{}"),
+            new Endpoint("GET", "/api/customer/reservations/1/vnpay-payments/latest", "CUSTOMER", "{}"),
             new Endpoint("POST", "/api/customer/service-bookings", "CUSTOMER", "{\"reservation_id\":1,\"room_id\":\"101\",\"service_id\":\"S1\",\"scheduled_at\":\"2026-10-01T12:00:00\",\"quantity\":1}"),
             new Endpoint("GET", "/api/customer/service-bookings?reservation_id=1", "CUSTOMER", "{}"),
             new Endpoint("POST", "/api/customer/service-bookings/1/cancel", "CUSTOMER", "{}"),

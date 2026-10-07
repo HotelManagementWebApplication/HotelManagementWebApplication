@@ -418,10 +418,8 @@ thời gian sử dụng. `free_quantity` là phần nằm trong hạn mức; ch�
 hạn mức đã dùng mới tính vào hóa đơn phòng. Hủy booking phòng tự hủy dịch vụ
 chưa dùng. Hồ bơi chỉ xem thông tin trên web, không đặt trước.
 
-Khách thuê theo gói ngày-đêm có quyền lợi: hồ bơi không giới hạn theo số khách
-trong booking; giặt ủi một lần/ngày/phòng; bữa sáng một suất/ngày/khách; tại
-MaM Restaurant mỗi khách một bữa trưa và một bữa tối/ngày. Khách thuê theo giờ
-trả giá niêm yết cho mọi dịch vụ. Xem bảng giá tại `rule.md` mục 15.
+Quyền lợi, định mức miễn phí và giá dịch vụ áp dụng cho khách được định nghĩa
+duy nhất tại `customer-policy.md` mục 8.
 
 ### 9.3. Thuật ngữ đặt bàn/lịch hẹn
 

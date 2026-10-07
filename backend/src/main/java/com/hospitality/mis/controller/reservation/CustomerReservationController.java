@@ -45,4 +45,12 @@ public class CustomerReservationController {
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
         return service.cancel(id, request, SecurityActor.currentActor(), idempotencyKey);
     }
+
+    @PostMapping("/{id}/stay-change")
+    public CustomerReservationDtos.Response changeStay(
+            @PathVariable Long id,
+            @Valid @RequestBody CustomerReservationDtos.ChangeRequest request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey) {
+        return service.changeStay(id, request, SecurityActor.currentActor(), idempotencyKey);
+    }
 }

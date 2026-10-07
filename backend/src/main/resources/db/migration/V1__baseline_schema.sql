@@ -131,6 +131,11 @@ CREATE TABLE PhieuDatPhong (
     thoiDiemHetHanThanhToanCoc DATETIME2(6),
     trangThaiThanhToanCoc NVARCHAR(20) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Không yêu cầu',
     phuongThucBaoDam NVARCHAR(20) COLLATE Vietnamese_100_CS_AS,
+    loaiThayDoiDangCho NVARCHAR(20) COLLATE Vietnamese_100_CS_AS,
+    thoiDiemNhanPhongTruocThayDoi DATETIME2(6),
+    thoiDiemTraPhongTruocThayDoi DATETIME2(6),
+    tienDatCocTruocThayDoi DECIMAL(12, 2),
+    tienDatCocBoSung DECIMAL(12, 2) NOT NULL DEFAULT 0,
     emailXacNhan NVARCHAR(150),
     nguonDatPhong NVARCHAR(30) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Trực tiếp',
     doanhThuGopOta DECIMAL(14,2) NOT NULL DEFAULT 0,
@@ -147,7 +152,16 @@ CREATE TABLE PhieuDatPhong (
     CONSTRAINT chkPhieuDatPhong05 CHECK (
         thoiDiemNhanPhongThucTe IS NULL OR thoiDiemTraPhongThucTe IS NULL OR thoiDiemTraPhongThucTe >= thoiDiemNhanPhongThucTe
     ),
-    CONSTRAINT chkPhieuDatPhong06 CHECK (phuongThucBaoDam IS NULL OR phuongThucBaoDam IN (N'VNPay', N'Tại khách sạn'))
+    CONSTRAINT chkPhieuDatPhong06 CHECK (phuongThucBaoDam IS NULL OR phuongThucBaoDam IN (N'VNPay', N'Tại khách sạn')),
+    CONSTRAINT chkPhieuDatPhong07 CHECK (loaiThayDoiDangCho IS NULL OR loaiThayDoiDangCho IN (N'Gia hạn')),
+    CONSTRAINT chkPhieuDatPhong08 CHECK (tienDatCocBoSung >= 0),
+    CONSTRAINT chkPhieuDatPhong09 CHECK (
+        (loaiThayDoiDangCho IS NULL AND thoiDiemNhanPhongTruocThayDoi IS NULL AND thoiDiemTraPhongTruocThayDoi IS NULL
+            AND tienDatCocTruocThayDoi IS NULL AND tienDatCocBoSung = 0)
+        OR
+        (loaiThayDoiDangCho IS NOT NULL AND thoiDiemNhanPhongTruocThayDoi IS NOT NULL AND thoiDiemTraPhongTruocThayDoi IS NOT NULL
+            AND tienDatCocTruocThayDoi IS NOT NULL AND tienDatCocBoSung > 0)
+    )
 );
 
 CREATE INDEX idxPhieuDatPhong01 ON PhieuDatPhong (maKhachLuuTru, thoiDiemDat);

@@ -14,6 +14,7 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:8080",
       "/media": "http://localhost:8080",
+      "/agent-api": "http://localhost:8090",
     },
   }
 });

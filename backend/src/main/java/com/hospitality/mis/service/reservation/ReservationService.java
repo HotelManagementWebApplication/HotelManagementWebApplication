@@ -163,6 +163,7 @@ public class ReservationService {
         reservation.setBookingSource(request.bookingSource());
         reservation.setIdempotencyKey(key);
         reservation.setCanonicalRequestFingerprint(fingerprint);
+        if (suppliedDeposit.signum() > 0) reservation.setDepositPaymentStatus(DepositPaymentStatus.PAID);
         reservation.transitionTo(reservation.getDepositAmount().signum() > 0 ? ReservationStatus.DEPOSIT_PAID : ReservationStatus.CONFIRMED);
         request.rooms().forEach(line -> { ReservationRoom rr = new ReservationRoom(); rr.setRoom(locked.get(line.roomId())); rr.setCheckIn(line.expectedCheckIn()); rr.setCheckOut(line.expectedCheckOut()); rr.setGuestCount(line.guestCount() == null ? 1 : line.guestCount()); rr.setStatus(RoomStatus.RESERVED); reservation.addRoom(rr); });
         try {
@@ -280,6 +281,8 @@ public class ReservationService {
             if (customerAccountId != null && (r.getCustomerAccount() == null
                     || !customerAccountId.equals(r.getCustomerAccount().getId())))
                 throw error("RESERVATION_NOT_FOUND", "Không tìm thấy booking");
+            if (customerAccountId != null && r.getPendingChangeType() != null)
+                throw error("PENDING_CHANGE_PAYMENT", "Hãy hoàn tất hoặc chờ hết hạn cọc bổ sung trước khi hủy booking");
             requireState(r, ReservationStatus.DRAFT, ReservationStatus.CONFIRMED, ReservationStatus.DEPOSIT_PAID);
             LocalDateTime now = LocalDateTime.now(clock);
             LocalDateTime checkIn = r.getRooms().stream().map(ReservationRoom::getCheckIn).min(LocalDateTime::compareTo)
@@ -370,6 +373,13 @@ public class ReservationService {
                         }
                     }
                     r.transitionTo(ReservationStatus.CONFIRMED);
+                    if (r.getDepositAmount() != null && r.getDepositAmount().signum() > 0
+                            && r.getDepositPaymentStatus() != DepositPaymentStatus.PAID) {
+                        r.setDepositPaymentStatus(DepositPaymentStatus.PAID);
+                        r.setDepositPaymentCode(null);
+                        r.setDepositPaymentExpiresAt(null);
+                        billing.registerDeposit(r);
+                    }
                     r.getRooms().forEach(line -> { line.setStatus(RoomStatus.RESERVED); line.getRoom().setStatus(RoomStatus.RESERVED); });
                     audit.record(principal, "RESERVATION_CONFIRMED", "RESERVATION", id.toString(), ReservationStatus.DRAFT.name(), ReservationStatus.CONFIRMED.name(), null);
                     return toResponse(r);

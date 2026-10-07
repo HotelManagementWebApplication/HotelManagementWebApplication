@@ -23,7 +23,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.PathVariable;
 
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 
 import org.springframework.web.bind.annotation.RequestBody;
@@ -197,14 +196,6 @@ public class ReservationController {
         return service.confirm(id, SecurityActor.currentActor(), idempotencyKey);
     }
 
-    @PatchMapping("/{id}")
-    @PreAuthorize("@departmentAccess.allows(authentication, 'RESERVATION_WRITE')")
-    public ReservationDtos.Response update(@PathVariable Long id,
-                                           @Valid @RequestBody ReservationDtos.UpdateRequest request,
-                                           @RequestHeader("Idempotency-Key") String idempotencyKey) {
-        return service.update(id, request, SecurityActor.currentActor(), idempotencyKey);
-    }
-
     @GetMapping("/{id}/timeline")
     @PreAuthorize("@departmentAccess.allows(authentication, 'RESERVATION_READ')")
     public List<com.hospitality.mis.dto.governance.AuditDtos.Response> timeline(@PathVariable Long id) {
@@ -226,27 +217,6 @@ public class ReservationController {
         return service.markNoShow(id, SecurityActor.currentActor(), idempotencyKey);
     }
 
-
-
-
-
-    /**
-     * Gia hạn đặt phòng qua POST /api/reservations/{id}/extend; id là path parameter, body gia hạn được {@code @Valid} kiểm tra,
-     * header {@code Idempotency-Key} bắt buộc. Trả đặt phòng sau gia hạn; chỉ RESERVATION_WRITE được phép và xung đột lịch,
-     * trạng thái hoặc khóa lặp do service báo lỗi.
-     */
-    @PostMapping("/{id}/extend")
-
-
-    @PreAuthorize("@departmentAccess.allows(authentication, 'RESERVATION_WRITE')")
-    public ReservationDtos.Response extend(@PathVariable Long id,
-
-                                           @Valid @RequestBody ReservationDtos.ExtendRequest request,
-                                           @RequestHeader("Idempotency-Key") String idempotencyKey) {
-
-        return service.extend(id, request, SecurityActor.currentActor(), idempotencyKey);
-
-    }
 
 
 

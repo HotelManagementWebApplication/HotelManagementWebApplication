@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { CustomerLoginRequest, CustomerMe, CustomerRegistrationRequest, CustomerReservation, CustomerReservationCreateRequest, CustomerPaymentInstruction, HotelServiceBooking, HotelServiceBookingRequest, VnpayCheckout, VnpayPaymentAttempt } from "../types/customer";
+import type { CustomerLoginRequest, CustomerMe, CustomerRegistrationRequest, CustomerReservation, CustomerReservationCreateRequest, CustomerPaymentInstruction, CustomerStayChangeRequest, HotelServiceBooking, HotelServiceBookingRequest, VnpayCheckout, VnpayPaymentAttempt } from "../types/customer";
 import type { TokenResponseDto } from "../types/api";
 
 export const customerApi = {
@@ -30,6 +30,7 @@ export const customerApi = {
     return apiClient.request<VnpayPaymentAttempt>(`/api/customer/reservations/${reservationId}/vnpay-payments/latest`);
   },
   cancelReservation: (id: number, reason: string, key: string) => apiClient.request<CustomerReservation>(`/api/customer/reservations/${id}/cancel`, { method: "POST", body: { reason }, idempotencyKey: key }),
+  changeReservationStay: (id: number, body: CustomerStayChangeRequest, key: string) => apiClient.request<CustomerReservation>(`/api/customer/reservations/${id}/stay-change`, { method: "POST", body, idempotencyKey: key }),
   bookService: (body: HotelServiceBookingRequest, key: string) => apiClient.request<HotelServiceBooking>("/api/customer/service-bookings", { method: "POST", body, idempotencyKey: key }),
   serviceBookings: (reservationId: number) => apiClient.request<HotelServiceBooking[]>(`/api/customer/service-bookings?reservation_id=${reservationId}`),
   cancelServiceBooking: (id: number) => apiClient.request<HotelServiceBooking>(`/api/customer/service-bookings/${id}/cancel`, { method: "POST" }),

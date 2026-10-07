@@ -343,10 +343,9 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
 
   const [busy, setBusy] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
-  const [operation, setOperation] = useState<"transfer" | "extend" | "cancel" | "incident" | null>(null);
+  const [operation, setOperation] = useState<"transfer" | "cancel" | "incident" | null>(null);
   const [transferRoom, setTransferRoom] = useState("");
   const [transferReason, setTransferReason] = useState("");
-  const [extendAt, setExtendAt] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [incidentEquipName, setIncidentEquipName] = useState("");
   const [roomEquipment, setRoomEquipment] = useState<RoomEquipment[]>([]);
@@ -391,7 +390,6 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
   const keys = useRef({
     service: newFrontDeskIdempotencyKey(),
     transfer: newFrontDeskIdempotencyKey(),
-    extend: newFrontDeskIdempotencyKey(),
     checkout: newFrontDeskIdempotencyKey(),
     payment: newPaymentIdempotencyKey(),
     receipt: newFrontDeskIdempotencyKey(),
@@ -435,13 +433,12 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
   useEffect(() => {
     setFeedback(null); setOperation(null); setCheckoutStep("idle"); setIssuedReceipt(null);
     setReservationDetails(null); setServiceBookings([]); setServices([]); setInvoice(null); setPayments([]); setReceipts([]);
-    setTransferRoom(""); setTransferReason(""); setExtendAt(""); setCancelReason("");
+    setTransferRoom(""); setTransferReason(""); setCancelReason("");
     setAvailableTransferRoomIds(null); setLoadingTransferRooms(false);
     setIncidentEquipName(""); setIncidentQuantity(1); setMembershipHistory(null);
     keys.current = {
       service: newFrontDeskIdempotencyKey(),
       transfer: newFrontDeskIdempotencyKey(),
-      extend: newFrontDeskIdempotencyKey(),
       checkout: newFrontDeskIdempotencyKey(),
       payment: newPaymentIdempotencyKey(),
       receipt: newFrontDeskIdempotencyKey(),
@@ -608,17 +605,6 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
       keys.current.transfer = newFrontDeskIdempotencyKey(); setOperation(null);
       await finishMutation(`Đã chuyển booking sang phòng ${selectedTransferRoom.number} (${selectedTransferRoom.id}).`);
       onTransferred?.(selectedTransferRoom.id);
-    } catch (error) { setFeedback({ tone: "error", text: apiErrorText(error) }); }
-    finally { setBusy(null); }
-  };
-
-  const extend = async () => {
-    if (!validReservation || !extendAt || busy) return;
-    setBusy("extend"); setFeedback(null);
-    try {
-      await frontDeskApi.extend(reservationId, extendAt.length === 16 ? `${extendAt}:00` : extendAt, keys.current.extend);
-      keys.current.extend = newFrontDeskIdempotencyKey(); setOperation(null);
-      await finishMutation("Đã gia hạn thời gian trả phòng.");
     } catch (error) { setFeedback({ tone: "error", text: apiErrorText(error) }); }
     finally { setBusy(null); }
   };
@@ -989,8 +975,6 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
             <button onClick={()=>void transfer()} disabled={!selectedTransferRoom||!canTransferTo(selectedTransferRoom)||busy!==null} style={{marginTop:8,width:"100%",height:34,borderRadius:7,background:selectedTransferRoom&&canTransferTo(selectedTransferRoom)?"#2563EB":"#94A3B8",color:"#FFF",fontWeight:700,cursor:selectedTransferRoom&&canTransferTo(selectedTransferRoom)?"pointer":"not-allowed"}}>{busy==="transfer"?"Đang chuyển…":"Xác nhận chuyển phòng"}</button>
           </div>
         )}
-        {operation==="extend" && <div style={{marginTop:12,padding:12,border:"1px solid #BFDBFE",borderRadius:10,background:"#EFF6FF"}}><strong style={{fontSize:12}}>Gia hạn lưu trú</strong><input type="datetime-local" value={extendAt} onChange={event=>setExtendAt(event.target.value)} style={{width:"100%",height:34,marginTop:8,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 9px",boxSizing:"border-box"}}/><p style={{fontSize:10,color:"#64748B",marginTop:5}}>Hệ thống sẽ kiểm tra phòng còn trống và điều kiện gia hạn trước giờ trả phòng.</p><button onClick={()=>void extend()} disabled={!extendAt||busy!==null} style={{marginTop:8,width:"100%",height:34,borderRadius:7,background:"#2563EB",color:"#FFF",fontWeight:700,cursor:"pointer"}}>{busy==="extend"?"Đang gia hạn…":"Xác nhận gia hạn"}</button></div>}
-
         {checkoutStep!=="idle" && invoice && <div style={{marginTop:12,padding:13,border:"1px solid #BBF7D0",borderRadius:10,background:"#F0FDF4"}}><p style={{fontSize:10,fontWeight:800,color:"#166534",letterSpacing:1}}>QUY TRÌNH TRẢ PHÒNG</p><p style={{fontSize:12,color:"#334155",marginTop:6}}>Hóa đơn #{invoice.id} · Còn thanh toán <strong>{fmtVND(invoice.payable)}</strong></p>{checkoutStep==="review"&&<><label style={{display:"block",fontSize:11,color:"#475569",marginTop:9}}>Phương thức thanh toán<select value={paymentMethod} onChange={event=>setPaymentMethod(event.target.value as PaymentMethod)} style={{width:"100%",height:34,marginTop:4,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 8px",background:"#FFF"}}><option value="CASH">Tiền mặt</option><option value="CARD">Thẻ</option><option value="BANK_TRANSFER">Chuyển khoản</option></select></label><button onClick={()=>void confirmCheckout()} disabled={busy!==null} style={{marginTop:9,width:"100%",height:36,borderRadius:7,background:"#16A34A",color:"#FFF",fontWeight:700}}>{busy==="checkout"?"Đang hoàn tất trả phòng…":"Khách đã xác nhận hóa đơn"}</button></>}{checkoutStep==="payment"&&<button onClick={()=>void recordPayment()} disabled={busy!==null} style={{marginTop:9,width:"100%",height:36,borderRadius:7,background:"#0F172A",color:"#FFF",fontWeight:700}}>{busy==="payment"?"Đang ghi thanh toán…":`Xác nhận đã thu ${fmtVND(invoice.payable)}`}</button>}{checkoutStep==="receipt"&&<button onClick={()=>void issueAndPrintReceipt()} disabled={busy!==null} style={{marginTop:9,width:"100%",height:36,borderRadius:7,background:"#2563EB",color:"#FFF",fontWeight:700}}>{busy==="receipt"?"Đang phát hành…":"Phát hành & in biên lai"}</button>}{checkoutStep==="done"&&<div style={{marginTop:9,fontSize:12,fontWeight:700,color:"#166534"}}>{issuedReceipt?`Hoàn tất · ${issuedReceipt.receipt_number}`:"Hoàn tất · không phát sinh số tiền phải thu"}{issuedReceipt&&<button onClick={()=>printReceipt(issuedReceipt,room,invoice,rooms.filter(candidate=>candidate.reservationId===reservationId),serviceBookings,services,reservationDetails)} style={{display:"block",marginTop:7,color:"#1D4ED8",fontWeight:700}}>In lại biên lai</button>}</div>}</div>}
       </div>
 
@@ -1009,7 +993,7 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
           <button onClick={()=>void confirmReservation()} disabled={busy!==null} style={{ width:"100%",padding:"11px",borderRadius:9,
             background:"#16A34A",color:"#FFF",fontSize:13,fontWeight:700,cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
-            <CheckCircle2 size={16} /> {busy==="confirm"?"Đang xác nhận…":"Xác nhận đặt phòng"}
+            <CheckCircle2 size={16} /> {busy==="confirm"?"Đang xác nhận…":"Xác nhận đã thu cọc & giữ phòng"}
           </button>
         )}
         <button onClick={()=>void reviewCheckout()} disabled={!validReservation||busy!==null||room.reservationStatus!=="CHECKED_IN"} style={{ width:"100%",padding:"12px",borderRadius:9,
@@ -1025,12 +1009,6 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
           <RefreshCcw size={14} /> Chuyển phòng
         </button>
         <div style={{ display:"flex",gap:8 }}>
-          <button onClick={()=>setOperation(value=>value==="extend"?null:"extend")} disabled={!validReservation||busy!==null} style={{ flex:1,padding:"10px",borderRadius:9,
-            background:"#FFF",border:"1px solid #E2E8F0",color:"#334155",
-            fontSize:12,fontWeight:600,cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",gap:5 }}>
-            <CalendarDays size={13} /> Gia hạn lưu trú
-          </button>
           <button onClick={()=>setTab("service")} disabled={!validReservation||busy!==null} style={{ flex:1,padding:"10px",borderRadius:9,
             background:"#FFF",border:"1px solid #E2E8F0",color:"#334155",
             fontSize:12,fontWeight:600,cursor:"pointer",

@@ -212,6 +212,117 @@ public class CustomerReservationService {
                 .orElseThrow(() -> error("RESERVATION_NOT_FOUND", "Không tìm thấy booking")));
     }
 
+    /** Khách tự gia hạn nối tiếp hoặc đổi nguyên khoảng lưu trú trước check-in hơn 48 giờ. */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public CustomerReservationDtos.Response changeStay(Long id, CustomerReservationDtos.ChangeRequest request,
+                                                        String actor, String idempotencyKey) {
+        long accountId = customerAccountId(actor);
+        String key = IdempotencySupport.requireKey(idempotencyKey);
+        if (request == null || request.type() == null || request.newCheckOut() == null)
+            throw error("INVALID_CHANGE_REQUEST", "Thiếu thông tin thay đổi lịch lưu trú");
+        String fingerprint = IdempotencySupport.fingerprint("CUSTOMER_STAY_CHANGE|" + id + "|"
+                + request.type() + "|" + request.newCheckIn() + "|" + request.newCheckOut());
+        if (durableIdempotency != null) {
+            return durableIdempotency.executeWithReplay("customer-reservation-stay-change", key, actor, fingerprint,
+                    () -> changeStayOnce(id, request, accountId, actor),
+                    () -> toResponse(reservations.findCustomerDetails(id, accountId)
+                            .orElseThrow(() -> error("RESERVATION_NOT_FOUND", "Không tìm thấy booking"))));
+        }
+        return changeStayOnce(id, request, accountId, actor);
+    }
+
+    private CustomerReservationDtos.Response changeStayOnce(Long id, CustomerReservationDtos.ChangeRequest request,
+                                                              long accountId, String actor) {
+        Reservation reservation = reservations.findForUpdate(id)
+                .orElseThrow(() -> error("RESERVATION_NOT_FOUND", "Không tìm thấy booking"));
+        if (reservation.getCustomerAccount() == null || !Long.valueOf(accountId).equals(reservation.getCustomerAccount().getId()))
+            throw error("RESERVATION_NOT_FOUND", "Không tìm thấy booking");
+        if (reservation.getStatus() != ReservationStatus.CONFIRMED
+                && reservation.getStatus() != ReservationStatus.DEPOSIT_PAID)
+            throw error("RESERVATION_NOT_CHANGEABLE", "Chỉ booking đã cọc và chưa check-in mới được thay đổi lịch");
+        if (reservation.getDepositPaymentStatus() != DepositPaymentStatus.PAID)
+            throw error("DEPOSIT_PAYMENT_REQUIRED", "Booking phải hoàn tất tiền cọc trước khi thay đổi lịch");
+        if (!"PACKAGE".equalsIgnoreCase(reservation.getRentalType()))
+            throw error("PACKAGE_BOOKING_REQUIRED", "Chỉ booking thuê theo đêm được thêm hoặc đổi ngày");
+        if (reservation.getPendingChangeType() != null)
+            throw error("CHANGE_ALREADY_PENDING", "Booking đang chờ thanh toán cọc bổ sung");
+        if (reservation.getRooms().isEmpty()) throw error("INVALID_RESERVATION", "Booking không có phòng");
+
+        LocalDateTime oldCheckIn = reservation.getRooms().get(0).getCheckIn();
+        LocalDateTime oldCheckOut = reservation.getRooms().get(0).getCheckOut();
+        for (ReservationRoom line : reservation.getRooms()) {
+            if (!oldCheckIn.equals(line.getCheckIn()) || !oldCheckOut.equals(line.getCheckOut()))
+                throw error("MIXED_STAY_DATES", "Các phòng trong booking phải có cùng lịch để thay đổi một lần");
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (!now.isBefore(oldCheckIn.minusHours(48)))
+            throw error("CHANGE_TOO_LATE", "Chỉ được thêm hoặc đổi ngày trước giờ check-in hơn 48 giờ");
+
+        List<String> roomIds = reservation.getRooms().stream().map(line -> line.getRoom().getId()).sorted().toList();
+        Map<String, Room> lockedRooms = lockRooms(new HashSet<>(roomIds));
+        for (Room room : lockedRooms.values()) {
+            if (room.getStatus().blocksAvailability())
+                throw error("ROOM_NOT_READY", "Phòng " + room.getId() + " hiện không sẵn sàng");
+        }
+
+        LocalDateTime newCheckIn;
+        LocalDateTime newCheckOut = request.newCheckOut();
+        if (request.type() == CustomerReservationDtos.ChangeType.EXTEND) {
+            newCheckIn = oldCheckIn;
+            if (request.newCheckIn() != null && !request.newCheckIn().equals(oldCheckOut))
+                throw error("EXTENSION_MUST_BE_CONTIGUOUS", "Ngày thêm phải bắt đầu đúng từ ngày checkout hiện tại");
+            if (!newCheckOut.isAfter(oldCheckOut))
+                throw error("INVALID_EXTENSION", "Ngày checkout mới phải sau ngày checkout hiện tại");
+        } else {
+            newCheckIn = request.newCheckIn();
+            if (newCheckIn == null || !newCheckIn.isBefore(newCheckOut))
+                throw error("INVALID_INTERVAL", "Ngày check-in mới phải trước ngày check-out mới");
+            if (!newCheckIn.isAfter(now))
+                throw error("CHECK_IN_MUST_BE_FUTURE", "Ngày check-in mới phải ở tương lai");
+            Duration oldDuration = Duration.between(oldCheckIn, oldCheckOut);
+            if (!oldDuration.equals(Duration.between(newCheckIn, newCheckOut)))
+                throw error("RESCHEDULE_DURATION_MISMATCH", "Đổi ngày phải giữ nguyên số đêm; hãy dùng Thêm ngày nếu muốn ở lâu hơn");
+        }
+
+        for (ReservationRoom line : reservation.getRooms()) {
+            if (reservations.hasOverlapExcludingReservation(id, line.getRoom().getId(), newCheckIn, newCheckOut,
+                    RoomStatus.CANCELLED, IGNORED, now))
+                throw error("OVERBOOKING", "Phòng " + line.getRoom().getId() + " không trống trong lịch mới");
+        }
+
+        if (request.type() == CustomerReservationDtos.ChangeType.RESCHEDULE) {
+            for (ReservationRoom line : reservation.getRooms()) {
+                line.setCheckIn(newCheckIn);
+                line.setCheckOut(newCheckOut);
+                line.setOriginalCheckOut(newCheckOut);
+            }
+            audit.record("customer:" + actor, "CUSTOMER_RESERVATION_RESCHEDULED", "RESERVATION",
+                    id.toString(), oldCheckIn + "/" + oldCheckOut, newCheckIn + "/" + newCheckOut, null);
+            return toResponse(reservation);
+        }
+
+        BigDecimal previousDeposit = reservation.getDepositAmount();
+        BigDecimal additionalDeposit = requiredDeposit(reservation, oldCheckOut, newCheckOut);
+        BigDecimal requiredDeposit = previousDeposit.add(additionalDeposit).setScale(2, java.math.RoundingMode.HALF_UP);
+        if (additionalDeposit.signum() <= 0)
+            throw error("INVALID_ADDITIONAL_DEPOSIT", "Không tính được tiền cọc bổ sung cho thời gian thêm");
+
+        reservation.setPendingChangeType("Gia hạn");
+        reservation.setPendingPreviousCheckIn(oldCheckIn);
+        reservation.setPendingPreviousCheckOut(oldCheckOut);
+        reservation.setPendingPreviousDepositAmount(previousDeposit);
+        reservation.setPendingAdditionalDeposit(additionalDeposit);
+        reservation.setDepositAmount(requiredDeposit);
+        reservation.setCustomerPaymentMethod(CustomerPaymentMethod.VNPAY);
+        reservation.setDepositPaymentCode(newPaymentCode());
+        reservation.setDepositPaymentStatus(DepositPaymentStatus.PENDING);
+        reservation.setDepositPaymentExpiresAt(now.plusMinutes(depositHoldMinutes));
+        reservation.getRooms().forEach(line -> line.setCheckOut(newCheckOut));
+        audit.record("customer:" + actor, "CUSTOMER_RESERVATION_EXTENSION_REQUESTED", "RESERVATION",
+                id.toString(), oldCheckOut.toString(), newCheckOut.toString(), "ADDITIONAL_DEPOSIT=" + additionalDeposit);
+        return toResponse(reservation);
+    }
+
     private long customerAccountId(String actor) {
         SecurityActor.Principal principal = SecurityActor.currentPrincipal();
         if (!principal.isCustomer() || !principal.id().equals(actor)) throw new DomainException("CUSTOMER_REQUIRED", "Customer principal required");
@@ -244,6 +355,15 @@ public class CustomerReservationService {
                     : dailyPrice.multiply(BigDecimal.valueOf(units));
             total = total.add(charge);
         }
+        return total.multiply(new BigDecimal("0.50")).setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal requiredDeposit(Reservation reservation, LocalDateTime checkIn, LocalDateTime checkOut) {
+        long minutes = Math.max(1, Duration.between(checkIn, checkOut).toMinutes());
+        long units = Math.max(1, (minutes + 1439) / 1440);
+        BigDecimal total = reservation.getRooms().stream()
+                .map(line -> line.getRoom().getRoomType().getDailyPrice().multiply(BigDecimal.valueOf(units)))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         return total.multiply(new BigDecimal("0.50")).setScale(2, java.math.RoundingMode.HALF_UP);
     }
 
@@ -314,9 +434,13 @@ public class CustomerReservationService {
         DepositPaymentStatus paymentStatus = r.getDepositPaymentStatus();
         if (paymentStatus == DepositPaymentStatus.PENDING && r.getDepositPaymentExpiresAt() != null
                 && !r.getDepositPaymentExpiresAt().isAfter(LocalDateTime.now(clock))) paymentStatus = DepositPaymentStatus.EXPIRED;
-        var payment = new CustomerReservationDtos.PaymentInstruction(r.getDepositPaymentCode(), r.getDepositAmount(),
+        BigDecimal paymentAmount = r.getPendingChangeType() != null && r.getPendingAdditionalDeposit().signum() > 0
+                ? r.getPendingAdditionalDeposit() : r.getDepositAmount();
+        var payment = new CustomerReservationDtos.PaymentInstruction(r.getDepositPaymentCode(), paymentAmount,
                 paymentStatus, r.getDepositPaymentExpiresAt(),
-                r.getCustomerPaymentMethod() == CustomerPaymentMethod.PAY_AT_HOTEL
+                r.getPendingChangeType() != null
+                        ? "Thanh toán phần cọc bổ sung để hoàn tất gia hạn; booking gốc vẫn được giữ."
+                : r.getCustomerPaymentMethod() == CustomerPaymentMethod.PAY_AT_HOTEL
                         ? "Yêu cầu đang chờ lễ tân xác nhận; phòng chưa được giữ trước khi xác nhận."
                         : "Thanh toán 50% tiền cọc qua cổng VNPay để xác nhận giữ phòng.");
 
@@ -367,6 +491,12 @@ public class CustomerReservationService {
             totalAmount = r.getDepositAmount().multiply(BigDecimal.valueOf(2));
         }
 
+        CustomerReservationDtos.PendingChange pendingChange = r.getPendingChangeType() == null ? null
+                : new CustomerReservationDtos.PendingChange(
+                        CustomerReservationDtos.ChangeType.EXTEND,
+                        r.getPendingPreviousCheckIn(), r.getPendingPreviousCheckOut(),
+                        r.getRooms().get(0).getCheckIn(), r.getRooms().get(0).getCheckOut(),
+                        r.getPendingAdditionalDeposit(), r.getDepositPaymentExpiresAt());
         return new CustomerReservationDtos.Response(
                 r.getId(),
                 r.getStatus(),
@@ -379,7 +509,8 @@ public class CustomerReservationService {
                 payment,
                 services,
                 r.getCancellationReason(),
-                r.getCancellationOutcome()
+                r.getCancellationOutcome(),
+                pendingChange
         );
     }
 

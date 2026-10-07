@@ -35,17 +35,37 @@ public class CustomerReservationExpiryService {
     @Transactional
     public void expireHolds() {
         for (var reservation : reservations.findExpiredCustomerHoldsForUpdate(LocalDateTime.now(clock))) {
-            if (reservation.getStatus() != ReservationStatus.DRAFT
-                    || reservation.getDepositPaymentStatus() != DepositPaymentStatus.PENDING) continue;
+            if (reservation.getDepositPaymentStatus() != DepositPaymentStatus.PENDING) continue;
+            if (reservation.getPendingChangeType() != null) {
+                var oldCheckIn = reservation.getPendingPreviousCheckIn();
+                var oldCheckOut = reservation.getPendingPreviousCheckOut();
+                reservation.getRooms().forEach(line -> {
+                    line.setCheckIn(oldCheckIn);
+                    line.setCheckOut(oldCheckOut);
+                });
+                reservation.setDepositAmount(reservation.getPendingPreviousDepositAmount());
+                reservation.setDepositPaymentStatus(DepositPaymentStatus.PAID);
+                reservation.setDepositPaymentCode(null);
+                reservation.setDepositPaymentExpiresAt(null);
+                reservation.clearPendingChange();
+                expireAttempts(reservation.getId());
+                audit.record("SYSTEM", "CUSTOMER_EXTENSION_PAYMENT_EXPIRED", "RESERVATION",
+                        reservation.getId().toString(), "PENDING", "ROLLED_BACK", "ADDITIONAL_DEPOSIT_TIMEOUT");
+                continue;
+            }
+            if (reservation.getStatus() != ReservationStatus.DRAFT) continue;
             reservation.transitionTo(ReservationStatus.CANCELLED);
             reservation.setDepositPaymentStatus(DepositPaymentStatus.EXPIRED);
-            for (var attempt : vnpayAttempts.findByReservationIdAndStatus(
-                    reservation.getId(), VnpayPaymentStatus.PENDING)) {
-                attempt.setStatus(VnpayPaymentStatus.EXPIRED);
-                attempt.setCompletedAt(LocalDateTime.now(clock));
-            }
+            expireAttempts(reservation.getId());
             audit.record("SYSTEM", "CUSTOMER_RESERVATION_HOLD_EXPIRED", "RESERVATION",
                     reservation.getId().toString(), "PENDING", "EXPIRED", "DEPOSIT_HOLD_TIMEOUT");
+        }
+    }
+
+    private void expireAttempts(Long reservationId) {
+        for (var attempt : vnpayAttempts.findByReservationIdAndStatus(reservationId, VnpayPaymentStatus.PENDING)) {
+            attempt.setStatus(VnpayPaymentStatus.EXPIRED);
+            attempt.setCompletedAt(LocalDateTime.now(clock));
         }
     }
 }

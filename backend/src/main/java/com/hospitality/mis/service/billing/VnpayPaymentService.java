@@ -85,7 +85,12 @@ public class VnpayPaymentService {
             throw error("RESERVATION_NOT_FOUND", "Không tìm thấy booking");
         if (reservation.getCustomerPaymentMethod() != CustomerPaymentMethod.VNPAY)
             throw error("VNPAY_NOT_SELECTED", "Booking không chọn thanh toán qua VNPay");
-        if (reservation.getStatus() != ReservationStatus.DRAFT
+        boolean initialDeposit = reservation.getStatus() == ReservationStatus.DRAFT
+                && reservation.getPendingChangeType() == null;
+        boolean extensionDeposit = reservation.getPendingChangeType() != null
+                && (reservation.getStatus() == ReservationStatus.CONFIRMED
+                    || reservation.getStatus() == ReservationStatus.DEPOSIT_PAID);
+        if ((!initialDeposit && !extensionDeposit)
                 || reservation.getDepositPaymentStatus() != DepositPaymentStatus.PENDING)
             throw error("RESERVATION_NOT_PAYABLE", "Booking không còn chờ thanh toán cọc");
 
@@ -100,7 +105,7 @@ public class VnpayPaymentService {
 
         VnpayPaymentAttempt attempt = new VnpayPaymentAttempt();
         attempt.setReservation(reservation);
-        attempt.setAmount(reservation.getDepositAmount());
+        attempt.setAmount(extensionDeposit ? reservation.getPendingAdditionalDeposit() : reservation.getDepositAmount());
         attempt.setStatus(VnpayPaymentStatus.PENDING);
         attempt.setCreatedAt(now);
         attempt.setExpiresAt(expiresAt);

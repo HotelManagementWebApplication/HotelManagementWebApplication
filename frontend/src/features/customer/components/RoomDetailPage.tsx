@@ -67,7 +67,7 @@ export const RoomDetailPage: React.FC<RoomDetailPageProps> = ({ room, onBack, on
           <span>/</span>
           <span>MaM Hotel</span>
           <span>/</span>
-          <span>Hội An</span>
+          <span>Vũng Tàu</span>
           <span>/</span>
           <span>Phòng nghỉ &amp; Biệt thự</span>
           <span>/</span>
@@ -236,11 +236,11 @@ export const RoomDetailPage: React.FC<RoomDetailPageProps> = ({ room, onBack, on
 
           <div className="p-6 bg-[#FAF6EE] rounded-2xl border border-[#E7DECD]">
             <div className="flex items-center text-xs font-semibold uppercase tracking-wider text-[#8C6D37] mb-2">
-              <span>Chính sách kỳ nghỉ chánh niệm</span>
+              <span>Chính sách lưu trú</span>
             </div>
             <p className="text-xs text-[#57534E] leading-relaxed">
-              Nhận phòng từ 14:00 · Trả phòng trước 12:00. Miễn phí hủy phòng trước 48 giờ.
-              Đã bao gồm bữa sáng dinh dưỡng tự chọn tại nhà hàng ven biển và gói trị liệu Nam Y hàng ngày.
+              Giờ nhận và trả phòng theo lịch đã xác nhận trong booking. Hủy miễn phí nếu gửi yêu cầu hơn 48 giờ trước giờ nhận phòng; trong vòng 48 giờ, kể cả đúng mốc 48 giờ, tiền đặt cọc không được hoàn.
+              Khách thuê theo gói ngày-đêm được 1 suất bữa sáng mỗi ngày cho mỗi khách; khách thuê theo giờ không có quyền lợi miễn phí này.
             </p>
           </div>
         </div>
