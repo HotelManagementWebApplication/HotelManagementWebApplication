@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiClient, ApiError, type TokenPair, type TokenStore } from "./client";
+import { ApiClient, ApiError, apiErrorMessage, type TokenPair, type TokenStore } from "./client";
 
 const token = (access_token = "old", refresh_token = "refresh") => ({ access_token, refresh_token, token_type: "Bearer", expires_in: 900, refresh_expires_in: 86400 });
 const store = (initial = token()): TokenStore => {
@@ -11,6 +11,10 @@ const response = (status: number, body: unknown = {}) => new Response(status ===
 afterEach(() => vi.restoreAllMocks());
 
 describe("ApiClient", () => {
+  it("preserves API field validation reasons without exposing technical Error text", () => {
+    expect(apiErrorMessage(new ApiError(400,{message:"Dữ liệu yêu cầu không hợp lệ",details:["phone: Số điện thoại không hợp lệ"]}),"Lỗi")).toBe("Dữ liệu yêu cầu không hợp lệ: phone: Số điện thoại không hợp lệ");
+    expect(apiErrorMessage(new Error("sql/internal"),"Không thể lưu")).toBe("Không thể lưu");
+  });
   it("adds bearer, JSON and idempotency headers", async () => {
     const fetchMock = vi.fn().mockResolvedValue(response(200, { ok: true })); vi.stubGlobal("fetch", fetchMock);
     await new ApiClient("https://api.test", store()).request("/reservations", { method: "POST", body: { room_id: "r1" }, idempotencyKey: "key-1" });

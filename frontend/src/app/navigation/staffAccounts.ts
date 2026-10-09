@@ -58,8 +58,7 @@ const employeeRoleDestinations: Record<string, Pick<StaffAccount, "role" | "view
   STAFF: { role: "staff", view: "staff" },
 };
 
-export function resolveEmployeeDestination(role: string, fallback?: StaffAccount): Pick<StaffAccount, "role" | "view"> {
+export function resolveEmployeeDestination(role: string): Pick<StaffAccount, "role" | "view"> {
   if (employeeRoleDestinations[role]) return employeeRoleDestinations[role];
-  if (fallback) return { role: fallback.role, view: fallback.view };
-  return { role: "staff", view: "staff" };
+  throw new Error("Không xác định được vai trò nhân viên từ hồ sơ máy chủ.");
 }

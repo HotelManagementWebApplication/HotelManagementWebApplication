@@ -1,7 +1,7 @@
 package com.hospitality.mis.controller.auth;
 
 import com.hospitality.mis.common.exception.DomainException;
-import com.hospitality.mis.dao.auth.CustomerAccountRepository;
+import com.hospitality.mis.dao.auth.CustomerAccountDatabase;
 import com.hospitality.mis.dto.auth.CustomerAccountDtos;
 import com.hospitality.mis.service.auth.EmailService;
 import com.hospitality.mis.service.auth.OtpPurpose;
@@ -21,9 +21,9 @@ public class OtpController {
 
     private final OtpService otpService;
     private final EmailService emailService;
-    private final CustomerAccountRepository customerAccounts;
+    private final CustomerAccountDatabase customerAccounts;
 
-    public OtpController(OtpService otpService, EmailService emailService, CustomerAccountRepository customerAccounts) {
+    public OtpController(OtpService otpService, EmailService emailService, CustomerAccountDatabase customerAccounts) {
         this.otpService = otpService;
         this.emailService = emailService;
         this.customerAccounts = customerAccounts;
@@ -38,7 +38,7 @@ public class OtpController {
         String email = request.email().trim().toLowerCase();
 
         // Kiểm tra email đã có tài khoản khách hàng đăng ký trước đó chưa
-        if (customerAccounts.existsByGuestEmail(email)) {
+        if (customerAccounts.email(email).isPresent()) {
             throw new DomainException("EMAIL_ALREADY_IN_USE", "Địa chỉ email này đã được sử dụng cho một tài khoản khác.");
         }
 
@@ -56,7 +56,7 @@ public class OtpController {
         String email = request.email().trim().toLowerCase();
 
         // Kiểm tra email có liên kết với tài khoản khách hàng nào không
-        if (!customerAccounts.existsByGuestEmail(email)) {
+        if (!customerAccounts.email(email).isPresent()) {
             throw new DomainException("ACCOUNT_NOT_FOUND", "Không tìm thấy tài khoản khách hàng nào liên kết với email này.");
         }
 

@@ -30,6 +30,9 @@ hotel:
       # VNPay phải gọi được URL HTTPS public này; trỏ tunnel về localhost:8080.
       return-url: ${VNPAY_RETURN_URL:http://localhost:8080/api/public/payments/vnpay/return}
       frontend-result-url: ${VNPAY_FRONTEND_RESULT_URL:http://localhost:5173/payment/vnpay-result}
+  booking:
+    deposit-hold-minutes: ${HOTEL_DEPOSIT_HOLD_MINUTES:30}
+    hold-expiry-scan-ms: ${HOTEL_HOLD_EXPIRY_SCAN_MS:60000}
   policy:
     hourly-minimum: ${HOTEL_HOURLY_MINIMUM:3}
     late-checkout-grace-minutes: ${HOTEL_LATE_GRACE_MINUTES:20}

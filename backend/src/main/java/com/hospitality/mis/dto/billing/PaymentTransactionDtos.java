@@ -57,4 +57,13 @@ public final class PaymentTransactionDtos {
                            String actorId) {}
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record PageResponse(java.util.List<Response> items, int page, int size, long totalElements, int totalPages) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record LedgerResponse(Long id, Long invoiceId, BigDecimal amount, PaymentMethod method,
+                                 PaymentTransaction.TransactionType type, PaymentTransaction.TransactionStatus status,
+                                 String reference, LocalDateTime occurredAt, String actorId,
+                                 Long reservationId, BigDecimal serviceTotal) {}
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record LedgerPageResponse(java.util.List<LedgerResponse> items, int page, int size,
+                                     long totalElements, int totalPages, java.util.Map<String, Long> methodCounts) {}
 }

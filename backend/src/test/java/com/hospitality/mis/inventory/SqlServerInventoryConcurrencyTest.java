@@ -33,6 +33,7 @@ class SqlServerInventoryConcurrencyTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired InventoryMovementService inventory;
+    @Autowired com.fasterxml.jackson.databind.ObjectMapper mapper;
 
     @BeforeEach
     void seed() {
@@ -43,8 +44,8 @@ class SqlServerInventoryConcurrencyTest {
 
     @AfterEach
     void cleanup() {
-        jdbc.update("delete from BanGhiChongTrung where phamViLenh = ? and khoaChongTrung in (?, ?)",
-                "inventory-movement", "issue-a", "issue-b");
+        jdbc.update("delete from BanGhiChongTrung where phamViLenh = ? and nguoiThucHien = ?",
+                "inventory-movement", ACTOR);
         jdbc.update("delete from BienDongKhoDichVu where maDichVu = ?", SERVICE_ID);
         jdbc.update("delete from DichVu where maDichVu = ?", SERVICE_ID);
         jdbc.update("delete from NhatKyKiemSoat where nguoiThucHien = ?", ACTOR);
@@ -66,6 +67,54 @@ class SqlServerInventoryConcurrencyTest {
         }
         assertThat(jdbc.queryForObject("select soLuongTonKho from DichVu where maDichVu = ?", Integer.class, SERVICE_ID)).isZero();
         assertThat(jdbc.queryForObject("select count(*) from BienDongKhoDichVu where maDichVu = ?", Integer.class, SERVICE_ID)).isEqualTo(1);
+    }
+
+    @Test
+    void replaySurvivesNewServiceInstanceAndRejectsChangedPayloadOrActor() {
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(ACTOR,"","ROLE_KITCHEN"));
+        try {
+            var request=new InventoryMovementDtos.CreateRequest(SERVICE_ID,com.hospitality.mis.entity.operations.InventoryMovement.MovementType.RECEIVE,2,"delivery");
+            var first=inventory.record(request,ACTOR,"durable-replay");
+            var restarted=new InventoryMovementService(new com.hospitality.mis.dao.operations.ServiceInventoryDatabase(jdbc,mapper),java.time.Clock.system(java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
+            assertThat(restarted.record(request,ACTOR,"durable-replay")).isEqualTo(first);
+            org.assertj.core.api.Assertions.assertThatThrownBy(()->inventory.record(new InventoryMovementDtos.CreateRequest(SERVICE_ID,request.type(),3,request.reason()),ACTOR,"durable-replay"))
+                .isInstanceOfSatisfying(DomainException.class,e->assertThat(e.getCode()).isEqualTo("IDEMPOTENCY_KEY_CONFLICT"));
+            SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("other","","ROLE_KITCHEN"));
+            org.assertj.core.api.Assertions.assertThatThrownBy(()->inventory.record(request,"other","durable-replay"))
+                .isInstanceOfSatisfying(DomainException.class,e->assertThat(e.getCode()).isEqualTo("IDEMPOTENCY_KEY_CONFLICT"));
+            assertThat(jdbc.queryForObject("SELECT soLuongTonKho FROM DichVu WHERE maDichVu=?",Integer.class,SERVICE_ID)).isEqualTo(3);
+            assertThat(inventory.list(SERVICE_ID)).hasSize(1);
+        } finally {SecurityContextHolder.clearContext();}
+    }
+
+    @Test
+    void failedCommandHasNoMovementAuditOrClaimAndSignedAdjustIsReported() {
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(ACTOR,"","ROLE_KITCHEN"));
+        try {
+            var tooMany=new InventoryMovementDtos.CreateRequest(SERVICE_ID,com.hospitality.mis.entity.operations.InventoryMovement.MovementType.ISSUE,2,"too many");
+            org.assertj.core.api.Assertions.assertThatThrownBy(()->inventory.record(tooMany,ACTOR,"rollback"))
+                .isInstanceOfSatisfying(DomainException.class,e->assertThat(e.getCode()).isEqualTo("INSUFFICIENT_STOCK"));
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM BanGhiChongTrung WHERE nguoiThucHien=?",Integer.class,ACTOR)).isZero();
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE nguoiThucHien=?",Integer.class,ACTOR)).isZero();
+            assertThat(inventory.list(SERVICE_ID)).isEmpty();
+            inventory.record(new InventoryMovementDtos.CreateRequest(SERVICE_ID,com.hospitality.mis.entity.operations.InventoryMovement.MovementType.ADJUST,-1,"count"),ACTOR,"signed-adjust");
+            assertThat(inventory.report(SERVICE_ID,null,null).adjusted()).isEqualTo(-1);
+            assertThat(inventory.report(SERVICE_ID,null,null).netChange()).isEqualTo(-1);
+            assertThat(jdbc.queryForObject("SELECT soLuongTonKho FROM DichVu WHERE maDichVu=?",Integer.class,SERVICE_ID)).isZero();
+        } finally {SecurityContextHolder.clearContext();}
+    }
+
+    @Test
+    void twoConnectionsWithSameKeyCommitOneCommandAndReturnSameResult() throws Exception {
+        var ready=new CountDownLatch(2);var start=new CountDownLatch(1);
+        try(var executor=Executors.newFixedThreadPool(2)) {
+            var first=executor.submit(()->issueWhenReleased(request("issue-a"),ready,start));
+            var second=executor.submit(()->issueWhenReleased(request("issue-a"),ready,start));
+            assertThat(ready.await(10,TimeUnit.SECONDS)).isTrue();start.countDown();
+            assertThat(List.of(first.get(20,TimeUnit.SECONDS),second.get(20,TimeUnit.SECONDS))).containsOnly("SUCCESS");
+        }
+        assertThat(inventory.list(SERVICE_ID)).hasSize(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE nguoiThucHien=?",Integer.class,ACTOR)).isEqualTo(1);
     }
 
     private InventoryMovementDtos.CreateRequest request(String key) {

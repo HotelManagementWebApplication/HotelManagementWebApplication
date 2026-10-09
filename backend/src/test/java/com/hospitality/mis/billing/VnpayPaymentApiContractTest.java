@@ -39,17 +39,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:vnpaycontract;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate",
         "hotel.payment.vnpay.tmn-code=DEMOV210",
         "hotel.payment.vnpay.hash-secret=vnpay-test-secret",
         "hotel.payment.vnpay.return-url=https://merchant.example/api/public/payments/vnpay/return",
         "hotel.payment.vnpay.frontend-result-url=http://localhost:5173/payment/vnpay-result"
 })
 @AutoConfigureMockMvc
+@org.springframework.transaction.annotation.Transactional
 class VnpayPaymentApiContractTest {
     private static final String SECRET = "vnpay-test-secret";
 
@@ -68,16 +69,6 @@ class VnpayPaymentApiContractTest {
 
     @BeforeEach
     void seed() {
-        attempts.deleteAllInBatch();
-        payments.deleteAllInBatch();
-        receipts.deleteAllInBatch();
-        ledger.deleteAllInBatch();
-        invoices.deleteAllInBatch();
-        jdbc.update("delete from ChiTietDatPhong");
-        reservations.deleteAllInBatch();
-        accounts.deleteAllInBatch();
-        rooms.deleteAllInBatch();
-        roomTypes.deleteAllInBatch();
 
         RoomType type = new RoomType();
         type.setId("DLX");
@@ -143,9 +134,12 @@ class VnpayPaymentApiContractTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("DEPOSIT_PAID"))
                 .andExpect(jsonPath("$.deposit_payment.status").value("PAID"));
-        assertThat(payments.findByExternalEventId("VNPAY:14226112903")).isPresent();
-        assertThat(receipts.findByReceiptNumber("DEP-VNPAY-" + reservationId)).isPresent();
-        assertThat(ledger.count()).isEqualTo(2);
+        var payment=payments.findByExternalEventId("VNPAY:14226112903").orElseThrow();
+        var receipt=receipts.findByReceiptNumber("DEP-VNPAY-" + reservationId).orElseThrow();
+        assertThat(ledger.findAll()).filteredOn(row ->
+                (row.getSourceType().equals("PAYMENT_TRANSACTION") && row.getSourceId().equals(payment.getId().toString()))
+                || (row.getSourceType().equals("RECEIPT") && row.getSourceId().equals(receipt.getId().toString())))
+                .hasSize(2);
     }
 
     @Test

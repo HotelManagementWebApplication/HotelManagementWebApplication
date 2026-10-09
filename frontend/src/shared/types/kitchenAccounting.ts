@@ -24,6 +24,8 @@ export interface Page<T> { items: T[]; page: number; size: number; totalElements
 
 export interface Invoice { id: number; reservation_id: number; issued_at: string; room_total: number; service_total: number; late_surcharge: number; compensation: number; extension_total: number; adjustment_total: number; discount: number; deposit: number; payable: number; payment_method: PaymentMethod | null; status: InvoiceStatus; }
 export interface Payment { id: number; invoice_id: number; amount: number; method: PaymentMethod; type: PaymentTransactionType; status: PaymentTransactionStatus; reference: string | null; occurred_at: string; actor_id: string; }
+export interface LedgerPayment extends Payment { reservation_id: number; service_total: number; }
+export interface PaymentPage extends Page<LedgerPayment> { methodCounts: Partial<Record<PaymentMethod, number>>; }
 export interface Receipt { id: number; receipt_number: string; invoice_id: number; amount: number; method: PaymentMethod; issued_at: string; issued_by: string; }
 export interface Expense { id: number; category: string; description: string; amount: number; paid_by: string; paid_at: string; status: string; }
 export interface PartnerDebt { id: number; partner_name: string; reference_code: string; amount: number; settled_amount: number; status: string; recorded_at: string; }
@@ -35,9 +37,9 @@ export interface ExpenseRequest { category: string; description: string; amount:
 export interface PartnerDebtRequest { partner_name: string; reference_code: string; amount: number; }
 export interface DebtSettlementRequest { amount: number; note: string | null; }
 export interface LedgerEntry { id: number; entry_type: string; source_type: string; source_id: string; direction: string; amount: number; actor_id: string; occurred_at: string; note: string | null; finalized: boolean; }
-export interface Reconciliation { from_date: string | null; to_date: string | null; totals_by_method: Record<string, number>; total_payments: number; total_refunds: number; net_total: number; recognized_revenue: number; outstanding_partner_debt: number; cash_variance: number; }
+export interface Reconciliation { from_date: string | null; to_date: string | null; totals_by_method: Record<string, number>; total_payments: number; total_refunds: number; net_total: number; recognized_revenue: number; outstanding_partner_debt: number; cash_variance: number; completed_transactions: number; pending_bank_transfers: number; }
 
-export interface PaymentQuery { invoice_id?: number; method?: PaymentMethod; type?: PaymentTransactionType; status?: PaymentTransactionStatus; from?: string; to?: string; page?: number; size?: number; }
+export interface PaymentQuery { invoice_id?: number; method?: PaymentMethod; type?: PaymentTransactionType; status?: PaymentTransactionStatus; from?: string; to?: string; search?: string; page?: number; size?: number; }
 export interface ReceiptQuery { invoice_id?: number; method?: PaymentMethod; issued_by?: string; from?: string; to?: string; page?: number; size?: number; }
 export interface PaymentCreateRequest { amount: number; method: PaymentMethod; type: PaymentTransactionType; reference?: string | null; }
 export interface LedgerQuery { entry_type?: string; from?: string; to?: string; page?: number; size?: number; }

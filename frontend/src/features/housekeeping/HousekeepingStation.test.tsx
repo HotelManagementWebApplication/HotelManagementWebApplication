@@ -211,7 +211,7 @@ describe("HousekeepingStation Operational Interface", () => {
     // 2. Inspection
     const inspectNav = screen.getByRole("button", { name: /Kiểm tra & Nghiệm thu/i });
     fireEvent.click(inspectNav);
-    expect(await screen.findByText(/Giám sát chất lượng phòng sau khi dọn dẹp/i)).toBeDefined();
+    expect(await screen.findByText(/Theo dõi phòng đã dọn xong/i)).toBeDefined();
 
     // 3. Linen & Supplies
     const linenNav = screen.getByRole("button", { name: /Đồ vải & Vật tư ca/i });
@@ -270,7 +270,13 @@ describe("HousekeepingStation Operational Interface", () => {
 
     expect(await screen.findByText(/Checklist đồ vải/i)).toBeDefined();
 
-    // Click "Hoàn tất vệ sinh & Bàn giao"
+    const incomplete = screen.getByRole("button", { name: /Cần hoàn thành checklist/i }) as HTMLButtonElement;
+    expect(incomplete.disabled).toBe(true);
+    fireEvent.click(incomplete);
+    expect(housekeepingTechnicalApi.updateTask).not.toHaveBeenCalled();
+    expect(housekeepingTechnicalApi.addChecklistResult).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Thay ga trải giường", { exact: true }));
+    // Complete only after every displayed checklist item is checked.
     const completeBtn = screen.getByRole("button", { name: /Hoàn tất vệ sinh & Bàn giao/i });
     fireEvent.click(completeBtn);
 
@@ -297,22 +303,16 @@ describe("HousekeepingStation Operational Interface", () => {
     expect(screen.queryByRole("button", { name: /Hoàn tất vệ sinh & Bàn giao/i })).toBeNull();
   });
 
-  it("navigates to Inspection tab and approves a room awaiting verification", async () => {
+  it("shows rooms awaiting management acceptance without exposing an accept action to housekeeping", async () => {
     render(<HousekeepingStation onBack={onBack} />);
 
     const inspectNav = screen.getByRole("button", { name: /Kiểm tra & Nghiệm thu/i });
     fireEvent.click(inspectNav);
 
-    expect(await screen.findByText(/Chờ kiểm tra/i)).toBeDefined();
-
-    // Approve room 305
-    const approveBtns = await screen.findAllByText("✓ Nghiệm thu đạt");
-    expect(approveBtns.length).toBeGreaterThan(0);
-    fireEvent.click(approveBtns[0]);
-
-    await waitFor(() => {
-      expect(housekeepingTechnicalApi.updateTask).toHaveBeenCalledWith(305, { status: "READY" });
-    });
+    expect(await screen.findByText(/Chờ quản lý kiểm tra/i)).toBeDefined();
+    expect(await screen.findByRole("heading", { name: /Chờ quản lý nghiệm thu/i })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /Nghiệm thu đạt/i })).toBeNull();
+    expect(housekeepingTechnicalApi.updateTask).not.toHaveBeenCalled();
   });
 
   it("creates a new equipment incident via createIncident API and never calls createWorkOrder", async () => {

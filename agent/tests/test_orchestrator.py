@@ -81,6 +81,24 @@ def _service() -> CustomerChatService:
 
 
 class OrchestratorTest(unittest.TestCase):
+    def test_simple_greeting_gets_a_warm_reply_without_policy_retrieval(self) -> None:
+        response = asyncio.run(
+            CustomerChatService(_FailingRetriever(), _FakeBackend()).answer("xin chào!")
+        )
+
+        self.assertEqual("clarification", response.mode)
+        self.assertIn("Chào bạn", response.answer)
+        self.assertIn("Bạn đang cần tìm gì?", response.answer)
+        self.assertFalse(response.citations)
+
+    def test_thanks_get_a_natural_short_reply(self) -> None:
+        response = asyncio.run(
+            CustomerChatService(_FailingRetriever(), _FakeBackend()).answer("cảm ơn bạn nhé")
+        )
+
+        self.assertEqual("clarification", response.mode)
+        self.assertIn("Rất vui được hỗ trợ", response.answer)
+
     def test_room_type_question_groups_catalog_by_main_tier_without_unsolicited_prices(self) -> None:
         backend = _FakeBackend(public_rooms=[
             {"room_name": "501", "room_type_id": "RT001", "room_type_code": "STD", "room_type_name": "Standard (STD) · Đơn", "daily_price": 1_200_000},

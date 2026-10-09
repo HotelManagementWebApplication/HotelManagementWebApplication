@@ -57,6 +57,36 @@ services:
       retries: 12
       start_period: 10s
 
+  agent:
+    container_name: web-hotel-mis-agent
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - agent/.env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      BACKEND_API_BASE_URL: http://host.docker.internal:8080
+      AGENT_PORT: 8090
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3).read()
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
 volumes:
   hotel-sqlserver:
     name: web-hotel-mis_hotel-sqlserver

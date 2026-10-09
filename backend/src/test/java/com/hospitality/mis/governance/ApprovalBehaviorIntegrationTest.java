@@ -26,24 +26,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Integration proof for exact approval binding, separated actors, expiry and single consumption. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:approval-behavior;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 class ApprovalBehaviorIntegrationTest {
     @Autowired ApprovalService approvalService;
     @Autowired ApprovalRepository approvals;
     @Autowired AuditLogRepository audits;
     @Autowired IdempotencyRecordRepository idempotencyRecords;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @BeforeEach
     void clean() {
         SecurityContextHolder.clearContext();
-        idempotencyRecords.deleteAll();
-        approvals.deleteAll();
-        audits.deleteAll();
+        jdbc.update("DELETE NhatKyKiemSoat WHERE khoaLienKet LIKE N'approval-service-%' OR khoaLienKet LIKE N'approval-refund-%'");
+        jdbc.update("DELETE BanGhiChongTrung WHERE khoaChongTrung LIKE N'approval-service-%' OR khoaChongTrung LIKE N'approval-refund-%' OR khoaChongTrung IN(SELECT N'approval-approve-'+CONVERT(NVARCHAR(100),maYeuCauPheDuyet) FROM YeuCauPheDuyet WHERE khoaLienKet LIKE N'approval-service-%' OR khoaLienKet LIKE N'approval-refund-%')");
+        jdbc.update("DELETE YeuCauPheDuyet WHERE khoaLienKet LIKE N'approval-service-%' OR khoaLienKet LIKE N'approval-refund-%'");
     }
 
     @AfterEach
@@ -54,28 +55,28 @@ class ApprovalBehaviorIntegrationTest {
     @Test
     void exactApprovalCanBeActivatedByDifferentApproverOnlyOnce() {
         authenticate("kitchen", "KITCHEN");
-        ApprovalRequest requested = approvalService.request("kitchen", "SERVICE_PRICE_CHANGE", "SERVICE01",
+        var requested = approvalService.request("kitchen", "SERVICE_PRICE_CHANGE", "SERVICE01",
                 "125000.00", new BigDecimal("125000.00"), "Seasonal price", "approval-service-1");
 
-        assertThatThrownBy(() -> approvalService.approve(requested.getId(), "kitchen"))
+        assertThatThrownBy(() -> approvalService.approve(requested.id(), "kitchen"))
                 .isInstanceOf(DomainException.class)
                 .extracting("code").isEqualTo("SELF_APPROVAL_FORBIDDEN");
-        assertThat(approvals.findById(requested.getId()).orElseThrow().getStatus())
+        assertThat(approvals.findById(requested.id()).orElseThrow().getStatus())
                 .isEqualTo(ApprovalRequest.PENDING);
 
         authenticate("manager", "MANAGER");
-        ApprovalRequest approved = approvalService.approve(requested.getId(), "manager");
-        assertThat(approved.getApprover()).isEqualTo("manager");
+        var approved = approvalService.approve(requested.id(), "manager");
+        assertThat(approved.approver()).isEqualTo("manager");
 
         assertThatThrownBy(() -> approvalService.consumeApprovedByApprover("SERVICE_PRICE_CHANGE", "SERVICE01",
                 "125001.00", new BigDecimal("125001.00"), "manager"))
                 .isInstanceOf(DomainException.class)
                 .extracting("code").isEqualTo("APPROVAL_REQUIRED");
 
-        ApprovalRequest consumed = approvalService.consumeApprovedByApprover("SERVICE_PRICE_CHANGE", "SERVICE01",
+        var consumed = approvalService.consumeApprovedByApprover("SERVICE_PRICE_CHANGE", "SERVICE01",
                 "125000.00", new BigDecimal("125000.00"), "manager");
-        assertThat(consumed.getStatus()).isEqualTo(ApprovalRequest.CONSUMED);
-        assertThat(consumed.getConsumedAt()).isNotNull();
+        assertThat(consumed.status()).isEqualTo(ApprovalRequest.CONSUMED);
+        assertThat(consumed.consumedAt()).isNotNull();
         assertThatThrownBy(() -> approvalService.consumeApprovedByApprover("SERVICE_PRICE_CHANGE", "SERVICE01",
                 "125000.00", new BigDecimal("125000.00"), "manager"))
                 .isInstanceOf(DomainException.class)
@@ -85,31 +86,31 @@ class ApprovalBehaviorIntegrationTest {
     @Test
     void refundApprovalCannotBeExecutedByDifferentRequesterWithoutApprovalIdBinding() {
         authenticate("front-desk", "FRONT_DESK");
-        ApprovalRequest requested = approvalService.request("front-desk", "PAYMENT_REFUND", "77",
+        var requested = approvalService.request("front-desk", "PAYMENT_REFUND", "77",
                 "{\"invoice_id\":77,\"idempotency_key\":\"refund-1\",\"method\":\"CASH\",\"type\":\"REFUND\",\"reference\":\"customer-request\"}",
                 new BigDecimal("10.00"), "Customer refund", "approval-refund-1");
 
         authenticate("director", "DIRECTOR");
-        ApprovalRequest approved = approvalService.approve(requested.getId(), "director", "approval-refund-approve-1");
-        assertThat(approved.getStatus()).isEqualTo(ApprovalRequest.APPROVED);
-        assertThat(approved.getRequester()).isEqualTo("front-desk");
+        var approved = approvalService.approve(requested.id(), "director", "approval-refund-approve-1");
+        assertThat(approved.status()).isEqualTo(ApprovalRequest.APPROVED);
+        assertThat(approved.requester()).isEqualTo("front-desk");
 
         authenticate("accounting", "ACCOUNTING");
         assertThatThrownBy(() -> approvalService.requireApproved("PAYMENT_REFUND", "77",
-                approved.getMutationPayload(), new BigDecimal("10.00"), "accounting"))
+                approved.payload(), new BigDecimal("10.00"), "accounting"))
                 .isInstanceOf(DomainException.class)
                 .extracting("code").isEqualTo("APPROVAL_REQUIRED");
-        assertThat(approvals.findById(requested.getId()).orElseThrow().getStatus())
+        assertThat(approvals.findById(requested.id()).orElseThrow().getStatus())
                 .isEqualTo(ApprovalRequest.APPROVED);
     }
 
     @Test
     void concurrentExactActivationHasOneAtomicWinner() throws Exception {
         authenticate("kitchen", "KITCHEN");
-        ApprovalRequest requested = approvalService.request("kitchen", "SERVICE_PRICE_CHANGE", "SERVICE-CONCURRENT",
+        var requested = approvalService.request("kitchen", "SERVICE_PRICE_CHANGE", "SERVICE-CONCURRENT",
                 "125000.00", new BigDecimal("125000.00"), "Concurrent activation", "approval-service-concurrent");
         authenticate("manager", "MANAGER");
-        approvalService.approve(requested.getId(), "manager");
+        approvalService.approve(requested.id(), "manager");
 
         var ready = new CountDownLatch(2);
         var start = new CountDownLatch(1);
@@ -122,7 +123,7 @@ class ApprovalBehaviorIntegrationTest {
             assertThat(List.of(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS)))
                     .containsExactlyInAnyOrder("SUCCESS", "APPROVAL_REQUIRED");
         }
-        assertThat(approvals.findById(requested.getId()).orElseThrow().getStatus())
+        assertThat(approvals.findById(requested.id()).orElseThrow().getStatus())
                 .isEqualTo(ApprovalRequest.CONSUMED);
     }
 
@@ -134,7 +135,7 @@ class ApprovalBehaviorIntegrationTest {
         approvals.saveAndFlush(expired);
 
         assertThat(approvalService.list(ApprovalRequest.EXPIRED)).hasSize(1)
-                .allMatch(item -> item.getStatus().equals(ApprovalRequest.EXPIRED));
+                .allMatch(item -> item.status().equals(ApprovalRequest.EXPIRED));
         assertThat(approvals.findById(expired.getId()).orElseThrow().getStatus())
                 .isEqualTo(ApprovalRequest.EXPIRED);
     }

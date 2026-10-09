@@ -16,7 +16,8 @@ public class BookingDepositEmailListener {
 
     public BookingDepositEmailListener(EmailService emails) { this.emails = emails; }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public void onDepositPaid(BookingDepositPaidEvent event) {
         if (event.email() == null || event.email().isBlank()) return;
         try {

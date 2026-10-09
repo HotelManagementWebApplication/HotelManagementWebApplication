@@ -3,9 +3,29 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import FrontDeskPMS from "./FrontDeskPMS";
 import { authApi } from "../../shared/api/auth";
 import { frontDeskApi } from "../../shared/api/frontDesk";
+import { ApiError } from "../../shared/api/client";
 
 describe("FrontDeskPMS Reception Interface", () => {
   const onBack = vi.fn();
+
+  it("creates a booking with the authenticated employee, not the old demo actor", async () => {
+    vi.mocked(authApi.employeeProfile).mockResolvedValue({ employee_id: "FRONTDESK", full_name: "Lễ tân thật", role: "FRONT_DESK", permissions: [] });
+    const create = vi.spyOn(frontDeskApi, "createReservation").mockResolvedValue({ id: 77 } as any);
+    render(<FrontDeskPMS onBack={onBack} />);
+    await screen.findAllByText("Lễ tân thật");
+    fireEvent.click(screen.getByRole("button", {name: /Khách hàng/i}));
+    fireEvent.click(screen.getByRole("button", {name: /Tạo đặt phòng/i}));
+    fireEvent.change(screen.getByLabelText(/Mã khách hàng \(ID\)/), {target: {value: "10"}});
+    fireEvent.change(screen.getByLabelText(/Mã số phòng/), {target: {value: "802"}});
+    const deposit = screen.getByLabelText(/Tiền cọc \(VND\)/) as HTMLInputElement;
+    fireEvent.change(deposit, {target: {value: "725000"}});
+    expect(deposit.step).toBe("1");
+    expect(deposit.validity.valid).toBe(true);
+    fireEvent.change(screen.getByLabelText(/Thời gian nhận phòng/), {target: {value: "2035-01-10T14:00"}});
+    fireEvent.change(screen.getByLabelText(/Thời gian trả phòng/), {target: {value: "2035-01-12T12:00"}});
+    fireEvent.click(screen.getByRole("button", {name: "Xác nhận đặt phòng"}));
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({employee_id: "FRONTDESK", guest_id: 10, booking_source: "DIRECT", deposit: 725000})));
+  });
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -157,6 +177,34 @@ describe("FrontDeskPMS Reception Interface", () => {
       { room_id: "105", room_type_id: "STANDARD", room_type_name: "Standard Double", daily_price: 650000, floor: 1, available: false },
       { room_id: "203", room_type_id: "VIP", room_type_name: "Executive Suite", daily_price: 1500000, floor: 2, available: false },
     ]);
+  });
+
+  it("rejects garbage phone numbers and shows the reason inside the guest form", async () => {
+    const create = vi.spyOn(frontDeskApi, "createGuest");
+    render(<FrontDeskPMS onBack={onBack} />);
+    await screen.findAllByText("Nguyễn Văn Lễ Tân");
+    fireEvent.click(screen.getByRole("button", {name: /Khách hàng/i}));
+    fireEvent.click(screen.getByRole("button", {name: "Thêm khách hàng"}));
+    fireEvent.change(screen.getByLabelText("Họ và tên *"), {target: {value: "Khách demo"}});
+    fireEvent.change(screen.getByLabelText("CCCD / Hộ chiếu *"), {target: {value: "TEST123"}});
+    fireEvent.change(screen.getByLabelText("Số điện thoại *"), {target: {value: "abc"}});
+    fireEvent.click(screen.getByRole("button", {name: "Tạo hồ sơ"}));
+    expect(within(screen.getByRole("form", {name: "Tạo hồ sơ khách hàng"})).getByRole("alert").textContent).toContain("Số điện thoại phải có 8–15 ký tự");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("keeps the API validation reason visible inside the booking form", async () => {
+    vi.spyOn(frontDeskApi, "createReservation").mockRejectedValue(new ApiError(422, {code: "INVALID_DEPOSIT", message: "Tiền cọc không đúng mức yêu cầu"}));
+    render(<FrontDeskPMS onBack={onBack} />);
+    await screen.findAllByText("Nguyễn Văn Lễ Tân");
+    fireEvent.click(screen.getByRole("button", {name: /Khách hàng/i}));
+    fireEvent.click(screen.getByRole("button", {name: "Tạo đặt phòng"}));
+    fireEvent.change(screen.getByLabelText(/Mã khách hàng \(ID\)/), {target: {value: "10"}});
+    fireEvent.change(screen.getByLabelText(/Mã số phòng/), {target: {value: "802"}});
+    fireEvent.change(screen.getByLabelText(/Thời gian nhận phòng/), {target: {value: "2035-01-10T14:00"}});
+    fireEvent.change(screen.getByLabelText(/Thời gian trả phòng/), {target: {value: "2035-01-12T12:00"}});
+    fireEvent.click(screen.getByRole("button", {name: "Xác nhận đặt phòng"}));
+    expect((await within(screen.getByRole("form", {name: "Tạo đặt phòng tại quầy"})).findByRole("alert")).textContent).toContain("Tiền cọc không đúng mức yêu cầu");
   });
 
   it("renders Overview screen with KPIs and arrivals / departures tables", async () => {
@@ -338,7 +386,7 @@ describe("FrontDeskPMS Reception Interface", () => {
     expect(within(drawer).getByText("Chưa có khách")).toBeDefined();
     expect(within(drawer).getByText("Khách thanh toán tại quầy")).toBeDefined();
     expect(within(drawer).getByText("Chờ lễ tân xác nhận · chưa giữ phòng")).toBeDefined();
-    fireEvent.click(within(drawer).getByRole("button", { name: "Xác nhận đặt phòng" }));
+    fireEvent.click(within(drawer).getByRole("button", { name: "Xác nhận đã thu cọc & giữ phòng" }));
     await waitFor(() => expect(confirm).toHaveBeenCalledWith(903, expect.any(String)));
   });
 

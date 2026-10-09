@@ -44,8 +44,11 @@ export class ApiError extends Error {
 }
 
 /** Chỉ đưa thông báo có cấu trúc từ API ra giao diện; lỗi kỹ thuật dùng câu dự phòng tiếng Việt. */
-export const apiErrorMessage = (error: unknown, fallback: string) =>
-  error instanceof ApiError && error.message ? error.message : fallback;
+export const apiErrorMessage = (error: unknown, fallback: string) => {
+  if (!(error instanceof ApiError) || !error.message) return fallback;
+  const details = Array.isArray(error.details) ? error.details.filter((item): item is string => typeof item === "string") : [];
+  return details.length ? `${error.message}: ${details.join("; ")}` : error.message;
+};
 
 /**
  * The Vercel build is a static frontend. It cannot reach a backend listening

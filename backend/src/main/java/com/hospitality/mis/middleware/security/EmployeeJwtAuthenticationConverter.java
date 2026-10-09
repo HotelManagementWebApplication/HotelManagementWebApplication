@@ -19,11 +19,11 @@ public class EmployeeJwtAuthenticationConverter implements Converter<Jwt, Collec
     /** Dịch vụ nạp trạng thái, mật khẩu và quyền hiện tại của employee/customer. */
     private final EmployeeUserDetailsService users;
     /** Kho session dùng để xác nhận access token vẫn thuộc một refresh-token family đang hoạt động. */
-    private final com.hospitality.mis.dao.auth.RefreshTokenRepository sessions;
+    private final com.hospitality.mis.dao.auth.RefreshTokenDatabase sessions;
 
     /** Nhận các nguồn sự thật cần thiết để xác minh principal và trạng thái session. */
     public EmployeeJwtAuthenticationConverter(EmployeeUserDetailsService users,
-            com.hospitality.mis.dao.auth.RefreshTokenRepository sessions) {
+            com.hospitality.mis.dao.auth.RefreshTokenDatabase sessions) {
         this.users = users;
         this.sessions = sessions;
     }
@@ -48,9 +48,9 @@ public class EmployeeJwtAuthenticationConverter implements Converter<Jwt, Collec
         // session_id liên kết access token với session có thể revoke, nên token cũ không tự sống mãi.
         String sessionId = jwt.getClaimAsString("session_id");
         if (sessionId == null || sessionId.isBlank()
-                || sessions.findByFamilyIdAndRevokedAtIsNullAndExpiresAtAfter(sessionId, java.time.Instant.now())
-                .stream().noneMatch(token -> principalType.equals(token.getPrincipalType())
-                        && principalId.equals(token.getPrincipalId()))) {
+                || sessions.activeFamily(sessionId, java.time.Instant.now())
+                .stream().noneMatch(token -> principalType.equals(token.principalType().name())
+                        && principalId.equals(token.principalId()))) {
             throw new BadCredentialsException("JWT session is not active");
         }
 

@@ -41,11 +41,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:customerreservation;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate",
+        "hotel.booking.deposit-hold-minutes=30",
         "hotel.payment.webhook-secret=test-secret"
 })
 @AutoConfigureMockMvc
@@ -64,14 +65,7 @@ class CustomerReservationApiContractTest {
 
     @BeforeEach
     void seed() throws Exception {
-        payments.deleteAllInBatch();
-        receipts.deleteAllInBatch();
-        invoices.deleteAllInBatch();
-        jdbc.update("delete from ChiTietDatPhong");
-        reservations.deleteAllInBatch();
-        accounts.deleteAllInBatch();
-        rooms.deleteAllInBatch();
-        roomTypes.deleteAllInBatch();
+        cleanup();
         RoomType type = new RoomType();
         type.setId("STD");
         type.setName("Standard");
@@ -83,6 +77,23 @@ class CustomerReservationApiContractTest {
         room.setFloor(2);
         room.setRoomType(type);
         rooms.saveAndFlush(room);
+    }
+
+    @org.junit.jupiter.api.AfterEach void cleanup(){
+        for(Long account:jdbc.queryForList("SELECT maTaiKhoanKhachHang FROM TaiKhoanKhachHang WHERE soDienThoai IN(N'0900000201',N'0900000202',N'0900000203')",Long.class)){
+            jdbc.update("DELETE BanGhiChongTrung WHERE nguoiThucHien=?",account.toString());
+            jdbc.update("DELETE MaLamMoiDangNhap WHERE maTaiKhoanKhachHang=?",account);
+        }
+        jdbc.update("DELETE ButToanTaiChinh WHERE (loaiNguon=N'PAYMENT_TRANSACTION' AND maNguon IN(SELECT CONVERT(NVARCHAR(100),t.maGiaoDichThanhToan) FROM GiaoDichThanhToan t JOIN HoaDon h ON h.maHoaDon=t.maHoaDon JOIN ChiTietDatPhong c ON c.maPhieuDatPhong=h.maPhieuDatPhong WHERE c.maPhong=N'R201')) OR (loaiNguon=N'RECEIPT' AND maNguon IN(SELECT CONVERT(NVARCHAR(100),b.maBienLai) FROM BienLai b JOIN HoaDon h ON h.maHoaDon=b.maHoaDon JOIN ChiTietDatPhong c ON c.maPhieuDatPhong=h.maPhieuDatPhong WHERE c.maPhong=N'R201'))");
+        jdbc.update("DELETE BienLai WHERE maHoaDon IN(SELECT h.maHoaDon FROM HoaDon h JOIN ChiTietDatPhong c ON c.maPhieuDatPhong=h.maPhieuDatPhong WHERE c.maPhong=N'R201')");
+        jdbc.update("DELETE GiaoDichThanhToan WHERE maHoaDon IN(SELECT h.maHoaDon FROM HoaDon h JOIN ChiTietDatPhong c ON c.maPhieuDatPhong=h.maPhieuDatPhong WHERE c.maPhong=N'R201')");
+        jdbc.update("DELETE HoaDon WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM ChiTietDatPhong WHERE maPhong=N'R201')");
+        jdbc.update("DELETE PhieuDatPhong WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM ChiTietDatPhong WHERE maPhong=N'R201')");
+        jdbc.update("DELETE TaiKhoanKhachHang WHERE soDienThoai IN(N'0900000201',N'0900000202',N'0900000203')");
+        jdbc.update("DELETE KhachLuuTru WHERE soDienThoai IN(N'0900000201',N'0900000202',N'0900000203')");
+        jdbc.update("DELETE Phong WHERE maPhong=N'R201'");jdbc.update("DELETE LoaiPhong WHERE maLoaiPhong=N'STD' AND NOT EXISTS(SELECT 1 FROM Phong WHERE maLoaiPhong=N'STD')");
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        org.springframework.security.test.context.TestSecurityContextHolder.clearContext();
     }
 
     @Test
@@ -109,6 +120,8 @@ class CustomerReservationApiContractTest {
                 .andExpect(jsonPath("$.deposit_payment.payment_code").value(org.hamcrest.Matchers.startsWith("HOS-")))
                 .andReturn().getResponse().getContentAsString());
         long id = booking.get("id").asLong();
+        assertThat(LocalDateTime.parse(booking.at("/deposit_payment/expires_at").asText()))
+                .isEqualTo(LocalDateTime.parse(booking.get("booked_at").asText()).plusMinutes(30));
         JsonNode replay = objectMapper.readTree(mockMvc.perform(post("/api/customer/reservations")
                         .header(AUTHORIZATION, bearer).contentType(APPLICATION_JSON).content(json(request)))
                 .andExpect(status().isCreated())

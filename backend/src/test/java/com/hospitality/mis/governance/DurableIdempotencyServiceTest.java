@@ -1,173 +1,93 @@
 package com.hospitality.mis.governance;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hospitality.mis.common.exception.DomainException;
-import com.hospitality.mis.dao.governance.ApprovalRepository;
-import com.hospitality.mis.dao.governance.IdempotencyRecordRepository;
+import com.hospitality.mis.dao.governance.*;
 import com.hospitality.mis.entity.governance.ApprovalRequest;
-import com.hospitality.mis.service.governance.DurableIdempotencyService;
-import com.hospitality.mis.service.governance.ApprovalService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import com.hospitality.mis.service.governance.*;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.time.Instant;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import java.time.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import static org.assertj.core.api.Assertions.*;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-@SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:durable-idempotency;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa", "spring.datasource.password=",
-        "spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"
-})
+@SpringBootTest(properties={"spring.datasource.url=${MIGRATION_TEST_DB_URL}","spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}","spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}","spring.flyway.enabled=true","spring.jpa.hibernate.ddl-auto=validate"})
 class DurableIdempotencyServiceTest {
     @Autowired DurableIdempotencyService service;
-    @Autowired IdempotencyRecordRepository records;
+    @Autowired IdempotencyDatabase database;
+    @Autowired ObjectMapper mapper;
+    @Autowired Clock clock;
     @Autowired ApprovalRepository approvals;
-    @Autowired TransactionTemplate transactions;
+    @Autowired PlatformTransactionManager manager;
     @Autowired JdbcTemplate jdbc;
-
-    @BeforeEach
-    void clear() {
-        approvals.deleteAllInBatch();
-        records.deleteAll();
-        for (int value = 0; value < 64; value++) {
-            jdbc.update("MERGE INTO NhomKhoaChongTrung(maNhomKhoa) KEY(maNhomKhoa) VALUES (?)", value);
-        }
+    @BeforeEach @AfterEach void clean(){
+        jdbc.update("DELETE YeuCauPheDuyet WHERE nguoiYeuCau=N'IDC-requester'");
+        jdbc.update("DELETE BanGhiChongTrung WHERE nguoiThucHien LIKE N'IDC-%'");
     }
-
-    @Test
-    void approvalBulkClearStillCompletesAndReplaysDurableRecord() {
-        String payload = "150000.00";
-        String fingerprint = ApprovalService.fingerprintFor(payload);
-        Instant now = Instant.now();
-        ApprovalRequest approval = new ApprovalRequest("requester", "ROOM_TYPE_ACTIVATE", "TYPE-CLEAR",
-                payload, fingerprint, null, "clear regression", now.plusSeconds(3600),
-                "approval-clear-regression", now);
-        approval.approve("manager", now);
-        ApprovalRequest savedApproval = approvals.saveAndFlush(approval);
-        AtomicInteger executions = new AtomicInteger();
-
-        TestResponse first = transactions.execute(status -> service.execute("room-type-activate",
-                "clear-regression", "manager", "hash-clear", TestResponse.class, () -> {
-                    executions.incrementAndGet();
-                    Long approvalId = approvals.findApprovedForActivationId("ROOM_TYPE_ACTIVATE", "TYPE-CLEAR",
-                            fingerprint, null).orElseThrow();
-                    assertThat(approvals.consumeApprovedForActivationIfCurrent(approvalId, "ROOM_TYPE_ACTIVATE",
-                            "TYPE-CLEAR", fingerprint, null, now, now, "manager")).isEqualTo(1);
-                    return new TestResponse(savedApproval.getId().intValue(), "activated");
-                }));
-
-        assertThat(jdbc.queryForObject("select trangThai from BanGhiChongTrung "
-                + "where phamViLenh = ? and khoaChongTrung = ?", String.class,
-                "room-type-activate", "clear-regression")).isEqualTo("Đã hoàn tất");
-        assertThat(jdbc.queryForObject("select phanHoiJson from BanGhiChongTrung "
-                + "where phamViLenh = ? and khoaChongTrung = ?", String.class,
-                "room-type-activate", "clear-regression")).contains("activated");
-
-        TestResponse replay = transactions.execute(status -> service.execute("room-type-activate",
-                "clear-regression", "manager", "hash-clear", TestResponse.class, () -> {
-                    executions.incrementAndGet();
-                    throw new AssertionError("replay must not execute the durable command body");
-                }));
-
+    TransactionTemplate tx(){return new TransactionTemplate(manager);}
+    @Test void bulkClearDoesNotDetachCompletion(){
+        Instant now=Instant.now();String fingerprint=ApprovalService.fingerprintFor("150000.00");
+        var approval=new ApprovalRequest("IDC-requester","ROOM_TYPE_ACTIVATE","IDC-TYPE","150000.00",fingerprint,null,"regression",now.plusSeconds(3600),"IDC-clear",now);
+        approval.approve("IDC-manager",now);Long id=approvals.saveAndFlush(approval).getId();AtomicInteger runs=new AtomicInteger();
+        TestResponse first=tx().execute(status->service.execute("IDC-clear","same","IDC-manager","hash",TestResponse.class,()->{
+            runs.incrementAndGet();
+            assertThat(approvals.consumeApprovedForActivationIfCurrent(id,"ROOM_TYPE_ACTIVATE","IDC-TYPE",fingerprint,null,now,now,"IDC-manager")).isEqualTo(1);
+            return new TestResponse(1,"activated");
+        }));
+        TestResponse replay=tx().execute(status->service.execute("IDC-clear","same","IDC-manager","hash",TestResponse.class,()->{throw new AssertionError("must replay");}));
+        assertThat(replay).isEqualTo(first);assertThat(runs).hasValue(1);
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM BanGhiChongTrung WHERE phamViLenh=N'IDC-clear'",String.class)).isEqualTo("Đã hoàn tất");
+    }
+    @Test void replaySurvivesANewServiceInstanceAndRejectsActorPayloadOrResultType(){
+        TestResponse first=tx().execute(status->service.execute("IDC-test","same","IDC-a","hash",TestResponse.class,()->new TestResponse(1,"ok")));
+        var restarted=new DurableIdempotencyService(database,mapper,clock);
+        TestResponse replay=tx().execute(status->restarted.execute("IDC-test","same","IDC-a","hash",TestResponse.class,()->{throw new AssertionError("must replay");}));
         assertThat(replay).isEqualTo(first);
-        assertThat(executions).hasValue(1);
+        assertThatThrownBy(()->tx().execute(status->service.execute("IDC-test","same","IDC-b","hash",TestResponse.class,()->first))).isInstanceOf(DomainException.class);
+        assertThatThrownBy(()->tx().execute(status->service.execute("IDC-test","same","IDC-a","other",TestResponse.class,()->first))).isInstanceOf(DomainException.class);
+        assertThatThrownBy(()->tx().execute(status->service.execute("IDC-test","same","IDC-a","hash",OtherResponse.class,()->new OtherResponse("bad")))).isInstanceOf(DomainException.class);
     }
-
-    @Test
-    void committedResultIsReplayedWithoutRunningCommandAgain() {
-        AtomicInteger executions = new AtomicInteger();
-        TestResponse first = transactions.execute(status -> service.execute("test-command", "same-key", "actor-1",
-                "hash-1", TestResponse.class, () -> new TestResponse(executions.incrementAndGet(), "ok")));
-        TestResponse replay = transactions.execute(status -> service.execute("test-command", "same-key", "actor-1",
-                "hash-1", TestResponse.class, () -> new TestResponse(executions.incrementAndGet(), "duplicate")));
-
-        assertThat(first).isEqualTo(new TestResponse(1, "ok"));
-        assertThat(replay).isEqualTo(first);
-        assertThat(executions).hasValue(1);
-        assertThat(records.count()).isEqualTo(1);
+    @Test void businessFailureAndOuterRollbackRemoveClaimAndAllowRetry(){
+        assertThatThrownBy(()->tx().execute(status->service.execute("IDC-failure","same","IDC-a","hash",TestResponse.class,()->{throw new IllegalStateException("business failure");}))).isInstanceOf(IllegalStateException.class);
+        tx().executeWithoutResult(status->{service.execute("IDC-failure","same","IDC-a","hash",TestResponse.class,()->new TestResponse(1,"rollback"));status.setRollbackOnly();});
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM BanGhiChongTrung WHERE phamViLenh=N'IDC-failure'",Integer.class)).isZero();
+        TestResponse retry=tx().execute(status->service.execute("IDC-failure","same","IDC-a","hash",TestResponse.class,()->new TestResponse(2,"retry")));
+        assertThat(retry.value()).isEqualTo(2);
     }
-
-    @Test
-    void sameKeyCannotBeReusedForAnotherActorOrPayload() {
-        transactions.executeWithoutResult(status -> service.execute("test-command", "same-key", "actor-1",
-                "hash-1", TestResponse.class, () -> new TestResponse(1, "ok")));
-
-        assertThatThrownBy(() -> transactions.execute(status -> service.execute("test-command", "same-key", "actor-2",
-                "hash-2", TestResponse.class, () -> new TestResponse(2, "bad"))))
-                .isInstanceOf(DomainException.class);
-    }
-
-    @Test
-    void concurrentCallsWithTheSameNewKeyExecuteOnlyOnce() throws Exception {
-        AtomicInteger executions = new AtomicInteger();
-        CountDownLatch ready = new CountDownLatch(2);
-        CountDownLatch start = new CountDownLatch(1);
-        try (var executor = Executors.newFixedThreadPool(2)) {
-            var command = (java.util.concurrent.Callable<TestResponse>) () -> {
-                ready.countDown();
-                assertThat(start.await(5, TimeUnit.SECONDS)).isTrue();
-                return transactions.execute(status -> service.execute("concurrent-command", "new-key", "actor-1",
-                        "hash-1", TestResponse.class, () -> {
-                            int value = executions.incrementAndGet();
-                            try { Thread.sleep(100); } catch (InterruptedException exception) {
-                                Thread.currentThread().interrupt();
-                                throw new IllegalStateException(exception);
-                            }
-                            return new TestResponse(value, "ok");
-                        }));
-            };
-            var first = executor.submit(command);
-            var second = executor.submit(command);
-            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
-            assertThat(first.get(10, TimeUnit.SECONDS)).isEqualTo(new TestResponse(1, "ok"));
-            assertThat(second.get(10, TimeUnit.SECONDS)).isEqualTo(new TestResponse(1, "ok"));
+    @Test void concurrentNewKeyRunsOnlyOnceOnTwoDatabaseConnections()throws Exception{
+        AtomicInteger runs=new AtomicInteger();CountDownLatch ready=new CountDownLatch(2),start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)){
+            Callable<TestResponse> call=()->{ready.countDown();assertThat(start.await(5,TimeUnit.SECONDS)).isTrue();return tx().execute(status->service.execute("IDC-concurrent","new","IDC-a","hash",TestResponse.class,()->new TestResponse(runs.incrementAndGet(),"ok")));};
+            var a=pool.submit(call);var b=pool.submit(call);assertThat(ready.await(5,TimeUnit.SECONDS)).isTrue();start.countDown();
+            assertThat(a.get(15,TimeUnit.SECONDS)).isEqualTo(new TestResponse(1,"ok"));assertThat(b.get(15,TimeUnit.SECONDS)).isEqualTo(new TestResponse(1,"ok"));
         }
-        assertThat(executions).hasValue(1);
+        assertThat(runs).hasValue(1);
     }
-
-    @Test
-    void concurrentUniqueClaimWorksWithoutLockBucketRows() throws Exception {
-        jdbc.update("delete from NhomKhoaChongTrung");
-        long bucketsBefore = jdbc.queryForObject("select count(*) from NhomKhoaChongTrung", Long.class);
-        assertThat(bucketsBefore).isZero();
-        AtomicInteger executions = new AtomicInteger();
-        CountDownLatch ready = new CountDownLatch(2);
-        CountDownLatch start = new CountDownLatch(1);
-        try (var executor = Executors.newFixedThreadPool(2)) {
-            var command = (java.util.concurrent.Callable<TestResponse>) () -> {
-                ready.countDown();
-                assertThat(start.await(5, TimeUnit.SECONDS)).isTrue();
-                return transactions.execute(status -> service.execute("bucket-free-command", "same-key", "actor-1",
-                        "hash-1", TestResponse.class, () -> {
-                            int value = executions.incrementAndGet();
-                            try { Thread.sleep(100); } catch (InterruptedException exception) {
-                                Thread.currentThread().interrupt();
-                                throw new IllegalStateException(exception);
-                            }
-                            return new TestResponse(value, "ok");
-                        }));
-            };
-            var first = executor.submit(command);
-            var second = executor.submit(command);
-            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
-            assertThat(first.get(10, TimeUnit.SECONDS)).isEqualTo(new TestResponse(1, "ok"));
-            assertThat(second.get(10, TimeUnit.SECONDS)).isEqualTo(new TestResponse(1, "ok"));
-        }
-        assertThat(executions).hasValue(1);
-        assertThat(jdbc.queryForObject("select count(*) from NhomKhoaChongTrung", Long.class))
-                .isEqualTo(bucketsBefore);
+    @Test void missingInfrastructureFailsClosedWithoutRunningBusinessCommand(){
+        AtomicInteger runs=new AtomicInteger();short bucket=(short)Math.floorMod(("IDC-missing"+'\u0000'+"same").hashCode(),64);
+        tx().executeWithoutResult(status->{
+            jdbc.update("DELETE NhomKhoaChongTrung WHERE maNhomKhoa=?",bucket);
+            assertThatThrownBy(()->service.execute("IDC-missing","same","IDC-a","hash",TestResponse.class,()->new TestResponse(runs.incrementAndGet(),"bad"))).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            status.setRollbackOnly();
+        });
+        assertThat(runs).hasValue(0);assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhomKhoaChongTrung",Integer.class)).isEqualTo(64);
     }
-
-    public record TestResponse(int value, String message) {}
+    @Test void aggregateReplayChecksItsMarkerAndDoesNotExecuteCommandTwice(){
+        AtomicInteger runs=new AtomicInteger();
+        TestResponse first=tx().execute(status->service.executeWithReplay("IDC-loader","same","IDC-a","hash",()->new TestResponse(runs.incrementAndGet(),"first"),()->{throw new AssertionError();}));
+        TestResponse second=tx().execute(status->service.executeWithReplay("IDC-loader","same","IDC-a","hash",()->{throw new AssertionError();},()->new TestResponse(99,"reloaded")));
+        assertThat(first.value()).isEqualTo(1);assertThat(second.value()).isEqualTo(99);assertThat(runs).hasValue(1);
+    }
+    @Test void oversizedResponseBeyondFourKilobytesIsStoredAndReplayedIntact(){
+        String message="x".repeat(8000);TestResponse first=tx().execute(status->service.execute("IDC-large","same","IDC-a","hash",TestResponse.class,()->new TestResponse(1,message)));
+        TestResponse second=tx().execute(status->service.execute("IDC-large","same","IDC-a","hash",TestResponse.class,()->{throw new AssertionError();}));
+        assertThat(second).isEqualTo(first);
+    }
+    public record TestResponse(int value,String message){}
+    public record OtherResponse(String message){}
 }

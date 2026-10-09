@@ -5,6 +5,7 @@ import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical
 import { frontDeskApi } from "../../shared/api/frontDesk";
 import { kitchenAccountingApi } from "../../shared/api/kitchenAccounting";
 import { authApi } from "../../shared/api/auth";
+import { apiErrorMessage } from "../../shared/api/client";
 import { EmployeeProfileDropdown } from "../../shared/components/EmployeeProfileDropdown";
 import type { Approval as ApiApproval, EmployeeAdmin } from "../../shared/types/hrGovernance";
 import type { LeaveRequest } from "../../shared/types/enterprise";
@@ -998,7 +999,7 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
       setAcceptModalOrder(null);
       setAcceptNoteInput("");
     } catch (err) {
-      setAcceptModalError("Không thể nghiệm thu phiếu kỹ thuật. Vui lòng thử lại.");
+      setAcceptModalError(apiErrorMessage(err, "Không thể nghiệm thu phiếu kỹ thuật. Vui lòng thử lại."));
     } finally {
       setIsAccepting(false);
     }

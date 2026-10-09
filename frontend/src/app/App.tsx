@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { RoleId } from "../shared/types/domain";
-import { ApiError, apiClient } from "../shared/api/client";
+import { apiClient } from "../shared/api/client";
 import { authApi } from "../shared/api/auth";
 import { classifyAccount, formatAuthError } from "../shared/utils/authValidation";
 import { resolveEmployeeDestination, staffAccounts, type View } from "./navigation/staffAccounts";
@@ -29,9 +29,9 @@ export default function App() {
         setRole(destination.role);
         setView(destination.view);
       })
-      .catch(error => {
+      .catch(() => {
         if (!active) return;
-        if (error instanceof ApiError && error.isUnauthorized) apiClient.store.clear();
+        apiClient.store.clear();
         setView("login");
       })
       .finally(() => {
@@ -78,24 +78,25 @@ export default function App() {
       if (token?.access_token) {
         apiClient.store.set(token);
         apiClient.store.setIdentity?.("employee");
-        let profile: Awaited<ReturnType<typeof authApi.employeeProfile>> | null = null;
+        let profile: Awaited<ReturnType<typeof authApi.employeeProfile>>;
         try {
           profile = await authApi.employeeProfile();
         } catch (profileError) {
-          if (!staffAccount || (profileError instanceof ApiError && profileError.isUnauthorized)) {
-            return formatAuthError(profileError);
-          }
+          apiClient.store.clear();
+          return formatAuthError(profileError);
         }
-        if (profile?.role || staffAccount) {
-          const destination = resolveEmployeeDestination(profile?.role ?? "", staffAccount);
+        if (profile.role) {
+          const destination = resolveEmployeeDestination(profile.role);
           setRole(destination.role);
           setView(destination.view);
           return null;
         }
+        apiClient.store.clear();
         return "Không xác định được vai trò nhân viên. Vui lòng thử lại.";
       }
     } catch (backendError) {
       console.warn("Backend employee login failed:", backendError);
+      apiClient.store.clear();
       return formatAuthError(backendError);
     }
 

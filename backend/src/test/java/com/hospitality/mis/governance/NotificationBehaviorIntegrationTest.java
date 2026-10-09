@@ -1,32 +1,12 @@
 package com.hospitality.mis.governance;
 
 import com.hospitality.mis.common.exception.DomainException;
-import com.hospitality.mis.dao.governance.AuditLogRepository;
-import com.hospitality.mis.dao.governance.IdempotencyRecordRepository;
-import com.hospitality.mis.dao.governance.NotificationOutboxRepository;
-import com.hospitality.mis.dao.guest.GuestRepository;
-import com.hospitality.mis.dao.identity.EmployeeRepository;
-import com.hospitality.mis.dao.operations.EquipmentIncidentRepository;
-import com.hospitality.mis.dao.reservation.ReservationRepository;
-import com.hospitality.mis.dao.room.RoomEquipmentRepository;
-import com.hospitality.mis.dao.room.RoomRepository;
-import com.hospitality.mis.dao.room.RoomTypeRepository;
+import com.hospitality.mis.dto.governance.NotificationDtos;
 import com.hospitality.mis.dto.operations.EquipmentIncidentDtos;
-import com.hospitality.mis.entity.guest.Guest;
-import com.hospitality.mis.entity.identity.Employee;
-import com.hospitality.mis.entity.identity.EmployeeRole;
 import com.hospitality.mis.entity.operations.IncidentSeverity;
-import com.hospitality.mis.entity.reservation.Reservation;
-import com.hospitality.mis.entity.reservation.ReservationRoom;
-import com.hospitality.mis.entity.room.Room;
-import com.hospitality.mis.entity.room.RoomEquipment;
-import com.hospitality.mis.entity.room.RoomStatus;
-import com.hospitality.mis.entity.room.RoomType;
 import com.hospitality.mis.service.governance.NotificationOutboxService;
 import com.hospitality.mis.service.operations.EquipmentIncidentService;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -35,135 +15,125 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import java.util.List;
 import java.util.Set;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import java.util.concurrent.*;
+import static org.assertj.core.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** Integration proof for transactional outbox scope, polling, delivery and incident routing. */
+/** Real SQL Server proof: outbox commands, JWT scope, rollback and concurrent deduplication. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:notification-behavior;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 @AutoConfigureMockMvc
 class NotificationBehaviorIntegrationTest {
+    private static final String TOPIC="NOTIFICATION_CUTOVER_TEST";
+    private static final String ACTOR="NO-FD1";
     @Autowired NotificationOutboxService notifications;
-    @Autowired NotificationOutboxRepository outbox;
     @Autowired EquipmentIncidentService incidents;
-    @Autowired EquipmentIncidentRepository incidentRepository;
-    @Autowired IdempotencyRecordRepository idempotencyRecords;
-    @Autowired AuditLogRepository audits;
-    @Autowired EmployeeRepository employees;
-    @Autowired GuestRepository guests;
-    @Autowired RoomTypeRepository roomTypes;
-    @Autowired RoomRepository rooms;
-    @Autowired RoomEquipmentRepository equipment;
-    @Autowired ReservationRepository reservations;
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mockMvc;
+    @Autowired PlatformTransactionManager transactions;
 
-    @BeforeEach
-    void clean() {
+    @BeforeEach void cleanBefore(){cleanup();}
+    @AfterEach void cleanup(){
         SecurityContextHolder.clearContext();
-        jdbc.update("delete from SuCoThietBi");
-        jdbc.update("delete from HangDoiThongBao");
-        jdbc.update("delete from BanGhiChongTrung");
-        jdbc.update("delete from NhatKyKiemSoat");
-        jdbc.update("delete from ThietBiPhong");
-        jdbc.update("delete from ChiTietDatPhong");
-        jdbc.update("delete from PhieuDatPhong");
-        jdbc.update("delete from Phong");
-        jdbc.update("delete from LoaiPhong");
-        jdbc.update("delete from KhachLuuTru");
-        jdbc.update("delete from NhanVien");
+        jdbc.update("DELETE HangDoiThongBao WHERE chuDe=? OR noiDung LIKE N'%\"room_id\":\"NO-R\"%'",TOPIC);
+        jdbc.update("DELETE SuCoThietBi WHERE maPhong=N'NO-R'");
+        jdbc.update("DELETE BanGhiChongTrung WHERE nguoiThucHien=?",ACTOR);
+        jdbc.update("DELETE NhatKyKiemSoat WHERE nguoiThucHien=?",ACTOR);
+        jdbc.update("DELETE ThietBiPhong WHERE maPhong=N'NO-R'");
+        jdbc.update("DELETE PhieuDatPhong WHERE maNhanVien=?",ACTOR);
+        jdbc.update("DELETE Phong WHERE maPhong=N'NO-R'");
+        jdbc.update("DELETE LoaiPhong WHERE maLoaiPhong=N'NO-T'");
+        jdbc.update("DELETE KhachLuuTru WHERE soDienThoai=N'0909090922'");
+        jdbc.update("DELETE NhanVien WHERE maNhanVien=?",ACTOR);
+    }
+    private List<NotificationDtos.Response> events(Set<String> roles){
+        return notifications.pollForRoles(roles,null).stream().filter(x->TOPIC.equals(x.topic())).toList();
     }
 
-    @AfterEach
-    void clearAuthentication() {
-        SecurityContextHolder.clearContext();
-    }
-
-    @Test
-    void outboxDeduplicatesPollsOnlyJwtAllowedRoleAndLeavesDeliveredEventsOut() {
-        var first = notifications.enqueue("TEST_EVENT", "TECHNICAL", "{\"id\":1}", "test-dedupe-1");
-        var replay = notifications.enqueue("TEST_EVENT", "TECHNICAL", "{\"id\":1}", "test-dedupe-1");
-        notifications.enqueue("TEST_EVENT", "FRONT_DESK", "{\"id\":2}", "test-dedupe-2");
-
-        assertThat(replay.id()).isEqualTo(first.id());
-        assertThat(notifications.pollForRoles(Set.of("TECHNICAL"), null))
-                .extracting(response -> response.recipientRole()).containsExactly("TECHNICAL");
-        assertThatThrownBy(() -> notifications.pollForRoles(Set.of("TECHNICAL"), "FRONT_DESK"))
-                .isInstanceOf(DomainException.class)
-                .extracting("code").isEqualTo("NOTIFICATION_SCOPE_FORBIDDEN");
-
-        var delivered = notifications.markDelivered(first.id());
+    @Test void outboxDeduplicatesPollsOnlyJwtAllowedRoleAndLeavesDeliveredEventsOut(){
+        var first=notifications.enqueue(TOPIC,"TECHNICAL","{\"id\":1}","no-dedupe-1");
+        var replay=notifications.enqueue(TOPIC,"FRONT_DESK","{\"different\":true}","no-dedupe-1");
+        notifications.enqueue(TOPIC,"FRONT_DESK","{\"id\":2}","no-dedupe-2");
+        assertThat(replay).isEqualTo(first);
+        assertThat(events(Set.of("TECHNICAL"))).containsExactly(first);
+        assertThatThrownBy(()->notifications.pollForRoles(Set.of("TECHNICAL"),"FRONT_DESK"))
+                .isInstanceOf(DomainException.class).extracting("code").isEqualTo("NOTIFICATION_SCOPE_FORBIDDEN");
+        assertThat(notifications.pollForRoles(Set.of("TECHNICAL")," technical ")).contains(first);
+        var delivered=notifications.markDelivered(first.id());
         assertThat(delivered.status()).isEqualTo("DELIVERED");
         assertThat(delivered.deliveredAt()).isNotNull();
-        assertThat(notifications.pollForRoles(Set.of("TECHNICAL"), null)).isEmpty();
-        assertThat(outbox.findById(first.id()).orElseThrow().getStatus().name()).isEqualTo("DELIVERED");
+        assertThat(events(Set.of("TECHNICAL"))).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM HangDoiThongBao WHERE maThongBao=?",String.class,first.id())).isEqualTo("Đã gửi");
     }
 
-    @Test
-    void notificationControllerUsesJwtDepartmentScopeForPolling() throws Exception {
-        notifications.enqueue("TEST_EVENT", "TECHNICAL", "{\"id\":7}", "http-scope-1");
-        notifications.enqueue("TEST_EVENT", "FRONT_DESK", "{\"id\":8}", "http-scope-2");
-
-        mockMvc.perform(get("/api/governance/notifications/outbox")
-                        .param("role", "TECHNICAL")
-                        .with(jwt().jwt(token -> token.subject("technical-1")
-                                .claim("principal_id", "technical-1")
-                                .claim("principal_type", "EMPLOYEE"))
-                                .authorities(new SimpleGrantedAuthority("ROLE_TECHNICAL"))))
+    @Test void notificationControllerUsesJwtDepartmentScopeForPolling()throws Exception{
+        notifications.enqueue(TOPIC,"TECHNICAL","{}","no-http-1");
+        notifications.enqueue(TOPIC,"FRONT_DESK","{}","no-http-2");
+        mockMvc.perform(get("/api/governance/notifications/outbox").param("role","TECHNICAL")
+                .with(jwt().jwt(token->token.subject("technical-1").claim("principal_id","technical-1").claim("principal_type","EMPLOYEE"))
+                .authorities(new SimpleGrantedAuthority("ROLE_TECHNICAL"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].recipient_role").value("TECHNICAL"))
-                .andExpect(jsonPath("$[1]").doesNotExist());
+                .andExpect(jsonPath("$[?(@.dedupe_key=='no-http-1')].recipient_role").value(org.hamcrest.Matchers.contains("TECHNICAL")))
+                .andExpect(jsonPath("$[?(@.dedupe_key=='no-http-2')]").isEmpty());
     }
 
-    @Test
-    void highSeverityIncidentWritesOutboxEventsForFrontDeskTechnicalAndManager() {
-        jdbc.update("insert into NhanVien(maNhanVien, hoVaTen, matKhau, vaiTro, soDienThoai, duocKichHoat, taiKhoanKhongBiKhoa, soLanDangNhapThatBai, trangThaiLamViec, phaiDoiMatKhau) values (?,?,?,?,?,?,?,?,?,?)",
-                "FD0001", "FD0001", "bcrypt-hash", "Lễ tân", "0909000201", true, true, 0, "Đang làm việc", false);
-        jdbc.update("insert into KhachLuuTru(maKhachLuuTru, hoVaTen, soDienThoai, soGiayToTuyThan, hangThanhVien, tongChiTieu, soLanHuyMuon, soLanLuuTruHoanThanh, soLanTraPhongMuon, biChanDatPhong, phienBan) values (?,?,?,?,?,?,?,?,?,?,?)",
-                910001L, "Incident guest", "0909000202", "IDINCIDENT01", "Tiêu chuẩn", BigDecimal.ZERO, 0, 0, 0, false, 0L);
-        jdbc.update("insert into LoaiPhong(maLoaiPhong, ten, giaTheoNgay, giaTheoGio, maHangPhong, soKhachToiDa, trangThaiDanhMuc) values (?,?,?,?,?,?,?)",
-                "INCTYPE", "Incident room", new BigDecimal("100000"), new BigDecimal("10000"), "STD", 2, "Đang hoạt động");
-        jdbc.update("insert into Phong(maPhong, maLoaiPhong, trangThai, phienBan) values (?,?,?,?)",
-                "INC01", "INCTYPE", "Đang có khách", 0L);
-        jdbc.update("insert into ThietBiPhong(maPhong, ten, giaTriBanDau, ngayMua, soLuong, dangHoatDong) values (?,?,?,?,?,?)",
-                "INC01", "Television", new BigDecimal("2000000"), LocalDate.of(2025, 1, 1), 1, true);
-        jdbc.update("insert into PhieuDatPhong(maPhieuDatPhong, maKhachLuuTru, maNhanVien, thoiDiemDat, tienDatCoc, trangThai, hinhThucThue, nguonDatPhong, doanhThuGopOta, hoaHongOta, trangThaiDoiSoatOta, soPhutGiaHan, trangThaiThanhToanCoc, tienDatCocBoSung, phienBan) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                910001L, 910001L, "FD0001", LocalDateTime.of(2026, 9, 16, 8, 0), BigDecimal.ZERO,
-                "Đã nhận phòng", "Theo gói", "Trực tiếp", BigDecimal.ZERO, BigDecimal.ZERO,
-                "Không áp dụng", 0, "Không yêu cầu", BigDecimal.ZERO, 0L);
-        jdbc.update("insert into ChiTietDatPhong(maPhieuDatPhong, maPhong, thoiDiemNhanPhong, thoiDiemTraPhong, thoiDiemTraPhongBanDau, trangThai, soLanChuyenPhong, soLuongKhach) values (?,?,?,?,?,?,?,?)",
-                910001L, "INC01", LocalDateTime.of(2026, 9, 16, 8, 0), LocalDateTime.of(2026, 9, 17, 8, 0),
-                LocalDateTime.of(2026, 9, 17, 8, 0), "Đang có khách", 0, 1);
-        Long equipmentId = jdbc.queryForObject("select maThietBiPhong from ThietBiPhong where maPhong = ?", Long.class, "INC01");
-
-        authenticate("FD0001", EmployeeRole.FRONT_DESK);
-        incidents.record(910001L, new EquipmentIncidentDtos.CreateRequest(
-                "INC01", "Television", equipmentId, 1, IncidentSeverity.HIGH), "FD0001", "incident-routing-1");
-
-        assertThat(notifications.pollForRoles(Set.of("FRONT_DESK"), null)).hasSize(1)
-                .singleElement().satisfies(event -> assertThat(event.topic()).isEqualTo("EQUIPMENT_INCIDENT"));
-        assertThat(notifications.pollForRoles(Set.of("TECHNICAL"), null)).hasSize(1);
-        assertThat(notifications.pollForRoles(Set.of("MANAGER"), null)).hasSize(1);
-        assertThat(outbox.findAll()).hasSize(3);
+    @Test void highSeverityIncidentWritesOutboxEventsForFrontDeskTechnicalAndManager(){
+        jdbc.update("INSERT NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) VALUES(?,N'Notification actor',N'not-a-password',N'Lễ tân',N'0909090921')",ACTOR);
+        jdbc.update("INSERT KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) VALUES(N'Notification guest',N'0909090922',N'NO-ID')");
+        Long guest=jdbc.queryForObject("SELECT maKhachLuuTru FROM KhachLuuTru WHERE soDienThoai=N'0909090922'",Long.class);
+        jdbc.update("INSERT LoaiPhong(maLoaiPhong,ten,giaTheoNgay) VALUES(N'NO-T',N'Notification room',100000)");
+        jdbc.update("INSERT Phong(maPhong,maLoaiPhong,trangThai) VALUES(N'NO-R',N'NO-T',N'Đang có khách')");
+        jdbc.update("INSERT ThietBiPhong(maPhong,ten,giaTriBanDau,ngayMua,soLuong,dangHoatDong) VALUES(N'NO-R',N'Television',2000000,'2025-01-01',1,1)");
+        jdbc.update("INSERT PhieuDatPhong(maKhachLuuTru,maNhanVien,trangThai) VALUES(?,?,N'Đã nhận phòng')",guest,ACTOR);
+        Long reservation=jdbc.queryForObject("SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE maNhanVien=?",Long.class,ACTOR);
+        jdbc.update("INSERT ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,thoiDiemTraPhongBanDau,trangThai) VALUES(?,N'NO-R','2026-09-16T08:00:00','2026-09-17T08:00:00','2026-09-17T08:00:00',N'Đang có khách')",reservation);
+        Long equipment=jdbc.queryForObject("SELECT maThietBiPhong FROM ThietBiPhong WHERE maPhong=N'NO-R'",Long.class);
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(ACTOR,"test","ROLE_FRONT_DESK"));
+        var incident=incidents.record(reservation,new EquipmentIncidentDtos.CreateRequest("NO-R","Television",equipment,1,IncidentSeverity.HIGH),ACTOR,"no-routing");
+        for(String role:List.of("FRONT_DESK","TECHNICAL","MANAGER")){
+            assertThat(notifications.pollForRoles(Set.of(role),null).stream().filter(x->x.payload().contains("\"room_id\":\"NO-R\"")).toList())
+                    .singleElement().satisfies(x->assertThat(x.topic()).isEqualTo("EQUIPMENT_INCIDENT"));
+        }
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM HangDoiThongBao WHERE khoaChongLap IN(?,?,?)",Integer.class,
+                "equipment-incident-"+incident.id(),"equipment-incident-tech-"+incident.id(),"equipment-incident-manager-"+incident.id())).isEqualTo(3);
     }
 
-    private static void authenticate(String actor, EmployeeRole role) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken(actor, "test", "ROLE_" + role.name()));
+    @Test void surroundingRollbackDoesNotLeavePendingOrDeliveredState(){
+        new TransactionTemplate(transactions).executeWithoutResult(tx->{
+            notifications.enqueue(TOPIC,"TECHNICAL","{}","no-rollback");tx.setRollbackOnly();
+        });
+        assertThat(events(Set.of("TECHNICAL"))).isEmpty();
+        var event=notifications.enqueue(TOPIC,"TECHNICAL","{}","no-deliver-rollback");
+        new TransactionTemplate(transactions).executeWithoutResult(tx->{notifications.markDelivered(event.id());tx.setRollbackOnly();});
+        assertThat(events(Set.of("TECHNICAL"))).containsExactly(event);
+    }
+
+    @Test void missingAndOversizedCommandsDoNotWritePartialEvents(){
+        assertThatThrownBy(()->notifications.markDelivered(Long.MAX_VALUE)).isInstanceOf(java.util.NoSuchElementException.class);
+        assertThatThrownBy(()->notifications.enqueue("x".repeat(2000),"TECHNICAL","{}","no-invalid"))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM HangDoiThongBao WHERE khoaChongLap=N'no-invalid'",Integer.class)).isZero();
+    }
+
+    @Test void concurrentConnectionsReturnOneDurableEvent()throws Exception{
+        var ready=new CountDownLatch(2);var start=new CountDownLatch(1);
+        try(var executor=Executors.newFixedThreadPool(2)){
+            Callable<NotificationDtos.Response> command=()->{ready.countDown();assertThat(start.await(10,TimeUnit.SECONDS)).isTrue();return notifications.enqueue(TOPIC,"TECHNICAL","{}","no-race");};
+            var a=executor.submit(command);var b=executor.submit(command);
+            assertThat(ready.await(10,TimeUnit.SECONDS)).isTrue();start.countDown();
+            assertThat(a.get(20,TimeUnit.SECONDS)).isEqualTo(b.get(20,TimeUnit.SECONDS));
+        }
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM HangDoiThongBao WHERE khoaChongLap=N'no-race'",Integer.class)).isEqualTo(1);
     }
 }

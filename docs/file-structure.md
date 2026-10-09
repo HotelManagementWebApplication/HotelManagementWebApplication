@@ -11,11 +11,11 @@ web-hotel-mis/
 │       ├── main/java/com/hospitality/mis/
 │       │   ├── config/       # Spring, security, time and web configuration
 │       │   ├── controller/   # HTTP endpoints, grouped by domain
-│       │   ├── dao/          # Persistence repositories
+│       │   ├── dao/          # SQL Server database adapters
 │       │   ├── dto/          # Request and response contracts
 │       │   ├── entity/       # JPA persistence models
 │       │   └── service/      # Business rules and transaction boundaries
-│       ├── main/resources/db/migration/  # Một canonical Flyway V1 cho demo DB
+│       ├── main/resources/db/migration/  # Chuỗi migration Flyway của SQL Server
 │       └── test/             # Unit, API, security and SQL Server acceptance tests
 ├── frontend/
 │   ├── e2e/                  # Live backend contract test instructions/specs
@@ -33,9 +33,11 @@ web-hotel-mis/
 ## Change navigation
 
 For a backend behavior change, trace the controller mapping to its DTO, service,
-repository/entity and focused test. Schema fixes for this disposable demo belong
-in the single canonical `backend/src/main/resources/db/migration/V1__baseline_schema.sql`;
-recreate the local database instead of adding V2/V3 migrations. For a frontend
+repository/entity and focused test. Database changes belong in exactly six
+Flyway files under `backend/src/main/resources/db/migration/`: V1 schema,
+V2 indexes, V3 functions, V4 views, V5 stored procedures, V6 triggers. Edit the owning file;
+never add V7+ or auxiliary DDL files. Rebuild only authorized demo/test databases
+when checksums change, as required by root `AGENTS.md`. For a frontend
 change, trace the screen from `src/app/App.tsx` through `src/app/navigation` or
 the relevant `src/features` module to its API caller and focused test. The
 backend remains the only writer of business data; use the [API contract](api-contract.md)

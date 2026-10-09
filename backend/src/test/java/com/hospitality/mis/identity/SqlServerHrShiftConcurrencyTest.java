@@ -19,6 +19,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** SQL Server proof that employee row locking serializes overlapping shift assignment. */
 @SpringBootTest(properties = {
@@ -83,5 +84,30 @@ class SqlServerHrShiftConcurrencyTest {
         } finally {
             SecurityContextHolder.clearContext();
         }
+    }
+
+    @Test
+    void triggerRejectsOverlappingRawBatchAndRollsBackEveryRow() {
+        assertThat(jdbc.queryForObject("SELECT is_disabled FROM sys.triggers WHERE name=N'trgCaLamViecKhongTrung'", Boolean.class)).isFalse();
+        assertThatThrownBy(() -> jdbc.update("INSERT CaLamViecNhanVien(maNhanVien,ngayLamCa,maCa,thoiDiemBatDau,thoiDiemKetThuc,trangThai,nguoiTao) VALUES (?, '2032-01-04',N'A','2032-01-04T08:00:00','2032-01-04T16:00:00',N'Đã phân công',?), (?, '2032-01-04',N'B','2032-01-04T12:00:00','2032-01-04T20:00:00',N'Đã phân công',?)", EMPLOYEE, EMPLOYEE, EMPLOYEE, EMPLOYEE)).hasMessageContaining("51004");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM CaLamViecNhanVien WHERE maNhanVien=?", Integer.class, EMPLOYEE)).isZero();
+    }
+
+    @Test
+    void triggerAllowsAdjacentAndCancelledShiftsButRejectsMoveAndReactivation() {
+        rawShift("A", "08:00:00", "16:00:00", "Đã phân công");
+        rawShift("B", "16:00:00", "20:00:00", "Đã phân công");
+        rawShift("C", "12:00:00", "18:00:00", "Đã hủy");
+        assertThatThrownBy(() -> jdbc.update("UPDATE CaLamViecNhanVien SET thoiDiemBatDau='2032-01-04T15:00:00' WHERE maNhanVien=? AND maCa=N'B'", EMPLOYEE)).hasMessageContaining("51004");
+        assertThatThrownBy(() -> jdbc.update("UPDATE CaLamViecNhanVien SET trangThai=N'Đã phân công' WHERE maNhanVien=? AND maCa=N'C'", EMPLOYEE)).hasMessageContaining("51004");
+        assertThat(jdbc.queryForObject("SELECT DATEPART(hour,thoiDiemBatDau) FROM CaLamViecNhanVien WHERE maNhanVien=? AND maCa=N'B'", Integer.class, EMPLOYEE)).isEqualTo(16);
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM CaLamViecNhanVien WHERE maNhanVien=? AND maCa=N'C'", String.class, EMPLOYEE)).isEqualTo("Đã hủy");
+        jdbc.update("DELETE CaLamViecNhanVien WHERE maNhanVien=? AND maCa IN(N'A',N'B')", EMPLOYEE);
+        jdbc.update("UPDATE CaLamViecNhanVien SET trangThai=N'Đã phân công' WHERE maNhanVien=? AND maCa=N'C'", EMPLOYEE);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM CaLamViecNhanVien WHERE maNhanVien=?", Integer.class, EMPLOYEE)).isEqualTo(1);
+    }
+
+    private void rawShift(String code, String start, String end, String status) {
+        jdbc.update("INSERT CaLamViecNhanVien(maNhanVien,ngayLamCa,maCa,thoiDiemBatDau,thoiDiemKetThuc,trangThai,nguoiTao) VALUES (?,'2032-01-04',?,?,?,?,?)", EMPLOYEE, code, "2032-01-04T"+start, "2032-01-04T"+end, status, EMPLOYEE);
     }
 }

@@ -112,8 +112,8 @@ const apiErrorText = (error: unknown) => {
   if (error.status === 401) return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
   if (error.status === 403) return "Tài khoản Lễ tân không có quyền thực hiện thao tác này.";
   if (error.status === 404) return "Không tìm thấy thông tin lưu trú.";
-  if (error.status === 409) return "Dữ liệu vừa thay đổi hoặc phòng không còn khả dụng.";
-  if (error.status === 422) return apiErrorMessage(error, "Dữ liệu nghiệp vụ không hợp lệ.");
+  if (error.status === 409) return apiErrorMessage(error, "Dữ liệu vừa thay đổi hoặc phòng không còn khả dụng.");
+  if (error.status === 400 || error.status === 422) return apiErrorMessage(error, "Dữ liệu nghiệp vụ không hợp lệ.");
   if (error.status === 429) return "Thao tác quá nhanh. Vui lòng chờ rồi thử lại.";
   return "Không thể hoàn tất thao tác. Vui lòng thử lại.";
 };
@@ -1549,7 +1549,7 @@ function RoomMapScreen({ rooms = [], focusRoomId, onRefresh, onCheckIn }: { room
 /* ══════════════════════════════════════════════════════════
    GUESTS SCREEN
 ══════════════════════════════════════════════════════════ */
-function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn, onOpenRoom, onRefresh }: { staying?: Room[]; arriving?: ArrivingGuest[]; departures?: DepartureGuest[]; onCheckIn: (guest: ArrivingGuest) => Promise<void>; onOpenRoom: (roomId: string) => void; onRefresh?: () => Promise<void> | void }) {
+function GuestsScreen({ actorId, staying = [], arriving = [], departures = [], onCheckIn, onOpenRoom, onRefresh }: { actorId: string; staying?: Room[]; arriving?: ArrivingGuest[]; departures?: DepartureGuest[]; onCheckIn: (guest: ArrivingGuest) => Promise<void>; onOpenRoom: (roomId: string) => void; onRefresh?: () => Promise<void> | void }) {
   const [gTab, setGTab] = useState<"staying"|"arriving"|"departed"|"directory">("staying");
   const [gSearch, setGSearch] = useState("");
   const [vipOnly, setVipOnly] = useState(false);
@@ -1672,6 +1672,10 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
       setActionError("Vui lòng điền đầy đủ họ tên, CCCD/CMND và số điện thoại.");
       return;
     }
+    if (!/^[0-9+ .-]{8,15}$/.test(guestPhone.trim())) {
+      setActionError("Số điện thoại phải có 8–15 ký tự, chỉ gồm chữ số, dấu +, khoảng trắng, dấu chấm hoặc dấu gạch ngang.");
+      return;
+    }
     setSubmittingModal(true);
     setActionError(null);
     try {
@@ -1697,6 +1701,10 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
 
   const submitCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!actorId) {
+      setActionError("Chưa tải được nhân viên đang đăng nhập. Vui lòng tải lại hoặc đăng nhập lại.");
+      return;
+    }
     const guestId = Number(bookGuestId);
     if (!Number.isSafeInteger(guestId) || guestId <= 0) {
       setActionError("Vui lòng nhập mã khách hàng hợp lệ (ID số).");
@@ -1715,10 +1723,10 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
     try {
       const res = await frontDeskApi.createReservation({
         guest_id: guestId,
-        employee_id: "EMP001",
+        employee_id: actorId,
         deposit: Number(bookDeposit) || 0,
         rental_type: bookRentalType,
-        booking_source: "DIRECT_FRONT_DESK",
+        booking_source: "DIRECT",
         rooms: [{
           room_id: bookRoomId.trim(),
           guest_count: bookGuestCount,
@@ -1784,7 +1792,7 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
           ))}
         </div>
 
-        {actionError && <div role="alert" style={{padding:"10px 12px",borderRadius:8,background:"#FFF1F2",color:"#BE123C",fontSize:12,marginBottom:12}}>{actionError}</div>}
+        {actionError && !showCreateGuest && !showCreateBooking && <div role="alert" style={{padding:"10px 12px",borderRadius:8,background:"#FFF1F2",color:"#BE123C",fontSize:12,marginBottom:12}}>{actionError}</div>}
         {feedback && <div role="status" style={{padding:"10px 12px",borderRadius:8,background:"#F0FDF4",color:"#166534",border:"1px solid #BBF7D0",fontSize:12,marginBottom:12}}>{feedback}</div>}
 
         {/* Staying table */}
@@ -2007,7 +2015,8 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
               <h3 style={{ fontSize:15,fontWeight:700,color:"#0F172A" }}>Tạo hồ sơ khách hàng mới</h3>
               <button onClick={()=>setShowCreateGuest(false)} style={{ cursor:"pointer",color:"#94A3B8" }}><X size={18} /></button>
             </div>
-            <form onSubmit={submitCreateGuest} style={{ padding:20,display:"flex",flexDirection:"column",gap:12 }}>
+            <form aria-label="Tạo hồ sơ khách hàng" onSubmit={submitCreateGuest} style={{ padding:20,display:"flex",flexDirection:"column",gap:12 }}>
+              {actionError && <div role="alert" style={{padding:"10px 12px",borderRadius:8,background:"#FFF1F2",color:"#BE123C",fontSize:12}}>{actionError}</div>}
               <label style={{ fontSize:12,fontWeight:600,color:"#334155" }}>
                 Họ và tên *
                 <input required value={guestFullName} onChange={e=>setGuestFullName(e.target.value)} placeholder="Nguyễn Văn A"
@@ -2061,7 +2070,8 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
               <h3 style={{ fontSize:15,fontWeight:700,color:"#0F172A" }}>Tạo đặt phòng tại quầy</h3>
               <button onClick={()=>setShowCreateBooking(false)} style={{ cursor:"pointer",color:"#94A3B8" }}><X size={18} /></button>
             </div>
-            <form onSubmit={submitCreateBooking} style={{ padding:20,display:"flex",flexDirection:"column",gap:12 }}>
+            <form aria-label="Tạo đặt phòng tại quầy" onSubmit={submitCreateBooking} style={{ padding:20,display:"flex",flexDirection:"column",gap:12 }}>
+              {actionError && <div role="alert" style={{padding:"10px 12px",borderRadius:8,background:"#FFF1F2",color:"#BE123C",fontSize:12}}>{actionError}</div>}
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
                 <label style={{ fontSize:12,fontWeight:600,color:"#334155" }}>
                   Mã khách hàng (ID) *
@@ -2090,7 +2100,7 @@ function GuestsScreen({ staying = [], arriving = [], departures = [], onCheckIn,
                 </label>
                 <label style={{ fontSize:12,fontWeight:600,color:"#334155" }}>
                   Tiền cọc (VND)
-                  <input type="number" min="0" step="10000" value={bookDeposit} onChange={e=>setBookDeposit(e.target.value)} placeholder="0"
+                  <input type="number" min="0" step="1" value={bookDeposit} onChange={e=>setBookDeposit(e.target.value)} placeholder="0"
                     style={{ width:"100%",height:36,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 10px",fontSize:13,marginTop:4,boxSizing:"border-box" }} />
                 </label>
               </div>
@@ -2438,7 +2448,7 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
   const [dataState, setDataState] = useState<"loading" | "live" | "fallback">("loading");
   const [dataError, setDataError] = useState<string | null>(null);
   const [focusRoomId, setFocusRoomId] = useState<string | null>(null);
-  const [actorId, setActorId] = useState("EMP001");
+  const [actorId, setActorId] = useState("");
   const [actorName, setActorName] = useState("Nhân viên Lễ tân");
   const [sidebarProfileOpen, setSidebarProfileOpen] = useState(false);
   const requestSequence = useRef(0);
@@ -2535,7 +2545,7 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     let active = true;
-    authApi.employeeProfile().then(profile=>{ if (active) { setActorId(profile.employee_id || "EMP001"); setActorName(profile.full_name || "Nhân viên Lễ tân"); } }).catch(()=>undefined);
+    authApi.employeeProfile().then(profile=>{ if (active) { setActorId(profile.employee_id); setActorName(profile.full_name || "Nhân viên Lễ tân"); } }).catch(error=>{ if(active) {setActorId(""); setDataError(apiErrorText(error));} });
     return ()=>{active=false;};
   }, []);
 
@@ -2660,7 +2670,7 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
         <KpiBar rooms={displayRooms} arrivals={displayArriving.length} departures={displayDepartures.length} />
         {page==="overview" && <OverviewScreen arrivals={displayOverviewArrivals} departures={displayDepartures} alerts={displayAlerts} activities={displayActivities} pendingAtHotelRequests={pendingAtHotelRequests} requestDataError={requestDataError} requestActionError={requestActionError} confirmingRequestId={confirmingRequestId} onConfirmBookingRequest={id=>void handleConfirmAtHotelRequest(id)} dataState={dataState} dataError={dataError} onRetry={()=>void loadDashboard(search)} onOpenRoom={openRoom} actorName={actorName} />}
         {page==="rooms"    && <RoomMapScreen rooms={displayRooms} focusRoomId={focusRoomId} onRefresh={()=>loadDashboard(search)} onCheckIn={handleCheckInById} />}
-        {page==="guests"   && <GuestsScreen staying={displayStaying} arriving={displayArriving} departures={displayDepartures} onCheckIn={handleCheckIn} onOpenRoom={openRoom} onRefresh={()=>void loadDashboard(search)} />}
+        {page==="guests"   && <GuestsScreen actorId={actorId} staying={displayStaying} arriving={displayArriving} departures={displayDepartures} onCheckIn={handleCheckIn} onOpenRoom={openRoom} onRefresh={()=>void loadDashboard(search)} />}
         {page==="shift"    && <ShiftScreen actorId={actorId} arrivalCount={displayArriving.length} departureCount={displayDepartures.length} />}
       </div>
     </div>

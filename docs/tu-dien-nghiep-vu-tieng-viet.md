@@ -43,7 +43,7 @@ hoa hồng thương mại của đối tác.
 | `Repository` / `DAO` | Bộ truy cập dữ liệu | Đọc và ghi database theo yêu cầu của service |
 | `Database` | Cơ sở dữ liệu | Nơi lưu dữ liệu thật của hệ thống |
 | `Migration` | Phiên bản thay đổi database | Script tạo bảng, thêm cột hoặc cập nhật cấu trúc |
-| `Flyway` | Công cụ quản lý cấu trúc | Database demo chạy baseline `V1` duy nhất |
+| `Flyway` | Công cụ quản lý cấu trúc | Database demo chạy đúng chuỗi `V1`–`V5`; không tạo migration bổ sung, theo `AGENTS.md` |
 | `Schema` | Bộ cấu trúc database | Trong dự án hiện tại là schema `QLKS` |
 | `Transaction` | Giao dịch nguyên tử | Một chuỗi thao tác thành công toàn bộ hoặc hoàn tác toàn bộ |
 | `Validation` | Kiểm tra hợp lệ | Chặn dữ liệu thiếu, sai định dạng hoặc sai giới hạn |
@@ -683,8 +683,9 @@ tiếng Việt như “Khách đến hôm nay”, “Chưa thanh toán cọc”,
 4. Khi cần đổi chữ hiển thị, chỉ sửa nhãn tiếng Việt ở frontend hoặc lớp dịch.
 5. Khi thêm trạng thái mới, phải ghi vào tài liệu này, cập nhật luồng chuyển
    trạng thái, API, giao diện và dữ liệu mẫu.
-6. Khi thêm trường database, tạo migration Flyway mới; không sửa migration đã
-   chạy trên database đang có dữ liệu.
+6. Khi thêm trường database, sửa V1 trong baseline demo cố định V1–V6 theo
+   `AGENTS.md`; trigger chỉ đặt ở V6, không tạo V7+ hoặc SQL phụ. Chỉ dựng lại database demo/test đã
+   được cho phép khi checksum thay đổi; không repair lịch sử Flyway.
 7. Mọi thao tác tài chính, hoàn tiền, điều chỉnh hóa đơn, duyệt giá hoặc thay
    đổi dữ liệu nhạy cảm phải có người thực hiện và nhật ký audit.
 

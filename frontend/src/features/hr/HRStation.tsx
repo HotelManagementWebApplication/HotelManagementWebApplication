@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { Fragment, useEffect, useState, useMemo } from "react";
 import type { ChangeEvent } from "react";
 import { hrGovernanceApi } from "../../shared/api/hrGovernance";
 import { enterpriseApi } from "../../shared/api/enterprise";
@@ -9,6 +9,7 @@ import type { EmployeeAdmin, Shift } from "../../shared/types/hrGovernance";
 import { employeeRoleLabel } from "../../shared/types/api";
 import type { EmployeeProfileDto } from "../../shared/types/api";
 import { localDateValue } from "../../shared/utils/localDate";
+import { apiErrorMessage } from "../../shared/api/client";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -204,21 +205,6 @@ export default function HRStation({ onBack }: Props) {
   const [staffFilterStatus, setStaffFilterStatus] = useState("all");
 
   // New employee form state
-  const [newEmpForm, setNewEmpForm] = useState({
-    name: "",
-    gender: "Nữ" as "Nam" | "Nữ",
-    dob: "2000-01-01",
-    department: "Bộ phận Lễ tân",
-    departmentId: "reception",
-    role: "Nhân viên Lễ tân",
-    email: "",
-    phone: "",
-    idCard: "",
-    joinDate: localDateValue(),
-    contractType: "Thử việc" as "Chính thức" | "Thử việc" | "Thời vụ",
-    salaryGrade: "Bậc 1 (8,500,000 ₫)",
-    leaveBalance: 12
-  });
 
   // ── Tab 4 (Chấm công) states ──
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -442,21 +428,25 @@ export default function HRStation({ onBack }: Props) {
     const ranges: Record<Exclude<ShiftType, "off">, { code: string; start: string; end: string }> = {
       morning: { code: "MORNING", start: "06:00:00", end: "14:00:00" },
       afternoon: { code: "AFTERNOON", start: "14:00:00", end: "22:00:00" },
-      night: { code: "NIGHT", start: "22:00:00", end: "23:59:59" },
+      night: { code: "NIGHT", start: "22:00:00", end: "06:00:00" },
     };
     const range = ranges[newShift];
+    const endDate = new Date(`${cell.isoDate}T12:00:00`);
+    if (newShift === "night") endDate.setDate(endDate.getDate() + 1);
+    const startsAt = `${cell.isoDate}T${range.start}`;
+    const endsAt = `${localDateValue(endDate)}T${range.end}`;
     let savedShiftId = cell.shiftId;
     try {
       if (cell.shiftId) {
-        const saved = await hrGovernanceApi.updateShift(cell.shiftId, { shift_date: cell.isoDate, shift_code: range.code, starts_at: `${cell.isoDate}T${range.start}`, ends_at: `${cell.isoDate}T${range.end}` });
+        const saved = await hrGovernanceApi.updateShift(cell.shiftId, { shift_date: cell.isoDate, shift_code: range.code, starts_at: startsAt, ends_at: endsAt });
         savedShiftId = saved.id;
       } else {
-        const saved = await hrGovernanceApi.assignShift({ employee_id: editingShift.employeeId, shift_date: cell.isoDate, shift_code: range.code, starts_at: `${cell.isoDate}T${range.start}`, ends_at: `${cell.isoDate}T${range.end}` });
+        const saved = await hrGovernanceApi.assignShift({ employee_id: editingShift.employeeId, shift_date: cell.isoDate, shift_code: range.code, starts_at: startsAt, ends_at: endsAt });
         savedShiftId = saved.id;
       }
     } catch (error) {
       console.warn("Unable to persist shift:", error);
-      showToast("Không thể lưu ca trực. Vui lòng thử lại.");
+      showToast(apiErrorMessage(error, "Không thể lưu ca trực. Vui lòng thử lại."));
       return;
     }
     setScheduleData(prev =>
@@ -480,19 +470,6 @@ export default function HRStation({ onBack }: Props) {
     setEditingShift(null);
   };
 
-  const handleCreateEmployee = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEmpForm.name || !newEmpForm.phone) {
-      alert("Vui lòng điền đầy đủ tên và số điện thoại.");
-      return;
-    }
-    try {
-      const roleMap: Record<string, string> = { reception: "FRONT_DESK", housekeeping: "HOUSEKEEPING", fnb: "KITCHEN", technical: "TECHNICAL" };
-      const result = await enterpriseApi.autoProvisionEmployee({ full_name: newEmpForm.name, role: roleMap[newEmpForm.departmentId] ?? "STAFF", phone: newEmpForm.phone, email: newEmpForm.email || `${newEmpForm.name.replace(/\s+/g, ".").toLowerCase()}@hotel.com` });
-      showToast(`Đã tạo ${result.employee_id}. Mật khẩu tạm: ${result.temporary_password}`);
-      setIsAddEmployeeModalOpen(false);
-    } catch (error) { showToast("Không thể tạo tài khoản nhân viên. Vui lòng thử lại."); }
-  };
 
   const handleSyncBiometrics = async () => {
     setIsSyncingBiometrics(true);
@@ -1066,7 +1043,7 @@ export default function HRStation({ onBack }: Props) {
                 const Icon = dept.icon;
                 const isCollapsed = collapsedDepts[dept.id];
                 return (
-                  <div key={dept.id} className="contents">
+                  <Fragment key={dept.id}>
                     {/* Department Header Row */}
                     <tr className="border-t border-gray-100 bg-gray-50/50">
                       <td colSpan={8} className="py-2 px-3">
@@ -1137,7 +1114,7 @@ export default function HRStation({ onBack }: Props) {
                           })}
                         </tr>
                       ))}
-                  </div>
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -1447,7 +1424,7 @@ export default function HRStation({ onBack }: Props) {
             >
               <div className="flex items-center gap-2">
                 <Plus className="w-4 h-4 text-emerald-600" />
-                <span>Thêm nhân viên mới</span>
+                <span>Tiếp nhận nhân viên mới</span>
               </div>
               <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
             </button>
@@ -1557,7 +1534,7 @@ export default function HRStation({ onBack }: Props) {
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer shadow-xs"
           >
             <Plus className="w-4 h-4" />
-            <span>Thêm nhân viên mới</span>
+            <span>Tiếp nhận nhân viên mới</span>
           </button>
         </div>
       </div>
@@ -1765,8 +1742,8 @@ export default function HRStation({ onBack }: Props) {
                   <th className="py-3 px-4">Nhân viên</th>
                   <th className="py-3 px-4">Bộ phận</th>
                   <th className="py-3 px-4">Ca trực</th>
-                  <th className="py-3 px-4">Nhận phòng</th>
-                  <th className="py-3 px-4">Trả phòng</th>
+                  <th className="py-3 px-4">Giờ vào</th>
+                  <th className="py-3 px-4">Giờ ra</th>
                   <th className="py-3 px-4">Tổng giờ</th>
                   <th className="py-3 px-4">Đi muộn</th>
                   <th className="py-3 px-4">Trạng thái</th>
@@ -2069,150 +2046,13 @@ export default function HRStation({ onBack }: Props) {
     </div>
   );
 
-  // Modal: Add Employee
+  // Employee accounts are created only by roles with EMPLOYEE_PROVISION.
   const AddEmployeeModal = isAddEmployeeModalOpen && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4 animate-in fade-in">
-      <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-gray-100 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
-          <div>
-            <h3 className="font-serif font-bold text-gray-900 text-base">Thêm hồ sơ nhân viên mới</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Nhập đầy đủ thông tin nhân sự để lưu vào hệ thống khách sạn</p>
-          </div>
-          <button
-            onClick={() => setIsAddEmployeeModalOpen(false)}
-            className="text-gray-400 hover:text-gray-600 cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleCreateEmployee} className="space-y-4 text-xs">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Họ và tên *</label>
-              <input
-                type="text"
-                required
-                value={newEmpForm.name}
-                onChange={e => setNewEmpForm({ ...newEmpForm, name: e.target.value })}
-                placeholder="VD: Nguyễn Văn Hoàng"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Giới tính</label>
-              <select
-                value={newEmpForm.gender}
-                onChange={e => setNewEmpForm({ ...newEmpForm, gender: e.target.value as any })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              >
-                <option value="Nữ">Nữ</option>
-                <option value="Nam">Nam</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Số điện thoại *</label>
-              <input
-                type="tel"
-                required
-                value={newEmpForm.phone}
-                onChange={e => setNewEmpForm({ ...newEmpForm, phone: e.target.value })}
-                placeholder="0912 345 678"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Email</label>
-              <input
-                type="email"
-                value={newEmpForm.email}
-                onChange={e => setNewEmpForm({ ...newEmpForm, email: e.target.value })}
-                placeholder="hoang.nguyen@hotel.com"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Bộ phận</label>
-              <select
-                value={newEmpForm.departmentId}
-                onChange={e => {
-                  const val = e.target.value;
-                  const deptMap: Record<string, { name: string; role: string }> = {
-                    reception: { name: "Bộ phận Lễ tân", role: "Nhân viên Lễ tân" },
-                    housekeeping: { name: "Bộ phận Buồng phòng", role: "Nhân viên Buồng phòng" },
-                    fnb: { name: "Bộ phận Bếp & Nhà hàng", role: "Nhân viên Bếp / Phục vụ" },
-                    technical: { name: "Bộ phận Kỹ thuật", role: "Kỹ thuật viên bảo trì" },
-                  };
-                  setNewEmpForm({
-                    ...newEmpForm,
-                    departmentId: val,
-                    department: deptMap[val].name,
-                    role: deptMap[val].role
-                  });
-                }}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              >
-                <option value="reception">Bộ phận Lễ tân</option>
-                <option value="housekeeping">Bộ phận Buồng phòng</option>
-                <option value="fnb">Bộ phận Bếp & Nhà hàng</option>
-                <option value="technical">Bộ phận Kỹ thuật</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Chức danh</label>
-              <input
-                type="text"
-                value={newEmpForm.role}
-                onChange={e => setNewEmpForm({ ...newEmpForm, role: e.target.value })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Loại hợp đồng</label>
-              <select
-                value={newEmpForm.contractType}
-                onChange={e => setNewEmpForm({ ...newEmpForm, contractType: e.target.value as any })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              >
-                <option value="Thử việc">Thử việc (2 tháng)</option>
-                <option value="Chính thức">Chính thức (1 năm / Không thời hạn)</option>
-                <option value="Thời vụ">Thời vụ / Bán thời gian</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Ngày bắt đầu làm việc</label>
-              <input
-                type="date"
-                value={newEmpForm.joinDate}
-                onChange={e => setNewEmpForm({ ...newEmpForm, joinDate: e.target.value })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setIsAddEmployeeModalOpen(false)}
-              className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
-            >
-              Hủy bỏ
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer shadow-xs"
-            >
-              Lưu hồ sơ
-            </button>
-          </div>
-        </form>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div role="dialog" aria-modal="true" aria-labelledby="employee-access-title" className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+        <h3 id="employee-access-title" className="font-serif font-bold text-gray-900">Tiếp nhận nhân viên mới</h3>
+        <p className="mt-3 text-sm leading-6 text-gray-600">HR không có quyền cấp tài khoản hoặc chọn role. Vui lòng đề nghị MANAGER, ADMIN hoặc DIRECTOR cấp tài khoản theo phạm vi quyền. Nhân viên đã được cấp tài khoản sẽ xuất hiện trong danh sách hồ sơ để HR quản lý lịch, chấm công và nghỉ phép.</p>
+        <button type="button" onClick={() => setIsAddEmployeeModalOpen(false)} className="mt-5 px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm">Đã hiểu</button>
       </div>
     </div>
   );
@@ -2341,6 +2181,7 @@ export default function HRStation({ onBack }: Props) {
               }}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
             >
+              <option value="">Chọn nhân viên</option>
               {employees.map(emp => (
                 <option key={emp.id} value={emp.name}>
                   {emp.name} ({emp.department})

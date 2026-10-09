@@ -208,17 +208,25 @@ export default function StaffPortal({ role, onBack }: Props) {
   const [financeToday, setFinanceToday] = useState<FinanceEntry[]>([]);
   const [notifications, setNotifications] = useState<Array<{ id:number; title:string; desc:string; time:string; type:string; urgent:boolean }>>([]);
   const [selRoom, setSelRoom] = useState<Room | null>(null);
-  const [floor, setFloor] = useState(1);
+  const [floor, setFloor] = useState(0);
   const [showPermPanel, setShowPermPanel] = useState(false);
   const [shiftFilter, setShiftFilter] = useState<"all"|"active"|"off">("all");
   const [shiftPublished, setShiftPublished] = useState(false);
   const [userProfile, setUserProfile] = useState<EmployeeProfileDto | null>(null);
   const [approvalsList, setApprovalsList] = useState<Approval[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [roomsError, setRoomsError] = useState("");
+  const [loadRevision, setLoadRevision] = useState(0);
 
   useEffect(() => {
     let active = true;
-    Promise.all([publicApi.rooms(), frontDeskApi.reservations({ page: 0, size: 100 }), housekeepingTechnicalApi.tasks()])
+    setRoomsLoading(true);
+    setRoomsError("");
+    const access = PERMISSIONS[role];
+    Promise.all([publicApi.rooms(undefined, 0, 100),
+      access.reports.canViewAllBookings ? frontDeskApi.reservations({ page: 0, size: 100 }) : Promise.resolve({ items: [] }),
+      role === "housekeeping" || role === "manager" || role === "director" ? housekeepingTechnicalApi.tasks() : Promise.resolve([])])
       .then(([roomRows, reservationPage, taskRows]) => {
         if (!active) return;
         const roomById = new Map(roomRows.map(room => [room.room_id, room]));
@@ -266,10 +274,11 @@ export default function StaffPortal({ role, onBack }: Props) {
       })
       .catch(error => {
         console.warn("Backend staff portal data unavailable:", error);
-        if (active) { setRoomsState([]); setArrivals([]); setDepartures([]); setHousekeepingTasks([]); }
-      });
+        if (active) { setRoomsError(apiErrorMessage(error, "Không thể tải danh sách phòng. Vui lòng thử lại.")); }
+      })
+      .finally(() => { if (active) setRoomsLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [role, loadRevision]);
 
   useEffect(() => {
     let active = true;
@@ -278,7 +287,7 @@ export default function StaffPortal({ role, onBack }: Props) {
       ACCOUNTING: "accounting", KITCHEN: "fnb", MANAGER: "manager", DIRECTOR: "director",
       ADMIN: "admin", HR: "hr", STAFF: "staff",
     };
-    hrGovernanceApi.employees(true)
+    (PERMISSIONS[role].staff.canViewList ? hrGovernanceApi.employees(true) : Promise.resolve([]))
       .then(rows => {
         if (!active) return;
         setStaff(rows.map((employee: EmployeeAdmin): StaffMember => ({
@@ -294,7 +303,7 @@ export default function StaffPortal({ role, onBack }: Props) {
         })));
       })
       .catch(error => { console.warn("Backend staff directory unavailable:", error); if (active) setStaff([]); });
-    kitchenAccountingApi.invoices({ page: 0, size: 100 })
+    (PERMISSIONS[role].finance.canView ? kitchenAccountingApi.invoices({ page: 0, size: 100 }) : Promise.resolve({items: []}))
       .then(pageData => {
         if (!active) return;
         setFinanceToday(pageData.items.map(invoice => ({
@@ -311,14 +320,14 @@ export default function StaffPortal({ role, onBack }: Props) {
     authApi.employeeProfile()
       .then(p => { if (active) setUserProfile(p); })
       .catch(() => {});
-    hrGovernanceApi.approvals("PENDING")
+    (PERMISSIONS[role].approvals.canApproveConfig || PERMISSIONS[role].approvals.canApproveRefund ? hrGovernanceApi.approvals("PENDING") : Promise.resolve([]))
       .then(res => { if (active) setApprovalsList(rows(res)); })
       .catch(() => { if (active) setApprovalsList([]); });
-    hrGovernanceApi.audit({ page: 0, size: 20 })
+    (PERMISSIONS[role].reports.canViewAuditLog ? hrGovernanceApi.audit({ page: 0, size: 20 }) : Promise.resolve([]))
       .then(res => { if (active) setAuditLogs(rows(res)); })
       .catch(() => { if (active) setAuditLogs([]); });
     return () => { active = false; };
-  }, []);
+  }, [role]);
 
   const rm = ROLE_META[role];
   const perm = PERMISSIONS[role];
@@ -346,7 +355,7 @@ export default function StaffPortal({ role, onBack }: Props) {
   const expense = financeToday.filter(e=>e.type==="expense").reduce((a,e)=>a+e.amount,0);
   const urgentN = notifications.filter(n=>n.urgent).length;
 
-  const floorRooms = roomsState.filter(r=>r.floor===floor);
+  const floorRooms = roomsState.filter(r=>floor === 0 || r.floor===floor);
 
   /* Room state mutation */
   const updateRoom = (id:string, patch:Partial<Room>) => {
@@ -441,12 +450,12 @@ export default function StaffPortal({ role, onBack }: Props) {
           background:`linear-gradient(135deg,${rm.color}10,${rm.color}05)`,border:`1px solid ${rm.color}18`}}>
           <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
             <Clock size={10} style={{color:rm.color}}/>
-            <span style={{fontSize:10,fontWeight:600,color:rm.color}}>Ca sáng · 06:00–14:00</span>
+            <span style={{fontSize:10,fontWeight:600,color:rm.color}}>Dữ liệu phòng trực tuyến</span>
           </div>
           <div style={{height:2,borderRadius:99,background:"rgba(255,255,255,0.06)",overflow:"hidden"}}>
             <div style={{height:"100%",width:"57%",borderRadius:99,background:rm.gr}}/>
           </div>
-          <p style={{fontSize:9,color:"rgba(255,255,255,0.25)",marginTop:4}}>Còn 3 giờ 22 phút</p>
+          <p style={{fontSize:9,color:"rgba(255,255,255,0.25)",marginTop:4}}>Chỉ hiển thị dữ liệu trong phạm vi quyền</p>
         </div>
       )}
 
@@ -505,7 +514,8 @@ export default function StaffPortal({ role, onBack }: Props) {
       <div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:8,
         background:dark?"rgba(34,197,94,0.08)":"#F0FDF4",border:"1px solid #BBF7D0"}}>
         <span style={{width:6,height:6,borderRadius:99,background:"#22C55E"}}/>
-        <span style={{fontSize:11,fontWeight:600,color:"#16A34A"}}>Đang kết nối</span>
+        <span role="status" style={{fontSize:11,fontWeight:600,color:roomsError?"#B91C1C":"#16A34A"}}>{roomsLoading ? "Đang tải phòng…" : roomsError ? "Lỗi tải phòng" : "Đã kết nối"}</span>
+        {roomsError && <div role="alert">{roomsError} <button onClick={() => setLoadRevision(value => value + 1)}>Thử lại</button></div>}
       </div>
       {/* Role pill */}
       <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",borderRadius:8,
@@ -669,7 +679,7 @@ export default function StaffPortal({ role, onBack }: Props) {
         <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
           <div>
             <p style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:rm.color,textTransform:"uppercase",marginBottom:5}}>
-              ● Ca sáng đang hoạt động · {rm.label}
+              ● Thông tin vận hành · {rm.label}
             </p>
             <h1 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:"#FFF",lineHeight:1.1,margin:0}}>
               Xin chào, {userProfile?.full_name || "Nhân viên"}
@@ -757,8 +767,8 @@ export default function StaffPortal({ role, onBack }: Props) {
         {/* Today arrivals mini */}
         <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:14,padding:18}}>
           <p style={{fontSize:10,fontWeight:700,letterSpacing:"0.06em",color:T2,textTransform:"uppercase"}}>Nhận phòng hôm nay</p>
-          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:40,color:T1,lineHeight:1,marginTop:4}}>{arrivals.length}</p>
-          <p style={{fontSize:10,color:T2,marginTop:3}}>3 chờ xử lý · 2 hoàn thành</p>
+          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:40,color:T1,lineHeight:1,marginTop:4}}>{perm.reports.canViewAllBookings ? arrivals.length : "—"}</p>
+          <p style={{fontSize:10,color:T2,marginTop:3}}>{perm.reports.canViewAllBookings ? "Theo dữ liệu booking đã tải" : "Vai trò này không xem dữ liệu booking"}</p>
           <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:7}}>
             {arrivals.slice(0,3).map(b=>(
               <div key={b.id} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 9px",
@@ -960,8 +970,8 @@ export default function StaffPortal({ role, onBack }: Props) {
           </div>
         </div>
         {/* Floor tabs */}
-        <div style={{display:"flex",gap:3,padding:"10px 18px 0"}}>
-          {[1,2,3,4].map(f=>(
+        <div style={{display:"flex",flexWrap:"wrap",gap:3,padding:"10px 18px 0"}}>
+          {[0, ...Array.from(new Set(roomsState.map(room => room.floor))).sort((a,b) => a-b)].map(f=>(
             <button key={f} onClick={()=>setFloor(f)}
               style={{padding:"7px 14px",borderRadius:"8px 8px 0 0",fontSize:12,fontWeight:600,cursor:"pointer",
                 background:floor===f?CARD:"transparent",
@@ -971,7 +981,7 @@ export default function StaffPortal({ role, onBack }: Props) {
                 borderRight:`1px solid ${floor===f?BORDER:"transparent"}`,
                 borderBottom:floor===f?`1px solid ${CARD}`:"1px solid transparent",
                 marginBottom:floor===f?-1:0}}>
-              {f===4?"★ Tầng VIP":`Tầng ${f}`}
+              {f===0 ? "Tất cả tầng" : `Tầng ${f}`}
             </button>
           ))}
         </div>

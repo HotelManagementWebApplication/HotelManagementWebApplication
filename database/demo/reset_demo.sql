@@ -1,6 +1,15 @@
--- Manual demo reset. Run only after Flyway has applied baseline V1.
+-- Manual demo reset. Run only after Flyway has applied all current migrations.
 -- The database is not in production; this script rebuilds customer-facing demo data.
 -- Demo reset rebuilds employee accounts as part of the disposable dataset.
+
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+SET ANSI_PADDING ON;
+SET ANSI_WARNINGS ON;
+SET ARITHABORT ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET NUMERIC_ROUNDABORT OFF;
+SET XACT_ABORT ON;
 
 BEGIN TRANSACTION;
 
@@ -378,11 +387,11 @@ VALUES
     (5, 1, NULL, (SELECT maTaiKhoanKhachHang FROM TaiKhoanKhachHang WHERE soDienThoai = N'0901234567'),
      SYSDATETIME(), 270000.00, N'Bản nháp', N'Theo giờ',
      NULL, NULL, 0, N'DEMO-RES-005', 0,
-     N'DEMO-DEP-005', DATEADD(DAY, 7, SYSDATETIME()), N'Chờ thanh toán'),
+     N'DEMO-DEP-005', DATEADD(MINUTE, 30, SYSDATETIME()), N'Chờ thanh toán'),
     (6, 1, NULL, (SELECT maTaiKhoanKhachHang FROM TaiKhoanKhachHang WHERE soDienThoai = N'0901234567'),
      SYSDATETIME(), 3900000.00, N'Đã thanh toán cọc', N'Theo gói',
      NULL, NULL, 0, N'DEMO-RES-006', 0,
-     N'DEMO-DEP-006', DATEADD(DAY, 7, SYSDATETIME()), N'Đã thanh toán');
+     N'DEMO-DEP-006', NULL, N'Đã thanh toán');
 SET IDENTITY_INSERT PhieuDatPhong OFF;
 
 INSERT INTO ChiTietDatPhong

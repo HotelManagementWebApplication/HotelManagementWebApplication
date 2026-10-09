@@ -1,6 +1,6 @@
 package com.hospitality.mis.reservation;
 
-import com.hospitality.mis.dao.reservation.ReservationRepository;
+import com.hospitality.mis.dao.reservation.ReservationDatabase;
 import com.hospitality.mis.service.reservation.ReservationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -14,25 +14,24 @@ import static org.assertj.core.api.Assertions.*;
 /** Bảo vệ service search: scope theo role, bounds validation và fail-fast trước DB. */
 class ReservationSearchServiceTest {
     /** Repository mock dùng verify query scope và không query khi input invalid. */
-    private final ReservationRepository repository = mock(ReservationRepository.class);
+    private final ReservationDatabase repository = mock(ReservationDatabase.class);
     /** Service thật chỉ dùng search dependencies; các port mutation không liên quan được để null. */
-    private final ReservationService service = new ReservationService(repository, null, null, null, null, null, null, null, null);
+    private final ReservationService service = new ReservationService(repository, null, null, null, null, java.time.Clock.systemUTC());
     /** Dọn authentication giữa các role case. */
     @AfterEach void clear() { SecurityContextHolder.clearContext(); }
     /** Given frontdesk, When list toàn cục, Then query không bị giới hạn theo creator ca hiện tại. */
     @Test void frontDeskCanFindPreviousShiftBookings() {
         authenticate("clerk", "FRONT_DESK");
-        when(repository.searchIds(isNull(), isNull(), isNull(), any())).thenReturn(Page.empty());
+        when(repository.page(null, null, null, 0, 20)).thenReturn(new com.hospitality.mis.dto.reservation.ReservationDtos.PageResponse(java.util.List.of(),0,20,0,0));
         assertThat(service.list(null, null, 0, 20).totalElements()).isZero();
-        verify(repository).searchIds(isNull(), isNull(), isNull(), any());
-        verify(repository, never()).findPageDetails(any());
+        verify(repository).page(null, null, null, 0, 20);
     }
     /** Given manager, When list, Then global scope truyền null filters xuống repository. */
     @Test void managerHasGlobalScope() {
         authenticate("manager", "MANAGER");
-        when(repository.searchIds(isNull(), isNull(), isNull(), any())).thenReturn(Page.empty());
+        when(repository.page(null, null, null, 0, 20)).thenReturn(new com.hospitality.mis.dto.reservation.ReservationDtos.PageResponse(java.util.List.of(),0,20,0,0));
         service.list(null, null, 0, 20);
-        verify(repository).searchIds(isNull(), isNull(), isNull(), any());
+        verify(repository).page(null, null, null, 0, 20);
     }
     /** Given anonymous/negative/oversized filters, When list, Then fail trước DB và không tương tác repository. */
     @Test void invalidBoundsAndUnauthenticatedQueriesDoNotReachDatabase() {

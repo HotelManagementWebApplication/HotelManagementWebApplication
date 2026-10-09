@@ -36,11 +36,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:customerauth;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate",
         "spring.mail.username=otp-test@example.com",
         "spring.mail.password=test-only-password"
 })
@@ -75,8 +75,10 @@ class CustomerAuthenticationIntegrationTest {
         when(mailSender.createMimeMessage()).thenAnswer(ignored -> new JavaMailSenderImpl().createMimeMessage());
         refreshTokens.deleteAll();
         accounts.deleteAll();
-        employees.deleteAll();
-        jdbc.update("delete from KhachLuuTru");
+        jdbc.update("DELETE SuKienDangNhapNhanVien WHERE maNhanVien=N'employee'");
+        jdbc.update("DELETE CaLamViecNhanVien WHERE maNhanVien=N'employee'");
+        jdbc.update("DELETE NhanVien WHERE maNhanVien=N'employee'");
+        jdbc.update("DELETE KhachLuuTru WHERE maKhachLuuTru NOT IN(SELECT maKhachLuuTru FROM PhieuDatPhong)");
         jdbc.update("delete from NhatKyKiemSoat");
         Employee employee = new Employee();
         employee.setEmployeeId("employee");

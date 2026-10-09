@@ -1,59 +1,19 @@
 package com.hospitality.mis.reservation;
-
-import com.hospitality.mis.dao.reservation.ReservationRepository;
-import com.hospitality.mis.entity.guest.Guest;
-import com.hospitality.mis.entity.identity.Employee;
-import com.hospitality.mis.entity.identity.EmployeeRole;
-import com.hospitality.mis.entity.reservation.Reservation;
 import com.hospitality.mis.entity.reservation.ReservationStatus;
-import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.data.domain.PageRequest;
-import java.time.LocalDateTime;
-import static org.assertj.core.api.Assertions.assertThat;
-import org.springframework.test.util.ReflectionTestUtils;
-
-@DataJpaTest(properties = {"spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"})
-/** Bảo vệ query scope/status trước pagination, gồm cả booking cũ hơn trang đầu. */
-class ReservationSearchIntegrationTest {
-    /** EntityManager seed 107 rows và clear persistence context trước query. */
-    @Autowired EntityManager em;
-    /** Repository thật để kiểm tra count, page ids và detail hydration. */
-    @Autowired ReservationRepository repository;
-
-    @Test
-    /** Given nhiều owner/status và 105 booking nhiễu, When search, Then filter trước page và giữ total đúng. */
-    void scopeAndStatusAreAppliedBeforePaginationIncludingOlderBookings() {
-        Employee owner = employee("owner", "0900000001");
-        Employee other = employee("other", "0900000002");
-        Guest guest = new Guest(); guest.setFullName("Search Guest"); guest.setPhone("0900000011");
-        guest.setIdentityNumber("012345678901"); em.persist(guest);
-        Reservation old = reservation(owner, guest, ReservationStatus.CONFIRMED, 0);
-        for (int i = 1; i <= 105; i++) reservation(other, guest, ReservationStatus.CONFIRMED, i);
-        reservation(owner, guest, ReservationStatus.DEPOSIT_PAID, 106);
-        em.flush(); em.clear();
-        var page = repository.searchIds("owner", ReservationStatus.CONFIRMED, guest.getId(), PageRequest.of(0, 20));
-        assertThat(page.getTotalElements()).isEqualTo(1);
-        assertThat(page.getContent()).containsExactly(old.getId());
-        assertThat(repository.findPageDetails(page.getContent())).hasSize(1);
-        var global = repository.searchIds(null, null, null, PageRequest.of(1, 20));
-        assertThat(global.getTotalElements()).isEqualTo(107);
-        assertThat(global.getContent()).hasSize(20);
-        assertThat(repository.searchIds("owner", null, null, PageRequest.of(1, 1)).getContent())
-                .containsExactly(old.getId());
-    }
-
-    /** Persist employee fixture với phone unique để tạo owner scopes độc lập. */
-    private Employee employee(String id, String phone) {
-        Employee e = new Employee(); e.setEmployeeId(id); e.setFullName(id); e.setPhone(phone);
-        e.setPassword("test-hash"); e.setRole(EmployeeRole.FRONT_DESK); em.persist(e); return e;
-    }
-    /** Persist reservation tại minute định trước để thứ tự pagination tái lập. */
-    private Reservation reservation(Employee employee, Guest guest, ReservationStatus status, int minute) {
-        Reservation r = new Reservation(); r.setEmployee(employee); r.setGuest(guest); r.transitionTo(status);
-        ReflectionTestUtils.setField(r, "bookedAt", LocalDateTime.of(2031, 1, 1, 0, 0).plusMinutes(minute));
-        em.persist(r); return r;
+import static org.assertj.core.api.Assertions.*;
+class ReservationSearchIntegrationTest extends ReservationSqlFixture {
+    @Test void filtersBeforePaginationAndOrdersByBookedTimeThenIdentity(){
+        for(int i=0;i<107;i++){
+            String status=i==0||i==106?"Đã xác nhận":"Bản nháp";
+            jdbc.update("INSERT PhieuDatPhong(maKhachLuuTru,maNhanVien,trangThai,thoiDiemDat) VALUES(?,N'HCT-FD',?,?)",guest,status,now.plusMinutes(i));
+            long id=jdbc.queryForObject("SELECT MAX(maPhieuDatPhong) FROM PhieuDatPhong WHERE maNhanVien=N'HCT-FD'",Long.class);
+            jdbc.update("INSERT ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,thoiDiemTraPhongBanDau) VALUES(?,N'HCT-R1',?,?,?)",id,now.plusDays(i),now.plusDays(i+1),now.plusDays(i+1));
+        }
+        var page=service.list(ReservationStatus.CONFIRMED,guest,1,1);
+        assertThat(page.totalElements()).isEqualTo(2);assertThat(page.items()).hasSize(1);
+        assertThat(page.items().get(0).bookedAt()).isEqualTo(now);
+        assertThat(service.list(null,guest,1,20).items()).hasSize(20);
+        actor("other","STAFF");assertThat(service.list(null,guest,0,20).totalElements()).isZero();
     }
 }

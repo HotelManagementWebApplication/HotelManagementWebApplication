@@ -1,10 +1,11 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { kitchenAccountingApi, newKitchenIdempotencyKey } from "../../shared/api/kitchenAccounting";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { authApi } from "../../shared/api/auth";
+import { apiErrorMessage, ApiError } from "../../shared/api/client";
 import { EmployeeProfileDropdown } from "../../shared/components/EmployeeProfileDropdown";
 import type { OtaReconciliation, VatInvoice } from "../../shared/types/enterprise";
-import type { Invoice as ApiInvoice, CashHandover, CashDenomination, Payment, PartnerDebt } from "../../shared/types/kitchenAccounting";
+import type { CashHandover, CashDenomination, LedgerPayment, PaymentMethod, PaymentPage, Reconciliation, PartnerDebt } from "../../shared/types/kitchenAccounting";
 import { employeeRoleLabel } from "../../shared/types/api";
 import type { EmployeeProfileDto } from "../../shared/types/api";
 import { localDateValue } from "../../shared/utils/localDate";
@@ -26,11 +27,6 @@ type LedgerTab = "all" | "cash" | "card" | "vietqr" | "momo" | "other";
 type PayStatus = "paid" | "pending" | "refunded" | "failed" | "cancelled";
 type OtaChannel = "agoda" | "booking" | "expedia" | "airbnb" | "direct";
 
-interface Invoice {
-  id: string; room: number; guest: string; desc: string;
-  amount: number; method: string; methodType: string;
-  time: string; status: PayStatus;
-}
 interface PaymentLedgerEntry {
   id: string;
   invoiceId: string;
@@ -334,18 +330,40 @@ function CashHandoverPanel({
 /* ══════════════════════════════════════════════════════════
    INVOICE & PAYMENT LEDGER PANEL
 ══════════════════════════════════════════════════════════ */
-function LedgerPanel({ invoices = [], payments = [], fillHeight = false }: { invoices?: Invoice[]; payments?: Payment[]; fillHeight?: boolean }) {
+function LedgerPanel({ fillHeight = false }: { fillHeight?: boolean }) {
   const [lTab, setLTab] = useState<LedgerTab>("all");
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
-  const [methodFilter, setMethodFilter] = useState<LedgerTab | "all">("all");
+  const [paymentPage, setPaymentPage] = useState<PaymentPage | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const PER_PAGE = 10;
   const currentDateLabel = new Date().toLocaleDateString("vi-VN");
+  const today = localDateValue();
+  const methods: Record<Exclude<LedgerTab, "all">, PaymentMethod> = { cash:"CASH", card:"CARD", vietqr:"BANK_TRANSFER", momo:"MOMO", other:"OTHER" };
+  const method = lTab === "all" ? undefined : methods[lTab];
 
-  const paymentRows = useMemo<PaymentLedgerEntry[]>(() => {
-    const invoicesById = new Map(invoices.map(invoice => [Number(invoice.id.replace("INV-", "")), invoice]));
-    return payments.map((payment): PaymentLedgerEntry => {
-      const invoice = invoicesById.get(payment.invoice_id);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    setExportError("");
+    kitchenAccountingApi.payments({ from:today, to:today, page:page-1, size:PER_PAGE, method, search:searchQuery.trim() || undefined })
+      .then(result => {
+        if (!active) return;
+        if (result.page !== page-1) throw new ApiError(502,{code:"INVALID_PAGE_RESPONSE",message:"Máy chủ trả sai trang giao dịch. Vui lòng tải lại."});
+        if (page > Math.max(1,result.totalPages)) { setPage(Math.max(1,result.totalPages)); return; }
+        setPaymentPage(result);
+      })
+      .catch(cause => { if (active) setError(apiErrorMessage(cause,"Không thể tải giao dịch thanh toán.")); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [page, method, searchQuery, today, reload]);
+
+  const toLedgerRow = (payment: LedgerPayment): PaymentLedgerEntry => {
       const methodType: LedgerTab = payment.method === "CASH" ? "cash"
         : payment.method === "CARD" ? "card"
         : payment.method === "BANK_TRANSFER" ? "vietqr"
@@ -358,9 +376,9 @@ function LedgerPanel({ invoices = [], payments = [], fillHeight = false }: { inv
       return {
         id: `PAY-${payment.id}`,
         invoiceId: `INV-${payment.invoice_id}`,
-        reservationId: invoice ? invoice.room : "—",
-        guest: invoice?.guest ?? "—",
-        description: payment.type === "REFUND" ? "Hoàn tiền" : invoice?.desc ?? "Thanh toán hóa đơn",
+        reservationId: payment.reservation_id,
+        guest: `Đặt phòng #${payment.reservation_id}`,
+        description: payment.type === "REFUND" ? "Hoàn tiền" : payment.service_total > 0 ? "Phòng & dịch vụ" : "Tiền phòng",
         amount: payment.amount,
         method: payment.method,
         methodType,
@@ -368,28 +386,20 @@ function LedgerPanel({ invoices = [], payments = [], fillHeight = false }: { inv
         status,
         ledgerTab: ["all", methodType],
       };
-    }).sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
-  }, [invoices, payments]);
-
-  const filtered = useMemo(() =>
-    paymentRows.filter(row => {
-      const matchesTab = row.ledgerTab.includes(lTab);
-      const matchesMethod = methodFilter === "all" || row.methodType === methodFilter;
-      const haystack = `${row.id} ${row.invoiceId} ${row.reservationId} ${row.guest} ${row.description} ${row.method}`.toLowerCase();
-      return matchesTab && matchesMethod && haystack.includes(searchQuery.trim().toLowerCase());
-    }),
-    [paymentRows, lTab, methodFilter, searchQuery]
-  );
-  const pageRows = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
-  const totalPages = Math.ceil(filtered.length / PER_PAGE) || 1;
+  };
+  const pageRows = loading || error ? [] : (paymentPage?.items ?? []).map(toLedgerRow);
+  const totalElements = paymentPage?.totalElements ?? 0;
+  const totalPages = Math.max(1,paymentPage?.totalPages ?? 0);
+  const methodCounts = paymentPage?.methodCounts ?? {};
+  const pageNumbers = [...new Set([1,Math.max(1,page-1),page,Math.min(totalPages,page+1),totalPages])].sort((a,b)=>a-b);
 
   const TABS: { id:LedgerTab; label:string; count:number }[] = [
-    { id:"all",     label:"Tất cả",        count:paymentRows.length },
-    { id:"cash",    label:"Tiền mặt",       count:paymentRows.filter(row => row.methodType === "cash").length },
-    { id:"card",    label:"Thẻ",       count:paymentRows.filter(row => row.methodType === "card").length },
-    { id:"vietqr",  label:"Chuyển khoản",  count:paymentRows.filter(row => row.methodType === "vietqr").length },
-    { id:"momo",    label:"Ví MoMo",       count:paymentRows.filter(row => row.methodType === "momo").length },
-    { id:"other",   label:"Khác",          count:paymentRows.filter(row => row.methodType === "other").length },
+    { id:"all",     label:"Tất cả",        count:Object.values(methodCounts).reduce((sum,count)=>sum+(count ?? 0),0) },
+    { id:"cash",    label:"Tiền mặt",       count:methodCounts.CASH ?? 0 },
+    { id:"card",    label:"Thẻ",            count:methodCounts.CARD ?? 0 },
+    { id:"vietqr",  label:"Chuyển khoản",  count:methodCounts.BANK_TRANSFER ?? 0 },
+    { id:"momo",    label:"Ví MoMo",       count:methodCounts.MOMO ?? 0 },
+    { id:"other",   label:"Khác",          count:methodCounts.OTHER ?? 0 },
   ];
 
   const STATUS_CFG: Record<PayStatus,{label:string;bg:string;text:string;dot:string}> = {
@@ -400,12 +410,30 @@ function LedgerPanel({ invoices = [], payments = [], fillHeight = false }: { inv
     cancelled:{ label:"Đã hủy", bg:"#F1F5F9",text:"#64748B",dot:"#94A3B8" },
   };
 
-  const exportRows = () => {
+  const exportRows = async () => {
+    setExporting(true);
+    setExportError("");
+    try {
+    const payments: LedgerPayment[] = [];
+    let pages = 1;
+    let expectedTotal: number | undefined;
+    const ids = new Set<number>();
+    for (let index=0; index<pages; index++) {
+      const result = await kitchenAccountingApi.payments({ from:today, to:today, method, search:searchQuery.trim() || undefined, page:index, size:100 });
+      if (result.page !== index || (expectedTotal !== undefined && result.totalElements !== expectedTotal)
+          || (result.items.length === 0 && payments.length < result.totalElements)
+          || result.items.some(row=>ids.has(row.id))) throw new ApiError(502,{code:"EXPORT_DATA_CHANGED",message:"Dữ liệu giao dịch đã thay đổi hoặc trả thiếu khi xuất. Vui lòng thử lại."});
+      expectedTotal = result.totalElements;
+      result.items.forEach(row=>ids.add(row.id));
+      payments.push(...result.items);
+      pages = result.totalPages;
+    }
+    if (payments.length !== expectedTotal) throw new ApiError(502,{code:"EXPORT_INCOMPLETE",message:"Chưa tải đủ giao dịch để xuất CSV. Vui lòng thử lại."});
     const escapeCsv = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
     const rows = [
       ["transaction_id", "invoice_id", "reservation_id", "type", "amount", "method", "occurred_at", "status", "reference"],
-      ...filtered.map(row => {
-        const source = payments.find(payment => `PAY-${payment.id}` === row.id);
+      ...payments.map(source => {
+        const row = toLedgerRow(source);
         return [row.id, row.invoiceId, row.reservationId, row.description, row.amount, row.method, source?.occurred_at ?? "", row.status, source?.reference ?? ""];
       }),
     ].map(row => row.map(escapeCsv).join(","));
@@ -415,6 +443,8 @@ function LedgerPanel({ invoices = [], payments = [], fillHeight = false }: { inv
     link.download = `payments-${localDateValue()}.csv`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (cause) { setExportError(apiErrorMessage(cause,"Không thể xuất giao dịch CSV.")); }
+    finally { setExporting(false); }
   };
 
   return (
@@ -427,10 +457,10 @@ function LedgerPanel({ invoices = [], payments = [], fillHeight = false }: { inv
           <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Sổ giao dịch thanh toán</p>
           <p style={{ fontSize:11,color:"#94A3B8" }}>Giao dịch thực tế ghi nhận ngày {currentDateLabel}</p>
         </div>
-        <button onClick={exportRows} style={{ display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:8,
+        <button disabled={exporting || loading} onClick={() => void exportRows()} style={{ display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:8,
           border:"1px solid #E2E8F0",background:"#F8FAFC",color:"#334155",fontSize:11,
           fontWeight:600,cursor:"pointer" }}>
-          <Download size={12} /> Xuất giao dịch CSV
+          <Download size={12} /> {exporting ? "Đang xuất…" : "Xuất giao dịch CSV"}
         </button>
       </div>
 
@@ -439,7 +469,7 @@ function LedgerPanel({ invoices = [], payments = [], fillHeight = false }: { inv
         display:"flex",gap:8,alignItems:"center" }}>
         <div style={{ position:"relative",flex:1 }}>
           <Search size={12} style={{ position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
-          <input value={searchQuery} onChange={event => { setSearchQuery(event.target.value); setPage(1); }} placeholder="Tìm mã giao dịch, hóa đơn hoặc đặt phòng..."
+          <input value={searchQuery} maxLength={200} onChange={event => { setSearchQuery(event.target.value); setPage(1); }} placeholder="Tìm mã giao dịch, hóa đơn hoặc đặt phòng..."
             style={{ width:"100%",height:30,paddingLeft:28,paddingRight:8,borderRadius:7,
               border:"1px solid #E2E8F0",background:"#F8FAFC",fontSize:11,outline:"none",boxSizing:"border-box" }} />
         </div>
@@ -451,7 +481,7 @@ function LedgerPanel({ invoices = [], payments = [], fillHeight = false }: { inv
           <ChevronDown size={10} style={{ position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
         </div>
         <div style={{ position:"relative" }}>
-          <select value={methodFilter} onChange={event => { setMethodFilter(event.target.value as LedgerTab | "all"); setPage(1); }} style={{ height:30,padding:"0 22px 0 8px",borderRadius:7,border:"1px solid #E2E8F0",
+          <select aria-label="Phương thức thanh toán" value={lTab} onChange={event => { setLTab(event.target.value as LedgerTab); setPage(1); }} style={{ height:30,padding:"0 22px 0 8px",borderRadius:7,border:"1px solid #E2E8F0",
             background:"#F8FAFC",fontSize:11,outline:"none",cursor:"pointer",appearance:"none" }}>
             <option value="all">Tất cả phương thức</option>
             <option value="cash">Tiền mặt</option><option value="card">Thẻ</option>
@@ -479,6 +509,8 @@ function LedgerPanel({ invoices = [], payments = [], fillHeight = false }: { inv
         })}
       </div>
 
+      {error && <div role="alert" style={{padding:"12px 18px",color:"#B91C1C"}}>{error} <button onClick={()=>setReload(value=>value+1)}>Tải lại giao dịch</button></div>}
+      {exportError && <div role="alert" style={{padding:"12px 18px",color:"#B91C1C"}}>{exportError}</div>}
       {/* Table */}
       <div style={{ flex:1,overflowY:"auto" }}>
         <table style={{ width:"100%",borderCollapse:"collapse" }}>
@@ -492,7 +524,8 @@ function LedgerPanel({ invoices = [], payments = [], fillHeight = false }: { inv
             </tr>
           </thead>
           <tbody>
-            {pageRows.length === 0 && (
+            {loading && <tr><td colSpan={8} style={{padding:28,textAlign:"center"}}>Đang tải giao dịch…</td></tr>}
+            {!loading && !error && pageRows.length === 0 && (
               <tr>
                 <td colSpan={8} style={{ padding:"28px 12px",textAlign:"center",fontSize:12,color:"#94A3B8" }}>
                   Chưa có giao dịch thanh toán phù hợp trong ngày đã chọn.
@@ -533,24 +566,24 @@ function LedgerPanel({ invoices = [], payments = [], fillHeight = false }: { inv
       {/* Pagination */}
       <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",
         padding:"10px 18px",borderTop:"1px solid #E2E8F0",background:"#F8FAFC",flexShrink:0 }}>
-        <span style={{ fontSize:11,color:"#64748B" }}>Hiển thị {filtered.length === 0 ? 0 : (page-1)*PER_PAGE+1}–{Math.min(page*PER_PAGE,filtered.length)} trên {filtered.length} giao dịch</span>
+        <span style={{ fontSize:11,color:"#64748B" }}>{loading ? "Đang tải trang giao dịch…" : error ? "Chưa tải được giao dịch" : `Hiển thị ${totalElements === 0 ? 0 : (page-1)*PER_PAGE+1}–${totalElements === 0 ? 0 : (page-1)*PER_PAGE+pageRows.length} trên ${totalElements} giao dịch`}</span>
         <div style={{ display:"flex",gap:4,alignItems:"center" }}>
-          <button onClick={() => setPage(p=>Math.max(1,p-1))} disabled={page===1}
+          <button type="button" aria-label="Trang trước" onClick={() => setPage(p=>Math.max(1,p-1))} disabled={loading || !!error || page===1}
             style={{ width:24,height:24,borderRadius:6,border:"1px solid #E2E8F0",background:"#FFF",
-              cursor:page===1?"not-allowed":"pointer",color:page===1?"#CBD5E1":"#475569",
+              cursor:loading || error || page===1?"not-allowed":"pointer",color:loading || error || page===1?"#CBD5E1":"#475569",
               display:"flex",alignItems:"center",justifyContent:"center" }}>
             <ChevronLeft size={11} />
           </button>
-          {Array.from({ length: totalPages }, (_, index) => index + 1).map(n => (
-            <button key={n} onClick={() => setPage(n)}
+          {pageNumbers.map(n => (
+            <button type="button" aria-label={`Trang ${n}`} aria-current={page===n?"page":undefined} disabled={loading || !!error} key={n} onClick={() => setPage(n)}
               style={{ width:24,height:24,borderRadius:6,fontSize:11,
                 border:page===n?"none":"1px solid #E2E8F0",cursor:"pointer",
                 background:page===n?"#0F172A":"#FFF",color:page===n?"#FFF":"#475569",
                 fontWeight:page===n?700:400 }}>{n}</button>
           ))}
-          <button onClick={() => setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages}
+          <button type="button" aria-label="Trang sau" onClick={() => setPage(p=>Math.min(totalPages,p+1))} disabled={loading || !!error || page>=totalPages}
             style={{ width:24,height:24,borderRadius:6,border:"1px solid #E2E8F0",background:"#FFF",
-              cursor:page===6?"not-allowed":"pointer",color:page===6?"#CBD5E1":"#475569",
+              cursor:loading || error || page>=totalPages?"not-allowed":"pointer",color:loading || error || page>=totalPages?"#CBD5E1":"#475569",
               display:"flex",alignItems:"center",justifyContent:"center" }}>
             <ChevronRight size={11} />
           </button>
@@ -836,8 +869,8 @@ function DebtScreen({ debts, onSettled }: { debts: PartnerDebt[]; onSettled: (de
 ══════════════════════════════════════════════════════════ */
 export default function AccountingStation({ onBack }: { onBack: () => void }) {
   const [mainTab, setMainTab] = useState<MainTab>("handover");
-  const [liveInvoices, setLiveInvoices] = useState<Invoice[]>([]);
-  const [livePayments, setLivePayments] = useState<Payment[]>([]);
+  const [financeSummary, setFinanceSummary] = useState<Reconciliation | null>(null);
+  const [summaryError, setSummaryError] = useState("");
   const [liveDebts, setLiveDebts] = useState<PartnerDebt[]>([]);
   const [liveCashHandovers, setLiveCashHandovers] = useState<CashHandover[]>([]);
   const [cashHandoverSubmitting, setCashHandoverSubmitting] = useState(false);
@@ -849,41 +882,11 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     let active = true;
-    kitchenAccountingApi.invoices({ page: 0, size: 100 })
-      .then(page => {
-        if (!active) return;
-        const mapped = page.items.map((invoice: ApiInvoice): Invoice => {
-          const method = invoice.payment_method ?? "OTHER";
-          const methodType = method === "CASH" ? "cash" : method === "CARD" ? "card"
-            : method === "BANK_TRANSFER" ? "vietqr" : method === "MOMO" ? "momo" : "other";
-          const invoiceTotal = invoice.room_total + invoice.service_total + invoice.late_surcharge
-            + invoice.compensation + invoice.extension_total + invoice.adjustment_total - invoice.discount;
-          const amount = Math.round(invoice.status === "DA_THANH_TOAN"
-            ? invoiceTotal
-            : invoice.status === "DU_KIEN" ? invoice.deposit : invoice.payable);
-          const room = invoice.reservation_id;
-          const status: PayStatus = invoice.status === "DA_THANH_TOAN" ? "paid" : "pending";
-          return {
-            id: `INV-${invoice.id}`,
-            room,
-            guest: `Đặt phòng #${invoice.reservation_id}`,
-            desc: invoice.service_total > 0 ? "Phòng & dịch vụ" : "Tiền phòng",
-            amount,
-            method,
-            methodType,
-            time: new Date(invoice.issued_at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-            status,
-          };
-        });
-        setLiveInvoices(mapped);
-      })
-      .catch(err => {
-        console.warn("Backend accounting invoices unavailable:", err);
-        if (active) setLiveInvoices([]);
-      });
-    kitchenAccountingApi.payments({ from: localDateValue(), to: localDateValue(), page: 0, size: 100 })
-      .then(page => { if (active) setLivePayments(page.items); })
-      .catch(err => { console.warn("Backend accounting payment transactions unavailable:", err); if (active) setLivePayments([]); });
+
+    kitchenAccountingApi.reconciliation({ from:localDateValue(), to:localDateValue() })
+      .then(summary => { if (active) setFinanceSummary(summary); })
+      .catch(cause => { if (active) setSummaryError(apiErrorMessage(cause,"Không thể tải tổng hợp tài chính.")); });
+
     kitchenAccountingApi.partnerDebts()
       .then(rows => { if (active) setLiveDebts(rows); })
       .catch(err => { console.warn("Backend partner debts unavailable:", err); if (active) setLiveDebts([]); });
@@ -968,18 +971,12 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
       setCashHandoverSubmitting(false);
     }
   };
-  const completedPayments = livePayments.filter(payment => payment.status === "COMPLETED");
-  const netAmount = (payments: Payment[]) => payments.reduce((sum, payment) =>
-    sum + (payment.type === "REFUND" ? -payment.amount : payment.amount), 0);
-  const revenueToday = netAmount(completedPayments);
-  const cashToday = netAmount(completedPayments.filter(payment => payment.method === "CASH"));
-  const cardToday = netAmount(completedPayments.filter(payment => payment.method === "CARD"));
-  const pendingTransfer = liveInvoices.filter(invoice => invoice.status === "pending" && invoice.methodType === "vietqr").reduce((sum, invoice) => sum + invoice.amount, 0);
+  const summaryMoney = (value: number | undefined) => value === undefined ? "—" : fmtMoney(value);
   const financeKpis = [
-    { label:"Thu/hoàn ròng hôm nay", Icon:DollarSign, iconBg:"#DCFCE7",iconColor:"#16A34A",val:fmtMoney(revenueToday),sub:`${completedPayments.length} giao dịch hoàn tất`, subUp:false },
-    { label:"Tiền mặt nhận ròng hôm nay", Icon:DollarSign, iconBg:"#DBEAFE",iconColor:"#2563EB",val:fmtMoney(cashToday), sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
-    { label:"Thanh toán thẻ ròng hôm nay", Icon:CreditCard, iconBg:"#EDE9FE",iconColor:"#5B21B6",val:fmtMoney(cardToday),sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
-    { label:"Chuyển khoản chờ đối soát",Icon:Building2, iconBg:"#FEF9C3",iconColor:"#92400E",val:fmtMoney(pendingTransfer), sub:"Theo hóa đơn đang chờ", subUp:false },
+    { label:"Thu/hoàn ròng hôm nay", Icon:DollarSign, iconBg:"#DCFCE7",iconColor:"#16A34A",val:summaryMoney(financeSummary?.net_total),sub:financeSummary ? `${financeSummary.completed_transactions} giao dịch hoàn tất` : "Đang tải tổng hợp", subUp:false },
+    { label:"Tiền mặt nhận ròng hôm nay", Icon:DollarSign, iconBg:"#DBEAFE",iconColor:"#2563EB",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CASH ?? 0 : undefined), sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
+    { label:"Thanh toán thẻ ròng hôm nay", Icon:CreditCard, iconBg:"#EDE9FE",iconColor:"#5B21B6",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CARD ?? 0 : undefined),sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
+    { label:"Chuyển khoản chờ đối soát",Icon:Building2, iconBg:"#FEF9C3",iconColor:"#92400E",val:summaryMoney(financeSummary?.pending_bank_transfers), sub:"Theo hóa đơn đang chờ", subUp:false },
     { label:"Hoàn tiền chờ Giám đốc",  Icon:RefreshCcw,  iconBg:"#FFE4E8",iconColor:"#DC2626",val:"0",          sub:"Chưa có dữ liệu hoàn tiền",       subUp:false },
   ];
   const todayLabel = new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" });
@@ -1135,6 +1132,7 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
               </div>
             </div>
 
+            {summaryError && <p role="alert" style={{color:"#B91C1C",fontSize:12,marginBottom:10}}>{summaryError}</p>}
             {/* KPI CARDS */}
             <div style={{ display:"flex",gap:12,marginBottom:14,overflowX:"auto" }}>
               {financeKpis.map(k => (
@@ -1179,13 +1177,13 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
           {mainTab === "handover" && (
             <div style={{ flex:1,display:"flex",gap:14,padding:"14px 22px",overflow:"hidden" }}>
               <CashHandoverPanel cashRows={liveCashRows} handoverDate={todayLabel} fromStaff={userProfile?.employee_id} toStaff={userProfile?.full_name} onSubmit={submitCashHandover} submitting={cashHandoverSubmitting} />
-              <LedgerPanel invoices={liveInvoices} payments={livePayments} />
+              <LedgerPanel />
             </div>
           )}
           {mainTab === "ledger" && (
             <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",padding:"14px 22px" }}>
               <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden",flex:1,display:"flex",flexDirection:"column" }}>
-                <LedgerPanel invoices={liveInvoices} payments={livePayments} fillHeight />
+                <LedgerPanel fillHeight />
               </div>
             </div>
           )}

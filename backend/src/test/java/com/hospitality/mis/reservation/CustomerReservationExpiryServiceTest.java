@@ -1,80 +1,43 @@
 package com.hospitality.mis.reservation;
 
-import com.hospitality.mis.dao.billing.VnpayPaymentAttemptRepository;
-import com.hospitality.mis.dao.reservation.ReservationRepository;
-import com.hospitality.mis.entity.reservation.DepositPaymentStatus;
-import com.hospitality.mis.entity.reservation.Reservation;
-import com.hospitality.mis.entity.reservation.ReservationRoom;
-import com.hospitality.mis.entity.reservation.ReservationStatus;
-import com.hospitality.mis.service.governance.AuditService;
 import com.hospitality.mis.service.reservation.CustomerReservationExpiryService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-
+import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.List;
+import static org.assertj.core.api.Assertions.*;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest(properties={"spring.datasource.url=${MIGRATION_TEST_DB_URL}","spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}","spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}","spring.flyway.enabled=true","spring.jpa.hibernate.ddl-auto=validate"})
 class CustomerReservationExpiryServiceTest {
-    @Mock ReservationRepository reservations;
-    @Mock AuditService audit;
-    @Mock VnpayPaymentAttemptRepository vnpayAttempts;
-
-    @Test
-    void expiredExtensionPaymentRestoresOriginalConfirmedBooking() {
-        var originalCheckIn = LocalDateTime.of(2026, 10, 10, 14, 0);
-        var originalCheckOut = LocalDateTime.of(2026, 10, 12, 12, 0);
-        var extendedCheckOut = LocalDateTime.of(2026, 10, 14, 12, 0);
-
-        var reservation = new Reservation();
-        ReflectionTestUtils.setField(reservation, "id", 41L);
-        reservation.transitionTo(ReservationStatus.CONFIRMED);
-        reservation.setDepositAmount(new BigDecimal("3600000"));
-        reservation.setDepositPaymentStatus(DepositPaymentStatus.PENDING);
-        reservation.setDepositPaymentCode("EXT-41");
-        reservation.setDepositPaymentExpiresAt(LocalDateTime.of(2026, 10, 2, 9, 0));
-        reservation.setPendingChangeType("Gia hạn");
-        reservation.setPendingPreviousCheckIn(originalCheckIn);
-        reservation.setPendingPreviousCheckOut(originalCheckOut);
-        reservation.setPendingPreviousDepositAmount(new BigDecimal("1800000"));
-        reservation.setPendingAdditionalDeposit(new BigDecimal("1800000"));
-
-        var room = new ReservationRoom();
-        room.setCheckIn(originalCheckIn);
-        room.setCheckOut(extendedCheckOut);
-        reservation.addRoom(room);
-
-        when(reservations.findExpiredCustomerHoldsForUpdate(any())).thenReturn(List.of(reservation));
-        when(vnpayAttempts.findByReservationIdAndStatus(any(), any())).thenReturn(List.of());
-
-        var service = new CustomerReservationExpiryService(reservations, audit, vnpayAttempts);
-        ReflectionTestUtils.setField(service, "clock", Clock.fixed(
-            Instant.parse("2026-10-02T03:00:00Z"), ZoneId.of("Asia/Ho_Chi_Minh")));
-
+    @Autowired CustomerReservationExpiryService service;
+    @Autowired JdbcTemplate jdbc;
+    @BeforeEach void seed(){cleanup();jdbc.update("INSERT KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) VALUES(N'EXP guest',N'0966000901',N'096600000001')");}
+    @AfterEach void clear(){cleanup();}
+    @Test void expiredExtensionRestoresScheduleDepositAttemptAndAudit(){
+        long id=reservation("Đã xác nhận","EXP-extension");
+        LocalDateTime oldIn=LocalDateTime.of(2026,10,10,14,0),oldOut=LocalDateTime.of(2026,10,12,12,0),extended=LocalDateTime.of(2026,10,14,12,0);
+        room(id,"EXP-A",oldIn,extended);
+        jdbc.update("UPDATE ChiTietDatPhong SET thoiDiemTraPhongBanDau=? WHERE maPhieuDatPhong=?",oldOut,id);
+        jdbc.update("UPDATE PhieuDatPhong SET tienDatCoc=3600000,trangThaiThanhToanCoc=N'Chờ thanh toán',thoiDiemHetHanThanhToanCoc='2026-10-01',loaiThayDoiDangCho=N'Gia hạn',thoiDiemNhanPhongTruocThayDoi=?,thoiDiemTraPhongTruocThayDoi=?,tienDatCocTruocThayDoi=1800000,tienDatCocBoSung=1800000,maThanhToanDatCoc=N'EXP-CODE' WHERE maPhieuDatPhong=?",oldIn,oldOut,id);
+        attempt(id,"EXP-ATTEMPT");
         service.expireHolds();
-
-        assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
-        assertThat(reservation.getDepositPaymentStatus()).isEqualTo(DepositPaymentStatus.PAID);
-        assertThat(reservation.getDepositAmount()).isEqualByComparingTo("1800000");
-        assertThat(room.getCheckIn()).isEqualTo(originalCheckIn);
-        assertThat(room.getCheckOut()).isEqualTo(originalCheckOut);
-        assertThat(reservation.getPendingChangeType()).isNull();
-        assertThat(reservation.getPendingAdditionalDeposit()).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(reservation.getDepositPaymentCode()).isNull();
-        assertThat(reservation.getDepositPaymentExpiresAt()).isNull();
-        verify(audit).record("SYSTEM", "CUSTOMER_EXTENSION_PAYMENT_EXPIRED", "RESERVATION",
-            "41", "PENDING", "ROLLED_BACK", "ADDITIONAL_DEPOSIT_TIMEOUT");
+        assertThat(jdbc.queryForObject("SELECT tienDatCoc FROM PhieuDatPhong WHERE maPhieuDatPhong=?",BigDecimal.class,id)).isEqualByComparingTo("1800000");
+        assertThat(jdbc.queryForObject("SELECT trangThaiThanhToanCoc FROM PhieuDatPhong WHERE maPhieuDatPhong=?",String.class,id)).isEqualTo("Đã thanh toán");
+        assertThat(jdbc.queryForObject("SELECT thoiDiemTraPhong FROM ChiTietDatPhong WHERE maPhieuDatPhong=?",java.sql.Timestamp.class,id).toLocalDateTime()).isEqualTo(oldOut);
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM YeuCauThanhToanVnpay WHERE maPhieuDatPhong=?",String.class,id)).isEqualTo("Đã hết hạn");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE hanhDong=N'CUSTOMER_EXTENSION_PAYMENT_EXPIRED' AND maDoiTuong=CONVERT(NVARCHAR(100),?)",Integer.class,id)).isEqualTo(1);
     }
+    @Test void expiredDraftCancelsHoldAndAttemptTogether(){
+        long id=reservation("Bản nháp","EXP-draft");room(id,"EXP-B",LocalDateTime.of(2026,10,10,14,0),LocalDateTime.of(2026,10,12,12,0));
+        jdbc.update("UPDATE PhieuDatPhong SET trangThaiThanhToanCoc=N'Chờ thanh toán',thoiDiemHetHanThanhToanCoc='2026-10-01' WHERE maPhieuDatPhong=?",id);attempt(id,"EXP-DRAFT-ATTEMPT");
+        service.expireHolds();
+        assertThat(jdbc.queryForMap("SELECT trangThai,trangThaiThanhToanCoc FROM PhieuDatPhong WHERE maPhieuDatPhong=?",id)).containsEntry("trangThai","Đã hủy").containsEntry("trangThaiThanhToanCoc","Đã hết hạn");
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM ChiTietDatPhong WHERE maPhieuDatPhong=?",String.class,id)).isEqualTo("Đã hủy");
+    }
+    private long reservation(String status,String key){Long guest=jdbc.queryForObject("SELECT maKhachLuuTru FROM KhachLuuTru WHERE soDienThoai=N'0966000901'",Long.class);jdbc.update("INSERT PhieuDatPhong(maKhachLuuTru,trangThai,hinhThucThue,khoaChongTrung) VALUES(?,?,N'Theo gói',?)",guest,status,key);return jdbc.queryForObject("SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE khoaChongTrung=?",Long.class,key);}
+    private void room(long reservation,String room,LocalDateTime from,LocalDateTime to){if(jdbc.queryForObject("SELECT COUNT(*) FROM LoaiPhong WHERE maLoaiPhong=N'EXP'",Integer.class)==0)jdbc.update("INSERT LoaiPhong(maLoaiPhong,ten,giaTheoNgay) VALUES(N'EXP',N'Expiry',100)");jdbc.update("INSERT Phong(maPhong,maLoaiPhong) VALUES(?,N'EXP')",room);jdbc.update("INSERT ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,thoiDiemTraPhongBanDau,trangThai,soLuongKhach) VALUES(?,?,?,?,?,N'Đã giữ phòng',1)",reservation,room,from,to,to);}
+    private void attempt(long reservation,String reference){jdbc.update("INSERT YeuCauThanhToanVnpay(maPhieuDatPhong,maThamChieuMerchant,soTien,trangThai,thoiDiemTao,thoiDiemHetHan) VALUES(?,?,100,N'Chờ thanh toán','2026-09-30','2026-10-01')",reservation,reference);}
+    private void cleanup(){jdbc.update("DELETE NhatKyKiemSoat WHERE loaiDoiTuong=N'RESERVATION' AND maDoiTuong IN(SELECT CONVERT(NVARCHAR(100),maPhieuDatPhong) FROM PhieuDatPhong WHERE khoaChongTrung LIKE N'EXP-%')");jdbc.update("DELETE YeuCauThanhToanVnpay WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE khoaChongTrung LIKE N'EXP-%')");jdbc.update("DELETE ChiTietDatPhong WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE khoaChongTrung LIKE N'EXP-%')");jdbc.update("DELETE PhieuDatPhong WHERE khoaChongTrung LIKE N'EXP-%'");jdbc.update("DELETE Phong WHERE maPhong LIKE N'EXP-%'");jdbc.update("DELETE LoaiPhong WHERE maLoaiPhong=N'EXP'");jdbc.update("DELETE KhachLuuTru WHERE soDienThoai=N'0966000901'");}
 }

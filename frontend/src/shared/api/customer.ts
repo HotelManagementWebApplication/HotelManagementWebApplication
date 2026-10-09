@@ -12,9 +12,9 @@ export const customerApi = {
   login: (body: CustomerLoginRequest) => apiClient.request<TokenResponseDto>("/api/auth/customers/login", { method: "POST", body, skipAuth: true }),
   me: () => apiClient.request<CustomerMe>("/api/auth/customers/me"),
   reservations: () => apiClient.request<CustomerReservation[]>("/api/customer/reservations"),
-  reservation: async (id: number) => {
+  reservation: async (id: number, signal?: AbortSignal) => {
     if (!Number.isSafeInteger(id) || id <= 0) throw new TypeError("reservation ID must be a positive integer");
-    return apiClient.request<CustomerReservation>(`/api/customer/reservations/${id}`);
+    return apiClient.request<CustomerReservation>(`/api/customer/reservations/${id}`, signal ? { signal } : undefined);
   },
   depositPayment: async (id: number) => {
     if (!Number.isSafeInteger(id) || id <= 0) throw new TypeError("reservation ID must be a positive integer");
@@ -25,9 +25,9 @@ export const customerApi = {
     if (!Number.isSafeInteger(reservationId) || reservationId <= 0) throw new TypeError("reservation ID must be a positive integer");
     return apiClient.request<VnpayCheckout>(`/api/customer/reservations/${reservationId}/vnpay-payments`, { method: "POST" });
   },
-  latestVnpayPayment: async (reservationId: number) => {
+  latestVnpayPayment: async (reservationId: number, signal?: AbortSignal) => {
     if (!Number.isSafeInteger(reservationId) || reservationId <= 0) throw new TypeError("reservation ID must be a positive integer");
-    return apiClient.request<VnpayPaymentAttempt>(`/api/customer/reservations/${reservationId}/vnpay-payments/latest`);
+    return apiClient.request<VnpayPaymentAttempt>(`/api/customer/reservations/${reservationId}/vnpay-payments/latest`, signal ? { signal } : undefined);
   },
   cancelReservation: (id: number, reason: string, key: string) => apiClient.request<CustomerReservation>(`/api/customer/reservations/${id}/cancel`, { method: "POST", body: { reason }, idempotencyKey: key }),
   changeReservationStay: (id: number, body: CustomerStayChangeRequest, key: string) => apiClient.request<CustomerReservation>(`/api/customer/reservations/${id}/stay-change`, { method: "POST", body, idempotencyKey: key }),

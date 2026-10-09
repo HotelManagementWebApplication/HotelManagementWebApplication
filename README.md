@@ -22,8 +22,10 @@ docker-compose.yml    Local SQL Server and Qdrant services
 
 - The backend API is the only business-data writer. Frontend and agent code do
   not connect directly to SQL Server.
-- Flyway migrations under `backend/src/main/resources/db/migration/` own schema
-  changes. Hibernate validates mappings; it does not create or update schema.
+- Exactly six Flyway files under `backend/src/main/resources/db/migration/`
+  own database changes: V1 schema, V2 indexes, V3 functions, V4 views, V5
+  procedures, V6 triggers. Never create V7+ or auxiliary DDL files; see root `AGENTS.md`.
+  Hibernate validates mappings; it does not create or update schema.
 - Demo reset scripts are destructive and local-only. Read
   [`database/demo/README.md`](database/demo/README.md) before using them; never
   point them at shared or production data.
@@ -41,14 +43,14 @@ Set-Location C:\web-hotel-mis
 docker compose up -d qdrant
 ```
 
-For the complete local dependency set, start the existing SQL Server services
-and Qdrant. The init service only creates `QLKS` when it does not exist; it does
+For the complete local dependency set, start the existing SQL Server services,
+Qdrant and the customer agent. The init service only creates `QLKS` when it does
 not reset or delete the database. Do not use `docker compose down -v` because it
 removes the named data volumes.
 
 ```powershell
 Set-Location C:\web-hotel-mis
-docker compose up -d sqlserver sqlserver-init qdrant
+docker compose up -d --build sqlserver sqlserver-init qdrant agent
 ```
 
 Create the agent environment from the repository root. The conditional copy
@@ -155,7 +157,7 @@ quản trị sandbox, IPN URL là
 
 Backend không gửi `vnp_BankCode`, vì vậy cổng VNPay tự hiển thị QR, ATM/tài khoản
 ngân hàng, thẻ quốc tế và ví. Số tiền gửi sang VNPay là đúng 50% tiền phòng;
-booking được giữ 15 phút và mỗi lần “Thanh toán lại” tạo một `vnp_TxnRef` mới
+booking được giữ 30 phút và mỗi lần “Thanh toán lại” tạo một `vnp_TxnRef` mới
 trên cùng booking.
 
 The project has completed its SQL Server cutover. Docker Compose contains the
@@ -168,9 +170,7 @@ CI configuration lives in [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 See [architecture](docs/architecture.md), the
 [API contract](docs/api-contract.md), the
 [frontend surface inventory](docs/ui-action-matrix.md), and the
-[SQL Server closeout criteria](docs/ke-hoach-chuyen-doi-sql-server.md).
-The current SQL Server closeout criteria are in
-[`docs/ke-hoach-chuyen-doi-sql-server.md`](docs/ke-hoach-chuyen-doi-sql-server.md).
+[database access and acceptance evidence](docs/database-access-matrix.md).
 Live E2E setup
 and disposable-database requirements are documented in
 [`frontend/e2e/README.md`](frontend/e2e/README.md).

@@ -1,7 +1,7 @@
 package com.hospitality.mis.operations;
 
-import com.hospitality.mis.dao.operations.EquipmentIncidentRepository;
-import com.hospitality.mis.dao.reservation.ReservationRepository;
+import com.hospitality.mis.dao.operations.FrontDeskDashboardDatabase;
+import com.hospitality.mis.dto.operations.FrontDeskDashboardDtos;
 import com.hospitality.mis.entity.guest.Guest;
 import com.hospitality.mis.entity.operations.EquipmentIncident;
 import com.hospitality.mis.entity.reservation.Reservation;
@@ -22,13 +22,13 @@ import java.time.LocalDateTime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Bảo vệ query dashboard thật: DB lọc/sort/count/page trước khi nạp aggregate. */
-@DataJpaTest(properties = {"spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"})
+@org.springframework.boot.test.context.SpringBootTest(properties={"spring.datasource.url=${MIGRATION_TEST_DB_URL}","spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}","spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}","spring.flyway.enabled=true","spring.jpa.hibernate.ddl-auto=validate"})
+@org.springframework.transaction.annotation.Transactional
 class FrontDeskDashboardQueryIntegrationTest {
     private static final LocalDate BUSINESS_DATE = LocalDate.of(2031, 1, 10);
 
     @Autowired EntityManager entityManager;
-    @Autowired ReservationRepository reservations;
-    @Autowired EquipmentIncidentRepository incidents;
+    @Autowired FrontDeskDashboardDatabase dashboard;
 
     @Test
     void dashboardReservationQueryAppliesSearchSortAndCountBeforePage() {
@@ -43,13 +43,12 @@ class FrontDeskDashboardQueryIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        var page = reservations.dashboardIds("target", null, "ALL",
-                BUSINESS_DATE.atStartOfDay(), BUSINESS_DATE.plusDays(1).atStartOfDay(), PageRequest.of(1, 1));
+        var page = dashboard.items("target", null, "ALL",
+                BUSINESS_DATE.atStartOfDay(), BUSINESS_DATE.plusDays(1).atStartOfDay(), 1, 1);
 
-        assertThat(page.getTotalElements()).isEqualTo(2);
-        assertThat(page.getContent()).containsExactly(second.getId());
-        assertThat(reservations.findDashboardDetails(page.getContent())).extracting(Reservation::getId)
-                .containsExactly(second.getId());
+        assertThat(dashboard.count("target",null,BUSINESS_DATE.atStartOfDay(),BUSINESS_DATE.plusDays(1).atStartOfDay())).isEqualTo(2);
+        assertThat(page).extracting(FrontDeskDashboardDtos.ReservationItem::reservationId).containsExactly(second.getId());
+        assertThat(page).extracting(FrontDeskDashboardDtos.ReservationItem::guestName).containsExactly("Target Guest");
         assertThat(first.getId()).isNotEqualTo(second.getId());
     }
 
@@ -66,11 +65,10 @@ class FrontDeskDashboardQueryIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        var page = reservations.dashboardIds("", null, "ARRIVALS",
-                BUSINESS_DATE.atStartOfDay(), BUSINESS_DATE.plusDays(1).atStartOfDay(), PageRequest.of(0, 20));
+        var page = dashboard.items("", null, "ARRIVALS",
+                BUSINESS_DATE.atStartOfDay(), BUSINESS_DATE.plusDays(1).atStartOfDay(), 0, 20);
 
-        assertThat(page.getTotalElements()).isEqualTo(1);
-        assertThat(page.getContent()).containsExactly(validArrival.getId());
+        assertThat(page).extracting(FrontDeskDashboardDtos.ReservationItem::reservationId).containsExactly(validArrival.getId());
     }
 
     @Test
@@ -86,10 +84,10 @@ class FrontDeskDashboardQueryIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        var page = reservations.dashboardIds("", null, "UPCOMING",
-                BUSINESS_DATE.atStartOfDay(), BUSINESS_DATE.plusDays(1).atStartOfDay(), PageRequest.of(0, 20));
+        var page = dashboard.items("", null, "UPCOMING",
+                BUSINESS_DATE.atStartOfDay(), BUSINESS_DATE.plusDays(1).atStartOfDay(), 0, 20);
 
-        assertThat(page.getContent()).containsExactly(future.getId());
+        assertThat(page).extracting(FrontDeskDashboardDtos.ReservationItem::reservationId).containsExactly(future.getId());
     }
 
     @Test
@@ -101,10 +99,10 @@ class FrontDeskDashboardQueryIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        var page = reservations.dashboardIds("", null, "UPCOMING",
-                BUSINESS_DATE.atStartOfDay(), BUSINESS_DATE.plusDays(1).atStartOfDay(), PageRequest.of(0, 20));
+        var page = dashboard.items("", null, "UPCOMING",
+                BUSINESS_DATE.atStartOfDay(), BUSINESS_DATE.plusDays(1).atStartOfDay(), 0, 20);
 
-        assertThat(page.getContent()).containsExactly(overdue.getId());
+        assertThat(page).extracting(FrontDeskDashboardDtos.ReservationItem::reservationId).containsExactly(overdue.getId());
     }
 
     @Test
@@ -123,10 +121,9 @@ class FrontDeskDashboardQueryIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        var page = incidents.dashboardPage(PageRequest.of(1, 1));
+        var page = dashboard.incidents(1,1);
 
-        assertThat(page.getTotalElements()).isEqualTo(2);
-        assertThat(page.getContent()).extracting(EquipmentIncident::getId).containsExactly(second.getId());
+        assertThat(page).extracting(FrontDeskDashboardDtos.IncidentItem::id).containsExactly(second.getId());
     }
 
     private Guest guest(String name, String phone, String identity) {

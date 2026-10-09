@@ -1,147 +1,105 @@
 package com.hospitality.mis.governance;
 
 import com.hospitality.mis.common.exception.DomainException;
-import com.hospitality.mis.dao.governance.ApprovalRepository;
-import com.hospitality.mis.entity.governance.ApprovalRequest;
+import com.hospitality.mis.dto.governance.ApprovalDtos;
 import com.hospitality.mis.service.governance.ApprovalService;
-import com.hospitality.mis.service.governance.AuditService;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.util.ReflectionTestUtils;
-
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Optional;
+import java.util.concurrent.*;
+import static org.assertj.core.api.Assertions.*;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-@ExtendWith(MockitoExtension.class)
-/** Bảo vệ vòng đời approval, binding payload/amount và quyền director/manager. */
+@SpringBootTest(properties={"spring.datasource.url=${MIGRATION_TEST_DB_URL}","spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}","spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}","spring.flyway.enabled=true","spring.jpa.hibernate.ddl-auto=validate"})
 class ApprovalServiceTest {
-    /** Repository giả lập có semantic findWithLock để test race/consume một lần. */
-    @Mock ApprovalRepository approvals;
-    /** Audit giả lập để kiểm tra approval hết hạn vẫn tạo dấu vết. */
-    @Mock AuditService audit;
-
-    /** Xóa authentication sau mỗi test security-sensitive. */
-    @AfterEach
-    void clearAuthentication() {
+    @Autowired ApprovalService service;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired PlatformTransactionManager manager;
+    @BeforeEach @AfterEach void cleanup(){
+        jdbc.update("DELETE BanGhiChongTrung WHERE nguoiThucHien LIKE N'APV-%'");
+        jdbc.update("DELETE NhatKyKiemSoat WHERE nguoiThucHien LIKE N'APV-%' OR maDoiTuong IN(SELECT CONVERT(NVARCHAR(100),maYeuCauPheDuyet) FROM YeuCauPheDuyet WHERE nguoiYeuCau LIKE N'APV-%') AND loaiDoiTuong=N'APPROVAL'");
+        jdbc.update("DELETE YeuCauPheDuyet WHERE nguoiYeuCau LIKE N'APV-%'");
         SecurityContextHolder.clearContext();
     }
-
-    /** Given pending đã hết hạn, When approve, Then chuyển EXPIRED và audit trạng thái. */
-    @Test
-    void expiredPendingApprovalIsMarkedExpiredAndCannotBeApproved() {
-        ApprovalRequest approval = request(Instant.now().minusSeconds(1));
-        when(approvals.findWithLockById(1L)).thenReturn(Optional.of(approval));
-        authenticateAs("manager");
-
-        assertThatThrownBy(() -> service().approve(1L, "manager"))
-                .isInstanceOf(DomainException.class)
-                .extracting("code").isEqualTo("APPROVAL_EXPIRED");
-
-        assertThat(approval.getStatus()).isEqualTo(ApprovalRequest.EXPIRED);
-        verify(audit).record(eq("manager"), eq("APPROVAL_EXPIRED"), eq("APPROVAL"), eq("1"),
-                eq(ApprovalRequest.PENDING), eq(ApprovalRequest.EXPIRED), any(), any());
+    ApprovalDtos.Response request(String action){actor("APV-requester","FRONT_DESK");return service.request("APV-requester",action,"APV-target","{\"price\":10}",new BigDecimal("10"),"reason","APV-"+action);}
+    @Test void expiredPendingCannotBeApprovedAndListExpiresItWithOneAudit(){
+        var request=request("PRICE_OVERRIDE");jdbc.update("UPDATE YeuCauPheDuyet SET thoiDiemHetHan=DATEADD(SECOND,-1,SYSDATETIMEOFFSET()) WHERE maYeuCauPheDuyet=?",request.id());
+        actor("APV-manager","MANAGER");code(()->service.approve(request.id(),"APV-manager"),"APPROVAL_EXPIRED");
+        assertThat(status(request.id())).isEqualTo("Chờ phê duyệt");
+        assertThat(service.list("EXPIRED")).anyMatch(row->row.id().equals(request.id()));
+        service.list("EXPIRED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE hanhDong=N'APPROVAL_EXPIRED' AND loaiDoiTuong=N'APPROVAL' AND maDoiTuong=?",Integer.class,request.id().toString())).isEqualTo(1);
     }
-
-    /** Given requester tạo approval, When tự approve, Then bị chặn và vẫn PENDING. */
-    @Test
-    void requesterCannotApproveOwnRequest() {
-        ApprovalRequest approval = request(Instant.now().plusSeconds(60));
-        when(approvals.findWithLockById(1L)).thenReturn(Optional.of(approval));
-        authenticateAs("requester");
-
-        assertThatThrownBy(() -> service().approve(1L, "requester"))
-                .isInstanceOf(DomainException.class)
-                .extracting("code").isEqualTo("SELF_APPROVAL_FORBIDDEN");
-        assertThat(approval.getStatus()).isEqualTo(ApprovalRequest.PENDING);
+    @Test void requesterCannotApproveOrRejectOwnRequest(){
+        var request=request("PRICE_OVERRIDE");code(()->service.approve(request.id(),"APV-requester"),"SELF_APPROVAL_FORBIDDEN");code(()->service.reject(request.id(),"APV-requester"),"SELF_APPROVAL_FORBIDDEN");assertThat(status(request.id())).isEqualTo("Chờ phê duyệt");
     }
-
-    /** Given approval đúng action nhưng sai target/payload/amount, When consume, Then yêu cầu approval mới. */
-    @Test
-    void wrongActionTargetPayloadOrAmountCannotConsumeApproval() {
-        ApprovalRequest approval = request(Instant.now().plusSeconds(60));
-        approval.approve("manager", Instant.now());
-        when(approvals.findApprovedForBindingWithLock(eq("PRICE_OVERRIDE"), eq("room-1"), eq("executor"),
-                eq(ApprovalService.fingerprintFor("{\"price\":10}")), eq(new BigDecimal("11"))))
-                .thenReturn(Optional.empty());
-        authenticateAs("executor");
-
-        assertThatThrownBy(() -> service().consumeApproved("PRICE_OVERRIDE", "room-1", "{\"price\":10}",
-                new BigDecimal("11"), "executor"))
-                .isInstanceOf(DomainException.class)
-                .extracting("code").isEqualTo("APPROVAL_REQUIRED");
+    @Test void exactBindingRejectsWrongActionTargetPayloadAmountAndRequester(){
+        var request=request("PRICE_OVERRIDE");actor("APV-manager","MANAGER");service.approve(request.id(),"APV-manager");
+        actor("APV-requester","FRONT_DESK");
+        code(()->service.consumeApproved("BILLING_ADJUSTMENT","APV-target",request.payload(),request.amount(),"APV-requester"),"APPROVAL_REQUIRED");
+        code(()->service.consumeApproved("PRICE_OVERRIDE","other",request.payload(),request.amount(),"APV-requester"),"APPROVAL_REQUIRED");
+        code(()->service.consumeApproved("PRICE_OVERRIDE","APV-target","other",request.amount(),"APV-requester"),"APPROVAL_REQUIRED");
+        code(()->service.consumeApproved("PRICE_OVERRIDE","APV-target",request.payload(),new BigDecimal("11"),"APV-requester"),"APPROVAL_REQUIRED");
+        actor("APV-other","FRONT_DESK");code(()->service.consumeApproved("PRICE_OVERRIDE","APV-target",request.payload(),request.amount(),"APV-other"),"APPROVAL_REQUIRED");
+        assertThat(status(request.id())).isEqualTo("Đã phê duyệt");
     }
-
-    /** Given approval APPROVED, When consume hai lần, Then lần hai fail và trạng thái chỉ consume một lần. */
-    @Test
-    void consumeIsOnceOnlyAndRecordsConsumedState() {
-        ApprovalRequest approval = request(Instant.now().plusSeconds(60));
-        approval.approve("manager", Instant.now());
-        when(approvals.findApprovedForBindingWithLock(eq("PRICE_OVERRIDE"), eq("room-1"), eq("executor"),
-                eq(ApprovalService.fingerprintFor("{\"price\":10}")), eq(new BigDecimal("10"))))
-                .thenReturn(Optional.of(approval), Optional.empty());
-        authenticateAs("executor");
-        ApprovalService service = service();
-
-        service.consumeApproved("PRICE_OVERRIDE", "room-1", "{\"price\":10}", new BigDecimal("10"), "executor");
-        assertThat(approval.getStatus()).isEqualTo(ApprovalRequest.CONSUMED);
-        assertThat(approval.getConsumedAt()).isNotNull();
-
-        assertThatThrownBy(() -> service.consumeApproved("PRICE_OVERRIDE", "room-1", "{\"price\":10}",
-                new BigDecimal("10"), "executor"))
-                .isInstanceOf(DomainException.class)
-                .extracting("code").isEqualTo("APPROVAL_REQUIRED");
-        verify(approvals, org.mockito.Mockito.times(2)).findApprovedForBindingWithLock(
-                eq("PRICE_OVERRIDE"), eq("room-1"), eq("executor"),
-                eq(ApprovalService.fingerprintFor("{\"price\":10}")), eq(new BigDecimal("10")));
+    @Test void requesterConsumeIsOnceOnlyAndReadOnlyRequireDoesNotConsume(){
+        var request=request("PRICE_OVERRIDE");actor("APV-manager","MANAGER");service.approve(request.id(),"APV-manager");
+        actor("APV-requester","FRONT_DESK");service.requireApproved(request.action(),request.targetId(),request.payload(),request.amount(),"APV-requester");
+        assertThat(status(request.id())).isEqualTo("Đã phê duyệt");
+        var consumed=service.consumeApproved(request.action(),request.targetId(),request.payload(),request.amount(),"APV-requester");
+        assertThat(consumed.status()).isEqualTo("CONSUMED");assertThat(consumed.consumedAt()).isNotNull();
+        code(()->service.consumeApproved(request.action(),request.targetId(),request.payload(),request.amount(),"APV-requester"),"APPROVAL_REQUIRED");
     }
-
-    /** Given refund nhạy cảm, When manager thử rồi director approve, Then chỉ director được APPROVED. */
-    @Test
-    void onlyDirectorCanApproveRefund() {
-        ApprovalRequest refund = new ApprovalRequest("clerk", "PAYMENT_REFUND", "invoice-1", "{}",
-                ApprovalService.fingerprintFor("{}"), new BigDecimal("100"), "refund", Instant.now().plusSeconds(60), "refund-1");
-        ReflectionTestUtils.setField(refund, "id", 2L);
-        when(approvals.findWithLockById(2L)).thenReturn(Optional.of(refund));
-        authenticateAs("manager");
-        assertThatThrownBy(() -> service().approve(2L, "manager"))
-                .extracting("code").isEqualTo("DIRECTOR_APPROVAL_REQUIRED");
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken("director", "n/a", "ROLE_DIRECTOR"));
-        service().approve(2L, "director");
-        assertThat(refund.getStatus()).isEqualTo(ApprovalRequest.APPROVED);
-        assertThat(refund.getApprover()).isEqualTo("director");
+    @Test void onlyDirectorCanApproveOrRejectRefund(){
+        var request=request("PAYMENT_REFUND");actor("APV-manager","MANAGER");code(()->service.approve(request.id(),"APV-manager"),"DIRECTOR_APPROVAL_REQUIRED");code(()->service.reject(request.id(),"APV-manager"),"DIRECTOR_APPROVAL_REQUIRED");
+        actor("APV-director","DIRECTOR");assertThat(service.approve(request.id(),"APV-director").status()).isEqualTo("APPROVED");
     }
-
-    /** Tạo service thật với repository/audit mock hiện tại. */
-    private ApprovalService service() {
-        return new ApprovalService(approvals, audit);
+    @Test void durableReplayReturnsCurrentDecisionAndConflictingKeysFail(){
+        var request=request("PRICE_OVERRIDE");
+        assertThat(service.request("APV-requester",request.action(),request.targetId(),request.payload(),new BigDecimal("10"),"reason","APV-PRICE_OVERRIDE").id()).isEqualTo(request.id());
+        code(()->service.request("APV-requester",request.action(),request.targetId(),"other",request.amount(),"reason","APV-PRICE_OVERRIDE"),"IDEMPOTENCY_KEY_CONFLICT");
+        actor("APV-manager","MANAGER");var approved=service.approve(request.id(),"APV-manager","APV-approve");assertThat(service.approve(request.id(),"APV-manager","APV-approve")).isEqualTo(approved);
+        code(()->service.reject(request.id(),"APV-manager","APV-reject"),"APPROVAL_ALREADY_DECIDED");
     }
-
-    /** Fixture approval id 1 với fingerprint canonical để các test binding cùng payload. */
-    private static ApprovalRequest request(Instant expiresAt) {
-        ApprovalRequest request = new ApprovalRequest("requester", "PRICE_OVERRIDE", "room-1",
-                "{\"price\":10}", ApprovalService.fingerprintFor("{\"price\":10}"),
-                new BigDecimal("10"), "price change", expiresAt, "approval-test");
-        ReflectionTestUtils.setField(request, "id", 1L);
-        return request;
+    @Test void consumeAndTargetMutationRollbackTogether(){
+        var request=request("ROOM_TYPE_ACTIVATE");actor("APV-manager","MANAGER");service.approve(request.id(),"APV-manager");
+        new TransactionTemplate(manager).executeWithoutResult(tx->{service.consumeApprovedByApprover(request.action(),request.targetId(),request.payload(),request.amount(),"APV-manager");tx.setRollbackOnly();});
+        assertThat(status(request.id())).isEqualTo("Đã phê duyệt");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE hanhDong=N'APPROVAL_CONSUMED' AND maDoiTuong=?",Integer.class,request.id().toString())).isZero();
+        assertThat(service.consumeApprovedByApprover(request.action(),request.targetId(),request.payload(),request.amount(),"APV-manager").status()).isEqualTo("CONSUMED");
     }
-
-    /** Đặt role manager cho actor thao tác approval thông thường. */
-    private static void authenticateAs(String actor) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new TestingAuthenticationToken(actor, "n/a", "ROLE_MANAGER"));
+    @Test void storageFailureRollsBackRequestAuditAndClaim(){
+        actor("APV-requester","FRONT_DESK");
+        assertThatThrownBy(()->service.request("APV-requester","PRICE_OVERRIDE","APV-target","{}",null,"x".repeat(501),"APV-too-long")).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM YeuCauPheDuyet WHERE nguoiYeuCau=N'APV-requester'",Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM BanGhiChongTrung WHERE nguoiThucHien=N'APV-requester'",Integer.class)).isZero();
     }
+    @Test void validationAndMissingApprovalErrorsDoNotWrite(){
+        actor("APV-requester","FRONT_DESK");
+        code(()->service.request("APV-requester","NOT_SUPPORTED","target","{}",null,"reason","key"),"UNSUPPORTED_APPROVAL");
+        code(()->service.request("APV-requester","PRICE_OVERRIDE","target","{}",new BigDecimal("-1"),"reason","key"),"INVALID_APPROVAL_REQUEST");
+        code(()->service.approve(Long.MAX_VALUE,"APV-requester"),"APPROVAL_NOT_FOUND");
+        code(()->service.consumeApproved("PRICE_OVERRIDE","target","APV-requester"),"APPROVAL_PAYLOAD_REQUIRED");
+    }
+    @Test void twoConcurrentDecisionsHaveOneWinner()throws Exception{
+        var request=request("PRICE_OVERRIDE");CountDownLatch ready=new CountDownLatch(2),start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)){
+            var a=pool.submit(()->decide(request.id(),"APV-manager-a",ready,start));var b=pool.submit(()->decide(request.id(),"APV-manager-b",ready,start));
+            assertThat(ready.await(5,TimeUnit.SECONDS)).isTrue();start.countDown();
+            assertThat(java.util.List.of(a.get(15,TimeUnit.SECONDS),b.get(15,TimeUnit.SECONDS))).containsExactlyInAnyOrder("APPROVED","APPROVAL_ALREADY_DECIDED");
+        }
+    }
+    String decide(Long id,String actor,CountDownLatch ready,CountDownLatch start)throws Exception{
+        actor(actor,"MANAGER");ready.countDown();assertThat(start.await(5,TimeUnit.SECONDS)).isTrue();
+        try{return service.approve(id,actor,"APV-"+actor).status();}catch(DomainException failure){return failure.getCode();}finally{SecurityContextHolder.clearContext();}
+    }
+    String status(Long id){return jdbc.queryForObject("SELECT trangThai FROM YeuCauPheDuyet WHERE maYeuCauPheDuyet=?",String.class,id);}
+    static void actor(String id,String role){SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(id,"n/a","ROLE_"+role));}
+    static void code(Runnable call,String code){assertThatThrownBy(call::run).isInstanceOf(DomainException.class).extracting("code").isEqualTo(code);}
 }

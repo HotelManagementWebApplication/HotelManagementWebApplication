@@ -36,9 +36,9 @@ import com.jayway.jsonpath.JsonPath;
 
 /** HTTP -> finance services -> DB aggregates for reconciliation and invoice-scoped pages. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:financeworkflow;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa", "spring.datasource.password=", "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}", "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}", "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 @AutoConfigureMockMvc
 @Transactional
@@ -144,7 +144,7 @@ class FinanceHttpReconciliationIntegrationTest {
         assertThat(secondId).isEqualTo(firstId);
         assertThat(expenses.count()).isEqualTo(1);
         assertThat(ledgerEntries.findAll().stream().filter(x -> "EXPENSE".equals(x.getEntryType())).count()).isEqualTo(1);
-        assertThat(audits.findTop100ByOrderByCreatedAtDesc().stream()
+        assertThat(audits.findAll().stream()
                 .filter(x -> "EXPENSE_RECORDED".equals(x.getAction())).count()).isEqualTo(1);
 
         mvc.perform(post("/api/finance/expenses").contentType(APPLICATION_JSON)
@@ -185,7 +185,7 @@ class FinanceHttpReconciliationIntegrationTest {
         assertThat(ledgerEntries.findAll().stream()
                 .filter(x -> "PARTNER_DEBT_RECORDED".equals(x.getEntryType()))
                 .allMatch(x -> "accounting".equals(x.getActorId()))).isTrue();
-        assertThat(audits.findTop100ByOrderByCreatedAtDesc().stream()
+        assertThat(audits.findAll().stream()
                 .anyMatch(x -> "PARTNER_DEBT_RECORDED".equals(x.getAction())
                         && "debt-create-1".equals(x.getCorrelationKey()))).isTrue();
     }

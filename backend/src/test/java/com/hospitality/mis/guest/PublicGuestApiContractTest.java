@@ -13,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.math.BigDecimal;
 
@@ -20,15 +21,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:publicguestapi;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 @AutoConfigureMockMvc
+@org.springframework.transaction.annotation.Transactional
 /** Kiểm tra public portal anonymous, DTO allow-list và lọc dịch vụ active. */
 class PublicGuestApiContractTest {
     @Autowired MockMvc mockMvc;
@@ -39,11 +44,6 @@ class PublicGuestApiContractTest {
 
     @BeforeEach
     void seedPublicCatalog() {
-        jdbc.update("delete from NhatKyKiemSoat");
-        rooms.deleteAllInBatch();
-        roomTypes.deleteAllInBatch();
-        services.deleteAllInBatch();
-
         RoomType type = new RoomType();
         type.setId("STD");
         type.setName("Standard");

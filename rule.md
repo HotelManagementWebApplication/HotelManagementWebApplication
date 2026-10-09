@@ -11,7 +11,7 @@
 ## 2. Hợp đồng chuẩn (canonical contract)
 
 - Tên trường Java, trạng thái, sự kiện, tham số API và các định danh nghiệp vụ dùng tiếng Anh, thống nhất trong toàn hệ thống.
-- Tên bảng/cột vật lý SQL Server dùng hợp đồng tiếng Việt không dấu đã chốt trong `backend/src/main/resources/db/migration/V1__baseline_schema.sql`; JPA mapping, native SQL, tài liệu và test phải dùng đúng hợp đồng vật lý này.
+- Tên bảng/cột vật lý SQL Server dùng hợp đồng tiếng Việt không dấu được quản lý bởi chuỗi Flyway migration trong `backend/src/main/resources/db/migration/`; JPA mapping, native SQL, tài liệu và test phải dùng đúng hợp đồng vật lý hiện hành sau khi áp dụng toàn bộ migration.
 - Đây là hard cut: không có legacy alias, không dual-read, không dual-write, không compatibility facade và không có runtime owner cũ.
 - API, schema, tài liệu và test phải cùng tuân theo hợp đồng chuẩn hiện hành.
 - `customer-policy.md` là nguồn sự thật duy nhất cho điều khoản, quyền lợi, phụ thu và giá dịch vụ công bố cho khách. Không chép các điều khoản đó thành bản thứ hai ở đây; mọi hành vi hệ thống liên quan phải khớp tài liệu chính sách khách hàng.
@@ -53,7 +53,7 @@
 
 - Điều kiện hạng, quyền lợi và tác động của vi phạm đối với khách được quy định tại `customer-policy.md` mục 6.
 - Theo dõi tổng chi tiêu tích lũy và số lượt lưu trú hoàn tất bằng hai bộ đếm độc lập.
-- Số giờ dùng để xét lượt lấy từ thời lượng đã đặt trong booking (`expected_check_in` đến `expected_check_out`), không lấy thời gian check-in/check-out thực tế. Chỉ ghi nhận lượt theo điều kiện hoàn tất checkout trong chính sách khách hàng.
+- Xét lượt theo hình thức thuê đã xác nhận của booking và điều kiện hoàn tất checkout tại chính sách khách hàng; không suy ra hình thức thuê từ số giờ đặt hoặc giờ check-in/check-out thực tế.
 - Giữ bộ đếm vi phạm cộng dồn và áp dụng đúng điều kiện hạ hạng được công bố; không tự suy đoán hành vi khi khách ở hạng Regular.
 
 ## 9. Bồi thường thiết bị

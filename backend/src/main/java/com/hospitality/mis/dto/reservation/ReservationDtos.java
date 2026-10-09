@@ -87,8 +87,8 @@ public final class ReservationDtos {
                                 @NotEmpty @Valid List<RoomStay> rooms,
                                 /** Khóa tùy chọn chống tạo trùng khi client retry. */
                                 String idempotencyKey,
-                                /** Nguồn đặt phòng: DIRECT, BOOKING_COM, AGODA, EXPEDIA, AIRBNB... */
-                                String bookingSource) {
+                                /** Nguồn đặt phòng chuẩn; không nhận mã tự đặt của frontend. */
+                                @jakarta.validation.constraints.Pattern(regexp = "DIRECT|BOOKING_COM|AGODA|EXPEDIA|AIRBNB", message = "Nguồn đặt phòng không hợp lệ") String bookingSource) {
         public CreateRequest(Long guestId, String employeeId, BigDecimal deposit, RentalType rentalType,
                              List<RoomStay> rooms, String idempotencyKey) {
             this(guestId, employeeId, deposit, rentalType, rooms, idempotencyKey, "DIRECT");

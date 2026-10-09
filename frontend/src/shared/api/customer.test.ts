@@ -25,7 +25,7 @@ describe("customer ownership contract", () => {
     await customerApi.changeReservationStay(42, change, "customer-change-42");
     expect(request).toHaveBeenNthCalledWith(1, "/api/auth/customers/me");
     expect(request).toHaveBeenNthCalledWith(2, "/api/customer/reservations");
-    expect(request).toHaveBeenNthCalledWith(3, "/api/customer/reservations/42");
+    expect(request).toHaveBeenNthCalledWith(3, "/api/customer/reservations/42", undefined);
     expect(request).toHaveBeenNthCalledWith(4, "/api/customer/reservations/42/deposit-payment");
     expect(request).toHaveBeenNthCalledWith(5, "/api/customer/reservations/42/cancel", { method: "POST", body: { reason: "Đổi kế hoạch" }, idempotencyKey: "customer-cancel-42" });
     expect(request).toHaveBeenNthCalledWith(6, "/api/customer/reservations/42/stay-change", { method: "POST", body: change, idempotencyKey: "customer-change-42" });
@@ -45,6 +45,15 @@ describe("customer ownership contract", () => {
   it("surfaces ownership errors from the backend instead of manufacturing a result", async () => {
     vi.spyOn(apiClient, "request").mockRejectedValue(new ApiError(403, { code: "FORBIDDEN" }));
     await expect(customerApi.reservation(999)).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+  });
+
+  it("forwards cancellation signals for payment-result reads",async()=>{
+    const request=vi.spyOn(apiClient,"request").mockResolvedValue({});
+    const controller=new AbortController();
+    await customerApi.reservation(42,controller.signal);
+    await customerApi.latestVnpayPayment(42,controller.signal);
+    expect(request).toHaveBeenNthCalledWith(1,"/api/customer/reservations/42",{signal:controller.signal});
+    expect(request).toHaveBeenNthCalledWith(2,"/api/customer/reservations/42/vnpay-payments/latest",{signal:controller.signal});
   });
 
   it("rejects invalid reservation IDs before making a request", async () => {

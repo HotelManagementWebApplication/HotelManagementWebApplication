@@ -6,7 +6,6 @@ import com.hospitality.mis.dao.auth.RefreshTokenRepository;
 import com.hospitality.mis.dao.governance.ApprovalRepository;
 import com.hospitality.mis.dao.governance.AuditLogRepository;
 import com.hospitality.mis.dao.identity.EmployeeRepository;
-import com.hospitality.mis.dao.identity.EmployeeShiftRepository;
 import com.hospitality.mis.entity.identity.Employee;
 import com.hospitality.mis.entity.identity.EmployeeRole;
 import com.hospitality.mis.service.governance.ApprovalService;
@@ -33,11 +32,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** HTTP proof for the current employee, shift and governance authorization contract. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:employee-admin-http;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 @AutoConfigureMockMvc
 class EmployeeAdminGovernanceHttpIntegrationTest {
@@ -45,7 +44,6 @@ class EmployeeAdminGovernanceHttpIntegrationTest {
     @Autowired ObjectMapper objectMapper;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired EmployeeRepository employees;
-    @Autowired EmployeeShiftRepository shifts;
     @Autowired RefreshTokenRepository refreshTokens;
     @Autowired ApprovalRepository approvals;
     @Autowired AuditLogRepository audits;
@@ -188,7 +186,7 @@ class EmployeeAdminGovernanceHttpIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED"));
         mockMvc.perform(get("/api/governance/audit").header("Authorization", bearer(login("director", "director-password").get("access_token").asText())))
                 .andExpect(status().isOk());
-        assertThat(audits.findTop100ByOrderByCreatedAtDesc().stream()
+        assertThat(audits.findAll().stream()
                 .anyMatch(item -> "EMPLOYEE_SHIFT_ASSIGNED".equals(item.getAction()) && "hr".equals(item.getActor()))).isTrue();
     }
 

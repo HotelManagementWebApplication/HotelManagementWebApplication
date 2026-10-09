@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 import json
 import re
+import unicodedata
 from typing import Any, AsyncIterator, Mapping, Sequence
 
 from agent.generation import ABSTAIN_TOKEN, AnswerGenerator, GenerationError
@@ -25,6 +26,15 @@ _UNKNOWN = "Mình chưa tìm thấy thông tin này trong quy định đã đư�
 _CITATION_IN_ANSWER = re.compile(r"customer-policy\.md:\d+(?:-\d+)?", re.IGNORECASE)
 _MONEY_IN_ANSWER = re.compile(r"\b\d[\d. ]*\s*(?:vnd|vnđ|đ)\b", re.IGNORECASE)
 _STREAM_BOUNDARY = re.compile(r".*?(?:[.!?](?=\s|$)|\n+)", re.DOTALL)
+_CASUAL_GREETING = "Chào bạn 👋 Mình có thể giúp tra phòng trống, dịch vụ, booking của bạn hoặc giải thích quy định lưu trú. Bạn đang cần tìm gì?"
+_CASUAL_THANKS = "Rất vui được hỗ trợ bạn 😊 Nếu cần tra phòng, dịch vụ hoặc booking, cứ nhắn mình nhé."
+_CASUAL_GOODBYE = "Tạm biệt bạn, chúc bạn một ngày vui vẻ! Khi cần tra thông tin lưu trú, cứ quay lại nhắn mình nhé."
+_GREETING_ONLY = {
+    "alo", "hello", "hi", "hey", "xin chao", "chao", "chao ban", "chao mam hotel",
+    "chao buoi sang", "chao buoi chieu", "chao buoi toi", "good morning", "good afternoon", "good evening",
+}
+_THANKS_ONLY = {"cam on", "cam on ban", "cam on nhe", "cam on ban nhe", "thanks", "thank you", "ok cam on", "da cam on"}
+_GOODBYE_ONLY = {"tam biet", "hen gap lai", "bye", "goodbye"}
 
 _AVAILABILITY_TERMS = ("phòng trống", "còn phòng", "phòng còn", "khả dụng", "đặt được", "available", "availability")
 _ROOM_TERMS = ("phòng", "hạng phòng", "loại phòng", "room")
@@ -243,6 +253,17 @@ class CustomerChatService:
             return _Plan(ChatResponse(answer=safety.reason or "Yêu cầu không được phép.", mode="refusal"))
 
         normalized = message.casefold()
+        folded = unicodedata.normalize("NFD", normalized.replace("đ", "d"))
+        conversational = "".join(char for char in folded if unicodedata.category(char) != "Mn")
+        conversational = re.sub(r"[^\w\s]", " ", conversational, flags=re.UNICODE)
+        conversational = " ".join(conversational.split())
+        if conversational in _GREETING_ONLY:
+            return _Plan(ChatResponse(answer=_CASUAL_GREETING, mode="clarification"))
+        if conversational in _THANKS_ONLY:
+            return _Plan(ChatResponse(answer=_CASUAL_THANKS, mode="clarification"))
+        if conversational in _GOODBYE_ONLY:
+            return _Plan(ChatResponse(answer=_CASUAL_GOODBYE, mode="clarification"))
+
         wants_availability = self._asks_availability(normalized)
         wants_rooms = self._asks_live_rooms(normalized) and not wants_availability
         wants_room_types = wants_rooms and self._asks_room_types(normalized)

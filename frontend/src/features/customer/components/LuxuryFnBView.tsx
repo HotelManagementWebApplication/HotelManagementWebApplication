@@ -10,6 +10,7 @@ import {
   Star,
 } from "lucide-react";
 import type { CustomerReservation, HotelServiceBooking, HotelServiceBookingRequest } from "../../../shared/types/customer";
+import { apiErrorMessage } from "../../../shared/api/client";
 import { localDateValue } from "../../../shared/utils/localDate";
 
 export interface FnbService {
@@ -80,16 +81,31 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [selectedReservationId, setSelectedReservationId] = useState(0);
   const [selectedRoomId, setSelectedRoomId] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState<number | string>(1);
+  const [bookingError, setBookingError] = useState("");
   const [mealPeriod, setMealPeriod] = useState<"LUNCH" | "DINNER">("LUNCH");
   const [date, setDate] = useState(() => localDateValue());
-  const [time, setTime] = useState("18:30");
+  const [time, setTime] = useState("12:30");
   const [specialRequest, setSpecialRequest] = useState("");
   const eligibleReservations = reservations.filter(reservation =>
     ["DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(reservation.status) && reservation.deposit_payment?.status === "PAID"
   );
   const selectedStay = eligibleReservations.find(reservation => reservation.id === selectedReservationId) ?? eligibleReservations[0];
   const selectedRoom = selectedStay?.rooms.find(room => room.room_id === selectedRoomId) ?? selectedStay?.rooms[0];
+  const mealTimes = mealPeriod === "LUNCH"
+    ? ["11:30", "12:00", "12:30", "13:00", "13:30", "14:00"]
+    : ["18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00", "21:30", "22:00"];
+  const availableTimes = (selectedService?.id === "MAMREST" ? mealTimes
+    : ["07:00", "08:30", "11:30", "12:30", "14:00", "15:00", "16:00", "17:30", "18:30", "19:30", "20:30"])
+    .filter(value => {
+      const scheduled = `${date}T${value}:00`;
+      return selectedRoom && scheduled >= selectedRoom.expected_check_in && scheduled < selectedRoom.expected_check_out
+        && new Date(scheduled).getTime() > Date.now();
+    });
+  const timesKey = availableTimes.join(",");
+  useEffect(() => {
+    setTime(current => availableTimes.includes(current) ? current : availableTimes[0] ?? "");
+  }, [timesKey]);
 
   useEffect(() => {
     const reservationId = selectedStay?.id;
@@ -105,8 +121,9 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
     if (!selectedRoom) return;
     const firstDay = selectedRoom.expected_check_in.slice(0, 10);
     const lastDay = selectedRoom.expected_check_out.slice(0, 10);
-    if (date < firstDay || date > lastDay) setDate(firstDay);
-  }, [selectedRoom, date]);
+    setDate(current => current < firstDay || current > lastDay ? firstDay : current);
+    setBookingError("");
+  }, [selectedRoom]);
 
   const cancelBooking = async (bookingId: number) => {
     setCancellingId(bookingId);
@@ -131,6 +148,7 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
     setTableModal(true);
     setServiceBooking(null);
     setBookingSuccess(false);
+    setBookingError("");
   };
 
   const handleConfirmReservation = async (e: React.FormEvent) => {
@@ -140,18 +158,30 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
       onLogin?.();
       return;
     }
-    if (!selectedService || !selectedStay || !selectedRoom) return;
+    if (!selectedService || !selectedStay || !selectedRoom || bookingLoading) return;
+    const count = Number(quantity);
+    const scheduled = `${date}T${time}:00`;
+    if (!Number.isInteger(count) || count < 1 || count > 20) {
+      setBookingError("Số suất/lần phải là số nguyên từ 1 đến 20.");
+      return;
+    }
+    if (!date || !time || !availableTimes.includes(time) || scheduled < selectedRoom.expected_check_in || scheduled >= selectedRoom.expected_check_out) {
+      setBookingError("Chọn giờ phục vụ phù hợp với bữa ăn, còn trong kỳ lưu trú và chưa qua thời điểm sử dụng.");
+      return;
+    }
+    setBookingError("");
     setServiceBookingLoading(true);
     try {
       const res = await onBookService({ reservation_id: selectedStay.id, room_id: selectedRoom.room_id,
-        service_id: selectedService.id, scheduled_at: `${date}T${time}:00`, quantity,
+        service_id: selectedService.id, scheduled_at: scheduled, quantity: count,
         ...(selectedService.id === "MAMREST" ? { meal_period: mealPeriod } : {}),
         note: specialRequest.trim() || undefined });
       if (res) {
         setServiceBooking(res);
         setBookingSuccess(true);
       }
-    } catch {
+    } catch (error) {
+      setBookingError(apiErrorMessage(error, "Không thể đặt dịch vụ. Vui lòng thử lại."));
       setBookingSuccess(false);
     } finally {
       setServiceBookingLoading(false);
@@ -469,11 +499,13 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
       {/* 5. Đặt dịch vụ khách sạn */}
       {tableModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-5xl rounded-3xl bg-[#FAF8F5] shadow-2xl border border-[#E2DDD4] relative max-h-[92vh] overflow-y-auto overflow-x-hidden">
+          <div role="dialog" aria-modal="true" aria-label="Đặt dịch vụ khách sạn" className="w-full max-w-5xl rounded-3xl bg-[#FAF8F5] shadow-2xl border border-[#E2DDD4] relative max-h-[92vh] overflow-y-auto overflow-x-hidden">
             {/* Close button */}
             <button
+              type="button"
+              aria-label="Đóng đặt dịch vụ"
               onClick={() => setTableModal(false)}
-              className="absolute top-6 right-6 w-9 h-9 rounded-full bg-[#EDE8E0] hover:bg-[#DDD6C8] flex items-center justify-center text-[#1C1917] transition cursor-pointer"
+              className="absolute z-20 top-6 right-6 w-9 h-9 rounded-full bg-[#EDE8E0] hover:bg-[#DDD6C8] flex items-center justify-center text-[#1C1917] transition cursor-pointer"
             >
               <X size={18} />
             </button>
@@ -582,10 +614,12 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="text-xs uppercase tracking-wider font-semibold text-[#78716C] block mb-1.5">
+                    <label htmlFor="service-date" className="text-xs uppercase tracking-wider font-semibold text-[#78716C] block mb-1.5">
                         Ngày
                       </label>
                       <input
+                        id="service-date"
+                        required
                         type="date"
                         value={date}
                         min={selectedRoom?.expected_check_in.slice(0, 10)}
@@ -595,15 +629,18 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="text-xs uppercase tracking-wider font-semibold text-[#78716C] block mb-1.5">
+                      <label htmlFor="service-time" className="text-xs uppercase tracking-wider font-semibold text-[#78716C] block mb-1.5">
                         Giờ
                       </label>
                       <select
+                        id="service-time"
+                        required
                         value={time}
                         onChange={(e) => setTime(e.target.value)}
                         className="w-full px-3 py-3 rounded-xl text-xs sm:text-sm outline-none bg-white border border-[#E2DDD4] text-[#1C1917] cursor-pointer"
                       >
-                        {["07:00", "08:30", "11:30", "12:30", "17:30", "18:30", "19:30", "20:30"].map(
+                        {availableTimes.length === 0 && <option value="">Không còn giờ phù hợp — chọn ngày/bữa khác</option>}
+                        {availableTimes.map(
                           (t) => (
                             <option key={t} value={t}>
                               {t}
@@ -614,8 +651,8 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
                     </div>
                     <div>
                       <label htmlFor="service-quantity" className="text-xs uppercase tracking-wider font-semibold text-[#78716C] block mb-1.5">Số suất/lần</label>
-                      <input id="service-quantity" type="number" min={1} max={20} value={quantity}
-                        onChange={event => setQuantity(Math.max(1, Math.min(20, Number(event.target.value) || 1)))}
+                      <input id="service-quantity" required type="number" min={1} max={20} step={1} value={quantity}
+                        onChange={event => setQuantity(event.target.value)}
                         className="w-full px-3 py-3 rounded-xl text-xs sm:text-sm bg-white border border-[#E2DDD4] text-[#1C1917]" />
                     </div>
                   </div>
@@ -652,11 +689,12 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
 
                   <button
                     type="submit"
-                    disabled={bookingLoading || !isAuthenticated || !selectedStay || !selectedRoom || !selectedService || selectedService.id === "POOL" || selectedService.price <= 0}
+                    disabled={bookingLoading || !isAuthenticated || !selectedStay || !selectedRoom || !selectedService || selectedService.id === "POOL" || selectedService.price <= 0 || !availableTimes.length}
                     className="w-full py-4 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs font-semibold uppercase tracking-[0.2em] transition-all duration-300 rounded-xl shadow-md cursor-pointer mt-3 disabled:opacity-50 text-center"
                   >
                     {bookingLoading ? "Đang xử lý..." : selectedService?.id === "POOL" ? "Không cần đặt trước" : "Xác nhận đặt dịch vụ"}
                   </button>
+                  {bookingError && <p role="alert" className="text-sm text-red-700">{bookingError}</p>}
                 </div>
               </form>
               </div>

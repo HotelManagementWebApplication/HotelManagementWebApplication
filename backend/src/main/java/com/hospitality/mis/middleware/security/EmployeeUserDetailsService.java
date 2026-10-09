@@ -1,9 +1,9 @@
 package com.hospitality.mis.middleware.security;
 
 import com.hospitality.mis.common.exception.DomainException;
-import com.hospitality.mis.dao.auth.CustomerAccountRepository;
-import com.hospitality.mis.entity.auth.CustomerAccount;
-import com.hospitality.mis.entity.identity.Employee;
+import com.hospitality.mis.dao.auth.CustomerAccountDatabase;
+
+import com.hospitality.mis.dao.identity.EmployeeDatabase.Snapshot;
 import com.hospitality.mis.entity.identity.EmployeeRole;
 import com.hospitality.mis.service.identity.EmployeeService;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -26,10 +26,10 @@ public class EmployeeUserDetailsService implements UserDetailsService {
     /** Nguồn dữ liệu employee và trạng thái tài khoản/role của nhân viên. */
     private final EmployeeService employees;
     /** Nguồn dữ liệu tài khoản khách hàng, tách biệt khỏi định danh nhân viên. */
-    private final CustomerAccountRepository customerAccounts;
+    private final CustomerAccountDatabase customerAccounts;
 
     /** Nhận các nguồn dữ liệu chính thức để không fallback chéo giữa employee và customer. */
-    public EmployeeUserDetailsService(EmployeeService employees, CustomerAccountRepository customerAccounts) {
+    public EmployeeUserDetailsService(EmployeeService employees, CustomerAccountDatabase customerAccounts) {
         this.employees = employees;
         this.customerAccounts = customerAccounts;
     }
@@ -42,47 +42,47 @@ public class EmployeeUserDetailsService implements UserDetailsService {
 
     /** Nạp employee theo định danh chính thức, kiểm tra hash và phản ánh lock/enable vào UserDetails. */
     public UserDetails loadEmployeeById(String employeeId) throws UsernameNotFoundException {
-        Employee employee;
+        Snapshot employee;
         try {
             employee = employees.findRequired(employeeId);
         } catch (DomainException exception) {
             // Cố ý không tìm kiếm khách hàng sau khi không tìm thấy nhân viên.
             throw new UsernameNotFoundException("Không tìm thấy nhân viên", exception);
         }
-        String encodedPassword = employee.getPassword();
+        String encodedPassword = employee.password();
         if (!isBcryptHash(encodedPassword)) {
             throw new UsernameNotFoundException("Thông tin xác thực không hợp lệ");
         }
         var authorities = Stream.concat(
-                        Stream.of(new SimpleGrantedAuthority("ROLE_" + employee.getRole().name())),
-                        employee.getPermissions().stream()
+                        Stream.of(new SimpleGrantedAuthority("ROLE_" + employee.role().name())),
+                        employee.role().permissions().stream()
                                 .map(permission -> new SimpleGrantedAuthority("PERMISSION_" + permission.name())))
                 .toList();
         // accountLocked/disabled phải phản ánh trạng thái hiện tại để token cũ không giữ quyền sau khi khóa.
-        return User.withUsername(employee.getEmployeeId())
+        return User.withUsername(employee.employeeId())
                 .password(encodedPassword)
                 .authorities(authorities)
                 .accountExpired(false)
-                .accountLocked(!employee.isAccountNonLocked())
+                .accountLocked(!employee.accountNonLocked())
                 .credentialsExpired(false)
-                .disabled(!employee.isEnabled())
+                .disabled(!employee.enabled())
                 .build();
     }
 
     /** Nạp customer theo ID số; không dùng employee lookup vì hai loại principal có lifecycle riêng. */
     public UserDetails loadCustomerById(Long customerAccountId) throws UsernameNotFoundException {
         if (customerAccountId == null) throw new UsernameNotFoundException("Customer principal id is required");
-        CustomerAccount customer = customerAccounts.findById(customerAccountId)
+        CustomerAccountDatabase.Snapshot customer = customerAccounts.find(customerAccountId)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy tài khoản khách hàng"));
-        if (!isBcryptHash(customer.getPassword())) {
+        if (!isBcryptHash(customer.password())) {
             throw new UsernameNotFoundException("Thông tin xác thực không hợp lệ");
         }
         // Khóa hoặc vô hiệu hóa customer cũng phải làm JWT revalidation thất bại.
-        return User.withUsername(String.valueOf(customer.getId()))
-                .password(customer.getPassword())
+        return User.withUsername(String.valueOf(customer.id()))
+                .password(customer.password())
                 .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"))
-                .accountLocked(!customer.isAccountNonLocked())
-                .disabled(!customer.isEnabled())
+                .accountLocked(!customer.accountNonLocked())
+                .disabled(!customer.enabled())
                 .build();
     }
 

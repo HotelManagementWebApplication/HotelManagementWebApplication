@@ -476,8 +476,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         onLogin();
         return null;
       }
-      window.alert(apiErrorMessage(error, "Không thể đặt dịch vụ. Vui lòng kiểm tra booking và thời gian sử dụng."));
-      return null;
+      throw error;
     }
   };
 
@@ -514,7 +513,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           </h2>
           <p className="text-sm text-[#78716C] mb-8 font-light">
             {bookingConfirmation.paymentMethod === "vnpay"
-              ? "Đặt phòng đang được giữ trong 15 phút để quý khách hoàn tất tiền cọc qua VNPay."
+              ? "Đặt phòng đang được giữ trong 30 phút để quý khách hoàn tất tiền cọc qua VNPay."
               : "Yêu cầu đã được gửi tới lễ tân. Phòng chỉ được giữ sau khi lễ tân xác nhận."}
           </p>
 

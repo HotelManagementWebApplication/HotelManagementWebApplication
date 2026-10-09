@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ArrowLeft, CheckCircle2, Clock3, ExternalLink, RefreshCw, ShieldCheck } from "lucide-react";
 import { customerApi } from "../../../shared/api/customer";
 import { apiErrorMessage } from "../../../shared/api/client";
@@ -10,6 +10,8 @@ interface Props {
 }
 
 const fmtVND = (value: number) => (value ?? 0).toLocaleString("vi-VN") + " ₫";
+const POLL_INTERVAL_MS = 2500;
+const MAX_POLLING_MS = 120_000;
 
 /** Trang đích sau redirect VNPay; trạng thái hiển thị được đọc lại từ backend. */
 export function VnpayPaymentResultPage({ isAuthenticated, onLogin }: Props) {
@@ -21,41 +23,120 @@ export function VnpayPaymentResultPage({ isAuthenticated, onLogin }: Props) {
   const [attempt, setAttempt] = useState<VnpayPaymentAttempt | null>(null);
   const [loading, setLoading] = useState(isAuthenticated);
   const [retrying, setRetrying] = useState(false);
+  const [manualChecking, setManualChecking] = useState(false);
+  const [pollingTimedOut, setPollingTimedOut] = useState(false);
   const [error, setError] = useState("");
+  const lifecycle = useRef<AbortController | null>(null);
+  const activeRequest = useRef<{ signal: AbortSignal; promise: Promise<void> } | null>(null);
+  const pollingDeadline = useRef<number | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback((): Promise<void> => {
+    const signal = lifecycle.current?.signal;
+    if (!signal || signal.aborted) return Promise.resolve();
     if (!isAuthenticated || !Number.isSafeInteger(reservationId) || reservationId <= 0) {
       setLoading(false);
-      return;
+      return Promise.resolve();
     }
-    try {
-      const [booking, payment] = await Promise.all([
-        customerApi.reservation(reservationId),
-        customerApi.latestVnpayPayment(reservationId),
-      ]);
-      setReservation(booking);
-      setAttempt(payment);
-      setError("");
-    } catch (cause) {
-      setError(apiErrorMessage(cause, "Không thể tải trạng thái thanh toán. Vui lòng thử lại."));
-    } finally {
-      setLoading(false);
-    }
+    if (activeRequest.current?.signal === signal) return activeRequest.current.promise;
+    const promise = (async () => {
+      try {
+        const [bookingResult, paymentResult] = await Promise.allSettled([
+          customerApi.reservation(reservationId, signal),
+          customerApi.latestVnpayPayment(reservationId, signal),
+        ]);
+        if (signal.aborted) return;
+        if (bookingResult.status === "rejected") throw bookingResult.reason;
+        if (paymentResult.status === "rejected") throw paymentResult.reason;
+        setReservation(bookingResult.value);
+        setAttempt(paymentResult.value);
+        setError("");
+      } catch (cause) {
+        if (!signal.aborted) setError(apiErrorMessage(cause, "Không thể tải trạng thái thanh toán. Vui lòng thử lại."));
+      } finally {
+        if (!signal.aborted) setLoading(false);
+        if (activeRequest.current?.signal === signal) activeRequest.current = null;
+      }
+    })();
+    activeRequest.current = { signal, promise };
+    return promise;
   }, [isAuthenticated, reservationId]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
-
   useEffect(() => {
-    if (attempt?.status !== "PENDING") return;
-    const timer = window.setInterval(() => void refresh(), 2500);
-    return () => window.clearInterval(timer);
-  }, [attempt?.status, refresh]);
+    const controller = new AbortController();
+    lifecycle.current = controller;
+    pollingDeadline.current = null;
+    setReservation(null);
+    setAttempt(null);
+    setError("");
+    setPollingTimedOut(false);
+    setLoading(isAuthenticated);
+    void refresh();
+    return () => controller.abort();
+  }, [isAuthenticated, refresh]);
 
   const paid = reservation?.deposit_payment?.status === "PAID" || attempt?.status === "SUCCEEDED";
-  const pending = attempt?.status === "PENDING";
+  useEffect(() => {
+    if (!isAuthenticated || paid || attempt?.status !== "PENDING" || pollingTimedOut) return;
+
+    const parseTime = (iso?: string | null) => {
+      if (!iso) return NaN;
+      const time = new Date(iso).getTime();
+      return Number.isFinite(time) ? time : NaN;
+    };
+
+    const attemptExpiry = parseTime(attempt.expires_at);
+    const holdExpiry = parseTime(reservation?.deposit_payment?.expires_at);
+    const validExpiries = [attemptExpiry, holdExpiry].filter(Number.isFinite);
+    const expiryTime = validExpiries.length ? Math.min(...validExpiries) : NaN;
+    const deadline = Math.min(pollingDeadline.current ?? Date.now() + MAX_POLLING_MS, expiryTime);
+    pollingDeadline.current = deadline;
+
+    if (!Number.isFinite(deadline) || Date.now() >= deadline) {
+      setPollingTimedOut(true);
+      return;
+    }
+
+    let cancelled = false;
+    let pollTimer: number;
+    const schedule = () => {
+      if (cancelled || Date.now() >= deadline) return;
+      pollTimer = window.setTimeout(async () => {
+        if (cancelled || Date.now() >= deadline) return;
+        await refresh();
+        schedule();
+      }, POLL_INTERVAL_MS);
+    };
+    schedule();
+
+    const remainingMs = Math.max(0, deadline - Date.now());
+    const timeoutTimer = window.setTimeout(() => {
+      cancelled = true;
+      window.clearTimeout(pollTimer);
+      setPollingTimedOut(true);
+    }, remainingMs);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(pollTimer);
+      window.clearTimeout(timeoutTimer);
+    };
+  }, [isAuthenticated, paid, attempt?.status, attempt?.expires_at, reservation?.deposit_payment?.expires_at, pollingTimedOut, refresh]);
+
+  const pending = attempt?.status === "PENDING" && !pollingTimedOut;
+  const timedOut = Boolean(pollingTimedOut && attempt?.status === "PENDING" && !paid);
   const canRetry = Boolean(reservation && reservation.status === "DRAFT"
     && reservation.deposit_payment?.status === "PENDING"
     && (!reservation.deposit_payment.expires_at || new Date(reservation.deposit_payment.expires_at).getTime() > Date.now()));
+
+  const handleManualCheck = async () => {
+    setManualChecking(true);
+    setError("");
+    try {
+      await refresh();
+    } finally {
+      setManualChecking(false);
+    }
+  };
 
   const retry = async () => {
     if (!canRetry || !reservation) return;
@@ -89,11 +170,13 @@ export function VnpayPaymentResultPage({ isAuthenticated, onLogin }: Props) {
 
   const Icon = paid ? CheckCircle2 : pending ? Clock3 : AlertCircle;
   const iconClass = paid ? "bg-emerald-50 text-emerald-600" : pending ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600";
-  const title = paid ? "Thanh toán cọc thành công" : pending ? "Đang xác nhận giao dịch" : "Thanh toán chưa hoàn tất";
+  const title = paid ? "Thanh toán cọc thành công" : pending ? "Đang xác nhận giao dịch" : timedOut ? "Hết thời gian chờ kết quả giao dịch" : "Thanh toán chưa hoàn tất";
   const description = paid
     ? "VNPay đã xác nhận khoản cọc. Phòng được giữ và booking đã đồng bộ sang lễ tân."
     : pending
     ? "Hệ thống đang chờ phản hồi từ VNPay. Trang này sẽ tự cập nhật."
+    : timedOut
+    ? "Đã hết thời gian chờ phản hồi tự động từ VNPay. Bạn có thể kiểm tra lại trạng thái hoặc thực hiện thao tác khác."
     : returnResult === "invalid"
     ? "Kết quả trả về không có chữ ký hợp lệ. Booking chưa được ghi nhận thanh toán."
     : "Giao dịch bị hủy hoặc không thành công. Bạn có thể thử lại trong thời gian giữ phòng còn lại.";
@@ -122,7 +205,7 @@ export function VnpayPaymentResultPage({ isAuthenticated, onLogin }: Props) {
             <div className="mt-7 rounded-2xl border border-[#E7DECD] bg-[#FAF6EE] p-4 text-left text-sm space-y-3">
               <div className="flex justify-between gap-4"><span className="text-[#78716C]">Mã giao dịch</span><strong className="font-mono text-right">{attempt?.transaction_reference ?? "—"}</strong></div>
               <div className="flex justify-between gap-4"><span className="text-[#78716C]">Tiền cọc</span><strong className="text-[#8C6D37]">{fmtVND(reservation.deposit_amount)}</strong></div>
-              <div className="flex justify-between gap-4"><span className="text-[#78716C]">Trạng thái</span><strong>{paid ? "Đã thanh toán" : attempt?.status ?? "Chưa xác định"}</strong></div>
+              <div className="flex justify-between gap-4"><span className="text-[#78716C]">Trạng thái</span><strong>{paid ? "Đã thanh toán" : timedOut ? "Hết thời gian chờ" : attempt?.status ?? "Chưa xác định"}</strong></div>
               {responseCode && <div className="flex justify-between gap-4"><span className="text-[#78716C]">Mã phản hồi VNPay</span><strong>{responseCode}</strong></div>}
               {reservation.deposit_payment?.expires_at && !paid && <div className="flex justify-between gap-4"><span className="text-[#78716C]">Giữ phòng đến</span><strong>{new Date(reservation.deposit_payment.expires_at).toLocaleString("vi-VN")}</strong></div>}
             </div>
@@ -136,6 +219,21 @@ export function VnpayPaymentResultPage({ isAuthenticated, onLogin }: Props) {
               <button type="button" onClick={backHome} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1C1917] py-3.5 text-xs font-semibold uppercase tracking-wider text-white hover:bg-[#8C6D37]">
                 <ExternalLink size={15} /> Xem đơn đặt
               </button>
+            ) : timedOut ? (
+              canRetry ? (
+                <div className="flex gap-2">
+                  <button type="button" disabled={manualChecking} onClick={() => void handleManualCheck()} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#8C6D37] bg-white py-3.5 text-xs font-semibold uppercase tracking-wider text-[#8C6D37] hover:bg-[#FAF6EE] disabled:opacity-50">
+                    <RefreshCw size={14} className={manualChecking ? "animate-spin" : ""} /> Kiểm tra lại
+                  </button>
+                  <button type="button" disabled={retrying} onClick={() => void retry()} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#1C1917] py-3.5 text-xs font-semibold uppercase tracking-wider text-white hover:bg-[#8C6D37] disabled:cursor-not-allowed disabled:opacity-40">
+                    <RefreshCw size={14} className={retrying ? "animate-spin" : ""} /> {retrying ? "Đang chuyển…" : "Thanh toán lại"}
+                  </button>
+                </div>
+              ) : (
+                <button type="button" disabled={manualChecking} onClick={() => void handleManualCheck()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1C1917] py-3.5 text-xs font-semibold uppercase tracking-wider text-white hover:bg-[#8C6D37] disabled:opacity-50">
+                  <RefreshCw size={15} className={manualChecking ? "animate-spin" : ""} /> Kiểm tra lại
+                </button>
+              )
             ) : (
               <button type="button" disabled={!canRetry || retrying} onClick={() => void retry()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1C1917] py-3.5 text-xs font-semibold uppercase tracking-wider text-white hover:bg-[#8C6D37] disabled:cursor-not-allowed disabled:opacity-40">
                 <RefreshCw size={15} className={retrying ? "animate-spin" : ""} /> {retrying ? "Đang chuyển…" : "Thanh toán lại"}

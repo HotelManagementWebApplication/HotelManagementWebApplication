@@ -135,9 +135,13 @@ Các mốc dưới đây tính theo số lượt lưu trú hoàn tất:
 
 - Lượt lưu trú được ghi nhận sau khi checkout hoàn tất. Booking bị hủy hoặc
   không đến nhận phòng không được tính.
-- Booking dưới 24 giờ không được tính lượt; booking từ đủ 24 giờ trở lên tính
-  1 lượt cho mỗi booking, dù kéo dài 48 giờ, 72 giờ hay hơn. Booking nhiều
-  phòng của cùng khách vẫn tính 1 lượt.
+- Booking combo ngày-đêm (hình thức thuê theo gói) được tính 1 lượt khi
+  checkout hoàn tất. Một đêm tiêu chuẩn nhận phòng lúc 14:00 và trả phòng
+  lúc 12:00 ngày hôm sau, tương đương 22 giờ, không phải 24 giờ. Booking
+  nhiều đêm hoặc nhiều phòng của cùng khách vẫn chỉ tính 1 lượt.
+- Booking theo giờ không được tính lượt VIP, kể cả kéo dài nhiều ngày.
+  Không áp dụng ngưỡng thời lượng 24 giờ để xét lượt. Khách đến muộn hoặc
+  trả sớm không làm đổi hình thức thuê đã xác nhận của booking.
 - Khách sạn theo dõi riêng số lượt lưu trú và tổng chi tiêu tích lũy. Ngưỡng
   xét hạng theo tổng chi tiêu chưa được chốt trong tài liệu này; khách vui lòng
   liên hệ khách sạn để xác nhận.

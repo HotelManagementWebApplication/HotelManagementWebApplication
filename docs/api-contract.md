@@ -343,13 +343,24 @@ generic PATCH. Create/update/accept/release đều yêu cầu `Idempotency-Key` 
 | `GET /api/finance/partner-debts/{id}/settlements` | Path `id` | `FINANCE_READ` |
 | `GET /api/finance/ledger` | Query `entry_type`, `from`, `to`, `page` default 0, `size` default 20 | `FINANCE_READ` |
 | `GET /api/finance/reconciliation` | Query `from`, `to` | `FINANCE_READ` |
-| `GET /api/finance/payments` | Query `invoice_id`, `method`, `type`, `status`, `from`, `to`, `page`, `size` | `FINANCE_READ` |
+| `GET /api/finance/payments` | Query `invoice_id`, `method`, `type`, `status`, `from`, `to`, `search`, `page`, `size` | `FINANCE_READ` |
 | `GET /api/finance/receipts` | Query `invoice_id`, `method`, `issued_by`, `from`, `to`, `page`, `size` | `FINANCE_READ` |
 | `GET /api/hr/shifts` | Query hiện bind `date`, `to`, `employeeId` | `SHIFT_READ` |
 | `GET /api/hr/shifts/coverage` | Query `date`, `shiftCode`, `minimum_staff` | `SHIFT_READ` |
 | `POST /api/hr/shifts` | Body `employee_id`, `shift_date`, `shift_code`, `starts_at`, `ends_at` | `SHIFT_WRITE`; actor được ghi nhận bởi service, không có idempotency header |
 | `PATCH /api/hr/shifts/{id}/status` | Body `status` | `SHIFT_WRITE` |
 | `PUT /api/hr/shifts/{id}` | Body `shift_date`, `shift_code`, `starts_at`, `ends_at` | `SHIFT_WRITE` |
+
+`GET /api/finance/payments` phân trang tại SQL Server: `page` bắt đầu từ 0,
+`size` mặc định 20 và tối đa 100; trả `items`, `page`, `size`,
+`total_elements`, `total_pages`, `method_counts`. Mỗi item có thêm
+`reservation_id` và `service_total` để bảng kế toán không phải tải toàn bộ
+hóa đơn. `search` là chuỗi tìm kiếm literal tối đa 200 ký tự, áp dụng trước
+phân trang trên mã giao dịch/hóa đơn/booking, tham chiếu, phương thức và mô tả.
+`method_counts` dùng cùng phạm vi ngày/tìm kiếm nhưng không bị lọc bởi `method`.
+Kết quả sắp theo thời điểm giảm dần, rồi ID giảm dần. `reconciliation` có thêm
+`completed_transactions` của khoảng ngày đã chọn và `pending_bank_transfers`
+trên toàn bộ hóa đơn còn chờ, không giới hạn ở trang dữ liệu đang xem.
 
 `unit` của dịch vụ là nhãn hiển thị dạng chuỗi, không phải enum hoặc mã API ổn
 định. Giá trị bỏ trống được chuẩn hóa thành `lần`. Các bí danh đầu vào cũ
@@ -439,7 +450,7 @@ SQL Server 2022 thật, không bỏ qua acceptance test:
 1. Khởi động SQL Server 2022 bằng `docker-compose.yml` hoặc CI service, với
    `MIGRATION_TEST_DB_URL`, `MIGRATION_TEST_DB_USERNAME`,
    `MIGRATION_TEST_DB_PASSWORD` trỏ tới schema sạch.
-2. Chạy Flyway thật với canonical demo baseline `V1` trên database rỗng;
+2. Chạy toàn bộ chuỗi Flyway migration, bắt đầu từ baseline `V1`, trên database rỗng;
    `spring.flyway.enabled=true`.
 3. Chạy ứng dụng/test với `spring.jpa.hibernate.ddl-auto=validate` (không
    `create`, `create-drop` hay `update`). `application.yml` production đã đặt

@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.time.Instant;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -24,26 +24,42 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 
-/** HTTP -> dịch vụ thật -> repository thật. Chạy trên cả H2 và SQL Server. */
-@Transactional
+/** HTTP -> dịch vụ thật -> SQL Server đã chạy Flyway. */
 @WithMockUser(username = "clerk", roles = "FRONT_DESK")
 public abstract class BillingWorkflowAssertions {
     /** MockMvc đi qua controller, security và dịch vụ thật như một request production. */
     @Autowired MockMvc mvc;
     /** EntityManager seed invoice/approval trực tiếp trong transaction của test. */
     @Autowired EntityManager em;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
     /** Invoice chung của mỗi test; roomTotal 1250500 kiểm tra quy tắc làm tròn 1251000. */
     private Invoice invoice;
 
     /** Given nhân viên, khách và invoice sạch, When bắt đầu test, Then mọi workflow dùng cùng aggregate. */
     @BeforeEach void seedInvoice() {
-        Employee employee = new Employee(); employee.setEmployeeId("clerk"); employee.setFullName("Clerk");
-        employee.setPassword("test-hash"); employee.setPhone("0900000091"); employee.setRole(EmployeeRole.FRONT_DESK); em.persist(employee);
-        Guest guest = new Guest(); guest.setFullName("Billing Guest"); guest.setPhone("0900000092");
-        guest.setIdentityNumber("012345678991"); em.persist(guest);
-        Reservation r = new Reservation(); r.setEmployee(employee); r.setGuest(guest); em.persist(r);
-        invoice = new Invoice(); invoice.setReservation(r); invoice.setRoomTotal(new BigDecimal("1250500"));
-        em.persist(invoice); em.flush();
+        cleanup();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            Employee employee = new Employee(); employee.setEmployeeId("clerk"); employee.setFullName("Clerk");
+            employee.setPassword("test-hash"); employee.setPhone("0900000091"); employee.setRole(EmployeeRole.FRONT_DESK); em.persist(employee);
+            Guest guest = new Guest(); guest.setFullName("Billing Guest"); guest.setPhone("0900000092");
+            guest.setIdentityNumber("012345678991"); em.persist(guest);
+            Reservation r = new Reservation(); r.setEmployee(employee); r.setGuest(guest); em.persist(r);
+            invoice = new Invoice(); invoice.setReservation(r); invoice.setRoomTotal(new BigDecimal("1250500"));
+            em.persist(invoice); em.flush();
+        });
+    }
+    @org.junit.jupiter.api.AfterEach void cleanup() {
+        jdbc.update("DELETE NhatKyKiemSoat WHERE nguoiThucHien IN(N'clerk',N'director')");
+        jdbc.update("DELETE BanGhiChongTrung WHERE nguoiThucHien IN(N'clerk',N'director')");
+        jdbc.update("DELETE ButToanTaiChinh WHERE maNguoiThucHien=N'clerk'");
+        jdbc.update("DELETE BienLai WHERE maHoaDon IN(SELECT maHoaDon FROM HoaDon WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE maNhanVien=N'clerk'))");
+        jdbc.update("DELETE GiaoDichThanhToan WHERE maHoaDon IN(SELECT maHoaDon FROM HoaDon WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE maNhanVien=N'clerk'))");
+        jdbc.update("DELETE YeuCauPheDuyet WHERE nguoiYeuCau=N'clerk'");
+        jdbc.update("DELETE HoaDon WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE maNhanVien=N'clerk')");
+        jdbc.update("DELETE PhieuDatPhong WHERE maNhanVien=N'clerk'");
+        jdbc.update("DELETE KhachLuuTru WHERE soDienThoai=N'0900000092'");
+        jdbc.update("DELETE NhanVien WHERE maNhanVien=N'clerk'");
     }
 
     /** Given invoice 1250500, When thu, xuất receipt, refund lặp, Then ledger không nhân bản và payable đúng. */
@@ -58,7 +74,6 @@ public abstract class BillingWorkflowAssertions {
         approveRefund("251000", "refund");
         payment("251000", "REFUND", "refund");
         payment("251000", "REFUND", "refund");
-        em.flush(); em.clear();
         mvc.perform(get("/api/invoices/{id}/payments", invoice.getId()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
         mvc.perform(get("/api/invoices/reservation/{id}", invoice.getReservation().getId()))
@@ -126,7 +141,7 @@ public abstract class BillingWorkflowAssertions {
         ApprovalRequest approval = new ApprovalRequest("clerk", "PAYMENT_REFUND", String.valueOf(invoice.getId()),
                 payload, ApprovalService.fingerprintFor(payload), new BigDecimal(amount), "approved refund",
                 Instant.now().plusSeconds(3600), "approval-" + key);
-        em.persist(approval); em.flush();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> { em.persist(approval); em.flush(); });
         mvc.perform(post("/api/governance/approvals/{id}/approve", approval.getId())
                 .with(user("director").roles("DIRECTOR"))).andExpect(status().isOk());
     }

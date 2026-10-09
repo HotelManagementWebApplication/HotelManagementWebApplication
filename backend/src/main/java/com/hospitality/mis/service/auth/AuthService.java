@@ -1,14 +1,13 @@
 package com.hospitality.mis.service.auth;
 
 import com.hospitality.mis.common.exception.DomainException;
-import com.hospitality.mis.dao.auth.CustomerAccountRepository;
+import com.hospitality.mis.dao.auth.CustomerAccountDatabase;
 import com.hospitality.mis.common.validation.PhoneNumberNormalizer;
-import com.hospitality.mis.dao.auth.RefreshTokenRepository;
+import com.hospitality.mis.dao.auth.RefreshTokenDatabase;
 import com.hospitality.mis.dto.auth.AuthDtos;
 import com.hospitality.mis.dto.auth.CustomerAccountDtos;
-import com.hospitality.mis.entity.auth.CustomerAccount;
-import com.hospitality.mis.entity.auth.RefreshToken;
-import com.hospitality.mis.entity.identity.Employee;
+
+import com.hospitality.mis.dao.identity.EmployeeDatabase.Snapshot;
 import com.hospitality.mis.middleware.security.SecurityActor;
 import com.hospitality.mis.middleware.security.EmployeeUserDetailsService;
 import com.hospitality.mis.service.governance.AuditService;
@@ -41,19 +40,19 @@ public class AuthService {
     /** Chủ sở hữu chính sách tài khoản và bộ đếm đăng nhập lỗi. */
     private final EmployeeService employeeService;
     /** Lưu refresh token; thao tác nhạy cảm dùng bản ghi đã khóa. */
-    private final RefreshTokenRepository refreshTokens;
+    private final RefreshTokenDatabase refreshTokens;
     /** Tạo access/refresh token và mã hóa refresh token. */
     private final JwtTokenService tokenService;
     /** Lưu và kiểm tra tài khoản khách khi khách đăng nhập. */
-    private final CustomerAccountRepository customerAccounts;
+    private final CustomerAccountDatabase customerAccounts;
     /** So khớp và băm mật khẩu khách hàng. */
     private final PasswordEncoder passwordEncoder;
     /** Ghi audit cho đăng nhập, đăng xuất và đổi mật khẩu. */
     private final AuditService audit;
 
     public AuthService(AuthenticationManager authenticationManager, UserDetailsService userDetailsService,
-                       EmployeeService employeeService, RefreshTokenRepository refreshTokens,
-                       JwtTokenService tokenService, CustomerAccountRepository customerAccounts,
+                       EmployeeService employeeService, RefreshTokenDatabase refreshTokens,
+                       JwtTokenService tokenService, CustomerAccountDatabase customerAccounts,
                        PasswordEncoder passwordEncoder, AuditService audit) {
         this.authenticationManager = authenticationManager;
         this.userDetailsService = userDetailsService;
@@ -93,11 +92,11 @@ public class AuthService {
     @Transactional(noRollbackFor = AuthFailureException.class)
     public AuthDtos.TokenResponse customerLogin(CustomerAccountDtos.LoginRequest request) {
         String identifier = request.phone() == null ? "" : request.phone().trim();
-        CustomerAccount account;
+        CustomerAccountDatabase.Snapshot account;
         String auditIdentifier;
         if (identifier.contains("@")) {
             String email = identifier.toLowerCase(java.util.Locale.ROOT);
-            account = customerAccounts.findByGuestEmail(email).orElse(null);
+            account = customerAccounts.email(email).orElse(null);
             auditIdentifier = email;
         } else {
             String phone;
@@ -106,30 +105,30 @@ public class AuthService {
             } catch (DomainException exception) {
                 throw new AuthFailureException();
             }
-            account = customerAccounts.findByPhone(phone).orElse(null);
+            account = customerAccounts.phone(phone).orElse(null);
             auditIdentifier = phone;
         }
-        if (account == null || !EmployeeUserDetailsService.isBcryptHash(account.getPassword())
-                || !passwordEncoder.matches(request.password(), account.getPassword())) {
+        if (account == null || !EmployeeUserDetailsService.isBcryptHash(account.password())
+                || !passwordEncoder.matches(request.password(), account.password())) {
             audit.record("SYSTEM", "LOGIN_FAILED", "CUSTOMER_ACCOUNT",
                     auditIdentifier, null, null, "Invalid credentials");
             throw new AuthFailureException();
         }
-        if (!account.isEnabled()) {
-            audit.record("customer:" + account.getId(), "LOGIN_FAILED", "CUSTOMER_ACCOUNT",
-                    String.valueOf(account.getId()), null, null, "Account disabled");
+        if (!account.enabled()) {
+            audit.record("customer:" + account.id(), "LOGIN_FAILED", "CUSTOMER_ACCOUNT",
+                    String.valueOf(account.id()), null, null, "Account disabled");
             throw new AuthFailureException();
         }
-        if (!account.isAccountNonLocked()) {
-            audit.record("customer:" + account.getId(), "LOGIN_FAILED", "CUSTOMER_ACCOUNT",
-                    String.valueOf(account.getId()), null, null, "Account locked");
+        if (!account.accountNonLocked()) {
+            audit.record("customer:" + account.id(), "LOGIN_FAILED", "CUSTOMER_ACCOUNT",
+                    String.valueOf(account.id()), null, null, "Account locked");
             throw new AuthFailureException();
         }
-        UserDetails user = User.withUsername(String.valueOf(account.getId())).password(account.getPassword())
+        UserDetails user = User.withUsername(String.valueOf(account.id())).password(account.password())
                 .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER")).build();
-        audit.record("customer:" + account.getId(), "LOGIN_SUCCEEDED", "CUSTOMER_ACCOUNT",
-                String.valueOf(account.getId()), null, null, null);
-        return issueAndStore(JwtTokenService.PrincipalType.CUSTOMER, String.valueOf(account.getId()), user,
+        audit.record("customer:" + account.id(), "LOGIN_SUCCEEDED", "CUSTOMER_ACCOUNT",
+                String.valueOf(account.id()), null, null, null);
+        return issueAndStore(JwtTokenService.PrincipalType.CUSTOMER, String.valueOf(account.id()), user,
                 tokenService.generateFamilyId());
     }
 
@@ -137,9 +136,9 @@ public class AuthService {
     @Transactional(readOnly = true)
     public AuthDtos.EmployeeProfileResponse employeeMe(SecurityActor.Principal actor) {
         if (!actor.isEmployee()) throw new org.springframework.security.access.AccessDeniedException("Employee principal required");
-        Employee employee = employeeService.findRequired(actor.id());
-        return new AuthDtos.EmployeeProfileResponse(employee.getEmployeeId(), employee.getFullName(),
-                employee.getRole(), employee.getPermissions().stream().sorted().toList());
+        Snapshot employee = employeeService.findRequired(actor.id());
+        return new AuthDtos.EmployeeProfileResponse(employee.employeeId(), employee.fullName(),
+                employee.role(), employee.role().permissions().stream().sorted().toList());
     }
 
     /** Kiểm tra refresh token, phát hành token mới và thu hồi token cũ trong giao dịch. */
@@ -147,17 +146,16 @@ public class AuthService {
     public AuthDtos.TokenResponse refresh(String rawRefreshToken) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) throw new AuthFailureException();
         Instant now = Instant.now();
-        RefreshToken current = refreshTokens.findForUpdate(JwtTokenService.hash(rawRefreshToken))
+        RefreshTokenDatabase.Token current = refreshTokens.lock(JwtTokenService.hash(rawRefreshToken))
                 .orElseThrow(AuthFailureException::new);
-        if (current.getRevokedAt() != null) {
-            revokeFamily(current.getFamilyId(), now);
+        if (current.revokedAt() != null) {
+            refreshTokens.revokeFamily(current, now);
             audit.record(current.auditActor(), "REFRESH_REPLAY_DETECTED", "REFRESH_TOKEN",
-                    current.getFamilyId(), null, null, "Revoked refresh token replay");
+                    current.familyId(), null, null, "Revoked refresh token replay");
             throw new AuthFailureException();
         }
-        if (!now.isBefore(current.getExpiresAt())) {
-            current.revoke(now, null);
-            refreshTokens.save(current);
+        if (!now.isBefore(current.expiresAt())) {
+            refreshTokens.revoke(current, now);
             throw new AuthFailureException();
         }
 
@@ -165,9 +163,9 @@ public class AuthService {
         JwtTokenService.PrincipalType type = current.principalType();
         try {
             if (type == JwtTokenService.PrincipalType.EMPLOYEE) {
-                user = userDetailsService.loadUserByUsername(current.getPrincipalId());
+                user = userDetailsService.loadUserByUsername(current.principalId());
             } else {
-                CustomerAccount account = customerAccounts.findById(current.getCustomerAccountId())
+                CustomerAccountDatabase.Snapshot account = customerAccounts.find(current.customerAccountId())
                         .orElseThrow(AuthFailureException::new);
                 user = customerUser(account);
             }
@@ -190,13 +188,11 @@ public class AuthService {
             throw new AuthFailureException("ACCOUNT_LOCKED");
         }
 
-        String principalId = current.getPrincipalId();
+        String principalId = current.principalId();
         JwtTokenService.IssuedTokens issued = tokenService.issue(type, principalId, user.getAuthorities(),
-                current.getFamilyId());
-        current.revoke(now, issued.refreshTokenHash());
-        refreshTokens.save(current);
-        saveRefreshToken(type, principalId, issued, current.getFamilyId());
-        audit.record(current.auditActor(), "REFRESH_ROTATED", "REFRESH_TOKEN", current.getFamilyId(),
+                current.familyId());
+        refreshTokens.rotate(current, issued, now);
+        audit.record(current.auditActor(), "REFRESH_ROTATED", "REFRESH_TOKEN", current.familyId(),
                 null, issued.refreshTokenHash(), null);
         return issued.response();
     }
@@ -206,16 +202,16 @@ public class AuthService {
     public void logout(SecurityActor.Principal actor, String rawRefreshToken) {
         Instant now = Instant.now();
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
-            if (actor.isEmployee()) refreshTokens.revokeAllForEmployee(actor.id(), now);
-            else if (actor.isCustomer()) refreshTokens.revokeAllForCustomer(Long.valueOf(actor.id()), now);
+            if (actor.isEmployee()) refreshTokens.revokeEmployee(actor.id(), now);
+            else if (actor.isCustomer()) refreshTokens.revokeCustomer(Long.valueOf(actor.id()), now);
             else throw new AuthFailureException();
             audit.record(actor.isCustomer() ? "customer:" + actor.id() : actor.id(), "LOGOUT", "REFRESH_TOKEN", actor.id(), null, null, null);
             return;
         }
-        refreshTokens.findForUpdate(JwtTokenService.hash(rawRefreshToken)).ifPresent(token -> {
-            if (actor.type().equals(token.getPrincipalType()) && actor.id().equals(token.getPrincipalId())) {
-                revokeFamily(token.getFamilyId(), now);
-                audit.record(actor.isCustomer() ? "customer:" + actor.id() : actor.id(), "LOGOUT", "REFRESH_TOKEN", token.getFamilyId(), null, null, null);
+        refreshTokens.lock(JwtTokenService.hash(rawRefreshToken)).ifPresent(token -> {
+            if (actor.type().equals(token.principalType().name()) && actor.id().equals(token.principalId())) {
+                refreshTokens.revokeFamily(token, now);
+                audit.record(actor.isCustomer() ? "customer:" + actor.id() : actor.id(), "LOGOUT", "REFRESH_TOKEN", token.familyId(), null, null, null);
             }
         });
     }
@@ -223,12 +219,12 @@ public class AuthService {
     /** Tạo tài khoản nhân viên qua EmployeeService và ghi nhận sự kiện provisioning. */
     @Transactional
     public AuthDtos.EmployeeResponse provision(AuthDtos.ProvisionRequest request) {
-        Employee employee = employeeService.provision(request.employeeId(), request.fullName(), request.password(),
+        Snapshot employee = employeeService.provision(request.employeeId(), request.fullName(), request.password(),
                 request.role(), request.phone(), request.address());
-        audit.record(SecurityActor.currentActor(), "EMPLOYEE_PROVISIONED", "EMPLOYEE", employee.getEmployeeId(),
-                null, employee.getRole().name(), null);
-        return new AuthDtos.EmployeeResponse(employee.getEmployeeId(), employee.getFullName(), employee.getRole(),
-                employee.getPhone(), employee.getAddress());
+        audit.record(SecurityActor.currentActor(), "EMPLOYEE_PROVISIONED", "EMPLOYEE", employee.employeeId(),
+                null, employee.role().name(), null);
+        return new AuthDtos.EmployeeResponse(employee.employeeId(), employee.fullName(), employee.role(),
+                employee.phone(), employee.address());
     }
 
     /** Đổi mật khẩu nhân viên và buộc mọi refresh token cũ hết hiệu lực. */
@@ -237,9 +233,9 @@ public class AuthService {
                               SecurityActor.Principal actor) {
         if (!actor.isEmployee()) throw new AuthFailureException();
         SecurityActor.requireBoundActor(actor.id());
-        Employee employee = employeeService.resetPassword(employeeId, request == null ? null : request.password());
-        refreshTokens.revokeAllForEmployee(employeeId, Instant.now());
-        audit.record(actor.id(), "PASSWORD_RESET", "EMPLOYEE", employee.getEmployeeId(), null, null, null);
+        Snapshot employee = employeeService.resetPassword(employeeId, request == null ? null : request.password());
+        refreshTokens.revokeEmployee(employeeId, Instant.now());
+        audit.record(actor.id(), "PASSWORD_RESET", "EMPLOYEE", employee.employeeId(), null, null, null);
     }
 
     @Transactional
@@ -247,7 +243,7 @@ public class AuthService {
         if (!actor.isEmployee()) throw new AuthFailureException();
         SecurityActor.requireBoundActor(actor.id());
         employeeService.changeOwnPassword(actor.id(), request == null ? null : request.password());
-        refreshTokens.revokeAllForEmployee(actor.id(), Instant.now());
+        refreshTokens.revokeEmployee(actor.id(), Instant.now());
         audit.record(actor.id(), "PASSWORD_CHANGED", "EMPLOYEE", actor.id(), null, null, null);
     }
 
@@ -256,16 +252,15 @@ public class AuthService {
     public void resetCustomerPassword(SecurityActor.Principal actor,
                                       CustomerAccountDtos.PasswordResetRequest request) {
         if (!actor.isCustomer()) throw new AuthFailureException();
-        CustomerAccount account = customerAccounts.findById(Long.valueOf(actor.id()))
+        CustomerAccountDatabase.Snapshot account = customerAccounts.find(Long.valueOf(actor.id()))
                 .orElseThrow(AuthFailureException::new);
         if (request == null || request.password() == null || request.password().length() < 8
                 || request.password().length() > 72) {
             throw new AuthFailureException("PASSWORD_INVALID");
         }
-        account.setPassword(passwordEncoder.encode(request.password()));
-        customerAccounts.save(account);
-        refreshTokens.revokeAllForCustomer(account.getId(), Instant.now());
-        audit.record("customer:" + actor.id(), "PASSWORD_RESET", "CUSTOMER_ACCOUNT", String.valueOf(account.getId()),
+        customerAccounts.password(account.id(),passwordEncoder.encode(request.password()));
+        refreshTokens.revokeCustomer(account.id(), Instant.now());
+        audit.record("customer:" + actor.id(), "PASSWORD_RESET", "CUSTOMER_ACCOUNT", String.valueOf(account.id()),
                 null, null, null);
     }
 
@@ -280,34 +275,19 @@ public class AuthService {
     /** Chọn cách lưu token theo loại principal, giữ liên kết cùng familyId. */
     private void saveRefreshToken(JwtTokenService.PrincipalType type, String principalId,
                                   JwtTokenService.IssuedTokens issued, String familyId) {
-        if (type == JwtTokenService.PrincipalType.CUSTOMER) {
-            refreshTokens.save(RefreshToken.issueCustomer(Long.valueOf(principalId), issued.refreshTokenHash(),
-                    familyId, issued.issuedAt(), issued.refreshExpiresAt()));
-        } else {
-            refreshTokens.save(RefreshToken.issue(principalId, issued.refreshTokenHash(), familyId,
-                    issued.issuedAt(), issued.refreshExpiresAt()));
-        }
+        refreshTokens.issue(type, principalId, issued, familyId);
     }
 
     /** Chuyển tài khoản khách thành UserDetails để kiểm tra quyền và trạng thái. */
-    private UserDetails customerUser(CustomerAccount account) {
-        return User.withUsername(String.valueOf(account.getId())).password(account.getPassword())
+    private UserDetails customerUser(CustomerAccountDatabase.Snapshot account) {
+        return User.withUsername(String.valueOf(account.id())).password(account.password())
                 .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER"))
-                .accountLocked(!account.isAccountNonLocked()).disabled(!account.isEnabled()).build();
+                .accountLocked(!account.accountNonLocked()).disabled(!account.enabled()).build();
     }
 
     /** Thu hồi và lưu một refresh token vừa bị vô hiệu hóa. */
-    private void revokeCurrent(RefreshToken token, Instant now) {
-        token.revoke(now, null);
-        refreshTokens.save(token);
-    }
-
-    /** Thu hồi tất cả token trong một family khi phát hiện replay hoặc logout. */
-    private void revokeFamily(String familyId, Instant at) {
-        refreshTokens.findAllByFamilyId(familyId).forEach(token -> {
-            if (token.getRevokedAt() == null) token.revoke(at, null);
-        });
-        refreshTokens.flush();
+    private void revokeCurrent(RefreshTokenDatabase.Token token, Instant now) {
+        refreshTokens.revoke(token, now);
     }
 
 }

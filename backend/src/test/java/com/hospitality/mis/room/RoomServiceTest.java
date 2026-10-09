@@ -1,211 +1,110 @@
 package com.hospitality.mis.room;
 
 import com.hospitality.mis.common.exception.DomainException;
-import com.hospitality.mis.dao.room.ReservationOverlapPort;
-import com.hospitality.mis.dao.room.RoomStore;
-import com.hospitality.mis.dto.room.RoomDtos;
-import com.hospitality.mis.entity.room.Room;
+import com.hospitality.mis.dao.room.RoomDatabase;
 import com.hospitality.mis.entity.room.RoomStatus;
-import com.hospitality.mis.entity.room.RoomType;
-import com.hospitality.mis.service.governance.AuditService;
 import com.hospitality.mis.service.room.RoomService;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import java.time.*;
+import java.util.*;
+import java.util.concurrent.*;
+import static org.assertj.core.api.Assertions.*;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
-@ExtendWith(MockitoExtension.class)
-/** Bảo vệ room service: search/availability, lock trạng thái, actor và audit. */
+@SpringBootTest(properties={"spring.datasource.url=${MIGRATION_TEST_DB_URL}","spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}","spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}","spring.flyway.enabled=true","spring.jpa.hibernate.ddl-auto=validate"})
 class RoomServiceTest {
-    /** Khoảng thời gian half-open dùng cho mọi availability assertion. */
-    private static final LocalDateTime FROM = LocalDateTime.of(2031, 1, 10, 14, 0);
-    /** TO sau FROM; expected overlap chỉ áp trên khoảng này. */
-    private static final LocalDateTime TO = LocalDateTime.of(2031, 1, 11, 12, 0);
-
-    /** RoomStore mock; findForUpdate thể hiện locking boundary khi đổi status. */
-    @Mock RoomStore rooms;
-    /** Overlap port mock để tách availability khỏi reservation persistence. */
-    @Mock ReservationOverlapPort overlaps;
-    /** Audit mock để kiểm tra actor/state transition. */
-    @Mock AuditService audit;
-
-    /** Service thật được dựng sau khi đặt actor manager. */
-    private RoomService service;
-
-    /** Đặt actor manager mặc định và dựng service thật cho mỗi test. */
-    @BeforeEach
-    void setUp() {
-        setActor("manager", "MANAGER");
-        service = new RoomService(rooms, overlaps, audit);
+    @Autowired RoomService service;
+    @Autowired RoomDatabase rooms;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired PlatformTransactionManager manager;
+    long reservation;
+    @BeforeEach void seed(){
+        cleanup();
+        jdbc.update("INSERT LoaiPhong(maLoaiPhong,ten,giaTheoNgay) VALUES(N'RSP-T',N'Room service type',2400)");
+        jdbc.update("INSERT Phong(maPhong,maLoaiPhong,ten,tang) VALUES(N'RSP-01',N'RSP-T',N'Room 101',1),(N'RSP-02',N'RSP-T',N'Room 102',2)");
+        actor("RSP-manager","MANAGER");
     }
-
-    @AfterEach
-    /** Dọn SecurityContext sau test. */
-    void clearSecurityContext() {
-        SecurityContextHolder.clearContext();
+    @AfterEach void cleanup(){
+        jdbc.update("DELETE NhatKyKiemSoat WHERE loaiDoiTuong=N'ROOM' AND maDoiTuong LIKE N'RSP-%'");
+        jdbc.update("DELETE PhieuDatPhong WHERE maKhachLuuTru IN(SELECT maKhachLuuTru FROM KhachLuuTru WHERE soGiayToTuyThan=N'RSP-GUEST')");
+        jdbc.update("DELETE KhachLuuTru WHERE soGiayToTuyThan=N'RSP-GUEST'");
+        jdbc.update("DELETE Phong WHERE maPhong LIKE N'RSP-%'");jdbc.update("DELETE LoaiPhong WHERE maLoaiPhong=N'RSP-T'");SecurityContextHolder.clearContext();
     }
-
-    @Test
-    /** Given room/type canonical, When search, Then DTO map đủ field và không có legacy model. */
-    void searchMapsCanonicalRoomAndRoomTypeWithoutLegacyTypesInTheServiceContract() {
-        Room room = room("R101", RoomStatus.READY);
-        when(rooms.search("STD", RoomStatus.READY)).thenReturn(List.of(room));
-
-        RoomDtos.Response response = service.search("STD", RoomStatus.READY).getFirst();
-
-        assertThat(response.id()).isEqualTo("R101");
-        assertThat(response.name()).isEqualTo("Room 101");
-        assertThat(response.roomTypeId()).isEqualTo("STD");
-        assertThat(response.roomTypeName()).isEqualTo("Standard");
-        assertThat(response.dailyPrice()).isEqualByComparingTo("2400.00");
-        assertThat(response.floor()).isEqualTo(1);
-        assertThat(response.status()).isEqualTo(RoomStatus.READY);
+    @Test void searchMapsCanonicalRoomAndFiltersInStableOrder(){
+        var result=service.search("RSP-T",RoomStatus.READY);
+        assertThat(result).extracting(r->r.id()).containsExactly("RSP-01","RSP-02");var row=result.getFirst();
+        assertThat(row.name()).isEqualTo("Room 101");assertThat(row.roomTypeName()).isEqualTo("Room service type");assertThat(row.dailyPrice()).isEqualByComparingTo("2400");assertThat(row.floor()).isEqualTo(1);
     }
-
-    @Test
-    /** Given READY/MAINTENANCE/CLEANING và overlap, When availability, Then chỉ room READY không overlap mới available. */
-    void availabilityCombinesOperationalStateWithHalfOpenOverlapProtection() {
-        Room ready = room("R101", RoomStatus.READY);
-        Room maintenance = room("R102", RoomStatus.MAINTENANCE);
-        Room cleaning = room("R103", RoomStatus.CLEANING);
-        when(rooms.search(null, null)).thenReturn(List.of(ready, maintenance, cleaning));
-        when(overlaps.hasOverlap("R101", FROM, TO)).thenReturn(true);
-        when(overlaps.hasOverlap("R102", FROM, TO)).thenReturn(false);
-        when(overlaps.hasOverlap("R103", FROM, TO)).thenReturn(false);
-
-        List<RoomDtos.Availability> availability = service.availability(FROM, TO, null);
-
-        assertThat(availability).extracting(RoomDtos.Availability::available)
-                .containsExactly(false, false, false);
-        verify(overlaps).hasOverlap("R101", FROM, TO);
-        verify(overlaps).hasOverlap("R102", FROM, TO);
-        verify(overlaps).hasOverlap("R103", FROM, TO);
+    @Test void availabilityCombinesPhysicalStateAndHalfOpenOverlap(){
+        LocalDateTime from=LocalDateTime.now().plusDays(5).truncatedTo(java.time.temporal.ChronoUnit.MICROS),to=from.plusDays(1);booking(from,to);
+        jdbc.update("UPDATE Phong SET trangThai=N'Đang dọn phòng' WHERE maPhong=N'RSP-02'");
+        assertThat(service.availability(from,to,"RSP-T")).extracting(r->r.available()).containsExactly(false,false);
+        assertThat(service.availability(to,to.plusHours(1),"RSP-T")).extracting(r->r.available()).containsExactly(true,false);
     }
-
-    @Test
-    /** Given TO trước FROM, When availability, Then fail trước query persistence. */
-    void availabilityRejectsNonPositiveIntervalsBeforeTouchingPersistence() {
-        DomainException exception = assertThrows(DomainException.class,
-                () -> service.availability(TO, FROM, null));
-
-        assertThat(exception.getCode()).isEqualTo("INVALID_INTERVAL");
+    @Test void intervalValidationAndMissingRoomHaveStableErrors(){
+        var now=LocalDateTime.now();code(()->service.availability(now,now,null),"INVALID_INTERVAL");
+        code(()->service.availability(null,now,null),"INVALID_INTERVAL");code(()->service.updateStatus("RSP-none",RoomStatus.MAINTENANCE,"RSP-manager"),"ROOM_NOT_FOUND");
     }
-
-    @Test
-    /** Given technical và room READY, When chuyển MAINTENANCE, Then dùng findForUpdate và audit actor. */
-    void technicalMaintenanceTransitionUsesTheLockedStateAndAuditActor() {
-        setActor("technical", "TECHNICAL");
-        Room room = room("R101", RoomStatus.READY);
-        when(rooms.findForUpdate("R101")).thenReturn(Optional.of(room));
-
-        RoomDtos.Response response = service.updateStatus("R101", RoomStatus.MAINTENANCE, "technical");
-
-        assertThat(response.status()).isEqualTo(RoomStatus.MAINTENANCE);
-        verify(rooms).findForUpdate("R101");
-        verify(audit).record("technical", "ROOM_STATUS_CHANGED", "ROOM", "R101",
-                "available", "maintenance", null);
+    @Test void technicalMaintenanceUsesSqlVersionAndAudit(){
+        actor("RSP-tech","TECHNICAL");var row=service.updateStatus("RSP-01",RoomStatus.MAINTENANCE,"RSP-tech");
+        assertThat(row.status()).isEqualTo(RoomStatus.MAINTENANCE);assertThat(rooms.find("RSP-01").orElseThrow().version()).isEqualTo(1);
+        assertThat(jdbc.queryForMap("SELECT nguoiThucHien,duLieuTruoc,duLieuSau FROM NhatKyKiemSoat WHERE loaiDoiTuong=N'ROOM' AND maDoiTuong=N'RSP-01'")).containsEntry("nguoiThucHien","RSP-tech").containsEntry("duLieuTruoc","available").containsEntry("duLieuSau","maintenance");
     }
-
-    @Test
-    /** Given manager có quyền, When chuyển READY -> MAINTENANCE, Then mutation hợp lệ. */
-    void managerCanUseTheExplicitMaintenancePath() {
-        Room room = room("R101", RoomStatus.READY);
-        when(rooms.findForUpdate("R101")).thenReturn(Optional.of(room));
-
-        service.updateStatus("R101", RoomStatus.MAINTENANCE, "manager");
-
-        assertThat(room.getStatus()).isEqualTo(RoomStatus.MAINTENANCE);
+    @Test void managerCanStartMaintenanceAndSameStateDoesNotWriteTwice(){
+        service.updateStatus("RSP-01",RoomStatus.MAINTENANCE,"RSP-manager");service.updateStatus("RSP-01",RoomStatus.MAINTENANCE,"RSP-manager");
+        assertThat(rooms.find("RSP-01").orElseThrow().version()).isEqualTo(1);assertThat(audits()).isEqualTo(1);
     }
-
-    @Test
-    /** Given status null, When update, Then INVALID_ROOM_STATUS trước load và không có side effect. */
-    void statusUpdateRejectsNullStatusWithoutChangingAStoredRoom() {
-        DomainException exception = assertThrows(DomainException.class,
-                () -> service.updateStatus("R101", null, "manager"));
-
-        assertThat(exception.getCode()).isEqualTo("INVALID_ROOM_STATUS");
-        verifyNoInteractions(rooms, audit);
+    @Test void invalidStatusAndClientActorAreRejectedBeforeMutation(){
+        code(()->service.updateStatus("RSP-01",null,"RSP-manager"),"INVALID_ROOM_STATUS");
+        code(()->service.updateStatus("RSP-01",RoomStatus.RETURNED,"RSP-manager"),"INVALID_ROOM_STATUS");
+        code(()->service.updateStatus("RSP-01",RoomStatus.MAINTENANCE,"other"),"ACTOR_MISMATCH");
+        SecurityContextHolder.clearContext();code(()->service.updateStatus("RSP-01",RoomStatus.MAINTENANCE,"RSP-manager"),"ACTOR_REQUIRED");assertThat(audits()).isZero();
     }
-
-    @Test
-    /** Given OCCUPIED, When patch READY, Then state machine reject và audit không ghi. */
-    void occupiedRoomCannotBePatchedToReady() {
-        Room room = room("R101", RoomStatus.OCCUPIED);
-        when(rooms.findForUpdate("R101")).thenReturn(Optional.of(room));
-
-        DomainException exception = assertThrows(DomainException.class,
-                () -> service.updateStatus("R101", RoomStatus.READY, "manager"));
-
-        assertThat(exception.getCode()).isEqualTo("INVALID_ROOM_TRANSITION");
-        assertThat(room.getStatus()).isEqualTo(RoomStatus.OCCUPIED);
-        verify(audit, never()).record(any(), any(), any(), any(), any(), any(), any());
+    @Test void occupiedAndUnsupportedTransitionsNeverPatchReady(){
+        jdbc.update("UPDATE Phong SET trangThai=N'Đang có khách' WHERE maPhong=N'RSP-01'");
+        code(()->service.updateStatus("RSP-01",RoomStatus.READY,"RSP-manager"),"INVALID_ROOM_TRANSITION");
+        code(()->service.updateStatus("RSP-02",RoomStatus.CLEANING,"RSP-manager"),"INVALID_ROOM_TRANSITION");assertThat(audits()).isZero();
     }
-
-    @Test
-    /** Given housekeeping room MAINTENANCE, When patch READY, Then role forbidden và state giữ nguyên. */
-    void housekeepingCannotMakeRoomAvailable() {
-        setActor("housekeeping", "HOUSEKEEPING");
-        Room room = room("R101", RoomStatus.MAINTENANCE);
-        when(rooms.findForUpdate("R101")).thenReturn(Optional.of(room));
-
-        DomainException exception = assertThrows(DomainException.class,
-                () -> service.updateStatus("R101", RoomStatus.READY, "housekeeping"));
-
-        assertThat(exception.getCode()).isEqualTo("ROOM_STATUS_FORBIDDEN");
-        assertThat(room.getStatus()).isEqualTo(RoomStatus.MAINTENANCE);
-        verify(audit, never()).record(any(), any(), any(), any(), any(), any(), any());
+    @Test void housekeepingCannotStartOrReleaseMaintenanceAndTechnicalMustUseReleaseCommand(){
+        actor("RSP-hk","HOUSEKEEPING");code(()->service.updateStatus("RSP-01",RoomStatus.MAINTENANCE,"RSP-hk"),"ROOM_STATUS_FORBIDDEN");
+        jdbc.update("UPDATE Phong SET trangThai=N'Đang bảo trì' WHERE maPhong=N'RSP-01'");
+        code(()->service.updateStatus("RSP-01",RoomStatus.READY,"RSP-hk"),"ROOM_STATUS_FORBIDDEN");
+        actor("RSP-tech","TECHNICAL");code(()->service.updateStatus("RSP-01",RoomStatus.READY,"RSP-tech"),"ROOM_RELEASE_COMMAND_REQUIRED");
     }
-
-    @Test
-    /** Given actor request khác authenticated, When update, Then fail trước room/audit interaction. */
-    void statusUpdateRejectsClientActorThatDiffersFromAuthenticatedActor() {
-        DomainException exception = assertThrows(DomainException.class,
-                () -> service.updateStatus("R101", RoomStatus.MAINTENANCE, "other"));
-
-        assertThat(exception.getCode()).isEqualTo("ACTOR_MISMATCH");
-        verifyNoInteractions(rooms, audit);
+    @Test void readyReleaseUsesOneMicrosecondOverlapProbe(){
+        jdbc.update("UPDATE Phong SET trangThai=N'Đang bảo trì' WHERE maPhong=N'RSP-01'");
+        booking(LocalDateTime.now().minusHours(1),LocalDateTime.now().plusHours(1));
+        code(()->service.updateStatus("RSP-01",RoomStatus.READY,"RSP-manager"),"ROOM_NOT_AVAILABLE");
+        assertThat(rooms.find("RSP-01").orElseThrow().status()).isEqualTo(RoomStatus.MAINTENANCE);
+        jdbc.update("UPDATE PhieuDatPhong SET trangThai=N'Đã hủy' WHERE maPhieuDatPhong=?",reservation);
+        assertThat(service.updateStatus("RSP-01",RoomStatus.READY,"RSP-manager").status()).isEqualTo(RoomStatus.READY);
     }
-
-    /** Tạo security context role canonical để kiểm tra actor/authorization. */
-    private void setActor(String actor, String role) {
-        var context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(new UsernamePasswordAuthenticationToken(actor, "test",
-                List.of(new SimpleGrantedAuthority("ROLE_" + role))));
-        SecurityContextHolder.setContext(context);
+    @Test void outerRollbackDoesNotPersistStatusVersionOrAudit(){
+        assertThatThrownBy(()->new TransactionTemplate(manager).execute(status->{service.updateStatus("RSP-01",RoomStatus.MAINTENANCE,"RSP-manager");throw new IllegalStateException("rollback");})).isInstanceOf(IllegalStateException.class);
+        assertThat(rooms.find("RSP-01").orElseThrow().status()).isEqualTo(RoomStatus.READY);assertThat(rooms.find("RSP-01").orElseThrow().version()).isZero();assertThat(audits()).isZero();
     }
-
-    /** Dựng room fixture với type STD và giá 2400 để expected DTO có ý nghĩa. */
-    private Room room(String id, RoomStatus status) {
-        RoomType type = new RoomType();
-        type.setId("STD");
-        type.setName("Standard");
-        type.setDailyPrice(new BigDecimal("2400.00"));
-
-        Room room = new Room();
-        room.setId(id);
-        room.setName("Room 101");
-        room.setFloor(1);
-        room.setRoomType(type);
-        room.setStatus(status);
-        return room;
+    @Test void sqlStatusCommandRejectsStaleVersion(){
+        var original=rooms.find("RSP-01").orElseThrow();service.updateStatus("RSP-01",RoomStatus.MAINTENANCE,"RSP-manager");
+        code(()->new TransactionTemplate(manager).executeWithoutResult(status->rooms.status(original,RoomStatus.READY,false,true,LocalDateTime.now())),"VERSION_CONFLICT");
     }
+    @Test void concurrentSameStatusRecordsOnlyOneTransition()throws Exception{
+        var pool=Executors.newFixedThreadPool(2);var gate=new CountDownLatch(1);
+        try{var first=pool.submit(()->transition(gate));var second=pool.submit(()->transition(gate));gate.countDown();assertThat(first.get(20,TimeUnit.SECONDS)).isEqualTo(RoomStatus.MAINTENANCE);assertThat(second.get(20,TimeUnit.SECONDS)).isEqualTo(RoomStatus.MAINTENANCE);}finally{pool.shutdownNow();}
+        assertThat(audits()).isEqualTo(1);assertThat(rooms.find("RSP-01").orElseThrow().version()).isEqualTo(1);
+    }
+    private RoomStatus transition(CountDownLatch gate)throws Exception{gate.await();actor("RSP-manager","MANAGER");try{return service.updateStatus("RSP-01",RoomStatus.MAINTENANCE,"RSP-manager").status();}finally{SecurityContextHolder.clearContext();}}
+    private void booking(LocalDateTime from,LocalDateTime to){
+        Long guest=jdbc.queryForObject("INSERT KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) OUTPUT INSERTED.maKhachLuuTru VALUES(N'Room service guest',N'0909090651',N'RSP-GUEST')",Long.class);
+        reservation=jdbc.queryForObject("INSERT PhieuDatPhong(maKhachLuuTru,trangThai) OUTPUT INSERTED.maPhieuDatPhong VALUES(?,N'Đã xác nhận')",Long.class,guest);
+        jdbc.update("INSERT ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,thoiDiemTraPhongBanDau,trangThai,soLuongKhach) VALUES(?,N'RSP-01',?,?,?,N'Đã giữ phòng',1)",reservation,from,to,to);
+    }
+    private int audits(){return jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE loaiDoiTuong=N'ROOM' AND maDoiTuong LIKE N'RSP-%'",Integer.class);}
+    private void actor(String id,String role){SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(id,"test","ROLE_"+role));}
+    private void code(Runnable operation,String code){assertThatThrownBy(operation::run).isInstanceOf(DomainException.class).extracting("code").isEqualTo(code);}
 }
