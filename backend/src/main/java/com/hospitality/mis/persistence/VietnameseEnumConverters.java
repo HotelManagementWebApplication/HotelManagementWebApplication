@@ -7,6 +7,7 @@ import java.util.Map;
 import com.hospitality.mis.entity.billing.PaymentMethod;
 import com.hospitality.mis.entity.billing.PaymentStatus;
 import com.hospitality.mis.entity.billing.PaymentTransaction;
+import com.hospitality.mis.entity.billing.VnpayPaymentStatus;
 import com.hospitality.mis.entity.finance.Expense;
 import com.hospitality.mis.entity.finance.FinancialLedgerEntry;
 import com.hospitality.mis.entity.finance.PartnerDebt;
@@ -26,6 +27,7 @@ import com.hospitality.mis.entity.operations.MaintenanceStatus;
 import com.hospitality.mis.entity.operations.TechnicalWorkOrderStatus;
 import com.hospitality.mis.entity.reservation.CancellationOutcome;
 import com.hospitality.mis.entity.reservation.DepositPaymentStatus;
+import com.hospitality.mis.entity.reservation.CustomerPaymentMethod;
 import com.hospitality.mis.entity.reservation.ReservationStatus;
 import com.hospitality.mis.entity.room.RoomTypeCatalogStatus;
 
@@ -130,6 +132,22 @@ public final class VietnameseEnumConverters {
                 value(DepositPaymentStatus.PAID, "Đã thanh toán"), value(DepositPaymentStatus.EXPIRED, "Đã hết hạn")); }
         @Override public String convertToDatabaseColumn(DepositPaymentStatus value) { return mapping.convertToDatabaseColumn(value); }
         @Override public DepositPaymentStatus convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
+    }
+    @Converter public static final class CustomerPaymentMethodConverter implements AttributeConverter<CustomerPaymentMethod, String> {
+        private final EnumMapping<CustomerPaymentMethod> mapping;
+        public CustomerPaymentMethodConverter() { mapping = new EnumMapping<>(CustomerPaymentMethod.class,
+                value(CustomerPaymentMethod.VNPAY, "VNPay"), value(CustomerPaymentMethod.PAY_AT_HOTEL, "Tại khách sạn")); }
+        @Override public String convertToDatabaseColumn(CustomerPaymentMethod value) { return mapping.convertToDatabaseColumn(value); }
+        @Override public CustomerPaymentMethod convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
+    }
+    @Converter public static final class VnpayPaymentStatusConverter implements AttributeConverter<VnpayPaymentStatus, String> {
+        private final EnumMapping<VnpayPaymentStatus> mapping;
+        public VnpayPaymentStatusConverter() { mapping = new EnumMapping<>(VnpayPaymentStatus.class,
+                value(VnpayPaymentStatus.PENDING, "Chờ thanh toán"), value(VnpayPaymentStatus.SUCCEEDED, "Thành công"),
+                value(VnpayPaymentStatus.FAILED, "Thất bại"), value(VnpayPaymentStatus.EXPIRED, "Đã hết hạn"),
+                value(VnpayPaymentStatus.CANCELLED, "Đã hủy")); }
+        @Override public String convertToDatabaseColumn(VnpayPaymentStatus value) { return mapping.convertToDatabaseColumn(value); }
+        @Override public VnpayPaymentStatus convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
     }
     @Converter public static final class CancellationOutcomeConverter implements AttributeConverter<CancellationOutcome, String> {
         private final EnumMapping<CancellationOutcome> mapping;

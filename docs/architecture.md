@@ -9,7 +9,7 @@ Employee React app ---> JWT/RBAC application API <--- agent typed API tools
                             Auth   Use cases  Audit/approval
                                       |
                                       v
-                              Repositories -> SQL Server
+                              Database adapters -> SQL Server
 
 Chat UI -> Agent orchestrator
                        |
@@ -26,14 +26,15 @@ structured business data and must be read or changed through authenticated API
 tools. RAG is reserved for versioned documents and policies, with source
 citations and access control.
 
-## Canonical demo schema V1
+## Flyway schema history
 
-`backend/src/main/resources/db/migration/V1__baseline_schema.sql` is the
-authoritative schema for this demo system. The former V1-V41 chain was hard-cut
-into this single migration. A new environment starts from an empty SQL Server
-database and applies only V1; no external SQL baseline or historical patch chain
-is part of the application contract. This is disposable demo data, so schema
-fixes update V1 and the local database is recreated instead of adding V2/V3.
+The owner fixed the demo baseline to exactly six files under
+`backend/src/main/resources/db/migration/`: V1 tables/constraints, V2 indexes,
+V3 functions, V4 views, V5 stored procedures/business transactions, and V6 triggers.
+Edit the owning file, keeping one final definition per object; never add V7+
+or auxiliary DDL files. After checksum changes, recreate only the authorized
+demo/disposable test database and apply V1–V6 from scratch. Do not repair
+checksums or rewrite Flyway history. The binding rule is in root `AGENTS.md`.
 
 Hibernate is configured with `ddl-auto=validate`. It validates the schema
 created by Flyway and is not permitted to create, update or otherwise mutate
@@ -49,7 +50,7 @@ com.hospitality.mis
 ├── middleware        JWT, actor identity and authorization
 ├── controller        REST controllers grouped by module
 ├── service           business services and transaction boundaries
-├── dao               Spring Data repositories and persistence
+├── dao               Bound JDBC view/function/procedure adapters
 ├── dto               request/response objects grouped by module
 ├── entity            JPA entities and business types grouped by module
 ├── common            shared API errors and exception handling
@@ -66,9 +67,9 @@ com.hospitality.mis
   API paths retain the historical `partner-debts` name).
 - `governance`: audit log, approval workflow and reporting.
 
-Controllers depend on services. Services coordinate entities and DAO classes;
+Controllers depend on services. Services coordinate database adapters and projections;
 controllers do not access the database directly. DTOs are used at the HTTP
-boundary and entities are used for persistence. Cross-module workflows are
+boundary; entities remain for Hibernate schema validation, not runtime writes. Cross-module workflows are
 coordinated in services, not by controllers or direct database access.
 
 Start as a modular monolith. Split services only after a measured operational

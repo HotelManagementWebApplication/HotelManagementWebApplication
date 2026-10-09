@@ -1,178 +1,75 @@
 package com.hospitality.mis.operations;
 
-import com.hospitality.mis.dao.operations.RoomTransferRepository;
-import com.hospitality.mis.dao.reservation.ReservationRepository;
-import com.hospitality.mis.dao.room.RoomRepository;
+import com.hospitality.mis.common.exception.DomainException;
 import com.hospitality.mis.dto.operations.RoomTransferDtos;
-import com.hospitality.mis.entity.reservation.Reservation;
-import com.hospitality.mis.entity.reservation.ReservationRoom;
-import com.hospitality.mis.entity.reservation.ReservationStatus;
-import com.hospitality.mis.entity.reservation.RoomTransfer;
-import com.hospitality.mis.entity.room.Room;
-import com.hospitality.mis.entity.room.RoomStatus;
-import com.hospitality.mis.service.governance.AuditService;
 import com.hospitality.mis.service.operations.RoomTransferService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.util.concurrent.*;
+import static org.assertj.core.api.Assertions.*;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class)
-/** Bảo vệ room transfer: lock thứ tự, composite identity, timestamp và actor scope. */
+@SpringBootTest(properties={"spring.datasource.url=${MIGRATION_TEST_DB_URL}","spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}","spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}","spring.flyway.enabled=true","spring.jpa.hibernate.ddl-auto=validate"})
 class RoomTransferCorrectnessTest {
-    /** Các mock đại diện reservation lock, room lock, persisted transfer và audit side effect. */
-    @Mock ReservationRepository reservations;
-    @Mock RoomRepository rooms;
-    @Mock RoomTransferRepository transfers;
-    @Mock AuditService audit;
-
-    @BeforeEach
-    /** Đặt front desk actor hợp lệ cho mutation. */
-    void authenticateFrontDesk() {
-        var context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(new UsernamePasswordAuthenticationToken("frontdesk", "test",
-                List.of(new SimpleGrantedAuthority("ROLE_FRONT_DESK"))));
-        SecurityContextHolder.setContext(context);
+    @Autowired RoomTransferService service;
+    @Autowired JdbcTemplate jdbc;
+    private final LocalDateTime from=LocalDateTime.now().minusHours(2),to=LocalDateTime.now().plusDays(2);
+    @BeforeEach void seed(){
+        cleanup();actor();
+        jdbc.update("INSERT LoaiPhong(maLoaiPhong,ten,giaTheoNgay) VALUES(N'RTX',N'Transfer',100)");
+        jdbc.update("INSERT Phong(maPhong,maLoaiPhong,trangThai) VALUES(N'RTX-A',N'RTX',N'Đang có khách'),(N'RTX-B',N'RTX',N'Sẵn sàng'),(N'RTX-C',N'RTX',N'Sẵn sàng')");
+        jdbc.update("INSERT KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) VALUES(N'RTX guest',N'0977000901',N'097700000001')");
+        Long guest=jdbc.queryForObject("SELECT maKhachLuuTru FROM KhachLuuTru WHERE soDienThoai=N'0977000901'",Long.class);
+        jdbc.update("INSERT NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) VALUES(N'RTX-op',N'RTX operator',N'x',N'Lễ tân',N'0977000902')");
+        jdbc.update("INSERT PhieuDatPhong(maKhachLuuTru,maNhanVien,trangThai,hinhThucThue,khoaChongTrung,thoiDiemNhanPhongThucTe) VALUES(?,N'RTX-op',N'Đã nhận phòng',N'Theo gói',N'RTX-book',?)",guest,from);
+        Long reservation=id();
+        jdbc.update("INSERT ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,thoiDiemTraPhongBanDau,trangThai,soLuongKhach) VALUES(?,?,?,?,?,N'Đang có khách',2)",reservation,"RTX-A",from,to,to);
     }
-
-    @AfterEach
-    /** Dọn SecurityContext sau test. */
-    void clearSecurityContext() {
-        SecurityContextHolder.clearContext();
+    @AfterEach void clear(){cleanup();SecurityContextHolder.clearContext();}
+    @Test void transferAndReplayAreAtomic(){
+        var request=new RoomTransferDtos.CreateRequest("RTX-A","RTX-B",null,"upgrade");
+        var first=service.transfer(id(),request,"RTX-op","RTX-key");
+        assertThat(service.transfer(id(),request,"RTX-op","RTX-key")).isEqualTo(first);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ChuyenPhong WHERE maPhieuDatPhong=?",Integer.class,id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM Phong WHERE maPhong=N'RTX-A'",String.class)).isEqualTo("Đang dọn phòng");
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM Phong WHERE maPhong=N'RTX-B'",String.class)).isEqualTo("Đang có khách");
     }
-
-    @Test
-    /** Given booking 101, When chuyển sang 102, Then line cũ cancel, line mới thêm và timestamp giữ nguyên. */
-    void transferFlushesWithoutMutatingCompositeIdentityAndKeepsPersistedTimestamp() {
-        Room from = room("101", RoomStatus.OCCUPIED);
-        Room to = room("102", RoomStatus.READY);
-        Reservation reservation = new Reservation();
-        reservation.transitionTo(ReservationStatus.CONFIRMED);
-        reservation.transitionTo(ReservationStatus.CHECKED_IN);
-        ReservationRoom assignment = new ReservationRoom();
-        assignment.setRoom(from);
-        assignment.setCheckIn(LocalDateTime.of(2031, 1, 1, 14, 0));
-        assignment.setCheckOut(LocalDateTime.of(2031, 1, 5, 12, 0));
-        assignment.setStatus(RoomStatus.OCCUPIED);
-        reservation.addRoom(assignment);
-        when(reservations.findForUpdate(9L)).thenReturn(Optional.of(reservation));
-        when(rooms.findAllForUpdateOrdered(List.of("101", "102"))).thenReturn(List.of(from, to));
-        when(reservations.hasOverlapExcludingReservation(eq(9L), eq("102"),
-                eq(LocalDateTime.of(2031, 1, 2, 10, 30)), eq(LocalDateTime.of(2031, 1, 5, 12, 0)),
-                eq(RoomStatus.CANCELLED), anyList(), any(LocalDateTime.class))).thenReturn(false);
-        when(transfers.save(any(RoomTransfer.class))).thenAnswer(invocation -> {
-            RoomTransfer saved = invocation.getArgument(0);
-            saved.setTransferredAt(LocalDateTime.of(2031, 1, 2, 10, 30));
-            ReflectionTestUtils.setField(saved, "id", 77L);
-            return saved;
-        });
-
-        RoomTransferService service = new RoomTransferService(reservations, rooms, transfers, audit);
-        var response = service.transfer(9L,
-                new RoomTransferDtos.CreateRequest("101", "102", LocalDateTime.of(2031, 1, 2, 10, 30), "maintenance"),
-                "frontdesk", "transfer-9");
-
-        verify(reservations).saveAndFlush(reservation);
-        assertThat(assignment.getRoom()).isSameAs(from);
-        assertThat(assignment.getStatus()).isEqualTo(RoomStatus.CANCELLED);
-        assertThat(reservation.getRooms()).hasSize(2);
-        assertThat(reservation.getRooms().get(1).getRoom()).isSameAs(to);
-        assertThat(response.transferredAt()).isEqualTo(LocalDateTime.of(2031, 1, 2, 10, 30));
-        assertThat(response.id()).isEqualTo(77L);
+    @Test void invalidDestinationRollsBackSource(){
+        jdbc.update("UPDATE Phong SET trangThai=N'Đang dọn phòng' WHERE maPhong=N'RTX-B'");
+        code(()->service.transfer(id(),new RoomTransferDtos.CreateRequest("RTX-A","RTX-B",null,"bad"),"RTX-op","RTX-bad"),"ROOM_NOT_AVAILABLE");
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM Phong WHERE maPhong=N'RTX-A'",String.class)).isEqualTo("Đang có khách");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ChuyenPhong WHERE maPhieuDatPhong=?",Integer.class,id())).isZero();
     }
-
-    @Test
-    /** Given phòng đích đã được giữ, When lễ tân chuyển phòng, Then chặn trước khi ghi transfer. */
-    void transferRejectsTargetThatIsNotCurrentlyEmptyAndReady() {
-        Room from = room("502", RoomStatus.OCCUPIED);
-        Room reserved = room("503", RoomStatus.RESERVED);
-        Reservation reservation = checkedInReservation(from,
-                LocalDateTime.of(2031, 1, 1, 14, 0), LocalDateTime.of(2031, 1, 5, 12, 0));
-        when(reservations.findForUpdate(9L)).thenReturn(Optional.of(reservation));
-        when(rooms.findAllForUpdateOrdered(List.of("502", "503"))).thenReturn(List.of(from, reserved));
-
-        RoomTransferService service = new RoomTransferService(reservations, rooms, transfers, audit);
-        var error = org.junit.jupiter.api.Assertions.assertThrows(
-                com.hospitality.mis.common.exception.DomainException.class,
-                () -> service.transfer(9L,
-                        new RoomTransferDtos.CreateRequest("502", "503", LocalDateTime.of(2031, 1, 2, 10, 30), "đổi phòng"),
-                        "frontdesk", "transfer-reserved"));
-
-        assertThat(error.getCode()).isEqualTo("ROOM_NOT_AVAILABLE");
-        verify(reservations, never()).saveAndFlush(any());
-        verifyNoInteractions(transfers, audit);
+    @Test void overlappingDestinationIsRejected(){
+        jdbc.update("INSERT PhieuDatPhong(maKhachLuuTru,maNhanVien,trangThai,hinhThucThue,khoaChongTrung) SELECT maKhachLuuTru,N'RTX-op',N'Đã xác nhận',N'Theo gói',N'RTX-other' FROM PhieuDatPhong WHERE maPhieuDatPhong=?",id());
+        Long other=jdbc.queryForObject("SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE khoaChongTrung=N'RTX-other'",Long.class);
+        jdbc.update("INSERT ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,thoiDiemTraPhongBanDau,trangThai,soLuongKhach) VALUES(?,?,?,?,?,N'Đã giữ phòng',1)",other,"RTX-B",LocalDateTime.now().plusHours(1),to,to);
+        code(()->service.transfer(id(),new RoomTransferDtos.CreateRequest("RTX-A","RTX-B",null,"overlap"),"RTX-op","RTX-overlap"),"OVERBOOKING");
     }
-
-    @Test
-    /** Given phòng READY nhưng có booking trùng kỳ còn lại, When chuyển, Then chặn overbooking. */
-    void transferRejectsOverlappingBookingForTheRemainingStay() {
-        Room from = room("502", RoomStatus.OCCUPIED);
-        Room target = room("504", RoomStatus.READY);
-        LocalDateTime transferredAt = LocalDateTime.of(2031, 1, 2, 10, 30);
-        LocalDateTime checkout = LocalDateTime.of(2031, 1, 5, 12, 0);
-        Reservation reservation = checkedInReservation(from, LocalDateTime.of(2031, 1, 1, 14, 0), checkout);
-        when(reservations.findForUpdate(9L)).thenReturn(Optional.of(reservation));
-        when(rooms.findAllForUpdateOrdered(List.of("502", "504"))).thenReturn(List.of(from, target));
-        when(reservations.hasOverlapExcludingReservation(eq(9L), eq("504"), eq(transferredAt), eq(checkout),
-                eq(RoomStatus.CANCELLED),
-                eq(List.of(ReservationStatus.CANCELLED, ReservationStatus.NO_SHOW, ReservationStatus.CHECKED_OUT)),
-                any(LocalDateTime.class)))
-                .thenReturn(true);
-
-        RoomTransferService service = new RoomTransferService(reservations, rooms, transfers, audit);
-        var error = org.junit.jupiter.api.Assertions.assertThrows(
-                com.hospitality.mis.common.exception.DomainException.class,
-                () -> service.transfer(9L,
-                        new RoomTransferDtos.CreateRequest("502", "504", transferredAt, "đổi phòng"),
-                        "frontdesk", "transfer-overlap"));
-
-        assertThat(error.getCode()).isEqualTo("OVERBOOKING");
-        verify(reservations, never()).saveAndFlush(any());
-        verifyNoInteractions(transfers, audit);
+    @Test void concurrentDifferentKeysProduceOneTransfer()throws Exception{
+        var gate=new CountDownLatch(1);try(var pool=Executors.newFixedThreadPool(2)){
+            var a=pool.submit(()->attempt("RTX-a",gate));var b=pool.submit(()->attempt("RTX-b",gate));gate.countDown();
+            assertThat(java.util.List.of(a.get(20,TimeUnit.SECONDS),b.get(20,TimeUnit.SECONDS))).contains("OK");
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ChuyenPhong WHERE maPhieuDatPhong=?",Integer.class,id())).isEqualTo(1);
+        }
     }
-
-    @Test
-    /** Given actor request khác authenticated, When transfer, Then fail trước load reservation/room. */
-    void transferRejectsClientActorThatDiffersFromAuthenticatedActorBeforeLoadingReservation() {
-        RoomTransferService service = new RoomTransferService(reservations, rooms, transfers, audit);
-
-        var exception = org.junit.jupiter.api.Assertions.assertThrows(
-                com.hospitality.mis.common.exception.DomainException.class,
-                () -> service.transfer(9L,
-                        new RoomTransferDtos.CreateRequest("101", "102", null, "maintenance"),
-                        "other", "transfer-actor-mismatch"));
-
-        assertThat(exception.getCode()).isEqualTo("ACTOR_MISMATCH");
-        verifyNoInteractions(reservations, rooms, transfers, audit);
-    }
-
-    /** Dựng room tối thiểu với status để fixture thể hiện rõ room nguồn/đích. */
-    private static Room room(String id, RoomStatus status) {
-        Room room = new Room(); room.setId(id); room.setStatus(status); return room;
-    }
-
-    private static Reservation checkedInReservation(Room room, LocalDateTime checkIn, LocalDateTime checkOut) {
-        Reservation reservation = new Reservation();
-        reservation.transitionTo(ReservationStatus.CONFIRMED);
-        reservation.transitionTo(ReservationStatus.CHECKED_IN);
-        ReservationRoom assignment = new ReservationRoom();
-        assignment.setRoom(room); assignment.setCheckIn(checkIn); assignment.setCheckOut(checkOut);
-        assignment.setStatus(RoomStatus.OCCUPIED); reservation.addRoom(assignment);
-        return reservation;
+    private String attempt(String key,CountDownLatch gate)throws Exception{gate.await();actor();try{service.transfer(id(),new RoomTransferDtos.CreateRequest("RTX-A","RTX-B",null,"race"),"RTX-op",key);return "OK";}catch(DomainException e){return e.getCode();}finally{SecurityContextHolder.clearContext();}}
+    private void actor(){SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("RTX-op","x","ROLE_FRONT_DESK"));}
+    private Long id(){return jdbc.queryForObject("SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE khoaChongTrung=N'RTX-book'",Long.class);}
+    private void code(Runnable operation,String expected){assertThatThrownBy(operation::run).isInstanceOf(DomainException.class).extracting("code").isEqualTo(expected);}
+    private void cleanup(){
+        jdbc.update("DELETE BanGhiChongTrung WHERE nguoiThucHien=N'RTX-op'");
+        jdbc.update("DELETE NhatKyKiemSoat WHERE nguoiThucHien=N'RTX-op'");
+        jdbc.update("DELETE ChuyenPhong WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE khoaChongTrung LIKE N'RTX-%')");
+        jdbc.update("DELETE ChiTietDatPhong WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE khoaChongTrung LIKE N'RTX-%')");
+        jdbc.update("DELETE PhieuDatPhong WHERE khoaChongTrung LIKE N'RTX-%'");
+        jdbc.update("DELETE KhachLuuTru WHERE soDienThoai=N'0977000901'");
+        jdbc.update("DELETE Phong WHERE maPhong LIKE N'RTX-%'");
+        jdbc.update("DELETE LoaiPhong WHERE maLoaiPhong=N'RTX'");
+        jdbc.update("DELETE NhanVien WHERE maNhanVien=N'RTX-op'");
     }
 }

@@ -64,6 +64,20 @@ public class Reservation {
     @Column(name = "thoiDiemHetHanThanhToanCoc") private LocalDateTime depositPaymentExpiresAt;
     @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.DepositPaymentStatusConverter.class) @Column(name = "trangThaiThanhToanCoc", nullable = false, length = 20)
     private DepositPaymentStatus depositPaymentStatus = DepositPaymentStatus.NOT_REQUIRED;
+    /** Kênh bảo đảm do khách online lựa chọn; null với booking do nhân viên tạo. */
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.CustomerPaymentMethodConverter.class)
+    @Column(name = "phuongThucBaoDam", length = 20)
+    private CustomerPaymentMethod customerPaymentMethod;
+    /** Snapshot dùng để rollback an toàn phần gia hạn nếu cọc bổ sung hết hạn. */
+    @Column(name = "loaiThayDoiDangCho", length = 20) private String pendingChangeType;
+    @Column(name = "thoiDiemNhanPhongTruocThayDoi") private LocalDateTime pendingPreviousCheckIn;
+    @Column(name = "thoiDiemTraPhongTruocThayDoi") private LocalDateTime pendingPreviousCheckOut;
+    @Column(name = "tienDatCocTruocThayDoi", precision = 12, scale = 2) private BigDecimal pendingPreviousDepositAmount;
+    @Column(name = "tienDatCocBoSung", nullable = false, precision = 12, scale = 2)
+    private BigDecimal pendingAdditionalDeposit = BigDecimal.ZERO;
+    /** Email nhận xác nhận riêng cho booking, có thể khác email hồ sơ. */
+    @Column(name = "emailXacNhan", length = 150)
+    private String confirmationEmail;
     /** Phiên bản lạc quan, bảo vệ đặt phòng trước cập nhật đồng thời. */
     @Version @Column(name = "phienBan", nullable = false) private long version;
 
@@ -104,6 +118,13 @@ public class Reservation {
     public String getDepositPaymentCode() { return depositPaymentCode; }
     public LocalDateTime getDepositPaymentExpiresAt() { return depositPaymentExpiresAt; }
     public DepositPaymentStatus getDepositPaymentStatus() { return depositPaymentStatus; }
+    public CustomerPaymentMethod getCustomerPaymentMethod() { return customerPaymentMethod; }
+    public String getPendingChangeType() { return pendingChangeType; }
+    public LocalDateTime getPendingPreviousCheckIn() { return pendingPreviousCheckIn; }
+    public LocalDateTime getPendingPreviousCheckOut() { return pendingPreviousCheckOut; }
+    public BigDecimal getPendingPreviousDepositAmount() { return pendingPreviousDepositAmount; }
+    public BigDecimal getPendingAdditionalDeposit() { return pendingAdditionalDeposit; }
+    public String getConfirmationEmail() { return confirmationEmail; }
     public long getVersion() { return version; }
     public String getCancellationReason() { return cancellationReason; }
     public CancellationOutcome getCancellationOutcome() { return cancellationOutcome; }
@@ -126,6 +147,25 @@ public class Reservation {
     public void setDepositPaymentExpiresAt(LocalDateTime value) { depositPaymentExpiresAt = value; }
     public void setDepositPaymentStatus(DepositPaymentStatus value) {
         depositPaymentStatus = value == null ? DepositPaymentStatus.NOT_REQUIRED : value;
+    }
+    public void setCustomerPaymentMethod(CustomerPaymentMethod value) { customerPaymentMethod = value; }
+    public void setPendingChangeType(String value) { pendingChangeType = value; }
+    public void setPendingPreviousCheckIn(LocalDateTime value) { pendingPreviousCheckIn = value; }
+    public void setPendingPreviousCheckOut(LocalDateTime value) { pendingPreviousCheckOut = value; }
+    public void setPendingPreviousDepositAmount(BigDecimal value) { pendingPreviousDepositAmount = value; }
+    public void setPendingAdditionalDeposit(BigDecimal value) {
+        pendingAdditionalDeposit = value == null ? BigDecimal.ZERO : value;
+    }
+    /** Xóa snapshot sau khi cọc bổ sung hoàn tất hoặc gia hạn bị rollback. */
+    public void clearPendingChange() {
+        pendingChangeType = null;
+        pendingPreviousCheckIn = null;
+        pendingPreviousCheckOut = null;
+        pendingPreviousDepositAmount = null;
+        pendingAdditionalDeposit = BigDecimal.ZERO;
+    }
+    public void setConfirmationEmail(String value) {
+        confirmationEmail = value == null || value.isBlank() ? null : value.trim();
     }
     public void setCancellationReason(String value) { cancellationReason = value; }
     public void setCancellationOutcome(CancellationOutcome value) { cancellationOutcome = value; }

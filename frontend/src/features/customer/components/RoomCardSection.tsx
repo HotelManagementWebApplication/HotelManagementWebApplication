@@ -217,9 +217,10 @@ const CategoryRoomCarousel: React.FC<{
             <button
               type="button"
               onClick={() => onBookRoom(activeRoom)}
-              className="w-full py-3.5 px-6 bg-[#78716C] hover:bg-[#57534E] text-white text-xs font-semibold uppercase tracking-[0.2em] transition-colors rounded-none shadow-sm cursor-pointer text-center"
+              disabled={activeRoom.availableForBooking === false}
+              className="w-full py-3.5 px-6 bg-[#78716C] hover:bg-[#57534E] disabled:bg-[#D6D3D1] disabled:text-[#78716C] disabled:cursor-not-allowed text-white text-xs font-semibold uppercase tracking-[0.2em] transition-colors rounded-none shadow-sm cursor-pointer text-center"
             >
-              Đặt chỗ
+              {activeRoom.availableForBooking === false ? "Hết phòng" : "Đặt chỗ"}
             </button>
 
             <button

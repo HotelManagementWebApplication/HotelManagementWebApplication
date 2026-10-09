@@ -27,9 +27,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** HTTP -> service -> repository thật cho contract movement, stock guard và DB report. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:inventoryworkflow;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa", "spring.datasource.password=", "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}", "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}", "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 @AutoConfigureMockMvc
 class InventoryHttpWorkflowTest {
@@ -37,12 +37,21 @@ class InventoryHttpWorkflowTest {
     @Autowired ServiceRepository services;
     @Autowired InventoryMovementRepository movements;
     @Autowired ApprovalRepository approvals;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @org.junit.jupiter.api.AfterEach
+    void cleanup() {
+        jdbc.update("DELETE FROM BanGhiChongTrung WHERE nguoiThucHien='kitchen' AND phamViLenh IN('inventory-movement','service-stock')");
+        jdbc.update("DELETE FROM BienDongKhoDichVu WHERE maDichVu IN('MINI','OPEN')");
+        jdbc.update("DELETE FROM LichSuGiaDichVu WHERE maDichVu IN('MINI','OPEN')");
+        jdbc.update("DELETE FROM YeuCauPheDuyet WHERE maDoiTuong IN('MINI','OPEN')");
+        jdbc.update("DELETE FROM DichVu WHERE maDichVu IN('MINI','OPEN')");
+        jdbc.update("DELETE FROM NhatKyKiemSoat WHERE maDoiTuong IN('MINI','OPEN')");
+    }
 
     @BeforeEach
     void seed() {
-        movements.deleteAllInBatch();
-        approvals.deleteAllInBatch();
-        services.deleteAllInBatch();
+        cleanup();
         Service service = new Service();
         service.setId("MINI"); service.setName("Minibar water"); service.setPrice(new BigDecimal("10000"));
         service.setUnit("BOTTLE"); service.setStockQuantity(5); service.setSafetyThreshold(5);

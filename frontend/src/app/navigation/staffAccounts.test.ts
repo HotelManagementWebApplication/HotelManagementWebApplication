@@ -8,9 +8,8 @@ describe("staff account navigation", () => {
     expect(staffAccounts["director@hotel.com"]).toMatchObject({ employeeId: "DIRECTOR", role: "director", view: "manager" });
   });
 
-  it("uses the backend role first and falls back to the entered account mapping", () => {
+  it("routes only by the authenticated backend role and rejects an unknown role", () => {
     expect(resolveEmployeeDestination("DIRECTOR")).toEqual({ role: "director", view: "manager" });
-    expect(resolveEmployeeDestination("UNKNOWN", staffAccounts.accounting)).toEqual({ role: "accounting", view: "accounting" });
-    expect(resolveEmployeeDestination("UNKNOWN")).toEqual({ role: "staff", view: "staff" });
+    expect(() => resolveEmployeeDestination("UNKNOWN")).toThrow("Không xác định được vai trò nhân viên");
   });
 });

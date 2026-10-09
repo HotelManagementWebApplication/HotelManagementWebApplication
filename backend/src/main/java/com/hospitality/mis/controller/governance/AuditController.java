@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.stream.Collectors;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -43,11 +42,9 @@ public class AuditController {
                        @RequestParam(name = "size", required = false) Integer size) {
         boolean global = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_DIRECTOR") || a.getAuthority().equals("ROLE_MANAGER"));
-        if (action == null && entityType == null && entityId == null && correlationKey == null && from == null && to == null && page == null && size == null) return audit.list(SecurityActor.currentActor(), global).stream()
-                .map(AuditDtos.Response::from)
-                .collect(Collectors.toList());
+        if (action == null && entityType == null && entityId == null && correlationKey == null && from == null && to == null && page == null && size == null) return audit.list(SecurityActor.currentActor(), global);
         var result = audit.page(SecurityActor.currentActor(), global, action, entityType, entityId, correlationKey, from, to, page == null ? 0 : page, size == null ? 20 : size);
-        return new PageResponse(result.getContent().stream().map(AuditDtos.Response::from).toList(), result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
+        return new PageResponse(result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

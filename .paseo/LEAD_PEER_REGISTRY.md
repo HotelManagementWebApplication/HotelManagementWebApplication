@@ -1,40 +1,30 @@
 # Lead Peer Registry
 
-Session-owned snapshot for one Lead only. Never reuse a Peer by workspace,
-provider, name, or capability alone.
+Session-owned snapshot for the current Lead Paseo session.
 
-Lead agent ID: `c6e1b1f6-43a5-4715-8d3b-5f2c2c0160a6`
-Workspace: `C:\web-hotel-mis`
+Lead Paseo agent ID: `96207165-0be9-4c6b-943b-df94e42f35c1`  
+Workspace ID: `wks_1f191fc4a7a88312`  
+Workspace path: `C:\web-hotel-mis`  
+Task: `audit-role-acceptance-2026-10-09`  
+Checkout: shared local checkout; audit only, no source changes authorized.
 
 ## Active peers
 
-| Agent ID | Parent Lead ID | Provider / role | Capability | Brief | Owned boundary | Status | Handback summary | Context decision | Next action |
+| Agent ID | Parent Lead ID | Provider / role | Capability | Brief | Boundary | Status | Handback summary | Context decision | Next action |
 |---|---|---|---|---|---|---|---|---|---|
-| `c6e1b1f6-43a5-4715-8d3b-5f2c2c0160a6` | `c6e1b1f6-43a5-4715-8d3b-5f2c2c0160a6` | lead | peer-ledger | Read-only SQL Server and Vietnamese localization audit for Hotel MIS: session peer ledger management and audit coordination | `.paseo/LEAD_PEER_REGISTRY.md` | running | Supervising active audit peers 1aeb9444, f17c7aa0, and f34b67d6 | Current Lead session owner; active child peer orchestration | Await handbacks from child audit peers (1aeb9444, f17c7aa0, f34b67d6) |
-
-Only reuse a row when live state confirms the exact Parent Lead ID is this
-Lead, the workspace matches, the Peer is not archived, and capability,
-boundary, and context remain suitable. A missing or different parent ID means
-the Peer belongs to another session and must not be sent to, archived, or
-adopted.
 
 ## Archived peers
 
-`archive_agent` does not edit this file automatically. Remove archived Peers
-from Active and keep at most 12 compact summaries for this Lead session.
-
-| Agent ID | Parent Lead ID | Provider / role | Capability | Brief | Owned boundary | Status | Handback summary | Context decision | Next action | Archive reason |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `bcd166fa-6e53-415e-99cd-2443b87f1073` | `c6e1b1f6-43a5-4715-8d3b-5f2c2c0160a6` | peer-implementer | registry-maintenance | Session peer ledger maintenance and child peer registration | `.paseo/LEAD_PEER_REGISTRY.md` | archived; accepted | Session ledger was refreshed and the three child audit peers were registered. | accepted | none | ledger update accepted; no remaining assignment |
-| `f34b67d6-7d03-408d-bc66-2eb747f4ef66` | `c6e1b1f6-43a5-4715-8d3b-5f2c2c0160a6` | peer-architect | cross-layer-conversion-audit | Read-only cross-layer conversion audit evaluating architecture alignment, data model integrity, and cross-tier conversion risks | Read-only entire repository; no file writes | archived | handback accepted with findings on schema-contract contradiction, production compatibility fallbacks, stale MySQL operational paths, English backend errors reaching the Vietnamese UI, and mock/optional proof gaps | accepted | none | accepted read-only handback; no remaining assignment |
-| `1aeb9444-8e1b-43d0-ab7b-5b0d99649893` | `c6e1b1f6-43a5-4715-8d3b-5f2c2c0160a6` | peer-scout | sqlserver-compatibility-audit | Read-only SQL Server compatibility audit across schema, migrations, entities, repositories, and queries | Read-only entire repository; no file writes | archived | handback accepted with confirmed/high-confidence findings including unprefixed Vietnamese T-SQL literals, retained FOR UPDATE dialect path, timezone/default timestamp mismatch, skipped SQL Server/Flyway proof, missing SQL Server database bootstrap, pagination without deterministic ORDER BY, and concurrent UPDATE-then-INSERT risk | accepted | none | accepted read-only handback; no remaining assignment |
-| `f17c7aa0-c201-4f47-9dac-ce3bf076a172` | `c6e1b1f6-43a5-4715-8d3b-5f2c2c0160a6` | peer-scout | vietnamese-localization-audit | Read-only Vietnamese localization audit across business terminology, UI strings, documentation, and database mappings | Read-only entire repository; no file writes | archived | handback accepted with findings on untranslated UI/backend strings, terminology/enum mismatches, inconsistent currency/date formatting, absent i18n bundles, and mock-only proof | accepted | none | accepted read-only handback; no remaining assignment |
-| `e398d6f5-8ad1-4964-8c31-a12f4c62dd5c` | `c6e1b1f6-43a5-4715-8d3b-5f2c2c0160a6` | peer-reviewer | conversion-audit-proof-review | Read-only independent proof review and classification across SQL Server compatibility and Vietnamese localization audit claims | Read-only entire repository boundary | archived | accepted: 17 of 18 claims confirmed; claim 3 (runtime timezone expiry mismatch) not supported because Java Clock drives both deadline creation and expiry scanning; repository invariants verified | accepted | none | accepted independent proof review; no remaining assignment |
-
-## Handoff packet
-
-When remaining context falls below 70%, record only the objective, constraints,
-owned files, exact child IDs/parents, evidence, blockers, and next action here
-or in `.paseo/LEAD_HANDOFF.md`. Continue the same session after compaction if
-that context remains relevant; otherwise start a new owned session from the
-packet and never mix its Peer IDs with the old session.
+| Agent ID | Parent Lead ID | Provider / role | Capability | Boundary | Status | Handback summary | Context decision | Next action |
+|---|---|---|---|---|---|---|---|---|
+| `2147eabb-5fba-4b9f-8135-956b5e137b0b` | `96207165-0be9-4c6b-943b-df94e42f35c1` | `slp-peer-scout-agy / Scout` | acceptance-claims | Read-only acceptance doc and traceable repository evidence. | accepted; archived | Current static guards and six-migration invariant corroborated; historical tests/UI/DB actions remain unproved on the dirty current tree; pre-patch line references are stale without a commit anchor. | archived after accepted correction | none |
+| `809e954f-ea72-4d13-9397-31ca0d4a6aa5` | `96207165-0be9-4c6b-943b-df94e42f35c1` | `slp-peer-scout-agy / Scout` | backend-flow-audit | Read-only backend, migrations, tests, rules and docs. | accepted; archived | Identified multi-room VIP-duration aggregation bug candidate, approval-dependent refund risk, and missing customer-unblock flow; static only, runtime proof pending. | archived after accepted handback | none |
+| `65b40d2b-c0fa-4d83-a0ea-111687c95c02` | `96207165-0be9-4c6b-943b-df94e42f35c1` | `slp-peer-scout-agy / Scout` | frontend-flow-audit | Read-only frontend and referenced backend contracts/docs. | accepted; archived | Found HR copy bug, unbounded VNPay polling, fixed-page truncation, unsupported/placeholder surfaces and weak mutation error UX; runtime correctness remains unproved. | archived after accepted correction | none |
+| `652a0d53-51c9-49c5-9892-53967ac13329` | `96207165-0be9-4c6b-943b-df94e42f35c1` | `slp-peer-implementer-codex / Implementer` | frontend-runtime-proof | Shared checkout; generated frontend outputs only. | error; archived | Failed before project commands with workspace routing discovery unauthorized (401); no proof produced. | archived; provider replacement selected | none |
+| `8ef63b31-e247-49ad-b23f-62a342b24665` | `96207165-0be9-4c6b-943b-df94e42f35c1` | `slp-peer-implementer-agy / Implementer` | frontend-runtime-proof | Shared checkout; generated frontend outputs only. | accepted; archived | Targeted 25/25, full 161/161, build pass; proof debt includes uncovered VNPay result polling and proxy route tests; Accounting hardcodes page===6. | archived after accepted handback | none |
+| `c1427b68-07a2-4449-8da3-2f5512709d43` | `96207165-0be9-4c6b-943b-df94e42f35c1` | `slp-peer-implementer-agy / Implementer` | backend-runtime-proof | Shared checkout; backend target/test outputs only; no tracked edits or DB rebuild. | accepted; archived | 63 unit tests pass; 2,176 SQL tests blocked by missing MIGRATION_TEST_DB_URL. Static/proof audit found VIP aggregation counterexample, no unblock flow and partial refund coverage. | archived after accepted handback | none |
+| `4718c3fe-a4c0-4776-bf4d-831847601863` | `96207165-0be9-4c6b-943b-df94e42f35c1` | `slp-peer-reviewer-agy / Reviewer` | acceptance-proof-audit | Read-only current tree and existing generated reports. | accepted; archived | Accepted F1 HR copy, F2 VNPay polling/test gap, F3 Accounting pagination/truncation, F4 VIP aggregation; separated design gaps, environment blockers and proof debt. | archived after accepted handback | none |
+| `643e7527-3a05-46b2-b86b-aa2078a5dc7a` | `96207165-0be9-4c6b-943b-df94e42f35c1` | `slp-peer-implementer-agy / Implementer` | accepted-frontend-fixes | HR/VNPay result/accounting/API owned paths only. | accepted; archived | F1-F3 complete: 173 frontend tests and build pass; deterministic VNPay expiry recovery and complete paged accounting loads added. | archived after accepted handback | none |
+| `cd26e654-e6ed-4291-aedc-54920578985e` | `96207165-0be9-4c6b-943b-df94e42f35c1` | `slp-peer-implementer-agy / Implementer` | vip-qualification-fix | V5 plus ReservationServiceSqlTest only. | accepted; archived | Per-detail >=24h qualification implemented; two SQL behavior regressions added; package/test-compile pass, runtime DB proof blocked by absent test URL. | archived after accepted handback | none |
+| `c0822929-3428-4570-8898-243bc5f1ec64` | `96207165-0be9-4c6b-943b-df94e42f35c1` | `slp-peer-reviewer-agy / Reviewer` | accepted-fixes-review | Read-only F1-F4 changed files and existing reports. | accepted; archived | F1-F3 accepted with F2/F3 hardening request; F4 static correctness accepted but SQL runtime remains unproved. | archived after accepted handback | none |
+| `b3ecbbfb-be39-4eae-9136-e0440db99314` | `96207165-0be9-4c6b-943b-df94e42f35c1` | `slp-peer-implementer-agy / Implementer` | frontend-hardening | VNPay result/accounting/tests/API only. | accepted; archived | Missing/malformed expiry now fails closed; accounting page collection stops on empty/repeated/no-progress/excessive metadata; 181 tests/build pass. | archived after accepted correction | none |

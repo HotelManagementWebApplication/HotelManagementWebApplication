@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { authApi } from "../../shared/api/auth";
+import { apiErrorMessage } from "../../shared/api/client";
 import type { EquipmentIncident, HousekeepingTask, Room as ApiRoom } from "../../shared/types/housekeepingTechnical";
 import { employeeRoleLabel } from "../../shared/types/api";
 import type { EmployeeProfileDto } from "../../shared/types/api";
@@ -396,12 +397,12 @@ function RoomModal({
 
           {/* Only show "Hoàn tất vệ sinh" when room is in-progress */}
           {room.status === "in-progress" && (
-            <button onClick={() => { onComplete?.(room); onClose(); }}
+            <button disabled={done !== total} title={done !== total ? `Cần hoàn thành checklist (${done}/${total})` : undefined} onClick={() => { onComplete?.(room); onClose(); }}
               style={{ flex:2,padding:"12px",borderRadius:9,
                 background:"#16A34A",color:"#FFF",fontSize:13,fontWeight:700,cursor:"pointer",
                 display:"flex",alignItems:"center",justifyContent:"center",gap:8,
                 boxShadow:"0 2px 8px rgba(22,163,74,.3)" }}>
-              <CheckCircle2 size={16} /> Hoàn tất vệ sinh &amp; Bàn giao
+              <CheckCircle2 size={16} /> {done !== total ? `Cần hoàn thành checklist (${done}/${total})` : "Hoàn tất vệ sinh & Bàn giao"}
             </button>
           )}
 
@@ -884,14 +885,12 @@ function InspectionScreen({
   rooms = [],
   search = "",
   onComplete,
-  onApprove,
   onReportIncident,
   currentUser,
 }: {
   rooms?: HKRoom[];
   search?: string;
   onComplete?: (room: HKRoom) => void;
-  onApprove?: (room: HKRoom) => void;
   onReportIncident?: (roomNumber: string) => void;
   currentUser?: EmployeeProfileDto | null;
 }) {
@@ -914,15 +913,15 @@ function InspectionScreen({
     <div style={{ flex:1,overflowY:"auto",background:"#F8FAFC" }}>
       <div style={{ padding:"20px 24px" }}>
         <div style={{ marginBottom:16 }}>
-          <h2 style={{ fontSize:18,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Kiểm tra &amp; Nghiệm thu</h2>
-          <p style={{ fontSize:12,color:"#94A3B8" }}>Giám sát chất lượng phòng sau khi dọn dẹp trước khi chuyển sang Sẵn sàng đón khách</p>
+          <h2 style={{ fontSize:18,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Chờ quản lý nghiệm thu</h2>
+          <p style={{ fontSize:12,color:"#94A3B8" }}>Theo dõi phòng đã dọn xong; chỉ quản lý mới được chuyển phòng sang Sẵn sàng đón khách.</p>
         </div>
 
         {/* Awaiting inspection */}
         <div style={{ marginBottom:20 }}>
           <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:12 }}>
             <span style={{ width:8,height:8,borderRadius:99,background:"#8B5CF6" }} />
-            <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",margin:0 }}>Chờ kiểm tra ({toInspect.length} phòng)</p>
+            <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",margin:0 }}>Chờ quản lý kiểm tra ({toInspect.length} phòng)</p>
           </div>
           {toInspect.length === 0 && (
             <div style={{ padding:"20px",background:"#FFF",borderRadius:12,border:"1px dashed #CBD5E1",textAlign:"center",color:"#94A3B8",fontSize:12 }}>
@@ -930,11 +929,7 @@ function InspectionScreen({
             </div>
           )}
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10 }}>
-            {toInspect.map(r => {
-              const checklistOk = r.checklist.length === 0 || r.checklist.every(c => c.done);
-              const canApprove = checklistOk && r.subType !== "maintenance";
-
-              return (
+            {toInspect.map(r => (
                 <div key={r.id} style={{ background:"#FFF",borderRadius:12,border:"2px solid #EDE9FE",
                   padding:"14px 16px",display:"flex",flexDirection:"column",gap:10 }}>
                   <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between" }}>
@@ -949,7 +944,7 @@ function InspectionScreen({
                   <div style={{ display:"flex",alignItems:"center",gap:6 }}>
                     <Clock size={11} style={{ color:"#8B5CF6" }} />
                     <span style={{ fontSize:11,color:"#8B5CF6",fontWeight:600 }}>
-                      Dọn xong {r.doneMin || 5} phút trước
+                      Đã bàn giao {r.doneMin || 5} phút trước — chờ quản lý nghiệm thu
                     </span>
                   </div>
                   <div style={{ display:"flex",gap:8 }}>
@@ -958,24 +953,9 @@ function InspectionScreen({
                         background:"#EDE9FE",color:"#6D28D9",fontSize:12,fontWeight:700,cursor:"pointer" }}>
                       Xem chi tiết
                     </button>
-                    <button
-                      onClick={() => onApprove?.(r)}
-                      style={{
-                        padding:"8px 14px",borderRadius:8,
-                        border: `1px solid ${canApprove ? "#16A34A" : "#CBD5E1"}`,
-                        background: canApprove ? "#DCFCE7" : "#F1F5F9",
-                        color: canApprove ? "#166534" : "#94A3B8",
-                        fontSize:12,fontWeight:700,
-                        cursor: canApprove ? "pointer" : "not-allowed"
-                      }}
-                      title={!checklistOk ? "Cần hoàn thành toàn bộ checklist" : r.subType === "maintenance" ? "Còn sự cố kỹ thuật chưa xử lý" : "Nghiệm thu đạt"}
-                    >
-                      ✓ Nghiệm thu đạt
-                    </button>
                   </div>
                 </div>
-              );
-            })}
+              ))}
           </div>
         </div>
 
@@ -1099,7 +1079,7 @@ function IncidentsScreen({
         setSuccessMsg(null);
       }, 1500);
     } catch (err: any) {
-      setFormError("Không thể tạo sự cố trên hệ thống. Vui lòng thử lại.");
+      setFormError(apiErrorMessage(err, "Không thể tạo sự cố trên hệ thống. Vui lòng thử lại."));
     } finally {
       setBusy(false);
     }
@@ -1330,7 +1310,7 @@ function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (ite
         setMovementSuccess(null);
       }, 1500);
     }
-    catch (error) { setMovementError("Không thể cập nhật tồn kho. Vui lòng thử lại."); }
+    catch (error) { setMovementError(apiErrorMessage(error, "Không thể cập nhật tồn kho. Vui lòng thử lại.")); }
     finally { setMovementBusy(false); }
   };
 
@@ -1632,6 +1612,10 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
 
   const handleCompleteRoom = async (room: HKRoom) => {
     if (!room.taskId) return;
+    if (room.checklist.some(item => !item.done)) {
+      alert("Cần hoàn thành toàn bộ checklist trước khi bàn giao vệ sinh.");
+      return;
+    }
     try {
       // 1. Save all checklist results - do NOT swallow errors with catch(() => null)
       for (const item of room.checklist) {
@@ -1656,19 +1640,7 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
       await loadData();
     } catch (err) {
       console.error("Unable to complete housekeeping task on backend:", err);
-      alert("Không thể hoàn tất vệ sinh phòng. Vui lòng thử lại.");
-      await loadData();
-    }
-  };
-
-  const handleApproveRoom = async (room: HKRoom) => {
-    if (!room.taskId) return;
-    try {
-      await housekeepingTechnicalApi.updateTask(room.taskId, { status: "READY" });
-      await loadData();
-    } catch (err) {
-      console.error("Unable to approve housekeeping task on backend:", err);
-      alert("Không thể nghiệm thu phòng. Vui lòng thử lại.");
+      alert(apiErrorMessage(err, "Không thể hoàn tất vệ sinh phòng. Vui lòng thử lại."));
       await loadData();
     }
   };
@@ -1901,7 +1873,6 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
             rooms={liveRooms}
             search={search}
             onComplete={handleCompleteRoom}
-            onApprove={handleApproveRoom}
             onReportIncident={handleReportIncidentModal}
             currentUser={currentUser}
           />

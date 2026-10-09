@@ -15,6 +15,7 @@ import com.hospitality.mis.dto.reservation.ReservationDtos;
 import com.hospitality.mis.dto.billing.DepositPaymentWebhookDtos;
 import com.hospitality.mis.entity.room.Room;
 import com.hospitality.mis.entity.room.RoomType;
+import com.hospitality.mis.entity.reservation.CustomerPaymentMethod;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,11 +41,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:customerreservation;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate",
+        "hotel.booking.deposit-hold-minutes=30",
         "hotel.payment.webhook-secret=test-secret"
 })
 @AutoConfigureMockMvc
@@ -63,14 +65,7 @@ class CustomerReservationApiContractTest {
 
     @BeforeEach
     void seed() throws Exception {
-        payments.deleteAllInBatch();
-        receipts.deleteAllInBatch();
-        invoices.deleteAllInBatch();
-        jdbc.update("delete from ChiTietDatPhong");
-        reservations.deleteAllInBatch();
-        accounts.deleteAllInBatch();
-        rooms.deleteAllInBatch();
-        roomTypes.deleteAllInBatch();
+        cleanup();
         RoomType type = new RoomType();
         type.setId("STD");
         type.setName("Standard");
@@ -84,6 +79,23 @@ class CustomerReservationApiContractTest {
         rooms.saveAndFlush(room);
     }
 
+    @org.junit.jupiter.api.AfterEach void cleanup(){
+        for(Long account:jdbc.queryForList("SELECT maTaiKhoanKhachHang FROM TaiKhoanKhachHang WHERE soDienThoai IN(N'0900000201',N'0900000202',N'0900000203')",Long.class)){
+            jdbc.update("DELETE BanGhiChongTrung WHERE nguoiThucHien=?",account.toString());
+            jdbc.update("DELETE MaLamMoiDangNhap WHERE maTaiKhoanKhachHang=?",account);
+        }
+        jdbc.update("DELETE ButToanTaiChinh WHERE (loaiNguon=N'PAYMENT_TRANSACTION' AND maNguon IN(SELECT CONVERT(NVARCHAR(100),t.maGiaoDichThanhToan) FROM GiaoDichThanhToan t JOIN HoaDon h ON h.maHoaDon=t.maHoaDon JOIN ChiTietDatPhong c ON c.maPhieuDatPhong=h.maPhieuDatPhong WHERE c.maPhong=N'R201')) OR (loaiNguon=N'RECEIPT' AND maNguon IN(SELECT CONVERT(NVARCHAR(100),b.maBienLai) FROM BienLai b JOIN HoaDon h ON h.maHoaDon=b.maHoaDon JOIN ChiTietDatPhong c ON c.maPhieuDatPhong=h.maPhieuDatPhong WHERE c.maPhong=N'R201'))");
+        jdbc.update("DELETE BienLai WHERE maHoaDon IN(SELECT h.maHoaDon FROM HoaDon h JOIN ChiTietDatPhong c ON c.maPhieuDatPhong=h.maPhieuDatPhong WHERE c.maPhong=N'R201')");
+        jdbc.update("DELETE GiaoDichThanhToan WHERE maHoaDon IN(SELECT h.maHoaDon FROM HoaDon h JOIN ChiTietDatPhong c ON c.maPhieuDatPhong=h.maPhieuDatPhong WHERE c.maPhong=N'R201')");
+        jdbc.update("DELETE HoaDon WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM ChiTietDatPhong WHERE maPhong=N'R201')");
+        jdbc.update("DELETE PhieuDatPhong WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM ChiTietDatPhong WHERE maPhong=N'R201')");
+        jdbc.update("DELETE TaiKhoanKhachHang WHERE soDienThoai IN(N'0900000201',N'0900000202',N'0900000203')");
+        jdbc.update("DELETE KhachLuuTru WHERE soDienThoai IN(N'0900000201',N'0900000202',N'0900000203')");
+        jdbc.update("DELETE Phong WHERE maPhong=N'R201'");jdbc.update("DELETE LoaiPhong WHERE maLoaiPhong=N'STD' AND NOT EXISTS(SELECT 1 FROM Phong WHERE maLoaiPhong=N'STD')");
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        org.springframework.security.test.context.TestSecurityContextHolder.clearContext();
+    }
+
     @Test
     void customerBookingUsesAuthenticatedOwnerAndReturnsPendingDepositInstruction() throws Exception {
         mockMvc.perform(post("/api/auth/customers/register").contentType(APPLICATION_JSON)
@@ -95,9 +107,10 @@ class CustomerReservationApiContractTest {
                         .content(json(new CustomerAccountDtos.LoginRequest("0900000201", "customer-password"))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         String bearer = "Bearer " + login.get("access_token").asText();
-        var request = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE,
+        var request = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE, "DIRECT",
                 List.of(new CustomerReservationDtos.RoomStay("R201",
-                        LocalDateTime.of(2031, 1, 10, 14, 0), LocalDateTime.of(2031, 1, 11, 12, 0))), "customer-book-1");
+                        LocalDateTime.of(2031, 1, 10, 14, 0), LocalDateTime.of(2031, 1, 11, 12, 0))), "customer-book-1",
+                CustomerPaymentMethod.VNPAY, null);
         JsonNode booking = objectMapper.readTree(mockMvc.perform(post("/api/customer/reservations")
                         .header(AUTHORIZATION, bearer).contentType(APPLICATION_JSON).content(json(request)))
                 .andExpect(status().isCreated())
@@ -107,6 +120,8 @@ class CustomerReservationApiContractTest {
                 .andExpect(jsonPath("$.deposit_payment.payment_code").value(org.hamcrest.Matchers.startsWith("HOS-")))
                 .andReturn().getResponse().getContentAsString());
         long id = booking.get("id").asLong();
+        assertThat(LocalDateTime.parse(booking.at("/deposit_payment/expires_at").asText()))
+                .isEqualTo(LocalDateTime.parse(booking.get("booked_at").asText()).plusMinutes(30));
         JsonNode replay = objectMapper.readTree(mockMvc.perform(post("/api/customer/reservations")
                         .header(AUTHORIZATION, bearer).contentType(APPLICATION_JSON).content(json(request)))
                 .andExpect(status().isCreated())
@@ -115,9 +130,10 @@ class CustomerReservationApiContractTest {
         assertThat(replay.at("/deposit_payment/payment_code").asText())
                 .isEqualTo(booking.at("/deposit_payment/payment_code").asText());
 
-        var conflictingRequest = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE,
+        var conflictingRequest = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE, "DIRECT",
                 List.of(new CustomerReservationDtos.RoomStay("R201",
-                        LocalDateTime.of(2031, 1, 12, 14, 0), LocalDateTime.of(2031, 1, 13, 12, 0))), "customer-book-1");
+                        LocalDateTime.of(2031, 1, 12, 14, 0), LocalDateTime.of(2031, 1, 13, 12, 0))), "customer-book-1",
+                CustomerPaymentMethod.VNPAY, null);
         mockMvc.perform(post("/api/customer/reservations").header(AUTHORIZATION, bearer)
                         .contentType(APPLICATION_JSON).content(json(conflictingRequest)))
                 .andExpect(status().isUnprocessableEntity())
@@ -147,9 +163,10 @@ class CustomerReservationApiContractTest {
                         .content(json(new CustomerAccountDtos.LoginRequest("0900000202", "customer-password"))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         String bearer = "Bearer " + login.get("access_token").asText();
-        var create = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE,
+        var create = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE, "DIRECT",
                 List.of(new CustomerReservationDtos.RoomStay("R201",
-                        LocalDateTime.of(2031, 2, 10, 14, 0), LocalDateTime.of(2031, 2, 11, 12, 0))), "callback-book-1");
+                        LocalDateTime.of(2031, 2, 10, 14, 0), LocalDateTime.of(2031, 2, 11, 12, 0))), "callback-book-1",
+                CustomerPaymentMethod.VNPAY, null);
         JsonNode booking = objectMapper.readTree(mockMvc.perform(post("/api/customer/reservations")
                         .header(AUTHORIZATION, bearer).contentType(APPLICATION_JSON).content(json(create)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
@@ -167,6 +184,79 @@ class CustomerReservationApiContractTest {
                         .header("X-Payment-Signature", signature).contentType(APPLICATION_JSON).content(json(callback)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(true));
         assertThat(payments.findByExternalEventId("provider-event-1")).isPresent();
+    }
+
+    @Test
+    void customerCanRescheduleThenExtendContiguouslyWithOnlyTheAdditionalDeposit() throws Exception {
+        mockMvc.perform(post("/api/auth/customers/register").contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.RegisterRequest(
+                                "0900000203", "customer-password", "Change Stay Guest", "ID0900000203"))))
+                .andExpect(status().isCreated());
+        JsonNode login = objectMapper.readTree(mockMvc.perform(post("/api/auth/customers/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(json(new CustomerAccountDtos.LoginRequest("0900000203", "customer-password"))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String bearer = "Bearer " + login.get("access_token").asText();
+        var create = new CustomerReservationDtos.CreateRequest(ReservationDtos.RentalType.PACKAGE, "DIRECT",
+                List.of(new CustomerReservationDtos.RoomStay("R201",
+                        LocalDateTime.of(2031, 3, 2, 14, 0), LocalDateTime.of(2031, 3, 4, 12, 0))),
+                "change-stay-book-1", CustomerPaymentMethod.VNPAY, null);
+        JsonNode booking = objectMapper.readTree(mockMvc.perform(post("/api/customer/reservations")
+                        .header(AUTHORIZATION, bearer).contentType(APPLICATION_JSON).content(json(create)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        long id = booking.get("id").asLong();
+        String initialCode = booking.at("/deposit_payment/payment_code").asText();
+        var initialPayment = new DepositPaymentWebhookDtos.Request("provider-event-change-initial", initialCode,
+                new BigDecimal("2400.00"), "bank-change-initial", "SUCCESS");
+        mockMvc.perform(post("/api/public/payment-callbacks/deposit")
+                        .header("X-Payment-Signature", sign(initialPayment, "test-secret"))
+                        .contentType(APPLICATION_JSON).content(json(initialPayment)))
+                .andExpect(status().isOk());
+
+        var gap = new CustomerReservationDtos.ChangeRequest(CustomerReservationDtos.ChangeType.EXTEND,
+                LocalDateTime.of(2031, 3, 5, 12, 0), LocalDateTime.of(2031, 3, 6, 12, 0));
+        mockMvc.perform(post("/api/customer/reservations/{id}/stay-change", id)
+                        .header(AUTHORIZATION, bearer).header("Idempotency-Key", "change-gap-1")
+                        .contentType(APPLICATION_JSON).content(json(gap)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("EXTENSION_MUST_BE_CONTIGUOUS"));
+
+        var reschedule = new CustomerReservationDtos.ChangeRequest(CustomerReservationDtos.ChangeType.RESCHEDULE,
+                LocalDateTime.of(2031, 3, 10, 14, 0), LocalDateTime.of(2031, 3, 12, 12, 0));
+        mockMvc.perform(post("/api/customer/reservations/{id}/stay-change", id)
+                        .header(AUTHORIZATION, bearer).header("Idempotency-Key", "change-reschedule-1")
+                        .contentType(APPLICATION_JSON).content(json(reschedule)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rooms[0].expected_check_in").value("2031-03-10T14:00:00"))
+                .andExpect(jsonPath("$.rooms[0].expected_check_out").value("2031-03-12T12:00:00"))
+                .andExpect(jsonPath("$.deposit_payment.status").value("PAID"));
+
+        var extension = new CustomerReservationDtos.ChangeRequest(CustomerReservationDtos.ChangeType.EXTEND,
+                LocalDateTime.of(2031, 3, 12, 12, 0), LocalDateTime.of(2031, 3, 14, 12, 0));
+        JsonNode pending = objectMapper.readTree(mockMvc.perform(post("/api/customer/reservations/{id}/stay-change", id)
+                        .header(AUTHORIZATION, bearer).header("Idempotency-Key", "change-extend-1")
+                        .contentType(APPLICATION_JSON).content(json(extension)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deposit_amount").value(4800.00))
+                .andExpect(jsonPath("$.deposit_payment.amount").value(2400.00))
+                .andExpect(jsonPath("$.deposit_payment.status").value("PENDING"))
+                .andExpect(jsonPath("$.pending_change.additional_deposit").value(2400.00))
+                .andReturn().getResponse().getContentAsString());
+
+        var topUp = new DepositPaymentWebhookDtos.Request("provider-event-change-topup",
+                pending.at("/deposit_payment/payment_code").asText(), new BigDecimal("2400.00"),
+                "bank-change-topup", "SUCCESS");
+        mockMvc.perform(post("/api/public/payment-callbacks/deposit")
+                        .header("X-Payment-Signature", sign(topUp, "test-secret"))
+                        .contentType(APPLICATION_JSON).content(json(topUp)))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/customer/reservations/{id}", id).header(AUTHORIZATION, bearer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deposit_payment.status").value("PAID"))
+                .andExpect(jsonPath("$.pending_change").doesNotExist())
+                .andExpect(jsonPath("$.rooms[0].expected_check_out").value("2031-03-14T12:00:00"));
+        assertThat(invoices.findByReservationId(id).orElseThrow().getDepositPaid())
+                .isEqualByComparingTo("4800.00");
     }
 
     private String sign(DepositPaymentWebhookDtos.Request request, String secret) throws Exception {

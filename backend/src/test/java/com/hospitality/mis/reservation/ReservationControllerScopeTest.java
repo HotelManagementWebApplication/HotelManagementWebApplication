@@ -71,6 +71,9 @@ class ReservationControllerScopeTest {
     private static ReservationDtos.Response responseOwnedBy(String employeeId) {
         return new ReservationDtos.Response(7L, 11L, employeeId,
                 com.hospitality.mis.entity.reservation.ReservationStatus.CONFIRMED,
-                ReservationDtos.RentalType.PACKAGE, BigDecimal.ZERO, null, null, null, List.of());
+                ReservationDtos.RentalType.PACKAGE, BigDecimal.ZERO, null, null, null, List.of(),
+                null, null, "DIRECT", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                "NOT_APPLICABLE", List.of(), null,
+                com.hospitality.mis.entity.reservation.DepositPaymentStatus.NOT_REQUIRED);
     }
 }

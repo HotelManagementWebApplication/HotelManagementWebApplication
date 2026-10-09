@@ -74,7 +74,7 @@ class SqlServerRoomTypeCatalogRevisionAcceptanceTest {
 
         authenticate(APPROVER);
         var decided = approvals.approve(approval.id(), APPROVER, "sqlserver-room-approve");
-        assertThat(decided.getStatus()).isEqualTo(ApprovalRequest.APPROVED);
+        assertThat(decided.status()).isEqualTo(ApprovalRequest.APPROVED);
 
         var activated = catalog.activate(BASE, APPROVER, "sqlserver-room-activate");
         assertThat(activated.catalogStatus()).isEqualTo(RoomTypeCatalogStatus.ACTIVE);

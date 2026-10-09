@@ -6,9 +6,22 @@ import { hrGovernanceApi } from "../../shared/api/hrGovernance";
 import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
 import { frontDeskApi } from "../../shared/api/frontDesk";
 import { kitchenAccountingApi } from "../../shared/api/kitchenAccounting";
+import { ApiError } from "../../shared/api/client";
 
 describe("ManagerDashboard Interface and Acceptance Workflow", () => {
   const onBack = vi.fn();
+
+  it("keeps the acceptance modal open with the actual separation-of-duties reason", async () => {
+    vi.mocked(housekeepingTechnicalApi.workOrders).mockResolvedValue([{id:77,room_id:"R202",status:"WAITING_ACCEPTANCE",created_by:"EMP_MGR",materials:"Sửa điều hòa",result_note:"Đã sửa xong"}] as any);
+    const accept=vi.spyOn(housekeepingTechnicalApi,"accept").mockRejectedValue(new ApiError(422,{code:"SOD_VIOLATION",message:"Người tạo phiếu không được tự nghiệm thu"}));
+    render(<ManagerDashboard role="manager" onBack={onBack} />);
+    fireEvent.click(await screen.findByRole("button",{name:/^Phê duyệt$/i}));
+    fireEvent.change(screen.getByPlaceholderText(/Nhập nhận xét nghiệm thu/i),{target:{value:"Đã kiểm tra"}});
+    fireEvent.click(screen.getByRole("button",{name:/Xác nhận nghiệm thu/i}));
+    await screen.findByText("Người tạo phiếu không được tự nghiệm thu");
+    expect(screen.getByText("Nghiệm thu phiếu bảo trì kỹ thuật")).toBeTruthy();
+    expect(accept).toHaveBeenCalledTimes(1);
+  });
 
   beforeEach(() => {
     vi.restoreAllMocks();

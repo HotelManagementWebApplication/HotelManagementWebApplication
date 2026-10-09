@@ -1,10 +1,11 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { kitchenAccountingApi, newKitchenIdempotencyKey } from "../../shared/api/kitchenAccounting";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { authApi } from "../../shared/api/auth";
+import { apiErrorMessage, ApiError } from "../../shared/api/client";
 import { EmployeeProfileDropdown } from "../../shared/components/EmployeeProfileDropdown";
 import type { OtaReconciliation, VatInvoice } from "../../shared/types/enterprise";
-import type { Invoice as ApiInvoice, CashHandover, CashDenomination, PaymentMethod as ApiPaymentMethod, PartnerDebt } from "../../shared/types/kitchenAccounting";
+import type { CashHandover, CashDenomination, LedgerPayment, PaymentMethod, PaymentPage, Reconciliation, PartnerDebt } from "../../shared/types/kitchenAccounting";
 import { employeeRoleLabel } from "../../shared/types/api";
 import type { EmployeeProfileDto } from "../../shared/types/api";
 import { localDateValue } from "../../shared/utils/localDate";
@@ -22,14 +23,22 @@ import {
    TYPES
 ══════════════════════════════════════════════════════════ */
 type MainTab = "handover" | "ledger" | "ota" | "vat" | "debt";
-type LedgerTab = "all" | "cash" | "card" | "vietqr" | "agoda" | "booking";
-type PayStatus = "paid" | "pending" | "refunded";
+type LedgerTab = "all" | "cash" | "card" | "vietqr" | "momo" | "other";
+type PayStatus = "paid" | "pending" | "refunded" | "failed" | "cancelled";
 type OtaChannel = "agoda" | "booking" | "expedia" | "airbnb" | "direct";
 
-interface Invoice {
-  id: string; room: number; guest: string; desc: string;
-  amount: number; method: string; methodType: string;
-  time: string; status: PayStatus; ledgerTab: LedgerTab[];
+interface PaymentLedgerEntry {
+  id: string;
+  invoiceId: string;
+  reservationId: number | "—";
+  guest: string;
+  description: string;
+  amount: number;
+  method: string;
+  methodType: LedgerTab;
+  time: string;
+  status: PayStatus;
+  ledgerTab: LedgerTab[];
 }
 interface OtaRow {
   channel: OtaChannel; bookings: number; revenue: number;
@@ -47,12 +56,19 @@ interface CashRow {
 interface VatRow {
   invoice: string;
   guest: string;
-  room: number;
+  invoiceId: number;
   amount: number;
   vat: number;
+  totalAmount: number;
   vatRate: string;
   status: string;
   vatId?: number;
+  customerType: string;
+  taxCode: string | null;
+  companyName: string | null;
+  companyAddress: string | null;
+  issuedAt: string;
+  createdBy: string;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -71,11 +87,11 @@ const SIDEBAR_NAV: { id:MainTab; label:string; Icon:React.ElementType }[] = [
 
 const METHOD_CFG: Record<string,{bg:string;text:string;label:string}> = {
   visa:    { bg:"#DBEAFE",text:"#1D4ED8",label:"VISA" },
-  card:    { bg:"#FFE4E6",text:"#BE123C",label:"Mastercard" },
+  card:    { bg:"#FFE4E6",text:"#BE123C",label:"Thẻ" },
   cash:    { bg:"#DCFCE7",text:"#166534",label:"Tiền mặt" },
-  vietqr:  { bg:"#EDE9FE",text:"#5B21B6",label:"VietQR" },
-  agoda:   { bg:"#FEF3C7",text:"#92400E",label:"Agoda (VC)" },
-  booking: { bg:"#F0F9FF",text:"#0369A1",label:"Booking.com" },
+  vietqr:  { bg:"#EDE9FE",text:"#5B21B6",label:"Chuyển khoản" },
+  momo:    { bg:"#FCE7F3",text:"#9D174D",label:"Ví MoMo" },
+  other:   { bg:"#F1F5F9",text:"#475569",label:"Khác" },
 };
 
 const OTA_CFG: Record<OtaChannel,{label:string;color:string;bg:string;emoji:string}> = {
@@ -314,48 +330,137 @@ function CashHandoverPanel({
 /* ══════════════════════════════════════════════════════════
    INVOICE & PAYMENT LEDGER PANEL
 ══════════════════════════════════════════════════════════ */
-function LedgerPanel({ invoices = [] }: { invoices?: Invoice[] }) {
+function LedgerPanel({ fillHeight = false }: { fillHeight?: boolean }) {
   const [lTab, setLTab] = useState<LedgerTab>("all");
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [paymentPage, setPaymentPage] = useState<PaymentPage | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const PER_PAGE = 10;
   const currentDateLabel = new Date().toLocaleDateString("vi-VN");
+  const today = localDateValue();
+  const methods: Record<Exclude<LedgerTab, "all">, PaymentMethod> = { cash:"CASH", card:"CARD", vietqr:"BANK_TRANSFER", momo:"MOMO", other:"OTHER" };
+  const method = lTab === "all" ? undefined : methods[lTab];
 
-  const filtered = useMemo(() =>
-    invoices.filter(inv => inv.ledgerTab.includes(lTab)),
-    [invoices, lTab]
-  );
-  const pageInvs = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
-  const totalPages = Math.ceil(filtered.length / PER_PAGE) || 1;
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    setExportError("");
+    kitchenAccountingApi.payments({ from:today, to:today, page:page-1, size:PER_PAGE, method, search:searchQuery.trim() || undefined })
+      .then(result => {
+        if (!active) return;
+        if (result.page !== page-1) throw new ApiError(502,{code:"INVALID_PAGE_RESPONSE",message:"Máy chủ trả sai trang giao dịch. Vui lòng tải lại."});
+        if (page > Math.max(1,result.totalPages)) { setPage(Math.max(1,result.totalPages)); return; }
+        setPaymentPage(result);
+      })
+      .catch(cause => { if (active) setError(apiErrorMessage(cause,"Không thể tải giao dịch thanh toán.")); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [page, method, searchQuery, today, reload]);
+
+  const toLedgerRow = (payment: LedgerPayment): PaymentLedgerEntry => {
+      const methodType: LedgerTab = payment.method === "CASH" ? "cash"
+        : payment.method === "CARD" ? "card"
+        : payment.method === "BANK_TRANSFER" ? "vietqr"
+        : payment.method === "MOMO" ? "momo" : "other";
+      const status: PayStatus = payment.status === "COMPLETED"
+        ? payment.type === "REFUND" ? "refunded" : "paid"
+        : payment.status === "PENDING" ? "pending"
+        : payment.status === "CANCELLED" ? "cancelled" : "failed";
+      const occurredAt = new Date(payment.occurred_at);
+      return {
+        id: `PAY-${payment.id}`,
+        invoiceId: `INV-${payment.invoice_id}`,
+        reservationId: payment.reservation_id,
+        guest: `Đặt phòng #${payment.reservation_id}`,
+        description: payment.type === "REFUND" ? "Hoàn tiền" : payment.service_total > 0 ? "Phòng & dịch vụ" : "Tiền phòng",
+        amount: payment.amount,
+        method: payment.method,
+        methodType,
+        time: Number.isNaN(occurredAt.getTime()) ? "—" : occurredAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        status,
+        ledgerTab: ["all", methodType],
+      };
+  };
+  const pageRows = loading || error ? [] : (paymentPage?.items ?? []).map(toLedgerRow);
+  const totalElements = paymentPage?.totalElements ?? 0;
+  const totalPages = Math.max(1,paymentPage?.totalPages ?? 0);
+  const methodCounts = paymentPage?.methodCounts ?? {};
+  const pageNumbers = [...new Set([1,Math.max(1,page-1),page,Math.min(totalPages,page+1),totalPages])].sort((a,b)=>a-b);
 
   const TABS: { id:LedgerTab; label:string; count:number }[] = [
-    { id:"all",     label:"Tất cả",         count:invoices.length },
-    { id:"cash",    label:"Tiền mặt",        count:invoices.filter(inv => inv.ledgerTab.includes("cash")).length },
-    { id:"card",    label:"Thẻ",        count:invoices.filter(inv => inv.ledgerTab.includes("card")).length },
-    { id:"vietqr",  label:"VietQR",      count:invoices.filter(inv => inv.ledgerTab.includes("vietqr")).length },
-    { id:"agoda",   label:"Agoda",       count:invoices.filter(inv => inv.ledgerTab.includes("agoda")).length },
-    { id:"booking", label:"Booking.com", count:invoices.filter(inv => inv.ledgerTab.includes("booking")).length },
+    { id:"all",     label:"Tất cả",        count:Object.values(methodCounts).reduce((sum,count)=>sum+(count ?? 0),0) },
+    { id:"cash",    label:"Tiền mặt",       count:methodCounts.CASH ?? 0 },
+    { id:"card",    label:"Thẻ",            count:methodCounts.CARD ?? 0 },
+    { id:"vietqr",  label:"Chuyển khoản",  count:methodCounts.BANK_TRANSFER ?? 0 },
+    { id:"momo",    label:"Ví MoMo",       count:methodCounts.MOMO ?? 0 },
+    { id:"other",   label:"Khác",          count:methodCounts.OTHER ?? 0 },
   ];
 
   const STATUS_CFG: Record<PayStatus,{label:string;bg:string;text:string;dot:string}> = {
     paid:     { label:"Đã thanh toán",     bg:"#DCFCE7",text:"#166534",dot:"#16A34A" },
     pending:  { label:"Chờ thanh toán",  bg:"#DBEAFE",text:"#1D4ED8",dot:"#3B82F6" },
     refunded: { label:"Đã hoàn tiền", bg:"#FEF9C3",text:"#92400E",dot:"#F59E0B" },
+    failed:   { label:"Thất bại", bg:"#FFE4E6",text:"#BE123C",dot:"#E11D48" },
+    cancelled:{ label:"Đã hủy", bg:"#F1F5F9",text:"#64748B",dot:"#94A3B8" },
+  };
+
+  const exportRows = async () => {
+    setExporting(true);
+    setExportError("");
+    try {
+    const payments: LedgerPayment[] = [];
+    let pages = 1;
+    let expectedTotal: number | undefined;
+    const ids = new Set<number>();
+    for (let index=0; index<pages; index++) {
+      const result = await kitchenAccountingApi.payments({ from:today, to:today, method, search:searchQuery.trim() || undefined, page:index, size:100 });
+      if (result.page !== index || (expectedTotal !== undefined && result.totalElements !== expectedTotal)
+          || (result.items.length === 0 && payments.length < result.totalElements)
+          || result.items.some(row=>ids.has(row.id))) throw new ApiError(502,{code:"EXPORT_DATA_CHANGED",message:"Dữ liệu giao dịch đã thay đổi hoặc trả thiếu khi xuất. Vui lòng thử lại."});
+      expectedTotal = result.totalElements;
+      result.items.forEach(row=>ids.add(row.id));
+      payments.push(...result.items);
+      pages = result.totalPages;
+    }
+    if (payments.length !== expectedTotal) throw new ApiError(502,{code:"EXPORT_INCOMPLETE",message:"Chưa tải đủ giao dịch để xuất CSV. Vui lòng thử lại."});
+    const escapeCsv = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
+    const rows = [
+      ["transaction_id", "invoice_id", "reservation_id", "type", "amount", "method", "occurred_at", "status", "reference"],
+      ...payments.map(source => {
+        const row = toLedgerRow(source);
+        return [row.id, row.invoiceId, row.reservationId, row.description, row.amount, row.method, source?.occurred_at ?? "", row.status, source?.reference ?? ""];
+      }),
+    ].map(row => row.map(escapeCsv).join(","));
+    const url = URL.createObjectURL(new Blob([`\uFEFF${rows.join("\r\n")}`], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `payments-${localDateValue()}.csv`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (cause) { setExportError(apiErrorMessage(cause,"Không thể xuất giao dịch CSV.")); }
+    finally { setExporting(false); }
   };
 
   return (
-    <div style={{ flex:"0 0 50%",minWidth:0,display:"flex",flexDirection:"column",
+    <div style={{ flex:fillHeight?"1 1 100%":"1 1 50%",minWidth:0,minHeight:0,display:"flex",flexDirection:"column",
       background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden" }}>
       {/* Header */}
       <div style={{ padding:"16px 18px",borderBottom:"1px solid #E2E8F0",
         display:"flex",alignItems:"flex-start",justifyContent:"space-between" }}>
         <div>
-          <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Sổ hóa đơn &amp; thanh toán</p>
-          <p style={{ fontSize:11,color:"#94A3B8" }}>Tất cả giao dịch ngày {currentDateLabel}</p>
+          <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Sổ giao dịch thanh toán</p>
+          <p style={{ fontSize:11,color:"#94A3B8" }}>Giao dịch thực tế ghi nhận ngày {currentDateLabel}</p>
         </div>
-        <button style={{ display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:8,
+        <button disabled={exporting || loading} onClick={() => void exportRows()} style={{ display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:8,
           border:"1px solid #E2E8F0",background:"#F8FAFC",color:"#334155",fontSize:11,
           fontWeight:600,cursor:"pointer" }}>
-          <Download size={12} /> Xuất dữ liệu
+          <Download size={12} /> {exporting ? "Đang xuất…" : "Xuất giao dịch CSV"}
         </button>
       </div>
 
@@ -364,7 +469,7 @@ function LedgerPanel({ invoices = [] }: { invoices?: Invoice[] }) {
         display:"flex",gap:8,alignItems:"center" }}>
         <div style={{ position:"relative",flex:1 }}>
           <Search size={12} style={{ position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
-          <input placeholder="Tìm theo khách, phòng hoặc số hóa đơn..."
+          <input value={searchQuery} maxLength={200} onChange={event => { setSearchQuery(event.target.value); setPage(1); }} placeholder="Tìm mã giao dịch, hóa đơn hoặc đặt phòng..."
             style={{ width:"100%",height:30,paddingLeft:28,paddingRight:8,borderRadius:7,
               border:"1px solid #E2E8F0",background:"#F8FAFC",fontSize:11,outline:"none",boxSizing:"border-box" }} />
         </div>
@@ -376,11 +481,11 @@ function LedgerPanel({ invoices = [] }: { invoices?: Invoice[] }) {
           <ChevronDown size={10} style={{ position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
         </div>
         <div style={{ position:"relative" }}>
-          <select style={{ height:30,padding:"0 22px 0 8px",borderRadius:7,border:"1px solid #E2E8F0",
+          <select aria-label="Phương thức thanh toán" value={lTab} onChange={event => { setLTab(event.target.value as LedgerTab); setPage(1); }} style={{ height:30,padding:"0 22px 0 8px",borderRadius:7,border:"1px solid #E2E8F0",
             background:"#F8FAFC",fontSize:11,outline:"none",cursor:"pointer",appearance:"none" }}>
-            <option>Tất cả phương thức</option>
-            <option>Tiền mặt</option><option>VISA</option><option>Mastercard</option>
-            <option>VietQR</option><option>Agoda</option><option>Booking.com</option>
+            <option value="all">Tất cả phương thức</option>
+            <option value="cash">Tiền mặt</option><option value="card">Thẻ</option>
+            <option value="vietqr">Chuyển khoản</option><option value="momo">Ví MoMo</option><option value="other">Khác</option>
           </select>
           <ChevronDown size={10} style={{ position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
         </div>
@@ -404,12 +509,14 @@ function LedgerPanel({ invoices = [] }: { invoices?: Invoice[] }) {
         })}
       </div>
 
+      {error && <div role="alert" style={{padding:"12px 18px",color:"#B91C1C"}}>{error} <button onClick={()=>setReload(value=>value+1)}>Tải lại giao dịch</button></div>}
+      {exportError && <div role="alert" style={{padding:"12px 18px",color:"#B91C1C"}}>{exportError}</div>}
       {/* Table */}
       <div style={{ flex:1,overflowY:"auto" }}>
         <table style={{ width:"100%",borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:"#F8FAFC" }}>
-              {["Số hóa đơn","Phòng","Tên khách","Nội dung","Số tiền","Phương thức","Giờ","Trạng thái"].map(h => (
+              {["Mã giao dịch","Mã đặt phòng","Mã hóa đơn","Loại giao dịch","Số tiền","Phương thức","Giờ giao dịch","Trạng thái"].map(h => (
                 <th key={h} style={{ padding:"8px 10px",fontSize:10,fontWeight:700,color:"#64748B",
                   textAlign:"left",letterSpacing:"0.04em",textTransform:"uppercase",
                   whiteSpace:"nowrap",borderBottom:"1px solid #E2E8F0" }}>{h}</th>
@@ -417,24 +524,32 @@ function LedgerPanel({ invoices = [] }: { invoices?: Invoice[] }) {
             </tr>
           </thead>
           <tbody>
-            {pageInvs.map((inv,i) => {
-              const mc  = METHOD_CFG[inv.methodType] ?? { bg:"#F1F5F9",text:"#475569",label:inv.method };
-              const sc  = STATUS_CFG[inv.status];
+            {loading && <tr><td colSpan={8} style={{padding:28,textAlign:"center"}}>Đang tải giao dịch…</td></tr>}
+            {!loading && !error && pageRows.length === 0 && (
+              <tr>
+                <td colSpan={8} style={{ padding:"28px 12px",textAlign:"center",fontSize:12,color:"#94A3B8" }}>
+                  Chưa có giao dịch thanh toán phù hợp trong ngày đã chọn.
+                </td>
+              </tr>
+            )}
+            {pageRows.map((entry,i) => {
+              const mc  = METHOD_CFG[entry.methodType] ?? { bg:"#F1F5F9",text:"#475569",label:entry.method };
+              const sc  = STATUS_CFG[entry.status];
               return (
-                <tr key={inv.id} style={{ borderBottom:"1px solid #F8FAFC",background:i%2===0?"#FFF":"#FAFAFA" }}>
+                <tr key={entry.id} style={{ borderBottom:"1px solid #F8FAFC",background:i%2===0?"#FFF":"#FAFAFA" }}>
                   <td style={{ padding:"7px 10px",fontSize:10,fontWeight:600,color:"#2563EB",
-                    fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap" }}>{inv.id}</td>
-                  <td style={{ padding:"7px 10px",fontSize:12,fontWeight:700,color:"#0F172A" }}>{inv.room}</td>
+                    fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap" }}>{entry.id}</td>
+                  <td style={{ padding:"7px 10px",fontSize:12,fontWeight:700,color:"#0F172A" }}>{entry.reservationId}</td>
                   <td style={{ padding:"7px 10px",fontSize:12,color:"#334155",whiteSpace:"nowrap",maxWidth:120,
-                    overflow:"hidden",textOverflow:"ellipsis" }}>{inv.guest}</td>
-                  <td style={{ padding:"7px 10px",fontSize:11,color:"#64748B",whiteSpace:"nowrap" }}>{inv.desc}</td>
+                    overflow:"hidden",textOverflow:"ellipsis" }}>{entry.invoiceId}</td>
+                  <td style={{ padding:"7px 10px",fontSize:11,color:"#64748B",whiteSpace:"nowrap" }}>{entry.description}</td>
                   <td style={{ padding:"7px 10px",fontSize:12,fontWeight:700,color:"#0F172A",
-                    fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(inv.amount)}</td>
+                    fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(entry.amount)}</td>
                   <td style={{ padding:"7px 10px" }}>
                     <span style={{ fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:5,
                       background:mc.bg,color:mc.text,whiteSpace:"nowrap" }}>{mc.label}</span>
                   </td>
-                  <td style={{ padding:"7px 10px",fontSize:11,color:"#94A3B8",whiteSpace:"nowrap" }}>{inv.time}</td>
+                  <td style={{ padding:"7px 10px",fontSize:11,color:"#94A3B8",whiteSpace:"nowrap" }}>{entry.time}</td>
                   <td style={{ padding:"7px 10px" }}>
                     <div style={{ display:"flex",alignItems:"center",gap:4 }}>
                       <span style={{ width:6,height:6,borderRadius:99,background:sc.dot,flexShrink:0 }} />
@@ -451,24 +566,24 @@ function LedgerPanel({ invoices = [] }: { invoices?: Invoice[] }) {
       {/* Pagination */}
       <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",
         padding:"10px 18px",borderTop:"1px solid #E2E8F0",background:"#F8FAFC",flexShrink:0 }}>
-        <span style={{ fontSize:11,color:"#64748B" }}>Hiển thị {filtered.length === 0 ? 0 : (page-1)*PER_PAGE+1}–{Math.min(page*PER_PAGE,filtered.length)} trên {filtered.length} giao dịch</span>
+        <span style={{ fontSize:11,color:"#64748B" }}>{loading ? "Đang tải trang giao dịch…" : error ? "Chưa tải được giao dịch" : `Hiển thị ${totalElements === 0 ? 0 : (page-1)*PER_PAGE+1}–${totalElements === 0 ? 0 : (page-1)*PER_PAGE+pageRows.length} trên ${totalElements} giao dịch`}</span>
         <div style={{ display:"flex",gap:4,alignItems:"center" }}>
-          <button onClick={() => setPage(p=>Math.max(1,p-1))} disabled={page===1}
+          <button type="button" aria-label="Trang trước" onClick={() => setPage(p=>Math.max(1,p-1))} disabled={loading || !!error || page===1}
             style={{ width:24,height:24,borderRadius:6,border:"1px solid #E2E8F0",background:"#FFF",
-              cursor:page===1?"not-allowed":"pointer",color:page===1?"#CBD5E1":"#475569",
+              cursor:loading || error || page===1?"not-allowed":"pointer",color:loading || error || page===1?"#CBD5E1":"#475569",
               display:"flex",alignItems:"center",justifyContent:"center" }}>
             <ChevronLeft size={11} />
           </button>
-          {Array.from({ length: totalPages }, (_, index) => index + 1).map(n => (
-            <button key={n} onClick={() => setPage(n)}
+          {pageNumbers.map(n => (
+            <button type="button" aria-label={`Trang ${n}`} aria-current={page===n?"page":undefined} disabled={loading || !!error} key={n} onClick={() => setPage(n)}
               style={{ width:24,height:24,borderRadius:6,fontSize:11,
                 border:page===n?"none":"1px solid #E2E8F0",cursor:"pointer",
                 background:page===n?"#0F172A":"#FFF",color:page===n?"#FFF":"#475569",
                 fontWeight:page===n?700:400 }}>{n}</button>
           ))}
-          <button onClick={() => setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages}
+          <button type="button" aria-label="Trang sau" onClick={() => setPage(p=>Math.min(totalPages,p+1))} disabled={loading || !!error || page>=totalPages}
             style={{ width:24,height:24,borderRadius:6,border:"1px solid #E2E8F0",background:"#FFF",
-              cursor:page===6?"not-allowed":"pointer",color:page===6?"#CBD5E1":"#475569",
+              cursor:loading || error || page>=totalPages?"not-allowed":"pointer",color:loading || error || page>=totalPages?"#CBD5E1":"#475569",
               display:"flex",alignItems:"center",justifyContent:"center" }}>
             <ChevronRight size={11} />
           </button>
@@ -593,7 +708,12 @@ function OtaScreen({ otaData = [], onReconcile }: { otaData?: OtaRow[]; onReconc
 /* ══════════════════════════════════════════════════════════
    INVOICES & VAT SCREEN
 ══════════════════════════════════════════════════════════ */
-function VatScreen({ vatData = [], onExportXml }: { vatData?: VatRow[]; onExportXml?: (id: number) => void }) {
+function VatScreen({ vatData = [], onExportXml, onExportAllXml }: {
+  vatData?: VatRow[];
+  onExportXml?: (id: number) => void;
+  onExportAllXml?: (ids: number[]) => void;
+}) {
+  const [selectedInvoice, setSelectedInvoice] = useState<VatRow | null>(null);
   const totalVat = vatData.reduce((s,r) => s+r.vat, 0);
   const currentDateLabel = new Date().toLocaleDateString("vi-VN");
   return (
@@ -604,14 +724,14 @@ function VatScreen({ vatData = [], onExportXml }: { vatData?: VatRow[]; onExport
           <p style={{ fontSize:12,color:"#94A3B8" }}>Hóa đơn VAT phát hành ngày {currentDateLabel}</p>
         </div>
         <div style={{ display:"flex",gap:8 }}>
-          <button style={{ padding:"7px 14px",borderRadius:8,border:"1px solid #E2E8F0",
+          <button onClick={() => window.print()} style={{ padding:"7px 14px",borderRadius:8,border:"1px solid #E2E8F0",
             background:"#FFF",color:"#334155",fontSize:12,fontWeight:600,cursor:"pointer",
             display:"flex",alignItems:"center",gap:5 }}>
             <Printer size={12} /> In tất cả
           </button>
-          <button style={{ padding:"7px 14px",borderRadius:8,
+          <button disabled={!vatData.some(row => row.vatId)} onClick={() => onExportAllXml?.(vatData.flatMap(row => row.vatId ? [row.vatId] : []))} style={{ padding:"7px 14px",borderRadius:8,
             background:"#0F172A",color:"#FFF",fontSize:12,fontWeight:600,cursor:"pointer",
-            display:"flex",alignItems:"center",gap:5 }}>
+            display:"flex",alignItems:"center",gap:5,opacity:vatData.some(row => row.vatId) ? 1 : 0.5 }}>
             <Download size={12} /> Xuất XML
           </button>
         </div>
@@ -636,7 +756,7 @@ function VatScreen({ vatData = [], onExportXml }: { vatData?: VatRow[]; onExport
         <table style={{ width:"100%",borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:"#F8FAFC" }}>
-              {["Số hóa đơn","Tên khách","Phòng","Số tiền","VAT (8%)","Thuế suất","Trạng thái","Thao tác"].map(h => (
+              {["Số hóa đơn","Tên khách","Mã hóa đơn","Số tiền","VAT","Thuế suất","Trạng thái","Thao tác"].map(h => (
                 <th key={h} style={{ padding:"10px 14px",fontSize:11,fontWeight:700,color:"#64748B",
                   textAlign:"left",letterSpacing:"0.04em",textTransform:"uppercase",whiteSpace:"nowrap" }}>{h}</th>
               ))}
@@ -655,7 +775,7 @@ function VatScreen({ vatData = [], onExportXml }: { vatData?: VatRow[]; onExport
                 <td style={{ padding:"11px 14px",fontSize:11,fontWeight:600,color:"#2563EB",
                   fontFamily:"'JetBrains Mono',monospace" }}>{row.invoice}</td>
                 <td style={{ padding:"11px 14px",fontSize:13,fontWeight:600,color:"#0F172A" }}>{row.guest}</td>
-                <td style={{ padding:"11px 14px",fontSize:13,fontWeight:700,color:"#0F172A" }}>{row.room}</td>
+                <td style={{ padding:"11px 14px",fontSize:13,fontWeight:700,color:"#0F172A" }}>{row.invoiceId}</td>
                 <td style={{ padding:"11px 14px",fontSize:12,fontWeight:700,color:"#0F172A",
                   fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(row.amount)}</td>
                 <td style={{ padding:"11px 14px",fontSize:12,fontWeight:700,color:"#DC2626",
@@ -673,7 +793,7 @@ function VatScreen({ vatData = [], onExportXml }: { vatData?: VatRow[]; onExport
                 </td>
                 <td style={{ padding:"11px 14px" }}>
                   <div style={{ display:"flex",gap:5 }}>
-                    <button style={{ fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:6,
+                    <button onClick={() => setSelectedInvoice(row)} aria-label={`Xem hóa đơn VAT ${row.invoice}`} style={{ fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:6,
                       border:"1px solid #E2E8F0",background:"#FFF",color:"#334155",cursor:"pointer" }}>Xem</button>
                     <button onClick={() => row.vatId && onExportXml?.(row.vatId)} style={{ fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:6,
                       border:"1px solid #E2E8F0",background:"#FFF",color:"#334155",cursor:"pointer" }}>XML</button>
@@ -684,6 +804,37 @@ function VatScreen({ vatData = [], onExportXml }: { vatData?: VatRow[]; onExport
           </tbody>
         </table>
       </div>
+      {selectedInvoice && (
+        <div role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedInvoice(null); }} style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(15,23,42,.48)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <section role="dialog" aria-modal="true" aria-labelledby="vat-invoice-detail-title" style={{width:"min(100%,560px)",maxHeight:"90vh",overflowY:"auto",background:"#FFF",borderRadius:14,boxShadow:"0 24px 80px rgba(15,23,42,.24)",padding:22}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,borderBottom:"1px solid #E2E8F0",paddingBottom:14,marginBottom:14}}>
+              <div>
+                <h3 id="vat-invoice-detail-title" style={{fontSize:17,fontWeight:800,color:"#0F172A"}}>Chi tiết hóa đơn VAT</h3>
+                <p style={{fontFamily:"monospace",fontSize:12,color:"#2563EB",marginTop:4}}>{selectedInvoice.invoice}</p>
+              </div>
+              <button type="button" aria-label="Đóng chi tiết hóa đơn" onClick={() => setSelectedInvoice(null)} style={{border:0,background:"transparent",fontSize:22,cursor:"pointer",color:"#64748B"}}>×</button>
+            </div>
+            <dl style={{display:"grid",gridTemplateColumns:"minmax(130px, .8fr) 1.2fr",gap:"10px 16px",fontSize:12}}>
+              <dt style={{color:"#64748B"}}>Khách hàng</dt><dd style={{fontWeight:600,color:"#0F172A"}}>{selectedInvoice.guest}</dd>
+              <dt style={{color:"#64748B"}}>Mã hóa đơn gốc</dt><dd style={{fontWeight:600}}>{selectedInvoice.invoiceId}</dd>
+              <dt style={{color:"#64748B"}}>Loại khách hàng</dt><dd>{selectedInvoice.customerType}</dd>
+              <dt style={{color:"#64748B"}}>Mã số thuế</dt><dd>{selectedInvoice.taxCode || "—"}</dd>
+              <dt style={{color:"#64748B"}}>Tên đơn vị</dt><dd>{selectedInvoice.companyName || "—"}</dd>
+              <dt style={{color:"#64748B"}}>Địa chỉ</dt><dd>{selectedInvoice.companyAddress || "—"}</dd>
+              <dt style={{color:"#64748B"}}>Tiền trước thuế</dt><dd style={{fontWeight:700}}>{fmtMoney(selectedInvoice.amount)}</dd>
+              <dt style={{color:"#64748B"}}>Thuế suất / tiền thuế</dt><dd>{selectedInvoice.vatRate} · {fmtMoney(selectedInvoice.vat)}</dd>
+              <dt style={{color:"#64748B"}}>Tổng thanh toán</dt><dd style={{fontWeight:800,color:"#8C6D37"}}>{fmtMoney(selectedInvoice.totalAmount)}</dd>
+              <dt style={{color:"#64748B"}}>Trạng thái</dt><dd>{selectedInvoice.status === "issued" ? "Đã phát hành" : "Đang chờ"}</dd>
+              <dt style={{color:"#64748B"}}>Thời điểm phát hành</dt><dd>{new Date(selectedInvoice.issuedAt).toLocaleString("vi-VN")}</dd>
+              <dt style={{color:"#64748B"}}>Người lập</dt><dd>{selectedInvoice.createdBy}</dd>
+            </dl>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:20}}>
+              {selectedInvoice.vatId && <button type="button" onClick={() => onExportXml?.(selectedInvoice.vatId!)} style={{height:36,padding:"0 14px",border:"1px solid #CBD5E1",borderRadius:8,background:"#FFF",fontWeight:700,cursor:"pointer"}}>Tải XML</button>}
+              <button type="button" onClick={() => setSelectedInvoice(null)} style={{height:36,padding:"0 14px",border:0,borderRadius:8,background:"#0F172A",color:"#FFF",fontWeight:700,cursor:"pointer"}}>Đóng</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -718,7 +869,8 @@ function DebtScreen({ debts, onSettled }: { debts: PartnerDebt[]; onSettled: (de
 ══════════════════════════════════════════════════════════ */
 export default function AccountingStation({ onBack }: { onBack: () => void }) {
   const [mainTab, setMainTab] = useState<MainTab>("handover");
-  const [liveInvoices, setLiveInvoices] = useState<Invoice[]>([]);
+  const [financeSummary, setFinanceSummary] = useState<Reconciliation | null>(null);
+  const [summaryError, setSummaryError] = useState("");
   const [liveDebts, setLiveDebts] = useState<PartnerDebt[]>([]);
   const [liveCashHandovers, setLiveCashHandovers] = useState<CashHandover[]>([]);
   const [cashHandoverSubmitting, setCashHandoverSubmitting] = useState(false);
@@ -730,35 +882,11 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     let active = true;
-    kitchenAccountingApi.invoices({ page: 0, size: 100 })
-      .then(page => {
-        if (!active) return;
-        const mapped = page.items.map((invoice: ApiInvoice, index): Invoice => {
-          const method = invoice.payment_method ?? "OTHER";
-          const methodType = method === "CASH" ? "cash" : method === "CARD" ? "card" : method === "BANK_TRANSFER" ? "vietqr" : "agoda";
-          const amount = Math.round(invoice.payable || invoice.room_total + invoice.service_total);
-          const room = Number(String(invoice.reservation_id).replace(/\D/g, "")) || index + 1;
-          const status: PayStatus = invoice.status === "DA_THANH_TOAN" ? "paid" : "pending";
-          const ledgerTab: LedgerTab[] = methodType === "card" ? ["all", "card"] : methodType === "cash" ? ["all", "cash"] : methodType === "vietqr" ? ["all", "vietqr"] : ["all", "agoda"];
-          return {
-            id: `INV-${invoice.id}`,
-            room,
-            guest: `Reservation #${invoice.reservation_id}`,
-            desc: invoice.service_total > 0 ? "Phòng & dịch vụ" : "Tiền phòng",
-            amount,
-            method,
-            methodType,
-            time: new Date(invoice.issued_at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-            status,
-            ledgerTab,
-          };
-        });
-        setLiveInvoices(mapped);
-      })
-      .catch(err => {
-        console.warn("Backend accounting invoices unavailable:", err);
-        if (active) setLiveInvoices([]);
-      });
+
+    kitchenAccountingApi.reconciliation({ from:localDateValue(), to:localDateValue() })
+      .then(summary => { if (active) setFinanceSummary(summary); })
+      .catch(cause => { if (active) setSummaryError(apiErrorMessage(cause,"Không thể tải tổng hợp tài chính.")); });
+
     kitchenAccountingApi.partnerDebts()
       .then(rows => { if (active) setLiveDebts(rows); })
       .catch(err => { console.warn("Backend partner debts unavailable:", err); if (active) setLiveDebts([]); });
@@ -783,7 +911,23 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
     if (row.status === "DISPUTED") current.status = "dispute"; else if (row.status === "PENDING") current.status = current.status === "reconciled" ? "pending" : current.status;
     acc[key] = current; return acc;
   }, {}));
-  const liveVatData: VatRow[] = liveVat.map(row => ({ vatId: row.id, invoice: row.vat_invoice_number, guest: row.customer_name, room: row.invoice_id, amount: row.taxable_amount, vat: row.tax_amount, vatRate: `${row.tax_rate}%`, status: row.status === "ISSUED" ? "issued" : "pending" }));
+  const liveVatData: VatRow[] = liveVat.map(row => ({
+    vatId: row.id,
+    invoice: row.vat_invoice_number,
+    guest: row.customer_name,
+    invoiceId: row.invoice_id,
+    amount: row.taxable_amount,
+    vat: row.tax_amount,
+    totalAmount: row.total_amount,
+    vatRate: `${row.tax_rate}%`,
+    status: row.status === "ISSUED" ? "issued" : "pending",
+    customerType: row.customer_type,
+    taxCode: row.tax_code,
+    companyName: row.company_name,
+    companyAddress: row.company_address,
+    issuedAt: row.issued_at,
+    createdBy: row.created_by,
+  }));
   const reconcileOta = async (row: OtaRow) => {
     const reservationId = row.reservationIds?.[0];
     if (!reservationId) return;
@@ -793,6 +937,22 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
   const exportVatXml = async (id: number) => {
     try { const xml = await enterpriseApi.vatXml(id); const blob = new Blob([xml], { type: "application/xml;charset=utf-8" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `vat-${id}.xml`; link.click(); URL.revokeObjectURL(url); }
     catch (error) { window.alert("Không thể xuất XML VAT. Vui lòng thử lại."); }
+  };
+  const exportAllVatXml = async (ids: number[]) => {
+    if (ids.length === 0) return;
+    try {
+      const documents = await Promise.all(ids.map(id => enterpriseApi.vatXml(id)));
+      const body = documents.map(document => document.replace(/^\s*<\?xml[^>]*\?>\s*/i, "")).join("\n");
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<vatInvoices>\n${body}\n</vatInvoices>`;
+      const url = URL.createObjectURL(new Blob([xml], { type: "application/xml;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `vat-invoices-${localDateValue()}.xml`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      window.alert("Không thể xuất danh sách XML VAT. Vui lòng thử lại.");
+    }
   };
   const submitCashHandover = async (payload: { actualAmount: number; toActor: string; denominations: CashDenomination[] }) => {
     if (!userProfile?.employee_id) throw new Error("Không xác định được nhân viên đang đăng nhập.");
@@ -811,16 +971,12 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
       setCashHandoverSubmitting(false);
     }
   };
-  const paidInvoices = liveInvoices.filter(invoice => invoice.status === "paid");
-  const revenueToday = paidInvoices.reduce((sum, invoice) => sum + invoice.amount, 0);
-  const cashToday = paidInvoices.filter(invoice => invoice.methodType === "cash").reduce((sum, invoice) => sum + invoice.amount, 0);
-  const cardToday = paidInvoices.filter(invoice => invoice.methodType === "card").reduce((sum, invoice) => sum + invoice.amount, 0);
-  const pendingTransfer = liveInvoices.filter(invoice => invoice.status === "pending" && invoice.methodType === "vietqr").reduce((sum, invoice) => sum + invoice.amount, 0);
+  const summaryMoney = (value: number | undefined) => value === undefined ? "—" : fmtMoney(value);
   const financeKpis = [
-    { label:"Doanh thu hôm nay", Icon:DollarSign, iconBg:"#DCFCE7",iconColor:"#16A34A",val:fmtMoney(revenueToday),sub:`${paidInvoices.length} hóa đơn đã thanh toán`, subUp:false },
-    { label:"Tiền mặt trong két", Icon:DollarSign, iconBg:"#DBEAFE",iconColor:"#2563EB",val:fmtMoney(cashToday), sub:"Theo hóa đơn đã ghi nhận", subUp:false },
-    { label:"Thanh toán bằng thẻ", Icon:CreditCard, iconBg:"#EDE9FE",iconColor:"#5B21B6",val:fmtMoney(cardToday),sub:"Theo hóa đơn đã ghi nhận", subUp:false },
-    { label:"Chuyển khoản chờ đối soát",Icon:Building2, iconBg:"#FEF9C3",iconColor:"#92400E",val:fmtMoney(pendingTransfer), sub:"Theo hóa đơn đang chờ", subUp:false },
+    { label:"Thu/hoàn ròng hôm nay", Icon:DollarSign, iconBg:"#DCFCE7",iconColor:"#16A34A",val:summaryMoney(financeSummary?.net_total),sub:financeSummary ? `${financeSummary.completed_transactions} giao dịch hoàn tất` : "Đang tải tổng hợp", subUp:false },
+    { label:"Tiền mặt nhận ròng hôm nay", Icon:DollarSign, iconBg:"#DBEAFE",iconColor:"#2563EB",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CASH ?? 0 : undefined), sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
+    { label:"Thanh toán thẻ ròng hôm nay", Icon:CreditCard, iconBg:"#EDE9FE",iconColor:"#5B21B6",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CARD ?? 0 : undefined),sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
+    { label:"Chuyển khoản chờ đối soát",Icon:Building2, iconBg:"#FEF9C3",iconColor:"#92400E",val:summaryMoney(financeSummary?.pending_bank_transfers), sub:"Theo hóa đơn đang chờ", subUp:false },
     { label:"Hoàn tiền chờ Giám đốc",  Icon:RefreshCcw,  iconBg:"#FFE4E8",iconColor:"#DC2626",val:"0",          sub:"Chưa có dữ liệu hoàn tiền",       subUp:false },
   ];
   const todayLabel = new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" });
@@ -976,6 +1132,7 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
               </div>
             </div>
 
+            {summaryError && <p role="alert" style={{color:"#B91C1C",fontSize:12,marginBottom:10}}>{summaryError}</p>}
             {/* KPI CARDS */}
             <div style={{ display:"flex",gap:12,marginBottom:14,overflowX:"auto" }}>
               {financeKpis.map(k => (
@@ -1020,18 +1177,18 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
           {mainTab === "handover" && (
             <div style={{ flex:1,display:"flex",gap:14,padding:"14px 22px",overflow:"hidden" }}>
               <CashHandoverPanel cashRows={liveCashRows} handoverDate={todayLabel} fromStaff={userProfile?.employee_id} toStaff={userProfile?.full_name} onSubmit={submitCashHandover} submitting={cashHandoverSubmitting} />
-              <LedgerPanel invoices={liveInvoices} />
+              <LedgerPanel />
             </div>
           )}
           {mainTab === "ledger" && (
             <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",padding:"14px 22px" }}>
               <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden",flex:1,display:"flex",flexDirection:"column" }}>
-                <LedgerPanel invoices={liveInvoices} />
+                <LedgerPanel fillHeight />
               </div>
             </div>
           )}
           {mainTab === "ota"  && <OtaScreen otaData={liveOtaData} onReconcile={reconcileOta} />}
-          {mainTab === "vat"  && <VatScreen vatData={liveVatData} onExportXml={exportVatXml} />}
+          {mainTab === "vat"  && <VatScreen vatData={liveVatData} onExportXml={exportVatXml} onExportAllXml={exportAllVatXml} />}
           {mainTab === "debt" && <DebtScreen debts={liveDebts} onSettled={async debt => {
             const remaining = debt.amount - debt.settled_amount;
             const updated = await kitchenAccountingApi.settlePartnerDebt(debt.id, { amount: remaining, note: "Tất toán từ giao diện kế toán" }, newKitchenIdempotencyKey());

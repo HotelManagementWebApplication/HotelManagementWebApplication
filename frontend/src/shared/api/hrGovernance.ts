@@ -23,6 +23,7 @@ export const hrGovernanceApi = {
   coverage: (params: { date?: string; shiftCode: string; minimum_staff: number }) => apiClient.request<ShiftCoverage>(`/api/hr/shifts/coverage${query(params)}`),
   assignShift: (body: ShiftInput) => apiClient.request<Shift>("/api/hr/shifts", { method: "POST", body }),
   updateShift: (id: number, body: ShiftUpdateInput) => apiClient.request<Shift>(`/api/hr/shifts/${id}`, { method: "PUT", body }),
+  updateShiftStatus: (id: number, status: ShiftStatus) => apiClient.request<Shift>(`/api/hr/shifts/${id}/status`, { method: "PATCH", body: { status } }),
   setShiftStatus: (id: number, status: ShiftStatus) => apiClient.request<Shift>(`/api/hr/shifts/${id}/status`, { method: "PATCH", body: { status } }),
 
   approvals: (status = "PENDING") => apiClient.request<Collection<Approval>>(`/api/governance/approvals${query({ status })}`),
@@ -32,4 +33,3 @@ export const hrGovernanceApi = {
 };
 
 export const rows = <T,>(value: Collection<T> | undefined): T[] => Array.isArray(value) ? value : value?.items ?? [];
-

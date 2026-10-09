@@ -1,6 +1,15 @@
--- Manual demo reset. Run only after Flyway has applied baseline V1.
+-- Manual demo reset. Run only after Flyway has applied all current migrations.
 -- The database is not in production; this script rebuilds customer-facing demo data.
 -- Demo reset rebuilds employee accounts as part of the disposable dataset.
+
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+SET ANSI_PADDING ON;
+SET ANSI_WARNINGS ON;
+SET ARITHABORT ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET NUMERIC_ROUNDABORT OFF;
+SET XACT_ABORT ON;
 
 BEGIN TRANSACTION;
 
@@ -103,13 +112,13 @@ VALUES
 (N'RT004', N'Superior (SUP) · Đôi', N'SUP', 2100000.00, 300000.00, 35.00, N'Thành phố', N'Hai giường Queen', 4,
  N'https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=1200&h=800&fit=crop&auto=format',
  N'Phòng SUP đôi rộng rãi với tầm nhìn thoáng, phù hợp gia đình tối đa 4 khách.', N'Đang hoạt động', N'DEMO_SEED', N'DEMO_SEED', SYSDATETIME(), SYSDATETIME()),
-(N'RT005', N'Deluxe (DLX) · King', N'DLX', 2600000.00, 380000.00, 45.00, N'Sông Sài Gòn', N'Giường King', 4,
+(N'RT005', N'Deluxe (DLX) · King', N'DLX', 2600000.00, 380000.00, 45.00, N'Biển Vũng Tàu', N'Giường King', 4,
  N'https://images.unsplash.com/photo-1564078516393-cf04bd966897?w=1200&h=800&fit=crop&auto=format',
  N'DLX tầng cao, diện tích rộng, hướng sông và trang thiết bị cao cấp.', N'Đang hoạt động', N'DEMO_SEED', N'DEMO_SEED', SYSDATETIME(), SYSDATETIME()),
 (N'RT006', N'Deluxe (DLX) · Family', N'DLX', 3200000.00, 460000.00, 58.00, N'Toàn cảnh thành phố', N'Hai giường Queen + sofa', 6,
  N'https://images.unsplash.com/photo-1591088398332-8a7791972843d?w=1200&h=800&fit=crop&auto=format',
  N'DLX Family cho nhóm đông, có khu vực sofa và không gian nghỉ thoải mái tối đa 6 khách.', N'Đang hoạt động', N'DEMO_SEED', N'DEMO_SEED', SYSDATETIME(), SYSDATETIME()),
-(N'RT007', N'Suite (SUT) · Residence', N'SUT', 4500000.00, 650000.00, 78.00, N'Sông Sài Gòn', N'Giường King + phòng khách', 8,
+(N'RT007', N'Suite (SUT) · Residence', N'SUT', 4500000.00, 650000.00, 78.00, N'Biển Vũng Tàu', N'Giường King + phòng khách', 8,
  N'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1200&h=800&fit=crop&auto=format',
  N'Suite Residence tầng cao với phòng khách riêng, bồn tắm và sức chứa tối đa 8 khách.', N'Đang hoạt động', N'DEMO_SEED', N'DEMO_SEED', SYSDATETIME(), SYSDATETIME()),
 (N'RT008', N'Suite (SUT) · Executive', N'SUT', 5800000.00, 800000.00, 92.00, N'Toàn cảnh thành phố', N'Giường King + phòng khách', 8,
@@ -325,10 +334,10 @@ VALUES
  N'Khu xông hơi khô, ướt và phòng thư giãn với liệu trình theo giờ.',
  N'https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?w=800&h=520&fit=crop&auto=format'),
 (N'LIMO', N'Xe đưa đón sân bay VIP Limousine', 850000.00, N'chuyến', 999, 0, 1, N'Đưa đón',
- N'Xe cao cấp với tài xế riêng, đón và tiễn sân bay Tân Sơn Nhất.',
+ N'Xe cao cấp với tài xế riêng đưa đón giữa sân bay Tân Sơn Nhất và khách sạn tại Vũng Tàu.',
  N'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=600&h=400&fit=crop&auto=format'),
-(N'CITYTOUR', N'Tour thành phố Sài Gòn – Nửa ngày', 650000.00, N'khách', 999, 0, 1, N'Đưa đón',
- N'Tham quan các địa danh nổi bật cùng hướng dẫn viên địa phương.',
+(N'CITYTOUR', N'Tour Vũng Tàu – Nửa ngày', 650000.00, N'khách', 999, 0, 1, N'Đưa đón',
+ N'Tham quan các địa danh nổi bật tại Vũng Tàu cùng hướng dẫn viên địa phương.',
  N'https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=600&h=400&fit=crop&auto=format'),
 (N'POOL', N'Hồ bơi vô cực & Jacuzzi', 200000.00, N'khách/ngày', 999, 0, 1, N'Giải trí',
  N'Tầng 21 · Miễn phí không giới hạn lượt cho khách đã đăng ký trong booking thuê theo gói ngày-đêm. Khách thuê theo giờ trả 200.000 đồng mỗi khách mỗi ngày.',
@@ -378,11 +387,11 @@ VALUES
     (5, 1, NULL, (SELECT maTaiKhoanKhachHang FROM TaiKhoanKhachHang WHERE soDienThoai = N'0901234567'),
      SYSDATETIME(), 270000.00, N'Bản nháp', N'Theo giờ',
      NULL, NULL, 0, N'DEMO-RES-005', 0,
-     N'DEMO-DEP-005', DATEADD(DAY, 7, SYSDATETIME()), N'Chờ thanh toán'),
+     N'DEMO-DEP-005', DATEADD(MINUTE, 30, SYSDATETIME()), N'Chờ thanh toán'),
     (6, 1, NULL, (SELECT maTaiKhoanKhachHang FROM TaiKhoanKhachHang WHERE soDienThoai = N'0901234567'),
      SYSDATETIME(), 3900000.00, N'Đã thanh toán cọc', N'Theo gói',
      NULL, NULL, 0, N'DEMO-RES-006', 0,
-     N'DEMO-DEP-006', DATEADD(DAY, 7, SYSDATETIME()), N'Đã thanh toán');
+     N'DEMO-DEP-006', NULL, N'Đã thanh toán');
 SET IDENTITY_INSERT PhieuDatPhong OFF;
 
 INSERT INTO ChiTietDatPhong
@@ -406,6 +415,13 @@ UPDATE Phong SET trangThai = CASE maPhong
     WHEN N'802' THEN N'Sẵn sàng'
     ELSE trangThai
 END;
+
+-- Customer demo bookings with a deposit code are VNPay bookings. Keep the
+-- payment channel explicit so the customer portal and checkout guard agree.
+UPDATE PhieuDatPhong
+SET phuongThucBaoDam = N'VNPay'
+WHERE maPhieuDatPhong IN (5, 6)
+  AND maThanhToanDatCoc IS NOT NULL;
 
 INSERT INTO SuDungDichVu (maPhieuDatPhong, maDichVu, ngaySuDung, soLuong, donGia) VALUES
     (1, N'BREAKFAST', DATEADD(DAY, -1, CAST(SYSDATETIME() AS date)), 2, 0.00),

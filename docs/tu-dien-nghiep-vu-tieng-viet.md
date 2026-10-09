@@ -43,7 +43,7 @@ hoa hồng thương mại của đối tác.
 | `Repository` / `DAO` | Bộ truy cập dữ liệu | Đọc và ghi database theo yêu cầu của service |
 | `Database` | Cơ sở dữ liệu | Nơi lưu dữ liệu thật của hệ thống |
 | `Migration` | Phiên bản thay đổi database | Script tạo bảng, thêm cột hoặc cập nhật cấu trúc |
-| `Flyway` | Công cụ quản lý cấu trúc | Database demo chạy baseline `V1` duy nhất |
+| `Flyway` | Công cụ quản lý cấu trúc | Database demo chạy đúng chuỗi `V1`–`V5`; không tạo migration bổ sung, theo `AGENTS.md` |
 | `Schema` | Bộ cấu trúc database | Trong dự án hiện tại là schema `QLKS` |
 | `Transaction` | Giao dịch nguyên tử | Một chuỗi thao tác thành công toàn bộ hoặc hoàn tác toàn bộ |
 | `Validation` | Kiểm tra hợp lệ | Chặn dữ liệu thiếu, sai định dạng hoặc sai giới hạn |
@@ -418,10 +418,8 @@ thời gian sử dụng. `free_quantity` là phần nằm trong hạn mức; ch�
 hạn mức đã dùng mới tính vào hóa đơn phòng. Hủy booking phòng tự hủy dịch vụ
 chưa dùng. Hồ bơi chỉ xem thông tin trên web, không đặt trước.
 
-Khách thuê theo gói ngày-đêm có quyền lợi: hồ bơi không giới hạn theo số khách
-trong booking; giặt ủi một lần/ngày/phòng; bữa sáng một suất/ngày/khách; tại
-MaM Restaurant mỗi khách một bữa trưa và một bữa tối/ngày. Khách thuê theo giờ
-trả giá niêm yết cho mọi dịch vụ. Xem bảng giá tại `rule.md` mục 15.
+Quyền lợi, định mức miễn phí và giá dịch vụ áp dụng cho khách được định nghĩa
+duy nhất tại `customer-policy.md` mục 8.
 
 ### 9.3. Thuật ngữ đặt bàn/lịch hẹn
 
@@ -685,8 +683,9 @@ tiếng Việt như “Khách đến hôm nay”, “Chưa thanh toán cọc”,
 4. Khi cần đổi chữ hiển thị, chỉ sửa nhãn tiếng Việt ở frontend hoặc lớp dịch.
 5. Khi thêm trạng thái mới, phải ghi vào tài liệu này, cập nhật luồng chuyển
    trạng thái, API, giao diện và dữ liệu mẫu.
-6. Khi thêm trường database, tạo migration Flyway mới; không sửa migration đã
-   chạy trên database đang có dữ liệu.
+6. Khi thêm trường database, sửa V1 trong baseline demo cố định V1–V6 theo
+   `AGENTS.md`; trigger chỉ đặt ở V6, không tạo V7+ hoặc SQL phụ. Chỉ dựng lại database demo/test đã
+   được cho phép khi checksum thay đổi; không repair lịch sử Flyway.
 7. Mọi thao tác tài chính, hoàn tiền, điều chỉnh hóa đơn, duyệt giá hoặc thay
    đổi dữ liệu nhạy cảm phải có người thực hiện và nhật ký audit.
 

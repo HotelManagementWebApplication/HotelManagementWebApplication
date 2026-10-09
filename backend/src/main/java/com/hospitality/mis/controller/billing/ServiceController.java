@@ -140,8 +140,7 @@ public class ServiceController {
     @GetMapping("/price-requests")
     @PreAuthorize("@departmentAccess.allows(authentication, 'SERVICE_PRICE_REQUEST')")
     public List<com.hospitality.mis.dto.governance.ApprovalDtos.Response> myPriceRequests() {
-        return service.priceRequestsFor(SecurityActor.currentActor()).stream()
-                .map(com.hospitality.mis.dto.governance.ApprovalDtos.Response::from).toList();
+        return service.priceRequestsFor(SecurityActor.currentActor());
     }
 
 }

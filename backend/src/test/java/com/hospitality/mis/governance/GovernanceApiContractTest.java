@@ -39,11 +39,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:governanceapi;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 @AutoConfigureMockMvc
 /** Kiểm tra wire contract governance: snake_case allowlist và không lộ metadata persistence. */
@@ -78,7 +78,7 @@ class GovernanceApiContractTest {
     void approvalResponseUsesTheCanonicalAllowlistedSnakeCaseShape() throws Exception {
         when(approvalService.request(eq("actor"), eq("PRICE_OVERRIDE"), eq("room-1"),
                 eq("{\"price\":100}"), eq(new BigDecimal("100.00")), eq("Review"), eq("approval-1")))
-                .thenReturn(pending);
+                .thenReturn(ApprovalDtos.Response.from(pending));
 
         String body = mockMvc.perform(post("/api/governance/approvals")
                         .with(jwtAs("FRONT_DESK"))
@@ -113,14 +113,14 @@ class GovernanceApiContractTest {
                 null, "Review", Instant.now().plusSeconds(3600), "approval-1");
         ReflectionTestUtils.setField(approved, "id", 42L);
         approved.approve("actor", Instant.now());
-        when(approvalService.approve(42L, "actor")).thenReturn(approved);
+        when(approvalService.approve(42L, "actor")).thenReturn(ApprovalDtos.Response.from(approved));
 
         ApprovalRequest rejected = new ApprovalRequest("requester", "PRICE_OVERRIDE", "room-1", "{}", "fingerprint",
                 null, "Review", Instant.now().plusSeconds(3600), "approval-1");
         ReflectionTestUtils.setField(rejected, "id", 42L);
         rejected.reject("actor", Instant.now());
-        when(approvalService.reject(42L, "actor")).thenReturn(rejected);
-        when(approvalService.list("PENDING")).thenReturn(List.of(pending));
+        when(approvalService.reject(42L, "actor")).thenReturn(ApprovalDtos.Response.from(rejected));
+        when(approvalService.list("PENDING")).thenReturn(List.of(ApprovalDtos.Response.from(pending)));
 
         mockMvc.perform(post("/api/governance/approvals/42/approve").with(jwtAs("MANAGER")))
                 .andExpect(status().isOk())
@@ -139,7 +139,7 @@ class GovernanceApiContractTest {
     void filteredApprovalListUsesPageWrapperWhileStatusOnlyListRemainsArray() throws Exception {
         when(approvalService.page(eq("APPROVED"), eq("PRICE_OVERRIDE"), eq("room-1"), eq(null), eq(null),
                 eq(null), eq(null), eq(0), eq(20)))
-                .thenReturn(new PageImpl<>(List.of(pending), PageRequest.of(0, 20), 1));
+                .thenReturn(new PageImpl<>(List.of(ApprovalDtos.Response.from(pending)), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/api/governance/approvals")
                         .param("status", "APPROVED")
@@ -158,9 +158,8 @@ class GovernanceApiContractTest {
     /** Given audit row, When GET audit, Then snake_case và không serialize metadata của entity. */
     @Test
     void auditResponseUsesSnakeCaseWithoutEntitySerializationMetadata() throws Exception {
-        AuditLog audit = new AuditLog("manager", "APPROVAL_APPROVED", "APPROVAL", "42",
-                "PENDING", "APPROVED", "Review", "audit-1");
-        ReflectionTestUtils.setField(audit, "id", 7L);
+        AuditDtos.Response audit = new AuditDtos.Response(7L,"manager", "APPROVAL_APPROVED", "APPROVAL", "42",
+                "PENDING", "APPROVED", "Review", "audit-1", java.time.Instant.now());
         when(auditService.list("actor", true)).thenReturn(List.of(audit));
 
         String body = mockMvc.perform(get("/api/governance/audit").with(jwtAs("MANAGER")))

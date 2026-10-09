@@ -8,6 +8,8 @@ export interface RequestOptions extends Omit<RequestInit, "method" | "body" | "h
   body?: unknown;
   headers?: Record<string, string>;
   idempotencyKey?: string;
+  /** Do not attach a possibly stale session token to a public endpoint. */
+  skipAuth?: boolean;
   retryOnUnauthorized?: boolean;
   timeoutMs?: number;
 }
@@ -42,8 +44,11 @@ export class ApiError extends Error {
 }
 
 /** Chỉ đưa thông báo có cấu trúc từ API ra giao diện; lỗi kỹ thuật dùng câu dự phòng tiếng Việt. */
-export const apiErrorMessage = (error: unknown, fallback: string) =>
-  error instanceof ApiError && error.message ? error.message : fallback;
+export const apiErrorMessage = (error: unknown, fallback: string) => {
+  if (!(error instanceof ApiError) || !error.message) return fallback;
+  const details = Array.isArray(error.details) ? error.details.filter((item): item is string => typeof item === "string") : [];
+  return details.length ? `${error.message}: ${details.join("; ")}` : error.message;
+};
 
 /**
  * The Vercel build is a static frontend. It cannot reach a backend listening
@@ -132,8 +137,8 @@ export class ApiClient {
   }
 
   private async execute(path: string, options: RequestOptions): Promise<Response> {
-    const { method = "GET", body, headers = {}, idempotencyKey, timeoutMs = 10000, ...init } = options;
-    const token = this.store.get()?.access_token;
+    const { method = "GET", body, headers = {}, idempotencyKey, skipAuth = false, timeoutMs = 10000, ...init } = options;
+    const token = skipAuth ? undefined : this.store.get()?.access_token;
     const controller = new AbortController();
     const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
     try {

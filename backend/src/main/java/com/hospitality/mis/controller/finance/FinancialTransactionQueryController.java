@@ -23,15 +23,16 @@ public class FinancialTransactionQueryController {
 
     @GetMapping("/payments")
     @PreAuthorize("@departmentAccess.allows(authentication, 'FINANCE_READ')")
-    public PaymentTransactionDtos.PageResponse payments(
+    public PaymentTransactionDtos.LedgerPageResponse payments(
             @RequestParam(name = "invoice_id", required = false) Long invoiceId,
             @RequestParam(name = "method", required = false) PaymentMethod method,
             @RequestParam(name = "type", required = false) PaymentTransaction.TransactionType type,
             @RequestParam(name = "status", required = false) PaymentTransaction.TransactionStatus status,
             @RequestParam(name = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(name = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(name = "search", required = false) String search,
             @RequestParam(name = "page", defaultValue = "0") int page, @RequestParam(name = "size", defaultValue = "20") int size) {
-        return payments.search(invoiceId, method, type, status, from, to, page, size);
+        return payments.search(invoiceId, method, type, status, from, to, search, page, size);
     }
 
     @GetMapping("/receipts")

@@ -27,15 +27,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = {
 
-        "spring.datasource.url=jdbc:h2:mem:guestpersistence;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
 
-        "spring.datasource.username=sa",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
 
-        "spring.datasource.password=",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
 
-        "spring.flyway.enabled=false",
+        "spring.flyway.enabled=true",
 
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=validate"
 
 })
 

@@ -88,15 +88,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
 
-        "spring.datasource.url=jdbc:h2:mem:securitytest;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
 
-        "spring.datasource.username=sa",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
 
-        "spring.datasource.password=",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
 
-        "spring.flyway.enabled=false",
+        "spring.flyway.enabled=true",
 
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=validate"
 
 })
 
@@ -105,7 +105,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /** Bảo vệ security integration: token lifecycle, account state, role policy, audit và CORS. */
 class SecurityIntegrationTest {
 
-    /** MockMvc thật chạy qua filter/controller với H2 schema sạch. */
+    /** MockMvc thật chạy qua filter/controller với SQL Server và Flyway V1–V5. */
     @Autowired MockMvc mockMvc;
 
     /** Employee repository dùng seed, lock, disable và role administration assertions. */
@@ -139,11 +139,13 @@ class SecurityIntegrationTest {
     /** Xóa token/approval/employee và seed role fixture trước mỗi test độc lập. */
     void seedUsers() {
 
-        refreshTokens.deleteAll();
+        jdbc.update("DELETE MaLamMoiDangNhap WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'staff',N'kitchen')");
+        jdbc.update("DELETE SuKienDangNhapNhanVien WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'staff',N'kitchen')");
+        jdbc.update("DELETE CaLamViecNhanVien WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'staff',N'kitchen')");
 
         approvals.deleteAll();
 
-        employees.deleteAll();
+        jdbc.update("DELETE NhanVien WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'staff',N'kitchen')");
 
         jdbc.update("delete from NhatKyKiemSoat");
         employees.save(employee("admin", "admin-password", EmployeeRole.ADMIN, "0900000000"));

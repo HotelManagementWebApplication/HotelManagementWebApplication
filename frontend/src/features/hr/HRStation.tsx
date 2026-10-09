@@ -1,14 +1,15 @@
-import { useEffect, useState, useMemo } from "react";
+import { Fragment, useEffect, useState, useMemo } from "react";
 import type { ChangeEvent } from "react";
-import { hrGovernanceApi, rows as apiRows } from "../../shared/api/hrGovernance";
+import { hrGovernanceApi } from "../../shared/api/hrGovernance";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { authApi } from "../../shared/api/auth";
 import { EmployeeProfileDropdown } from "../../shared/components/EmployeeProfileDropdown";
 import type { AttendanceRecord as ApiAttendanceRecord, LeaveRequest as ApiLeaveRequest } from "../../shared/types/enterprise";
-import type { Approval, EmployeeAdmin, Shift } from "../../shared/types/hrGovernance";
+import type { EmployeeAdmin, Shift } from "../../shared/types/hrGovernance";
 import { employeeRoleLabel } from "../../shared/types/api";
 import type { EmployeeProfileDto } from "../../shared/types/api";
 import { localDateValue } from "../../shared/utils/localDate";
+import { apiErrorMessage } from "../../shared/api/client";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -99,17 +100,6 @@ interface LeaveTodayItem {
   statusColor: string;
 }
 
-interface PendingApprovalItem {
-  id: string;
-  name: string;
-  department: string;
-  avatar: string;
-  type: "swap" | "leave";
-  typeLabel: string;
-  date: string;
-  reason: string;
-}
-
 interface EmployeeProfile {
   id: string;
   name: string;
@@ -198,7 +188,6 @@ export default function HRStation({ onBack }: Props) {
   const [scheduleData, setScheduleData] = useState<DepartmentGroup[]>([]);
   const [collapsedDepts, setCollapsedDepts] = useState<Record<string, boolean>>({});
   const [leaveTodayList, setLeaveTodayList] = useState<LeaveTodayItem[]>([]);
-  const [pendingApprovals, setPendingApprovals] = useState<PendingApprovalItem[]>([]);
 
   // Quick edit shift modal
   const [editingShift, setEditingShift] = useState<{
@@ -216,27 +205,17 @@ export default function HRStation({ onBack }: Props) {
   const [staffFilterStatus, setStaffFilterStatus] = useState("all");
 
   // New employee form state
-  const [newEmpForm, setNewEmpForm] = useState({
-    name: "",
-    gender: "Nữ" as "Nam" | "Nữ",
-    dob: "2000-01-01",
-    department: "Bộ phận Lễ tân",
-    departmentId: "reception",
-    role: "Nhân viên Lễ tân",
-    email: "",
-    phone: "",
-    idCard: "",
-    joinDate: localDateValue(),
-    contractType: "Thử việc" as "Chính thức" | "Thử việc" | "Thời vụ",
-    salaryGrade: "Bậc 1 (8,500,000 ₫)",
-    leaveBalance: 12
-  });
 
   // ── Tab 4 (Chấm công) states ──
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [attendanceViewMode, setAttendanceViewMode] = useState<"daily" | "monthly">("daily");
   const [attendanceDate, setAttendanceDate] = useState(localDateValue());
   const [isSyncingBiometrics, setIsSyncingBiometrics] = useState(false);
+  const [editingAttendance, setEditingAttendance] = useState<AttendanceRecord | null>(null);
+  const [attendanceEditClockIn, setAttendanceEditClockIn] = useState("");
+  const [attendanceEditClockOut, setAttendanceEditClockOut] = useState("");
+  const [attendanceEditStatus, setAttendanceEditStatus] = useState<ApiAttendanceRecord["status"]>("PRESENT");
+  const [isSavingAttendanceEdit, setIsSavingAttendanceEdit] = useState(false);
   const today = useMemo(() => new Date(), []);
   const weekDates = useMemo(() => {
     const monday = new Date(today);
@@ -257,8 +236,8 @@ export default function HRStation({ onBack }: Props) {
     employeeName: "",
     department: "Bộ phận Lễ tân",
     type: "Nghỉ phép năm" as LeaveRequest["type"],
-    dateRange: new Date().toLocaleDateString("vi-VN"),
-    totalDays: "1 ngày",
+    startDate: localDateValue(),
+    endDate: localDateValue(),
     reason: ""
   });
 
@@ -360,20 +339,6 @@ export default function HRStation({ onBack }: Props) {
       if (active) { setEmployees([]); setScheduleData([]); setAttendanceRecords([]); setLeaveRequests([]); setLeaveTodayList([]); }
     });
 
-    hrGovernanceApi.approvals("PENDING")
-      .then(value => {
-        const approvals = apiRows<Approval>(value);
-        if (active) {
-          setPendingApprovals(approvals.map(approval => ({
-            id: String(approval.id), name: approval.requester, department: approval.action,
-            avatar: employeeAvatar(approval.requester),
-            type: approval.action.toLowerCase().includes("shift") ? "swap" : "leave",
-            typeLabel: approval.action, date: approval.expires_at, reason: approval.reason,
-          })));
-        }
-      })
-      .catch(err => { console.warn("Backend HR approvals unavailable:", err); if (active) setPendingApprovals([]); });
-
     authApi.employeeProfile()
       .then(profile => { if (active) setUserProfile(profile); })
       .catch(err => console.warn("Backend HR profile unavailable:", err));
@@ -393,7 +358,7 @@ export default function HRStation({ onBack }: Props) {
     return `${monday.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })} - ${sunday.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}`;
   }, [weekDates]);
   const pendingLeaves = useMemo(() => leaveRequests.filter(l => l.status === "pending"), [leaveRequests]);
-  const totalUnreadNotifs = pendingLeaves.length + pendingApprovals.length;
+  const totalUnreadNotifs = pendingLeaves.length;
   const attendanceSummary = useMemo(() => {
     const onTime = attendanceRecords.filter(record => record.status === "Đúng giờ").length;
     const late = attendanceRecords.filter(record => record.status === "Đi muộn").length;
@@ -429,49 +394,59 @@ export default function HRStation({ onBack }: Props) {
     setCollapsedDepts(prev => ({ ...prev, [deptId]: !prev[deptId] }));
   };
 
-  const persistApprovalDecision = async (item: PendingApprovalItem, action: "approve" | "reject") => {
-    const numericId = Number(item.id);
-    if (Number.isInteger(numericId)) {
-      try {
-        if (action === "approve") await hrGovernanceApi.approve(numericId);
-        else await hrGovernanceApi.reject(numericId);
-      } catch (err) {
-        console.warn("Unable to persist HR approval decision:", err);
-        return;
-      }
-    }
-    setPendingApprovals(prev => prev.filter(p => p.id !== item.id));
-    setLeaveRequests(prev =>
-      prev.map(r => (r.employeeName === item.name && r.status === "pending" ? { ...r, status: action === "approve" ? "approved" : "rejected", approver: userProfile?.full_name ? `${userProfile.full_name} (${employeeRoleLabel(userProfile.role)})` : "Quản lý nhân sự" } : r))
-    );
-    showToast(action === "approve" ? `Đã duyệt yêu cầu của ${item.name}!` : `Đã từ chối yêu cầu của ${item.name}.`);
-  };
-
-  const handleApproveRequest = (item: PendingApprovalItem) => { void persistApprovalDecision(item, "approve"); };
-  const handleRejectRequest = (item: PendingApprovalItem) => { void persistApprovalDecision(item, "reject"); };
-
   const handleUpdateShift = async (newShift: ShiftType) => {
     if (!editingShift) return;
     const cell = scheduleData.flatMap(group => group.employees).find(employee => employee.id === editingShift.employeeId)?.shifts[editingShift.dayIndex];
-    if (!cell?.isoDate || newShift === "off") {
-      showToast("Không thể xóa ca từ biểu mẫu này.");
+    if (!cell?.isoDate) {
+      showToast("Không tìm thấy ngày phân ca cần cập nhật.");
+      return;
+    }
+    if (newShift === "off") {
+      if (!cell.shiftId) {
+        setEditingShift(null);
+        return;
+      }
+      try {
+        await hrGovernanceApi.updateShiftStatus(cell.shiftId, "CANCELLED");
+        setScheduleData(previous => previous.map(dept => ({
+          ...dept,
+          employees: dept.employees.map(employee => {
+            if (employee.id !== editingShift.employeeId) return employee;
+            const updatedShifts = [...employee.shifts];
+            updatedShifts[editingShift.dayIndex] = { ...updatedShifts[editingShift.dayIndex], shift: "off", shiftId: undefined };
+            return { ...employee, shifts: updatedShifts };
+          }),
+        })));
+        setEditingShift(null);
+        showToast(`Đã hủy ca trực của ${editingShift.employeeName}.`);
+      } catch (error) {
+        console.warn("Unable to cancel assigned shift:", error);
+        showToast("Không thể hủy ca trực. Vui lòng thử lại.");
+      }
       return;
     }
     const ranges: Record<Exclude<ShiftType, "off">, { code: string; start: string; end: string }> = {
       morning: { code: "MORNING", start: "06:00:00", end: "14:00:00" },
       afternoon: { code: "AFTERNOON", start: "14:00:00", end: "22:00:00" },
-      night: { code: "NIGHT", start: "22:00:00", end: "23:59:59" },
+      night: { code: "NIGHT", start: "22:00:00", end: "06:00:00" },
     };
     const range = ranges[newShift];
+    const endDate = new Date(`${cell.isoDate}T12:00:00`);
+    if (newShift === "night") endDate.setDate(endDate.getDate() + 1);
+    const startsAt = `${cell.isoDate}T${range.start}`;
+    const endsAt = `${localDateValue(endDate)}T${range.end}`;
+    let savedShiftId = cell.shiftId;
     try {
       if (cell.shiftId) {
-        await hrGovernanceApi.updateShift(cell.shiftId, { shift_date: cell.isoDate, shift_code: range.code, starts_at: `${cell.isoDate}T${range.start}`, ends_at: `${cell.isoDate}T${range.end}` });
+        const saved = await hrGovernanceApi.updateShift(cell.shiftId, { shift_date: cell.isoDate, shift_code: range.code, starts_at: startsAt, ends_at: endsAt });
+        savedShiftId = saved.id;
       } else {
-        await hrGovernanceApi.assignShift({ employee_id: editingShift.employeeId, shift_date: cell.isoDate, shift_code: range.code, starts_at: `${cell.isoDate}T${range.start}`, ends_at: `${cell.isoDate}T${range.end}` });
+        const saved = await hrGovernanceApi.assignShift({ employee_id: editingShift.employeeId, shift_date: cell.isoDate, shift_code: range.code, starts_at: startsAt, ends_at: endsAt });
+        savedShiftId = saved.id;
       }
     } catch (error) {
       console.warn("Unable to persist shift:", error);
-      showToast("Không thể lưu ca trực. Vui lòng thử lại.");
+      showToast(apiErrorMessage(error, "Không thể lưu ca trực. Vui lòng thử lại."));
       return;
     }
     setScheduleData(prev =>
@@ -482,7 +457,8 @@ export default function HRStation({ onBack }: Props) {
             const updatedShifts = [...emp.shifts];
             updatedShifts[editingShift.dayIndex] = {
               ...updatedShifts[editingShift.dayIndex],
-              shift: newShift
+              shift: newShift,
+              shiftId: savedShiftId,
             };
             return { ...emp, shifts: updatedShifts };
           }
@@ -494,19 +470,6 @@ export default function HRStation({ onBack }: Props) {
     setEditingShift(null);
   };
 
-  const handleCreateEmployee = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEmpForm.name || !newEmpForm.phone) {
-      alert("Vui lòng điền đầy đủ tên và số điện thoại.");
-      return;
-    }
-    try {
-      const roleMap: Record<string, string> = { reception: "FRONT_DESK", housekeeping: "HOUSEKEEPING", fnb: "KITCHEN", technical: "TECHNICAL" };
-      const result = await enterpriseApi.autoProvisionEmployee({ full_name: newEmpForm.name, role: roleMap[newEmpForm.departmentId] ?? "STAFF", phone: newEmpForm.phone, email: newEmpForm.email || `${newEmpForm.name.replace(/\s+/g, ".").toLowerCase()}@hotel.com` });
-      showToast(`Đã tạo ${result.employee_id}. Mật khẩu tạm: ${result.temporary_password}`);
-      setIsAddEmployeeModalOpen(false);
-    } catch (error) { showToast("Không thể tạo tài khoản nhân viên. Vui lòng thử lại."); }
-  };
 
   const handleSyncBiometrics = async () => {
     setIsSyncingBiometrics(true);
@@ -562,27 +525,73 @@ export default function HRStation({ onBack }: Props) {
     finally { setIsSyncingBiometrics(false); }
   };
 
+  const handleSaveAttendanceAdjustment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingAttendance) return;
+    setIsSavingAttendanceEdit(true);
+    try {
+      const rows = await enterpriseApi.importAttendance([{
+        employee_id: editingAttendance.employeeId,
+        work_date: attendanceDate,
+        clock_in: attendanceEditClockIn ? `${attendanceDate}T${attendanceEditClockIn}:00` : null,
+        clock_out: attendanceEditClockOut ? `${attendanceDate}T${attendanceEditClockOut}:00` : null,
+        status: attendanceEditStatus,
+        source: "MANUAL",
+        device_event_id: `HR-ADJUST-${editingAttendance.id}-${Date.now()}`,
+        note: "HR điều chỉnh theo xác nhận của quản lý.",
+      }]);
+      const saved = rows.find(row => row.employee_id === editingAttendance.employeeId && row.work_date === attendanceDate);
+      if (!saved) throw new Error("Máy chủ chưa xác nhận bản ghi chấm công đã điều chỉnh.");
+      const checkIn = saved.clock_in ? new Date(saved.clock_in).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—";
+      const checkOut = saved.clock_out ? new Date(saved.clock_out).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—";
+      const inTime = saved.clock_in ? new Date(saved.clock_in).getTime() : 0;
+      const outTime = saved.clock_out ? new Date(saved.clock_out).getTime() : 0;
+      const hours = inTime && outTime ? Math.max(0, (outTime - inTime) / 3_600_000) : 0;
+      const status: AttendanceRecord["status"] = saved.status === "ABSENT" ? "Vắng"
+        : saved.status === "ON_LEAVE" ? "Có phép" : saved.status === "LATE" ? "Đi muộn" : "Đúng giờ";
+      setAttendanceRecords(previous => previous.map(record => record.id === String(saved.id)
+        ? { ...record, checkIn, checkOut, workHours: hours ? `${hours.toFixed(1)} giờ` : "—", status, shiftName: "Điều chỉnh thủ công" }
+        : record));
+      setEditingAttendance(null);
+      showToast("Đã lưu điều chỉnh chấm công.");
+    } catch (error) {
+      console.warn("Unable to adjust attendance:", error);
+      showToast(error instanceof Error ? error.message : "Không thể lưu điều chỉnh chấm công.");
+    } finally {
+      setIsSavingAttendanceEdit(false);
+    }
+  };
+
+  const handleExportAttendance = () => {
+    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const lines = [
+      ["employee_id", "employee_name", "department", "work_date", "clock_in", "clock_out", "work_hours", "status"],
+      ...attendanceRecords.map(record => [record.employeeId, record.employeeName, record.department, attendanceDate, record.checkIn, record.checkOut, record.workHours, record.status]),
+    ].map(row => row.map(value => escapeCsv(String(value))).join(","));
+    const url = URL.createObjectURL(new Blob([`\uFEFF${lines.join("\r\n")}`], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `attendance-${attendanceDate}.csv`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const handleCreateLeaveRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     const employee = employees.find(item => item.name === newLeaveForm.employeeName);
-    const date = newLeaveForm.dateRange.split(/[–-]/)[0].trim();
-    const [day, month, year] = date.includes("/") ? date.split("/").map(Number) : [0, 0, 0];
-    if (!employee || !day || !month || !year) { showToast("Vui lòng chọn nhân viên và ngày nghỉ hợp lệ."); return; }
+    const start = new Date(`${newLeaveForm.startDate}T00:00:00`);
+    const end = new Date(`${newLeaveForm.endDate}T00:00:00`);
+    if (!employee || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+      showToast("Vui lòng chọn nhân viên và khoảng ngày nghỉ hợp lệ.");
+      return;
+    }
+    const totalDays = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
     const typeMap: Record<string, string> = { "Nghỉ phép năm": "ANNUAL", "Nghỉ ốm": "SICK", "Đổi ca trực": "SHIFT_CHANGE", "Việc riêng": "UNPAID" };
     try {
-      const row = await enterpriseApi.createLeave({ employee_id: employee.id, leave_type: typeMap[newLeaveForm.type] ?? "UNPAID", start_date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, end_date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, reason: newLeaveForm.reason || "Không ghi chú" });
-      setLeaveRequests(prev => [{ id: String(row.id), employeeName: employee.name, avatar: employee.avatar, department: employee.department, type: newLeaveForm.type, dateRange: `${row.start_date} – ${row.end_date}`, totalDays: "1 ngày", reason: row.reason, submittedAt: row.created_at, status: "pending" }, ...prev]);
+      const row = await enterpriseApi.createLeave({ employee_id: employee.id, leave_type: typeMap[newLeaveForm.type] ?? "UNPAID", start_date: newLeaveForm.startDate, end_date: newLeaveForm.endDate, reason: newLeaveForm.reason || "Không ghi chú" });
+      setLeaveRequests(prev => [{ id: String(row.id), employeeName: employee.name, avatar: employee.avatar, department: employee.department, type: newLeaveForm.type, dateRange: `${row.start_date} – ${row.end_date}`, totalDays: `${totalDays} ngày`, reason: row.reason, submittedAt: row.created_at, status: "pending" }, ...prev]);
       setIsCreateLeaveModalOpen(false); showToast("Đã gửi đơn nghỉ, chờ quản lý duyệt.");
     } catch (error) { showToast("Không thể tạo đơn nghỉ. Vui lòng thử lại."); }
-  };
-
-  const decideLeave = async (request: LeaveRequest, approve: boolean) => {
-    try {
-      const row = approve ? await enterpriseApi.approveLeave(Number(request.id)) : await enterpriseApi.rejectLeave(Number(request.id));
-      setLeaveRequests(prev => prev.map(item => item.id === request.id ? { ...item, status: approve ? "approved" : "rejected", approver: row.approver ?? "Quản lý" } : item));
-      setPendingApprovals(prev => prev.filter(item => item.name !== request.employeeName));
-      showToast(approve ? `Đã phê duyệt đơn ${request.id}.` : `Đã từ chối đơn ${request.id}.`);
-    } catch (error) { showToast("Không thể cập nhật đơn nghỉ. Vui lòng thử lại."); }
   };
 
   // Helper render for Shift Badge
@@ -720,17 +729,6 @@ export default function HRStation({ onBack }: Props) {
                         <span className="text-[10px] text-gray-400 mt-1 block">{leave.submittedAt || "Mới"}</span>
                       </div>
                     ))}
-                    {pendingApprovals.map(appr => (
-                      <div
-                        key={`appr-${appr.id}`}
-                        onClick={() => { setCurrentTab("schedule"); setShowNotifications(false); }}
-                        className="p-3 hover:bg-gray-50 cursor-pointer"
-                      >
-                        <p className="font-semibold text-gray-800">{appr.typeLabel || "Yêu cầu phê duyệt"}</p>
-                        <p className="text-gray-500 text-[11px] mt-0.5">{appr.name}: {appr.reason || appr.department}</p>
-                        <span className="text-[10px] text-gray-400 mt-1 block">{appr.date || "Mới"}</span>
-                      </div>
-                    ))}
                   </>
                 )}
               </div>
@@ -832,9 +830,9 @@ export default function HRStation({ onBack }: Props) {
         >
           <FileText className={`w-4 h-4 ${currentTab === "leaves" ? "text-[#008A4B]" : "text-gray-400"}`} />
           <span>Đơn nghỉ phép</span>
-          {pendingApprovals.length > 0 && (
+          {pendingLeaves.length > 0 && (
             <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-              {pendingApprovals.length}
+              {pendingLeaves.length}
             </span>
           )}
         </button>
@@ -1045,7 +1043,7 @@ export default function HRStation({ onBack }: Props) {
                 const Icon = dept.icon;
                 const isCollapsed = collapsedDepts[dept.id];
                 return (
-                  <div key={dept.id} className="contents">
+                  <Fragment key={dept.id}>
                     {/* Department Header Row */}
                     <tr className="border-t border-gray-100 bg-gray-50/50">
                       <td colSpan={8} className="py-2 px-3">
@@ -1116,7 +1114,7 @@ export default function HRStation({ onBack }: Props) {
                           })}
                         </tr>
                       ))}
-                  </div>
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -1173,14 +1171,14 @@ export default function HRStation({ onBack }: Props) {
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-800 mb-3">
               <Clock className="w-4 h-4 text-blue-500" />
-              <span>Đang chờ duyệt nghỉ phép ({pendingApprovals.length})</span>
+              <span>Đang chờ Quản lý/Giám đốc duyệt ({pendingLeaves.length})</span>
             </div>
 
-            {pendingApprovals.length === 0 ? (
+            {pendingLeaves.length === 0 ? (
               <p className="text-xs text-gray-400 italic py-3 text-center">Không có yêu cầu chờ duyệt.</p>
             ) : (
               <div className="space-y-4">
-                {pendingApprovals.map(item => (
+                {pendingLeaves.map(item => (
                   <div
                     key={item.id}
                     className="p-3 rounded-xl bg-gray-50/70 border border-gray-100 hover:border-gray-200 transition-colors"
@@ -1190,19 +1188,19 @@ export default function HRStation({ onBack }: Props) {
                       <div className="flex items-center gap-2">
                         <img
                           src={item.avatar}
-                          alt={item.name}
+                          alt={item.employeeName}
                           className="w-7 h-7 rounded-full object-cover"
                         />
                         <div>
-                          <p className="text-xs font-semibold text-gray-900">{item.name}</p>
+                          <p className="text-xs font-semibold text-gray-900">{item.employeeName}</p>
                           <p className="text-[10px] text-gray-400">{item.department}</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <span className="text-[11px] font-semibold text-gray-700 block">
-                          {item.typeLabel}
+                          {item.type}
                         </span>
-                        <span className="text-[10px] text-gray-400">{item.date}</span>
+                        <span className="text-[10px] text-gray-400">{item.dateRange}</span>
                       </div>
                     </div>
 
@@ -1211,20 +1209,8 @@ export default function HRStation({ onBack }: Props) {
                       "{item.reason}"
                     </p>
 
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-2 mt-3 pt-2 border-t border-gray-200/50">
-                      <button
-                        onClick={() => handleApproveRequest(item)}
-                        className="flex-1 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-medium transition-colors cursor-pointer text-center shadow-xs"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleRejectRequest(item)}
-                        className="flex-1 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-300 rounded-lg text-xs font-medium transition-colors cursor-pointer text-center"
-                      >
-                        Reject
-                      </button>
+                    <div className="mt-3 pt-2 border-t border-gray-200/50 text-[11px] font-medium text-blue-700">
+                      Chờ Quản lý hoặc Giám đốc duyệt
                     </div>
                   </div>
                 ))}
@@ -1438,7 +1424,7 @@ export default function HRStation({ onBack }: Props) {
             >
               <div className="flex items-center gap-2">
                 <Plus className="w-4 h-4 text-emerald-600" />
-                <span>Thêm nhân viên mới</span>
+                <span>Tiếp nhận nhân viên mới</span>
               </div>
               <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
             </button>
@@ -1548,7 +1534,7 @@ export default function HRStation({ onBack }: Props) {
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer shadow-xs"
           >
             <Plus className="w-4 h-4" />
-            <span>Thêm nhân viên mới</span>
+            <span>Tiếp nhận nhân viên mới</span>
           </button>
         </div>
       </div>
@@ -1736,7 +1722,8 @@ export default function HRStation({ onBack }: Props) {
           </label>
 
           <button
-            onClick={() => showToast("Đang tải bảng chấm công Excel...")}
+            onClick={handleExportAttendance}
+            disabled={attendanceRecords.length === 0}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer shadow-2xs"
           >
             <Download className="w-3.5 h-3.5 text-gray-500" />
@@ -1755,8 +1742,8 @@ export default function HRStation({ onBack }: Props) {
                   <th className="py-3 px-4">Nhân viên</th>
                   <th className="py-3 px-4">Bộ phận</th>
                   <th className="py-3 px-4">Ca trực</th>
-                  <th className="py-3 px-4">Nhận phòng</th>
-                  <th className="py-3 px-4">Trả phòng</th>
+                  <th className="py-3 px-4">Giờ vào</th>
+                  <th className="py-3 px-4">Giờ ra</th>
                   <th className="py-3 px-4">Tổng giờ</th>
                   <th className="py-3 px-4">Đi muộn</th>
                   <th className="py-3 px-4">Trạng thái</th>
@@ -1807,7 +1794,12 @@ export default function HRStation({ onBack }: Props) {
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       <button
-                        onClick={() => showToast(`Mở hộp thoại điều chỉnh giờ công cho ${rec.employeeName}`)}
+                        onClick={() => {
+                          setEditingAttendance(rec);
+                          setAttendanceEditClockIn(rec.checkIn === "—" ? "" : rec.checkIn);
+                          setAttendanceEditClockOut(rec.checkOut === "—" ? "" : rec.checkOut);
+                          setAttendanceEditStatus(rec.status === "Vắng" ? "ABSENT" : rec.status === "Có phép" ? "ON_LEAVE" : rec.status === "Đi muộn" ? "LATE" : "PRESENT");
+                        }}
                         className="text-xs text-gray-500 hover:text-emerald-700 font-medium cursor-pointer"
                       >
                         Sửa
@@ -1966,20 +1958,9 @@ export default function HRStation({ onBack }: Props) {
             {/* Right: Actions / Status */}
             <div className="flex items-center gap-2 self-end md:self-center">
               {req.status === "pending" ? (
-                <>
-                  <button
-                    onClick={() => void decideLeave(req, true)}
-                    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-xs"
-                  >
-                    Phê duyệt
-                  </button>
-                  <button
-                    onClick={() => void decideLeave(req, false)}
-                    className="px-4 py-2 bg-white hover:bg-red-50 text-red-600 border border-red-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    Từ chối
-                  </button>
-                </>
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
+                  Chờ Quản lý/Giám đốc duyệt
+                </span>
               ) : req.status === "approved" ? (
                 <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
                   <Check className="w-3.5 h-3.5" /> Đã duyệt
@@ -2065,150 +2046,13 @@ export default function HRStation({ onBack }: Props) {
     </div>
   );
 
-  // Modal: Add Employee
+  // Employee accounts are created only by roles with EMPLOYEE_PROVISION.
   const AddEmployeeModal = isAddEmployeeModalOpen && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4 animate-in fade-in">
-      <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-gray-100 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
-          <div>
-            <h3 className="font-serif font-bold text-gray-900 text-base">Thêm hồ sơ nhân viên mới</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Nhập đầy đủ thông tin nhân sự để lưu vào hệ thống khách sạn</p>
-          </div>
-          <button
-            onClick={() => setIsAddEmployeeModalOpen(false)}
-            className="text-gray-400 hover:text-gray-600 cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleCreateEmployee} className="space-y-4 text-xs">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Họ và tên *</label>
-              <input
-                type="text"
-                required
-                value={newEmpForm.name}
-                onChange={e => setNewEmpForm({ ...newEmpForm, name: e.target.value })}
-                placeholder="VD: Nguyễn Văn Hoàng"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Giới tính</label>
-              <select
-                value={newEmpForm.gender}
-                onChange={e => setNewEmpForm({ ...newEmpForm, gender: e.target.value as any })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              >
-                <option value="Nữ">Nữ</option>
-                <option value="Nam">Nam</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Số điện thoại *</label>
-              <input
-                type="tel"
-                required
-                value={newEmpForm.phone}
-                onChange={e => setNewEmpForm({ ...newEmpForm, phone: e.target.value })}
-                placeholder="0912 345 678"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Email</label>
-              <input
-                type="email"
-                value={newEmpForm.email}
-                onChange={e => setNewEmpForm({ ...newEmpForm, email: e.target.value })}
-                placeholder="hoang.nguyen@hotel.com"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Bộ phận</label>
-              <select
-                value={newEmpForm.departmentId}
-                onChange={e => {
-                  const val = e.target.value;
-                  const deptMap: Record<string, { name: string; role: string }> = {
-                    reception: { name: "Bộ phận Lễ tân", role: "Nhân viên Lễ tân" },
-                    housekeeping: { name: "Bộ phận Buồng phòng", role: "Nhân viên Buồng phòng" },
-                    fnb: { name: "Bộ phận Bếp & Nhà hàng", role: "Nhân viên Bếp / Phục vụ" },
-                    technical: { name: "Bộ phận Kỹ thuật", role: "Kỹ thuật viên bảo trì" },
-                  };
-                  setNewEmpForm({
-                    ...newEmpForm,
-                    departmentId: val,
-                    department: deptMap[val].name,
-                    role: deptMap[val].role
-                  });
-                }}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              >
-                <option value="reception">Bộ phận Lễ tân</option>
-                <option value="housekeeping">Bộ phận Buồng phòng</option>
-                <option value="fnb">Bộ phận Bếp & Nhà hàng</option>
-                <option value="technical">Bộ phận Kỹ thuật</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Chức danh</label>
-              <input
-                type="text"
-                value={newEmpForm.role}
-                onChange={e => setNewEmpForm({ ...newEmpForm, role: e.target.value })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Loại hợp đồng</label>
-              <select
-                value={newEmpForm.contractType}
-                onChange={e => setNewEmpForm({ ...newEmpForm, contractType: e.target.value as any })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              >
-                <option value="Thử việc">Thử việc (2 tháng)</option>
-                <option value="Chính thức">Chính thức (1 năm / Không thời hạn)</option>
-                <option value="Thời vụ">Thời vụ / Bán thời gian</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Ngày bắt đầu làm việc</label>
-              <input
-                type="date"
-                value={newEmpForm.joinDate}
-                onChange={e => setNewEmpForm({ ...newEmpForm, joinDate: e.target.value })}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setIsAddEmployeeModalOpen(false)}
-              className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
-            >
-              Hủy bỏ
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer shadow-xs"
-            >
-              Lưu hồ sơ
-            </button>
-          </div>
-        </form>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div role="dialog" aria-modal="true" aria-labelledby="employee-access-title" className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+        <h3 id="employee-access-title" className="font-serif font-bold text-gray-900">Tiếp nhận nhân viên mới</h3>
+        <p className="mt-3 text-sm leading-6 text-gray-600">HR không có quyền cấp tài khoản hoặc chọn role. Vui lòng đề nghị MANAGER, ADMIN hoặc DIRECTOR cấp tài khoản theo phạm vi quyền. Nhân viên đã được cấp tài khoản sẽ xuất hiện trong danh sách hồ sơ để HR quản lý lịch, chấm công và nghỉ phép.</p>
+        <button type="button" onClick={() => setIsAddEmployeeModalOpen(false)} className="mt-5 px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm">Đã hiểu</button>
       </div>
     </div>
   );
@@ -2337,6 +2181,7 @@ export default function HRStation({ onBack }: Props) {
               }}
               className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
             >
+              <option value="">Chọn nhân viên</option>
               {employees.map(emp => (
                 <option key={emp.id} value={emp.name}>
                   {emp.name} ({emp.department})
@@ -2362,26 +2207,29 @@ export default function HRStation({ onBack }: Props) {
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-gray-700 font-semibold mb-1">Thời gian xin nghỉ</label>
+              <label className="block text-gray-700 font-semibold mb-1">Từ ngày *</label>
               <input
-                type="text"
-                value={newLeaveForm.dateRange}
-                onChange={e => setNewLeaveForm({ ...newLeaveForm, dateRange: e.target.value })}
-                placeholder="DD/MM/YYYY"
+                type="date"
+                required
+                min={localDateValue()}
+                value={newLeaveForm.startDate}
+                onChange={e => setNewLeaveForm(previous => ({ ...previous, startDate: e.target.value, endDate: previous.endDate < e.target.value ? e.target.value : previous.endDate }))}
                 className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
             <div>
-              <label className="block text-gray-700 font-semibold mb-1">Số lượng</label>
+              <label className="block text-gray-700 font-semibold mb-1">Đến ngày *</label>
               <input
-                type="text"
-                value={newLeaveForm.totalDays}
-                onChange={e => setNewLeaveForm({ ...newLeaveForm, totalDays: e.target.value })}
-                placeholder="1 ngày"
+                type="date"
+                required
+                min={newLeaveForm.startDate}
+                value={newLeaveForm.endDate}
+                onChange={e => setNewLeaveForm({ ...newLeaveForm, endDate: e.target.value })}
                 className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
           </div>
+          <p className="-mt-3 text-[11px] text-gray-500">Thời lượng: {Math.max(1, Math.floor((new Date(`${newLeaveForm.endDate}T00:00:00`).getTime() - new Date(`${newLeaveForm.startDate}T00:00:00`).getTime()) / 86_400_000) + 1)} ngày</p>
 
           <div>
             <label className="block text-gray-700 font-semibold mb-1">Lý do chi tiết</label>
@@ -2411,6 +2259,36 @@ export default function HRStation({ onBack }: Props) {
           </div>
         </form>
       </div>
+    </div>
+  );
+
+  const AttendanceEditModal = editingAttendance && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation">
+      <form onSubmit={handleSaveAttendanceAdjustment} role="dialog" aria-modal="true" aria-labelledby="attendance-edit-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+        <h3 id="attendance-edit-title" className="font-serif text-lg font-bold text-gray-900">Điều chỉnh chấm công</h3>
+        <p className="mt-1 text-xs text-gray-500">{editingAttendance.employeeName} · {editingAttendance.employeeId} · {attendanceDate}</p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <label className="text-xs font-semibold text-gray-700">Giờ vào
+            <input type="time" value={attendanceEditClockIn} onChange={event => setAttendanceEditClockIn(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+          </label>
+          <label className="text-xs font-semibold text-gray-700">Giờ ra
+            <input type="time" value={attendanceEditClockOut} onChange={event => setAttendanceEditClockOut(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+          </label>
+        </div>
+        <label className="mt-3 block text-xs font-semibold text-gray-700">Trạng thái
+          <select value={attendanceEditStatus} onChange={event => setAttendanceEditStatus(event.target.value as ApiAttendanceRecord["status"])} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
+            <option value="PRESENT">Đúng giờ</option>
+            <option value="LATE">Đi muộn</option>
+            <option value="ABSENT">Vắng</option>
+            <option value="ON_LEAVE">Có phép</option>
+          </select>
+        </label>
+        <p className="mt-3 text-[11px] leading-5 text-gray-500">Điều chỉnh được ghi vào lịch sử chấm công với nguồn thủ công và người thao tác hiện tại.</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={() => setEditingAttendance(null)} disabled={isSavingAttendanceEdit} className="rounded-lg bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-700">Hủy</button>
+          <button type="submit" disabled={isSavingAttendanceEdit} className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{isSavingAttendanceEdit ? "Đang lưu…" : "Lưu điều chỉnh"}</button>
+        </div>
+      </form>
     </div>
   );
 
@@ -2466,6 +2344,7 @@ export default function HRStation({ onBack }: Props) {
       {AddEmployeeModal}
       {EmployeeDetailModal}
       {CreateLeaveModal}
+      {AttendanceEditModal}
     </div>
   );
 }

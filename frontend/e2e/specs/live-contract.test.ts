@@ -287,8 +287,9 @@ describe("live backend E2E contract proof", () => {
 
     const bookingBody = {
       rental_type: "PACKAGE",
-      rooms: [{ room_id: value("E2E_CUSTOMER_ROOM_ID")!, expected_check_in: localDateTime(label, "E2E_CUSTOMER_CHECK_IN"), expected_check_out: localDateTime(label, "E2E_CUSTOMER_CHECK_OUT") }],
-      idempotency_key: `customer-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      payment_method: "VNPAY",
+      rooms: [{ room_id: value("E2E_CUSTOMER_ROOM_ID")!, expected_check_in: localDateTime(label, "E2E_CUSTOMER_CHECK_IN"), expected_check_out: localDateTime(label, "E2E_CUSTOMER_CHECK_OUT"), guest_count: 1 }],
+      idempotency_key: idempotencyKey("customer"),
     };
     const created = await request("/api/customer/reservations", { method: "POST", body: safeJson(bookingBody) }, token);
     expectStatus(created, 201, "customer booking creation");
@@ -501,9 +502,9 @@ describe("live backend E2E contract proof", () => {
     expect(Number(jsonObject(activated.body, "manager price activation response").price)).toBe(newPrice);
   });
 
-  liveTest("Accounting payment and refund contract blocker", true, [
+  liveTest("Accounting payment, Director-approved refund, and replay", true, [
     "E2E_API_BASE_URL", "E2E_ACCOUNTING_EMPLOYEE_ID", "E2E_ACCOUNTING_PASSWORD", "E2E_ACCOUNTING_INVOICE_ID",
-    "E2E_ACCOUNTING_PAYMENT_AMOUNT", "E2E_ACCOUNTING_REFUND_AMOUNT",
+    "E2E_ACCOUNTING_PAYMENT_AMOUNT", "E2E_ACCOUNTING_REFUND_AMOUNT", "E2E_DIRECTOR_EMPLOYEE_ID", "E2E_DIRECTOR_PASSWORD",
   ], async () => {
     const label = "accounting payment/refund";
     distinct(label, "E2E_ACCOUNTING_EMPLOYEE_ID", "E2E_DIRECTOR_EMPLOYEE_ID");
@@ -526,6 +527,33 @@ describe("live backend E2E contract proof", () => {
     });
     expectStatus(unapproved, 422, "accounting refund remains blocked without approval binding");
     expect(jsonObject(unapproved.body, "unapproved refund response").code).toBe("APPROVAL_REQUIRED");
+
+    const refundKey = idempotencyKey("acct-refund");
+    const refundBody = { amount: refundAmount, method: "CASH", type: "REFUND", reference: "E2E-DIRECTOR-APPROVED-REFUND" };
+    const payload = JSON.stringify({ invoice_id: invoiceId, idempotency_key: refundKey, method: refundBody.method, type: refundBody.type, reference: refundBody.reference });
+    const requested = await request("/api/governance/approvals", { method: "POST", body: safeJson({
+      action: "PAYMENT_REFUND", target_id: String(invoiceId), payload, amount: refundAmount,
+      reason: "E2E approved refund", idempotency_key: idempotencyKey("acct-request"),
+    }) }, accountingToken);
+    expectStatus(requested, 201, "accounting refund approval request");
+    const approvalId = Number(jsonObject(requested.body).id);
+    const directorToken = await employeeToken("E2E_DIRECTOR_EMPLOYEE_ID", "E2E_DIRECTOR_PASSWORD", label, "DIRECTOR");
+    const approved = await mutation(`/api/governance/approvals/${approvalId}/approve`, directorToken, idempotencyKey("director"), "director refund approval");
+    expectStatus(approved, 200, "director approves refund");
+    expect(jsonObject(approved.body).approver).toBe(value("E2E_DIRECTOR_EMPLOYEE_ID"));
+    const refunded = await mutation(`/api/invoices/${invoiceId}/payments`, accountingToken, refundKey, "approved accounting refund", refundBody);
+    expectStatus(refunded, 200, "approved refund");
+    const refundRow = assertActor(refunded, "actor_id", accountingId, "approved refund");
+    expect(refundRow.type).toBe("REFUND");
+    expect(Number(refundRow.amount)).toBe(refundAmount);
+    expect(String(refundRow.reference)).toMatch(/^REFUND_OF:\d+:/);
+    const replay = await mutation(`/api/invoices/${invoiceId}/payments`, accountingToken, refundKey, "approved refund replay", refundBody);
+    expectStatus(replay, 200, "approved refund replay");
+    expect(jsonObject(replay.body).id).toBe(refundRow.id);
+    const rows = await request(`/api/governance/approvals?status=CONSUMED&action=PAYMENT_REFUND&target_id=${invoiceId}`, undefined, directorToken);
+    expectStatus(rows, 200, "director reads consumed approval");
+    const consumed = filteredApprovalRows(rows.body, "refund approvals").find(row => jsonObject(row).id === approvalId);
+    expect(jsonObject(consumed).consumed_at).toEqual(expect.any(String));
   });
 
   liveTest("HR/Admin permission ceiling", false, [
@@ -550,6 +578,17 @@ describe("live backend E2E contract proof", () => {
     expectStatus(provision, 403, "HR cannot provision employee accounts");
     const hrShifts = await request("/api/hr/shifts", undefined, hrToken);
     expectStatus(hrShifts, 200, "HR retains HR read access");
+  });
+
+  liveTest("Staff basic read and financial permission ceiling", false, [
+    "E2E_API_BASE_URL", "E2E_STAFF_EMPLOYEE_ID", "E2E_STAFF_PASSWORD",
+  ], async () => {
+    const token = await employeeToken("E2E_STAFF_EMPLOYEE_ID", "E2E_STAFF_PASSWORD", "staff basic read", "STAFF");
+    const rooms = await request("/api/rooms", undefined, token);
+    expectStatus(rooms, 200, "staff basic room read");
+    expect(jsonArray(rooms.body).length).toBeGreaterThan(0);
+    const approvals = await request("/api/governance/approvals", undefined, token);
+    expectStatus(approvals, 403, "staff cannot access approvals");
   });
 
   afterAll(() => {

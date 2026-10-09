@@ -153,10 +153,11 @@ permissions từ client.
 | `GET /api/public/rooms/availability` | Query bắt buộc `from`, `to`; tùy chọn `type`, `page`, `size` | Public; availability cùng metadata catalog và ảnh riêng theo phòng, `Cache-Control: no-store` |
 | `GET /api/public/services` | Query `page` default 0, `size` default 20 | Public; DTO gồm `category`, `description`, `image_url`; cache 30s |
 | `POST /api/public/payment-callbacks/deposit` | Body `provider_event_id`, `payment_code`, `amount`, `reference`, `status`; header `X-Payment-Signature` | Public provider route; HMAC hợp lệ mới được nhận |
-| `POST /api/customer/reservations` | Body `rental_type`, `rooms[]`, `idempotency_key`; room item `room_id`, `expected_check_in`, `expected_check_out`, `guest_count` | `CUSTOMER`; 201, tối đa 3 phòng, guest lấy từ JWT |
+| `POST /api/customer/reservations` | Body `rental_type`, `rooms[]`, `idempotency_key`; room item `room_id`, `expected_check_in`, `expected_check_out`, `guest_count` | `CUSTOMER`; 201, room count follows `customer-policy.md` §3, guest lấy từ JWT |
 | `GET /api/customer/reservations` | Không body | `CUSTOMER`; chỉ booking của customer |
 | `GET /api/customer/reservations/{id}` | Path `id` | `CUSTOMER`; ownership enforced |
 | `GET /api/customer/reservations/{id}/deposit-payment` | Path `id` | `CUSTOMER`; payment instruction của chính booking |
+| `POST /api/customer/reservations/{id}/stay-change` | Body `type` (`EXTEND` hoặc `RESCHEDULE`), `new_check_in`, `new_check_out`; header bắt buộc `Idempotency-Key` | `CUSTOMER`; trước check-in hơn 48 giờ, phòng trống/sẵn sàng; `EXTEND` nối đúng checkout cũ và chờ cọc bổ sung, `RESCHEDULE` giữ nguyên số đêm |
 | `POST /api/customer/service-bookings` | Body `reservation_id`, `room_id`, `service_id`, `scheduled_at`, `quantity`, tùy chọn `meal_period`, `note`; header `Idempotency-Key` | `CUSTOMER`; 201, booking phòng đã xác nhận cọc; không cho khách ngoài hay đặt trước hồ bơi |
 | `GET /api/customer/service-bookings` | Query `reservation_id` | `CUSTOMER`; chỉ dịch vụ của booking thuộc tài khoản |
 | `POST /api/customer/service-bookings/{id}/cancel` | Path `id` | `CUSTOMER`; chỉ hủy dịch vụ chưa dùng của chính mình |
@@ -208,12 +209,10 @@ nhận.
 | `GET /api/reservations` | Query `status`, `guest_id`, `page` default 0, `size` default 20 | `RESERVATION_READ`; page response |
 | `GET /api/reservations/{id}` | Path `id` | `RESERVATION_READ`; scope actor trừ global-read role |
 | `POST /api/reservations/{id}/confirm` | Không body; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE`; `DRAFT → CONFIRMED` |
-| `PATCH /api/reservations/{id}` | Body `rooms[]`, `deposit`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
 | `POST /api/reservations/{id}/check-in` | Body tùy chọn `at`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
 | `POST /api/reservations/{id}/check-out` | Body `at`, `payment_method`; header bắt buộc `Idempotency-Key` | `RESERVATION_CHECKOUT`; trả invoice |
 | `POST /api/reservations/{id}/cancel` | Body `reason`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
 | `POST /api/reservations/{id}/no-show` | Không body; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
-| `POST /api/reservations/{id}/extend` | Body `new_expected_check_out`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
 | `POST /api/reservations/{id}/services` | Body `service_id`, `quantity`, `used_at`, `room_id`, `meal_period` nếu là MaM Restaurant; header bắt buộc `Idempotency-Key` | `RESERVATION_SERVICE_WRITE`; ghi dịch vụ đã dùng, áp dụng hạn mức miễn phí |
 | `GET /api/reservations/{id}/service-bookings` | Path `id` | `RESERVATION_SERVICE_WRITE`; danh sách dịch vụ khách đặt trước |
 | `POST /api/reservations/{id}/service-bookings/{bookingId}/use` | Path `id`, `bookingId` | `RESERVATION_SERVICE_WRITE`; chỉ xác nhận `USED` khi booking đã `CHECKED_IN` |
@@ -344,13 +343,24 @@ generic PATCH. Create/update/accept/release đều yêu cầu `Idempotency-Key` 
 | `GET /api/finance/partner-debts/{id}/settlements` | Path `id` | `FINANCE_READ` |
 | `GET /api/finance/ledger` | Query `entry_type`, `from`, `to`, `page` default 0, `size` default 20 | `FINANCE_READ` |
 | `GET /api/finance/reconciliation` | Query `from`, `to` | `FINANCE_READ` |
-| `GET /api/finance/payments` | Query `invoice_id`, `method`, `type`, `status`, `from`, `to`, `page`, `size` | `FINANCE_READ` |
+| `GET /api/finance/payments` | Query `invoice_id`, `method`, `type`, `status`, `from`, `to`, `search`, `page`, `size` | `FINANCE_READ` |
 | `GET /api/finance/receipts` | Query `invoice_id`, `method`, `issued_by`, `from`, `to`, `page`, `size` | `FINANCE_READ` |
 | `GET /api/hr/shifts` | Query hiện bind `date`, `to`, `employeeId` | `SHIFT_READ` |
 | `GET /api/hr/shifts/coverage` | Query `date`, `shiftCode`, `minimum_staff` | `SHIFT_READ` |
 | `POST /api/hr/shifts` | Body `employee_id`, `shift_date`, `shift_code`, `starts_at`, `ends_at` | `SHIFT_WRITE`; actor được ghi nhận bởi service, không có idempotency header |
 | `PATCH /api/hr/shifts/{id}/status` | Body `status` | `SHIFT_WRITE` |
 | `PUT /api/hr/shifts/{id}` | Body `shift_date`, `shift_code`, `starts_at`, `ends_at` | `SHIFT_WRITE` |
+
+`GET /api/finance/payments` phân trang tại SQL Server: `page` bắt đầu từ 0,
+`size` mặc định 20 và tối đa 100; trả `items`, `page`, `size`,
+`total_elements`, `total_pages`, `method_counts`. Mỗi item có thêm
+`reservation_id` và `service_total` để bảng kế toán không phải tải toàn bộ
+hóa đơn. `search` là chuỗi tìm kiếm literal tối đa 200 ký tự, áp dụng trước
+phân trang trên mã giao dịch/hóa đơn/booking, tham chiếu, phương thức và mô tả.
+`method_counts` dùng cùng phạm vi ngày/tìm kiếm nhưng không bị lọc bởi `method`.
+Kết quả sắp theo thời điểm giảm dần, rồi ID giảm dần. `reconciliation` có thêm
+`completed_transactions` của khoảng ngày đã chọn và `pending_bank_transfers`
+trên toàn bộ hóa đơn còn chờ, không giới hạn ở trang dữ liệu đang xem.
 
 `unit` của dịch vụ là nhãn hiển thị dạng chuỗi, không phải enum hoặc mã API ổn
 định. Giá trị bỏ trống được chuẩn hóa thành `lần`. Các bí danh đầu vào cũ
@@ -440,7 +450,7 @@ SQL Server 2022 thật, không bỏ qua acceptance test:
 1. Khởi động SQL Server 2022 bằng `docker-compose.yml` hoặc CI service, với
    `MIGRATION_TEST_DB_URL`, `MIGRATION_TEST_DB_USERNAME`,
    `MIGRATION_TEST_DB_PASSWORD` trỏ tới schema sạch.
-2. Chạy Flyway thật với canonical demo baseline `V1` trên database rỗng;
+2. Chạy toàn bộ chuỗi Flyway migration, bắt đầu từ baseline `V1`, trên database rỗng;
    `spring.flyway.enabled=true`.
 3. Chạy ứng dụng/test với `spring.jpa.hibernate.ddl-auto=validate` (không
    `create`, `create-drop` hay `update`). `application.yml` production đã đặt

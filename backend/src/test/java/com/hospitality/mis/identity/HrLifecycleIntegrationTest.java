@@ -4,7 +4,6 @@ import com.hospitality.mis.common.exception.DomainException;
 import com.hospitality.mis.dao.governance.AuditLogRepository;
 import com.hospitality.mis.dao.identity.EmployeeLoginEventRepository;
 import com.hospitality.mis.dao.identity.EmployeeRepository;
-import com.hospitality.mis.dao.identity.EmployeeShiftRepository;
 import com.hospitality.mis.dto.auth.EmployeeAdminDtos;
 import com.hospitality.mis.dto.identity.EmployeeShiftDtos;
 import com.hospitality.mis.entity.identity.Employee;
@@ -29,16 +28,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Integration proof for HR lifecycle, role authority, login history and shift rules. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:hr-lifecycle;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 class HrLifecycleIntegrationTest {
     @Autowired EmployeeRepository employees;
     @Autowired EmployeeLoginEventRepository loginEvents;
-    @Autowired EmployeeShiftRepository shifts;
     @Autowired AuditLogRepository audits;
     @Autowired JdbcTemplate jdbc;
     @Autowired EmployeeService employeeService;
@@ -63,21 +61,21 @@ class HrLifecycleIntegrationTest {
     void employeeLifecyclePersistsLeaveAndTerminationAndDoesNotExposePassword() {
         Employee director = saveEmployee("DIRECT01", EmployeeRole.DIRECTOR);
         authenticate(director.getEmployeeId(), EmployeeRole.DIRECTOR);
-        Employee target = employeeService.provision("HR0001", "HR employee", "valid-password",
+        var target = employeeService.provision("HR0001", "HR employee", "valid-password",
                 EmployeeRole.HR, "0909000101", "HR office");
 
-        EmployeeAdminDtos.Response onLeave = employeeService.setEmployment(target.getEmployeeId(),
+        EmployeeAdminDtos.Response onLeave = employeeService.setEmployment(target.employeeId(),
                 new EmployeeAdminDtos.EmploymentRequest(Employee.EmploymentStatus.ON_LEAVE,
                         LocalDate.of(2026, 9, 20), LocalDate.of(2026, 9, 22)));
         assertThat(onLeave.employmentStatus()).isEqualTo(Employee.EmploymentStatus.ON_LEAVE);
         assertThat(onLeave.leaveStart()).isEqualTo(LocalDate.of(2026, 9, 20));
         assertThat(onLeave.leaveEnd()).isEqualTo(LocalDate.of(2026, 9, 22));
 
-        EmployeeAdminDtos.Response terminated = employeeService.setEmployment(target.getEmployeeId(),
+        EmployeeAdminDtos.Response terminated = employeeService.setEmployment(target.employeeId(),
                 new EmployeeAdminDtos.EmploymentRequest(Employee.EmploymentStatus.TERMINATED, null, null));
         assertThat(terminated.employmentStatus()).isEqualTo(Employee.EmploymentStatus.TERMINATED);
         assertThat(terminated.enabled()).isFalse();
-        assertThat(employeeService.detail(target.getEmployeeId()).employeeId()).isEqualTo(target.getEmployeeId());
+        assertThat(employeeService.detail(target.employeeId()).employeeId()).isEqualTo(target.employeeId());
     }
 
     @Test
@@ -106,10 +104,10 @@ class HrLifecycleIntegrationTest {
         Employee hr = saveEmployee("HR0004", EmployeeRole.HR);
         authenticate(manager.getEmployeeId(), EmployeeRole.MANAGER);
 
-        Employee provisioned = employeeService.provision(
+        var provisioned = employeeService.provision(
                 "STAFF001", "Staff member", "valid-password", EmployeeRole.STAFF,
                 "0909000104", "Front office");
-        assertThat(provisioned.getRole()).isEqualTo(EmployeeRole.STAFF);
+        assertThat(provisioned.role()).isEqualTo(EmployeeRole.STAFF);
 
         assertThatThrownBy(() -> employeeService.setRole(hr.getEmployeeId(), EmployeeRole.DIRECTOR))
                 .isInstanceOf(DomainException.class)

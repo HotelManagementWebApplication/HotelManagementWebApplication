@@ -33,9 +33,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Real JPA approval proof for requester/approver separation and exact price payload binding. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:servicepriceapproval;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa", "spring.datasource.password=", "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}", "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}", "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 @AutoConfigureMockMvc
 class ServicePriceApprovalIntegrationTest {
@@ -47,21 +47,26 @@ class ServicePriceApprovalIntegrationTest {
     @Autowired IdempotencyRecordRepository idempotencyRecords;
     @Autowired ServiceCatalogService catalog;
     @Autowired ApprovalService approvals;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @BeforeEach
     void seed() {
-        idempotencyRecords.deleteAllInBatch();
-        approvalRecords.deleteAllInBatch();
-        audits.deleteAllInBatch();
-        priceHistory.deleteAllInBatch();
-        services.deleteAllInBatch();
+        cleanup();
         Service service = new Service(); service.setId("PRICE1"); service.setName("Approved price");
         service.setPrice(new BigDecimal("100")); service.setUnit("UNIT"); service.setStockQuantity(0); service.setSafetyThreshold(0);
         services.saveAndFlush(service);
     }
 
     @AfterEach
-    void clear() { SecurityContextHolder.clearContext(); }
+    void clear() { cleanup(); SecurityContextHolder.clearContext(); }
+
+    private void cleanup() {
+        jdbc.update("DELETE LichSuGiaDichVu WHERE maDichVu=N'PRICE1'");
+        jdbc.update("DELETE NhatKyKiemSoat WHERE (loaiDoiTuong=N'SERVICE' AND maDoiTuong=N'PRICE1') OR (loaiDoiTuong=N'APPROVAL' AND maDoiTuong IN(SELECT CONVERT(NVARCHAR(100),maYeuCauPheDuyet) FROM YeuCauPheDuyet WHERE maDoiTuong=N'PRICE1'))");
+        jdbc.update("DELETE BanGhiChongTrung WHERE khoaChongTrung LIKE N'price-%' OR khoaChongTrung LIKE N'activate-%' OR khoaChongTrung IN(N'replay-price',N'mismatch-price',N'state-price',N'replay-approve',N'mismatch-approve',N'state-approve',N'approve-price-1') OR khoaChongTrung IN(SELECT N'approval-approve-'+CONVERT(NVARCHAR(100),maYeuCauPheDuyet) FROM YeuCauPheDuyet WHERE maDoiTuong=N'PRICE1')");
+        jdbc.update("DELETE YeuCauPheDuyet WHERE maDoiTuong=N'PRICE1'");
+        jdbc.update("DELETE DichVu WHERE maDichVu=N'PRICE1'");
+    }
 
     @Test
     void activationRequiresTheApprovedPriceAndUsesApprovalReason() throws Exception {
@@ -80,8 +85,8 @@ class ServicePriceApprovalIntegrationTest {
                 .satisfies(history -> assertThat(history.approvalId()).isEqualTo(request.id()));
         assertThat(approvalRecords.findById(request.id()).orElseThrow().getStatus())
                 .isEqualTo(ApprovalRequest.CONSUMED);
-        assertThat(audits.findTop100ByEntityTypeAndEntityIdOrderByCreatedAtAscIdAsc("SERVICE", "PRICE1"))
-                .filteredOn(audit -> audit.getAction().equals("SERVICE_PRICE_CHANGED"))
+        assertThat(audits.findAll())
+                .filteredOn(audit -> audit.getEntityType().equals("SERVICE") && audit.getEntityId().equals("PRICE1") && audit.getAction().equals("SERVICE_PRICE_CHANGED"))
                 .singleElement().satisfies(audit -> assertThat(audit.getReason()).isEqualTo("manager reviewed"));
     }
 
@@ -98,8 +103,8 @@ class ServicePriceApprovalIntegrationTest {
         assertThat(first).contains("\"price\":150");
         assertThat(catalog.priceHistory("PRICE1")).hasSize(1)
                 .singleElement().satisfies(history -> assertThat(history.approvalId()).isEqualTo(request.id()));
-        assertThat(audits.findTop100ByEntityTypeAndEntityIdOrderByCreatedAtAscIdAsc("SERVICE", "PRICE1"))
-                .filteredOn(audit -> audit.getAction().equals("SERVICE_PRICE_CHANGED"))
+        assertThat(audits.findAll())
+                .filteredOn(audit -> audit.getEntityType().equals("SERVICE") && audit.getEntityId().equals("PRICE1") && audit.getAction().equals("SERVICE_PRICE_CHANGED"))
                 .hasSize(1);
     }
 

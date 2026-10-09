@@ -9,8 +9,8 @@ describe("backend auth contract", () => {
     const request = vi.spyOn(apiClient, "request").mockResolvedValue({ access_token: "a", refresh_token: "r", token_type: "Bearer", expires_in: 900, refresh_expires_in: 86400 });
     await authApi.employeeLogin({ employee_id: "E1", password: "secret" });
     await authApi.customerLogin({ phone: "0900000000", password: "secret" });
-    expect(request).toHaveBeenNthCalledWith(1, "/api/auth/login", { method: "POST", body: { employee_id: "E1", password: "secret" } });
-    expect(request).toHaveBeenNthCalledWith(2, "/api/auth/customers/login", { method: "POST", body: { phone: "0900000000", password: "secret" } });
+    expect(request).toHaveBeenNthCalledWith(1, "/api/auth/login", { method: "POST", body: { employee_id: "E1", password: "secret" }, skipAuth: true });
+    expect(request).toHaveBeenNthCalledWith(2, "/api/auth/customers/login", { method: "POST", body: { phone: "0900000000", password: "secret" }, skipAuth: true });
   });
 
   it("fetches customer profile separately and does not treat token response as profile", async () => {
@@ -32,10 +32,10 @@ describe("backend auth contract", () => {
     await authApi.sendRegistrationOtp("guest@example.test");
     await authApi.sendForgotOtp("guest@example.test");
     expect(request).toHaveBeenNthCalledWith(1, "/api/auth/otp/send-register", {
-      method: "POST", body: { email: "guest@example.test" }, timeoutMs: 45000,
+      method: "POST", body: { email: "guest@example.test" }, skipAuth: true, timeoutMs: 45000,
     });
     expect(request).toHaveBeenNthCalledWith(2, "/api/auth/otp/send-forgot-password", {
-      method: "POST", body: { email: "guest@example.test" }, timeoutMs: 45000,
+      method: "POST", body: { email: "guest@example.test" }, skipAuth: true, timeoutMs: 45000,
     });
   });
 });

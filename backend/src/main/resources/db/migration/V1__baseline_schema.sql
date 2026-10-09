@@ -34,9 +34,6 @@ CREATE TABLE LoaiPhong (
     CONSTRAINT chkLoaiPhong05 CHECK (trangThaiDanhMuc IN (N'Bản nháp', N'Đang hoạt động', N'Bị từ chối', N'Ngừng kinh doanh'))
 );
 
-CREATE INDEX idxLoaiPhong01 ON LoaiPhong (trangThaiDanhMuc, maLoaiPhong);
-CREATE INDEX idxLoaiPhong02 ON LoaiPhong (maLoaiPhongGoc);
-CREATE INDEX idxLoaiPhong03 ON LoaiPhong (maHangPhong);
 
 CREATE TABLE Phong (
     maPhong NVARCHAR(10) NOT NULL,
@@ -53,8 +50,6 @@ CREATE TABLE Phong (
     CONSTRAINT chkPhong03 CHECK (phienBan >= 0)
 );
 
-CREATE INDEX idxPhong01 ON Phong (maLoaiPhong);
-CREATE INDEX idxPhong02 ON Phong (trangThai);
 
 CREATE TABLE KhachLuuTru (
     maKhachLuuTru BIGINT IDENTITY(1,1) NOT NULL,
@@ -82,9 +77,6 @@ CREATE TABLE KhachLuuTru (
     CONSTRAINT chkKhachLuuTru06 CHECK (phienBan >= 0)
 );
 
-CREATE INDEX idxKhachLuuTru01 ON KhachLuuTru (hoVaTen, soDienThoai, soGiayToTuyThan);
-CREATE UNIQUE INDEX ukKhachLuuTru02 ON KhachLuuTru (email)
-    WHERE email IS NOT NULL;
 
 CREATE TABLE NhanVien (
     maNhanVien NVARCHAR(10) NOT NULL,
@@ -110,7 +102,6 @@ CREATE TABLE NhanVien (
     CONSTRAINT chkNhanVien03 CHECK (ngayBatDauNghi IS NULL OR ngayKetThucNghi IS NULL OR ngayKetThucNghi >= ngayBatDauNghi)
 );
 
-CREATE INDEX idxNhanVien01 ON NhanVien (trangThaiLamViec, duocKichHoat);
 
 CREATE TABLE PhieuDatPhong (
     maPhieuDatPhong BIGINT IDENTITY(1,1) NOT NULL,
@@ -130,6 +121,13 @@ CREATE TABLE PhieuDatPhong (
     maThanhToanDatCoc NVARCHAR(40),
     thoiDiemHetHanThanhToanCoc DATETIME2(6),
     trangThaiThanhToanCoc NVARCHAR(20) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Không yêu cầu',
+    phuongThucBaoDam NVARCHAR(20) COLLATE Vietnamese_100_CS_AS,
+    loaiThayDoiDangCho NVARCHAR(20) COLLATE Vietnamese_100_CS_AS,
+    thoiDiemNhanPhongTruocThayDoi DATETIME2(6),
+    thoiDiemTraPhongTruocThayDoi DATETIME2(6),
+    tienDatCocTruocThayDoi DECIMAL(12, 2),
+    tienDatCocBoSung DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    emailXacNhan NVARCHAR(150),
     nguonDatPhong NVARCHAR(30) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Trực tiếp',
     doanhThuGopOta DECIMAL(14,2) NOT NULL DEFAULT 0,
     hoaHongOta DECIMAL(14,2) NOT NULL DEFAULT 0,
@@ -144,20 +142,22 @@ CREATE TABLE PhieuDatPhong (
     CONSTRAINT chkPhieuDatPhong04 CHECK (ketQuaHuy IS NULL OR ketQuaHuy IN (N'Hoàn tiền', N'Không phát sinh hoàn tiền', N'Mất quyền hoàn tiền')),
     CONSTRAINT chkPhieuDatPhong05 CHECK (
         thoiDiemNhanPhongThucTe IS NULL OR thoiDiemTraPhongThucTe IS NULL OR thoiDiemTraPhongThucTe >= thoiDiemNhanPhongThucTe
+    ),
+    CONSTRAINT chkPhieuDatPhong06 CHECK (phuongThucBaoDam IS NULL OR phuongThucBaoDam IN (N'VNPay', N'Tại khách sạn')),
+    CONSTRAINT chkPhieuDatPhong07 CHECK (loaiThayDoiDangCho IS NULL OR loaiThayDoiDangCho IN (N'Gia hạn')),
+    CONSTRAINT chkPhieuDatPhong08 CHECK (tienDatCocBoSung >= 0),
+    CONSTRAINT chkPhieuDatPhong09 CHECK (
+        (loaiThayDoiDangCho IS NULL AND thoiDiemNhanPhongTruocThayDoi IS NULL AND thoiDiemTraPhongTruocThayDoi IS NULL
+            AND tienDatCocTruocThayDoi IS NULL AND tienDatCocBoSung = 0)
+        OR
+        (loaiThayDoiDangCho IS NOT NULL AND thoiDiemNhanPhongTruocThayDoi IS NOT NULL AND thoiDiemTraPhongTruocThayDoi IS NOT NULL
+            AND tienDatCocTruocThayDoi IS NOT NULL AND tienDatCocBoSung > 0)
     )
 );
 
-CREATE INDEX idxPhieuDatPhong01 ON PhieuDatPhong (maKhachLuuTru, thoiDiemDat);
-CREATE INDEX idxPhieuDatPhong02 ON PhieuDatPhong (maNhanVien, thoiDiemDat);
-CREATE INDEX idxPhieuDatPhong03 ON PhieuDatPhong (trangThai);
-CREATE INDEX idxPhieuDatPhong04 ON PhieuDatPhong (maTaiKhoanKhachHang, thoiDiemDat);
-CREATE UNIQUE INDEX ukPhieuDatPhong01 ON PhieuDatPhong (khoaChongTrung)
-    WHERE khoaChongTrung IS NOT NULL;
 -- SQL Server treats NULL as a value in a regular UNIQUE constraint.  The
 -- nullable deposit-payment reference is unique only when present (non-NULL)
 -- references must be unique.
-CREATE UNIQUE INDEX ukPhieuDatPhong02 ON PhieuDatPhong (maThanhToanDatCoc)
-    WHERE maThanhToanDatCoc IS NOT NULL;
 
 CREATE TABLE ChiTietDatPhong (
     maPhieuDatPhong BIGINT NOT NULL,
@@ -179,7 +179,6 @@ CREATE TABLE ChiTietDatPhong (
     CONSTRAINT chkChiTietDatPhong05 CHECK (trangThai IN (N'Sẵn sàng', N'Đang có khách', N'Đang dọn phòng', N'Đang bảo trì', N'Ngừng sử dụng', N'Đã giữ phòng', N'Đã trả phòng', N'Đã hủy'))
 );
 
-CREATE INDEX idxChiTietDatPhong01 ON ChiTietDatPhong (maPhong, thoiDiemNhanPhong, thoiDiemTraPhong);
 
 CREATE TABLE ChuyenPhong (
     maChuyenPhong BIGINT IDENTITY(1,1) NOT NULL,
@@ -196,9 +195,6 @@ CREATE TABLE ChuyenPhong (
     CONSTRAINT chkChuyenPhong01 CHECK (maPhongCu <> maPhongMoi)
 );
 
-CREATE INDEX idxChuyenPhong01 ON ChuyenPhong (maPhieuDatPhong);
-CREATE INDEX idxChuyenPhong02 ON ChuyenPhong (maPhongCu);
-CREATE INDEX idxChuyenPhong03 ON ChuyenPhong (maPhongMoi);
 
 CREATE TABLE DichVu (
     maDichVu NVARCHAR(10) NOT NULL,
@@ -217,8 +213,6 @@ CREATE TABLE DichVu (
     CONSTRAINT chkDichVu03 CHECK (nguongAnToan >= 0)
 );
 
-CREATE INDEX idxDichVu01 ON DichVu (dangHoatDong, ten);
-CREATE INDEX idxDichVu02 ON DichVu (dangHoatDong, danhMuc, ten);
 
 CREATE TABLE SuDungDichVu (
     maPhieuDatPhong BIGINT,
@@ -234,7 +228,6 @@ CREATE TABLE SuDungDichVu (
     CONSTRAINT chkSuDungDichVu02 CHECK (donGia >= 0)
 );
 
-CREATE INDEX idxSuDungDichVu01 ON SuDungDichVu (maDichVu, ngaySuDung);
 
 CREATE TABLE HoaDon (
     maHoaDon BIGINT IDENTITY(1,1) NOT NULL,
@@ -266,7 +259,6 @@ CREATE TABLE HoaDon (
     CONSTRAINT chkHoaDon09 CHECK (phienBan >= 0)
 );
 
-CREATE INDEX idxHoaDon01 ON HoaDon (trangThai, thoiDiemPhatHanh);
 
 CREATE TABLE DieuChinhHoaDon (
     maDieuChinhHoaDon BIGINT IDENTITY(1,1) NOT NULL,
@@ -282,7 +274,6 @@ CREATE TABLE DieuChinhHoaDon (
     CONSTRAINT chkDieuChinhHoaDon01 CHECK (soTienChenhLech <> 0)
 );
 
-CREATE INDEX idxDieuChinhHoaDon01 ON DieuChinhHoaDon (maHoaDon, thoiDiemPhatSinh);
 
 CREATE TABLE PhieuBaoTri (
     maPhieuBaoTri NVARCHAR(10) NOT NULL,
@@ -295,11 +286,10 @@ CREATE TABLE PhieuBaoTri (
     CONSTRAINT fkPhieuBaoTri01 FOREIGN KEY (maPhong) REFERENCES Phong (maPhong)
 );
 
-CREATE INDEX idxPhieuBaoTri01 ON PhieuBaoTri (maPhong, trangThai);
 
 CREATE TABLE SuCoThietBi (
     maSuCoThietBi BIGINT IDENTITY(1,1) NOT NULL,
-    maPhieuDatPhong BIGINT NOT NULL,
+    maPhieuDatPhong BIGINT NULL,
     maPhong NVARCHAR(10) NOT NULL,
     tenThietBi NVARCHAR(100) NOT NULL,
     giaTriBanDau DECIMAL(14, 2) NOT NULL,
@@ -318,8 +308,6 @@ CREATE TABLE SuCoThietBi (
     CONSTRAINT chkSuCoThietBi03 CHECK (tienBoiThuong >= 0)
 );
 
-CREATE INDEX idxSuCoThietBi01 ON SuCoThietBi (maPhieuDatPhong);
-CREATE INDEX idxSuCoThietBi02 ON SuCoThietBi (maPhong);
 
 CREATE TABLE YeuCauPheDuyet (
     maYeuCauPheDuyet BIGINT IDENTITY(1,1) NOT NULL,
@@ -341,9 +329,6 @@ CREATE TABLE YeuCauPheDuyet (
     CONSTRAINT pkYeuCauPheDuyet PRIMARY KEY (maYeuCauPheDuyet)
 );
 
-CREATE INDEX idxYeuCauPheDuyet01 ON YeuCauPheDuyet (trangThai);
-CREATE INDEX idxYeuCauPheDuyet02 ON YeuCauPheDuyet (maDoiTuong);
-CREATE INDEX idxYeuCauPheDuyet03 ON YeuCauPheDuyet (trangThai, mucDoRuiRo, thoiDiemYeuCau);
 
 CREATE TABLE NhatKyKiemSoat (
     maNhatKyKiemSoat BIGINT IDENTITY(1,1) NOT NULL,
@@ -359,8 +344,6 @@ CREATE TABLE NhatKyKiemSoat (
     CONSTRAINT pkNhatKyKiemSoat PRIMARY KEY (maNhatKyKiemSoat)
 );
 
-CREATE INDEX idxNhatKyKiemSoat01 ON NhatKyKiemSoat (nguoiThucHien, thoiDiemTao);
-CREATE INDEX idxNhatKyKiemSoat02 ON NhatKyKiemSoat (hanhDong, thoiDiemTao);
 
 CREATE TABLE MaLamMoiDangNhap (
     maMaLamMoiDangNhap BIGINT IDENTITY(1,1) NOT NULL,
@@ -378,10 +361,6 @@ CREATE TABLE MaLamMoiDangNhap (
     CONSTRAINT chkMaLamMoiDangNhap01 CHECK ((maNhanVien IS NOT NULL AND maTaiKhoanKhachHang IS NULL) OR (maNhanVien IS NULL AND maTaiKhoanKhachHang IS NOT NULL))
 );
 
-CREATE INDEX idxMaLamMoiDangNhap01 ON MaLamMoiDangNhap (maNhanVien);
-CREATE INDEX idxMaLamMoiDangNhap02 ON MaLamMoiDangNhap (thoiDiemHetHan);
-CREATE INDEX idxMaLamMoiDangNhap03 ON MaLamMoiDangNhap (thoiDiemThuHoi, thoiDiemHetHan);
-CREATE INDEX idxMaLamMoiDangNhap04 ON MaLamMoiDangNhap (maTaiKhoanKhachHang);
 
 CREATE TABLE TaiKhoanKhachHang (
     maTaiKhoanKhachHang BIGINT IDENTITY(1,1) NOT NULL,
@@ -400,6 +379,31 @@ ALTER TABLE PhieuDatPhong
     ADD CONSTRAINT fkPhieuDatPhong03
         FOREIGN KEY (maTaiKhoanKhachHang) REFERENCES TaiKhoanKhachHang (maTaiKhoanKhachHang);
 
+CREATE TABLE YeuCauThanhToanVnpay (
+    maYeuCauThanhToanVnpay BIGINT IDENTITY(1,1) NOT NULL,
+    maPhieuDatPhong BIGINT NOT NULL,
+    maThamChieuMerchant NVARCHAR(100) NOT NULL,
+    soTien DECIMAL(12,2) NOT NULL,
+    trangThai NVARCHAR(20) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Chờ thanh toán',
+    thoiDiemTao DATETIME2(6) NOT NULL,
+    thoiDiemHetHan DATETIME2(6) NOT NULL,
+    thoiDiemHoanTat DATETIME2(6),
+    maGiaoDichVnpay NVARCHAR(100),
+    maNganHang NVARCHAR(20),
+    loaiThe NVARCHAR(20),
+    maPhanHoi NVARCHAR(10),
+    phienBan BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT pkYeuCauThanhToanVnpay PRIMARY KEY (maYeuCauThanhToanVnpay),
+    CONSTRAINT ukYeuCauThanhToanVnpay01 UNIQUE (maThamChieuMerchant),
+    CONSTRAINT fkYeuCauThanhToanVnpay01 FOREIGN KEY (maPhieuDatPhong)
+        REFERENCES PhieuDatPhong (maPhieuDatPhong),
+    CONSTRAINT chkYeuCauThanhToanVnpay01 CHECK (soTien > 0),
+    CONSTRAINT chkYeuCauThanhToanVnpay02 CHECK (thoiDiemHetHan > thoiDiemTao),
+    CONSTRAINT chkYeuCauThanhToanVnpay03 CHECK (phienBan >= 0),
+    CONSTRAINT chkYeuCauThanhToanVnpay04 CHECK (trangThai IN (N'Chờ thanh toán', N'Thành công', N'Thất bại', N'Đã hết hạn', N'Đã hủy'))
+);
+
+
 CREATE TABLE GiaoDichThanhToan (
     maGiaoDichThanhToan BIGINT IDENTITY(1,1) NOT NULL,
     maHoaDon BIGINT NOT NULL,
@@ -417,12 +421,8 @@ CREATE TABLE GiaoDichThanhToan (
     CONSTRAINT chkGiaoDichThanhToan01 CHECK (soTien > 0)
 );
 
-CREATE UNIQUE INDEX ukGiaoDichThanhToan01 ON GiaoDichThanhToan (khoaChongTrung)
-    WHERE khoaChongTrung IS NOT NULL;
 -- Nullable external event IDs are unique only when present (filtered unique
 -- NULL behavior; SQL Server requires a filtered index for this contract).
-CREATE UNIQUE INDEX ukGiaoDichThanhToan02 ON GiaoDichThanhToan (maSuKienBenNgoai)
-    WHERE maSuKienBenNgoai IS NOT NULL;
 
 CREATE TABLE BienLai (
     maBienLai BIGINT IDENTITY(1,1) NOT NULL,
@@ -514,11 +514,6 @@ CREATE TABLE LichSuHangThanhVien (
     CONSTRAINT fkLichSuHangThanhVien01 FOREIGN KEY (maKhachLuuTru) REFERENCES KhachLuuTru (maKhachLuuTru)
 );
 
-CREATE INDEX idxGiaoDichThanhToan01 ON GiaoDichThanhToan (maHoaDon, thoiDiemPhatSinh);
-CREATE INDEX idxBienLai01 ON BienLai (maHoaDon, thoiDiemPhatHanh);
-CREATE INDEX idxBienDongKhoDichVu01 ON BienDongKhoDichVu (maDichVu, thoiDiemPhatSinh);
-CREATE INDEX idxThietBiPhong01 ON ThietBiPhong (maPhong, dangHoatDong);
-CREATE INDEX idxLichSuHangThanhVien01 ON LichSuHangThanhVien (maKhachLuuTru, thoiDiemThayDoi);
 
 CREATE TABLE TienNghi (
     maTienNghi BIGINT IDENTITY(1,1) NOT NULL,
@@ -536,7 +531,6 @@ CREATE TABLE LoaiPhongTienNghi (
     CONSTRAINT fkLoaiPhongTienNghi02 FOREIGN KEY (maTienNghi) REFERENCES TienNghi (maTienNghi)
 );
 
-CREATE INDEX idxLoaiPhongTienNghi01 ON LoaiPhongTienNghi (maTienNghi);
 
 CREATE TABLE HinhAnhPhong (
     maHinhAnhPhong BIGINT IDENTITY(1,1) NOT NULL,
@@ -554,7 +548,6 @@ CREATE TABLE HinhAnhPhong (
     CONSTRAINT chkHinhAnhPhong02 CHECK (kichThuocByte > 0 AND kichThuocByte <= 5242880)
 );
 
-CREATE INDEX idxHinhAnhPhong01 ON HinhAnhPhong (maPhong, dangHoatDong, thuTuHienThi);
 
 CREATE TABLE BanGhiChongTrung (
     maBanGhiChongTrung BIGINT IDENTITY(1,1) NOT NULL,
@@ -572,7 +565,6 @@ CREATE TABLE BanGhiChongTrung (
     CONSTRAINT ukBanGhiChongTrung01 UNIQUE (phamViLenh, khoaChongTrung)
 );
 
-CREATE INDEX idxBanGhiChongTrung01 ON BanGhiChongTrung (thoiDiemTao);
 
 CREATE TABLE NhomKhoaChongTrung (
     maNhomKhoa SMALLINT NOT NULL,
@@ -598,8 +590,6 @@ CREATE TABLE LichSuGiaLoaiPhong (
     CONSTRAINT fkLichSuGiaLoaiPhong02 FOREIGN KEY (maYeuCauPheDuyet) REFERENCES YeuCauPheDuyet (maYeuCauPheDuyet)
 );
 
-CREATE INDEX idxLichSuGiaLoaiPhong01
-    ON LichSuGiaLoaiPhong (maLoaiPhong, thoiDiemHieuLuc, maLichSuGiaLoaiPhong);
 
 CREATE TABLE NhiemVuBuongPhong (
     maNhiemVuBuongPhong BIGINT IDENTITY(1,1) NOT NULL,
@@ -616,8 +606,6 @@ CREATE TABLE NhiemVuBuongPhong (
     CONSTRAINT chkNhiemVuBuongPhong01 CHECK (trangThai IN (N'Cần dọn phòng',N'Đang thực hiện',N'Đã dọn xong',N'Sẵn sàng',N'Chờ kỹ thuật'))
 );
 
-CREATE INDEX idxNhiemVuBuongPhong01 ON NhiemVuBuongPhong (maPhong, trangThai);
-CREATE INDEX idxNhiemVuBuongPhong02 ON NhiemVuBuongPhong (nguoiDuocPhanCong, trangThai);
 
 CREATE TABLE PhieuCongViecKyThuat (
     maPhieuCongViecKyThuat BIGINT IDENTITY(1,1) NOT NULL,
@@ -642,8 +630,6 @@ CREATE TABLE PhieuCongViecKyThuat (
     CONSTRAINT chkPhieuCongViecKyThuat02 CHECK (doUuTien IN (N'Thấp',N'Trung bình',N'Cao',N'Nghiêm trọng'))
 );
 
-CREATE INDEX idxPhieuCongViecKyThuat01 ON PhieuCongViecKyThuat (maPhong, trangThai);
-CREATE INDEX idxPhieuCongViecKyThuat02 ON PhieuCongViecKyThuat (nguoiDuocPhanCong, trangThai);
 
 CREATE TABLE LichSuGiaDichVu (
     maLichSuGiaDichVu BIGINT IDENTITY(1,1) NOT NULL,
@@ -657,8 +643,6 @@ CREATE TABLE LichSuGiaDichVu (
     CONSTRAINT fkLichSuGiaDichVu02 FOREIGN KEY (maYeuCauPheDuyet) REFERENCES YeuCauPheDuyet (maYeuCauPheDuyet)
 );
 
-CREATE INDEX idxLichSuGiaDichVu01
-    ON LichSuGiaDichVu (maDichVu, thoiDiemHieuLuc, maLichSuGiaDichVu);
 
 CREATE TABLE HangDoiThongBao (
     maThongBao BIGINT IDENTITY(1,1) NOT NULL,
@@ -674,7 +658,6 @@ CREATE TABLE HangDoiThongBao (
     CONSTRAINT ukHangDoiThongBao01 UNIQUE (khoaChongLap)
 );
 
-CREATE INDEX idxHangDoiThongBao01 ON HangDoiThongBao (trangThai, thoiDiemCoTheGui, maThongBao);
 
 CREATE TABLE CaLamViecNhanVien (
     maCaLamViecNhanVien BIGINT IDENTITY(1,1) NOT NULL,
@@ -690,7 +673,6 @@ CREATE TABLE CaLamViecNhanVien (
     CONSTRAINT chkCaLamViecNhanVien01 CHECK (trangThai IN (N'Đã phân công',N'Đã bắt đầu',N'Đã hoàn thành',N'Đã hủy'))
 );
 
-CREATE INDEX idxCaLamViecNhanVien01 ON CaLamViecNhanVien (ngayLamCa, maNhanVien);
 
 CREATE TABLE MauChecklistBuongPhong (
     maMauChecklist BIGINT IDENTITY(1,1) NOT NULL,
@@ -712,7 +694,6 @@ CREATE TABLE KetQuaChecklistBuongPhong (
     CONSTRAINT fkKetQuaChecklistBuongPhong01 FOREIGN KEY (maNhiemVuBuongPhong) REFERENCES NhiemVuBuongPhong (maNhiemVuBuongPhong)
 );
 
-CREATE INDEX idxKetQuaChecklistBuongPhong01 ON KetQuaChecklistBuongPhong (maNhiemVuBuongPhong, maKetQuaChecklist);
 
 CREATE TABLE KiemTraBuongPhong (
     maKiemTraBuongPhong BIGINT IDENTITY(1,1) NOT NULL,
@@ -728,7 +709,6 @@ CREATE TABLE KiemTraBuongPhong (
     CONSTRAINT fkKiemTraBuongPhong01 FOREIGN KEY (maNhiemVuBuongPhong) REFERENCES NhiemVuBuongPhong (maNhiemVuBuongPhong)
 );
 
-CREATE INDEX idxKiemTraBuongPhong01 ON KiemTraBuongPhong (maNhiemVuBuongPhong, thoiDiemHoanThanh);
 
 CREATE TABLE ThanhToanCongNoDoiTac (
     maThanhToanCongNo BIGINT IDENTITY(1,1) NOT NULL,
@@ -742,8 +722,6 @@ CREATE TABLE ThanhToanCongNoDoiTac (
     CONSTRAINT chkThanhToanCongNoDoiTac01 CHECK (soTien > 0)
 );
 
-CREATE INDEX idxThanhToanCongNoDoiTac01
-    ON ThanhToanCongNoDoiTac (maCongNoDoiTac, thoiDiemThanhToan);
 
 CREATE TABLE ButToanTaiChinh (
     maButToanTaiChinh BIGINT IDENTITY(1,1) NOT NULL,
@@ -761,8 +739,6 @@ CREATE TABLE ButToanTaiChinh (
     CONSTRAINT chkButToanTaiChinh02 CHECK (soTien > 0)
 );
 
-CREATE INDEX idxButToanTaiChinh01
-    ON ButToanTaiChinh (thoiDiemPhatSinh, loaiButToan);
 
 CREATE TABLE SuKienDangNhapNhanVien (
     maSuKienDangNhap BIGINT IDENTITY(1,1) NOT NULL,
@@ -775,8 +751,6 @@ CREATE TABLE SuKienDangNhapNhanVien (
     CONSTRAINT chkSuKienDangNhapNhanVien01 CHECK (ketQua IN (N'Thành công',N'Thất bại'))
 );
 
-CREATE INDEX idxSuKienDangNhapNhanVien01
-    ON SuKienDangNhapNhanVien (maNhanVien, thoiDiemPhatSinh);
 
 CREATE TABLE HoaDonGiaTriGiaTang (
     maHoaDonGiaTriGiaTang BIGINT IDENTITY(1,1) NOT NULL,
@@ -840,7 +814,6 @@ CREATE TABLE DonNghiPhep (
     CONSTRAINT chkDonNghiPhepTrangThai CHECK (trangThai IN (N'Chờ phê duyệt', N'Đã phê duyệt', N'Bị từ chối'))
 );
 
-CREATE INDEX idxDonNghiPhep01 ON DonNghiPhep (trangThai, ngayBatDau);
 
 CREATE TABLE MatHangTonKho (
     maMatHang NVARCHAR(30) NOT NULL,
@@ -869,7 +842,6 @@ CREATE TABLE BienDongTonKho (
     CONSTRAINT chkBienDongTonKho01 CHECK (soLuong > 0)
 );
 
-CREATE INDEX idxBienDongTonKho01 ON BienDongTonKho (maMatHang, thoiDiemPhatSinh);
 
 CREATE TABLE TaiSanKyThuat (
     maTaiSanKyThuat NVARCHAR(30) NOT NULL,
@@ -891,7 +863,6 @@ CREATE TABLE TaiSanKyThuat (
     CONSTRAINT chkTaiSanKyThuat01 CHECK (giaTriBanDau >= 0)
 );
 
-CREATE INDEX idxTaiSanKyThuat01 ON TaiSanKyThuat (loaiViTri, tang, trangThai);
 
 CREATE TABLE ChiTietTienBanGiao (
     maChiTietTienBanGiao BIGINT IDENTITY(1,1) NOT NULL,
@@ -904,8 +875,6 @@ CREATE TABLE ChiTietTienBanGiao (
     CONSTRAINT chkChiTietTienBanGiao01 CHECK (menhGia > 0 AND soLuong > 0)
 );
 
-CREATE INDEX idxChiTietTienBanGiao01
-    ON ChiTietTienBanGiao (maBanGiaoTienCa);
 
 CREATE TABLE DatDichVuKhachSan (
     maDatDichVuKhachSan BIGINT IDENTITY(1,1) NOT NULL,
@@ -936,13 +905,8 @@ CREATE TABLE DatDichVuKhachSan (
     CONSTRAINT chkDatDichVuKhachSan04 CHECK (trangThai IN (N'Đã xác nhận', N'Đã sử dụng', N'Đã hủy'))
 );
 
-CREATE INDEX idxDatDichVuKhachSan01
-    ON DatDichVuKhachSan (maPhieuDatPhong, trangThai, thoiDiemDuKien);
-CREATE INDEX idxDatDichVuKhachSan02
-    ON DatDichVuKhachSan (maPhieuDatPhong, maPhong, maDichVu, thoiDiemDuKien, trangThai);
 
--- Final demo baseline constraints.  The demo database is rebuilt from this one
--- migration, so these are expressed directly here instead of as V2-V5 upgrades.
+-- Final baseline table constraints. Later object types are owned by V2-V5.
 
 ALTER TABLE BanGhiChongTrung ADD CONSTRAINT chkBanGhiChongTrungtrangThai CHECK (trangThai IN (N'Đang xử lý', N'Đã hoàn tất'));
 ALTER TABLE BanGiaoTienCa ADD CONSTRAINT chkBanGiaoTienCamaCa CHECK (maCa IN (N'Ca sáng', N'Ca chiều', N'Ca đêm') OR (maCa NOT LIKE N'%[^-A-Za-z0-9_]%' COLLATE Latin1_General_100_BIN2 AND maCa LIKE N'[A-Za-z]%' COLLATE Latin1_General_100_BIN2 AND LEN(maCa) BETWEEN 1 AND 30));

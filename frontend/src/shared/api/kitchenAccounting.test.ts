@@ -7,6 +7,7 @@ describe("kitchen/accounting API contract", () => {
   beforeEach(() => { request.mockReset(); request.mockResolvedValue([]); });
 
   it("uses the audited endpoint paths and snake_case query names", async () => {
+    request.mockResolvedValue({items:[],page:0,size:20,total_elements:0,total_pages:0,method_counts:{}});
     await kitchenAccountingApi.services(); await kitchenAccountingApi.lowStock(); await kitchenAccountingApi.priceRequests();
     await kitchenAccountingApi.inventoryMovements("mini bar"); await kitchenAccountingApi.inventoryReport("mini bar", { from: "2026-09-01", to: "2026-09-18" });
     await kitchenAccountingApi.priceHistory("mini bar"); await kitchenAccountingApi.invoices({ reservation_id: 7 });
@@ -73,5 +74,43 @@ describe("kitchen/accounting API contract", () => {
     expect(canActivatePrice({ status: "APPROVED", action: "SERVICE_PRICE_CHANGE", target_id: "S1", requester: "e1" }, "S1", ["SERVICE_PRICE_ACTIVATE"], "e2")).toBe(true);
     expect(canActivatePrice({ status: "PENDING", action: "SERVICE_PRICE_CHANGE", target_id: "S1", requester: "e1" }, "S1", ["SERVICE_PRICE_ACTIVATE"], "e2")).toBe(false);
     expect(canActivatePrice({ status: "APPROVED", action: "SERVICE_PRICE_CHANGE", target_id: "S1", requester: "e2" }, "S1", ["SERVICE_PRICE_ACTIVATE"], "e2")).toBe(false);
+  });
+
+  it("normalizes page responses for invoices and payments safely", async () => {
+    request.mockResolvedValueOnce({
+      items: [{ id: 1 }],
+      page: 1,
+      total_elements: 21,
+      total_pages: 2,
+      size: 20,
+    } as any);
+    const invoicePage = await kitchenAccountingApi.invoices();
+    expect(invoicePage).toEqual(expect.objectContaining({
+      items: [{ id: 1 }],
+      totalElements: 21,
+      totalPages: 2,
+      size: 20,
+    }));
+
+    request.mockResolvedValueOnce({ items:[{id:2,reservation_id:150}],page:14,size:10,total_elements:141,total_pages:15,method_counts:{CASH:141} } as any);
+    const paymentPage = await kitchenAccountingApi.payments({page:14,size:10,search:"PAY-2",method:"CASH"});
+    expect(paymentPage).toEqual({
+      items: [{ id: 2,reservation_id:150 }],
+      page: 14,
+      size: 10,
+      totalElements: 141,
+      totalPages: 15,
+      methodCounts:{CASH:141},
+    });
+    expect(request).toHaveBeenLastCalledWith("/api/finance/payments?page=14&size=10&search=PAY-2&method=CASH");
+  });
+
+  it("rejects missing or inconsistent page metadata rather than hiding remaining records", async()=>{
+    request.mockResolvedValueOnce([{id:1}] as any);
+    await expect(kitchenAccountingApi.invoices()).rejects.toThrow("Phản hồi phân trang không hợp lệ");
+    request.mockResolvedValueOnce({items:[{id:1}],page:0,size:10,total_elements:150,total_pages:1} as any);
+    await expect(kitchenAccountingApi.payments()).rejects.toThrow("Phản hồi phân trang không hợp lệ");
+    request.mockResolvedValueOnce({items:[{id:1}],page:0,size:10,total_elements:150,total_pages:15,method_counts:{CASH:150}} as any);
+    await expect(kitchenAccountingApi.payments()).rejects.toThrow("Phản hồi phân trang không hợp lệ");
   });
 });

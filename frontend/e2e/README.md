@@ -32,11 +32,11 @@ production schema containing data that must be preserved.
 - Accounting/Director: `E2E_API_BASE_URL`, `E2E_ACCOUNTING_EMPLOYEE_ID`,
   `E2E_ACCOUNTING_PASSWORD`, `E2E_ACCOUNTING_INVOICE_ID`,
   `E2E_ACCOUNTING_PAYMENT_AMOUNT`, `E2E_ACCOUNTING_REFUND_AMOUNT`,
-  `E2E_ACCOUNTING_REFUND_KEY`, `E2E_ACCOUNTING_REFUND_APPROVAL_ID`,
   `E2E_DIRECTOR_EMPLOYEE_ID`, `E2E_DIRECTOR_PASSWORD`,
   `E2E_SQLSERVER_DATABASE`, and `E2E_SQLSERVER_DISPOSABLE=true`.
 - HR/Admin: `E2E_API_BASE_URL`, `E2E_ADMIN_EMPLOYEE_ID`,
   `E2E_ADMIN_PASSWORD`, `E2E_HR_EMPLOYEE_ID`, and `E2E_HR_PASSWORD`.
+- Staff: `E2E_API_BASE_URL`, `E2E_STAFF_EMPLOYEE_ID`, and `E2E_STAFF_PASSWORD`.
 
 The customer flow registers the supplied customer, so its phone and identity
 number must be unused in the disposable schema. Its room ID must identify an
@@ -44,14 +44,17 @@ available room, and `E2E_CUSTOMER_FOREIGN_RESERVATION_ID` must be a positive ID
 belonging to another customer. The other flows mutate existing records and
 require IDs whose state matches the scenario: a check-in-ready reservation, a
 housekeeping task/work order in the expected initial state, a service, an
-invoice, and an already approved refund approval. Employee IDs must be real
+invoice. The accounting scenario requests its refund approval through HTTP and
+has the distinct Director approve it before recording and replaying the refund.
+Employee IDs must be real
 accounts with the exact roles checked by the test; actors must be distinct
 where the test requires it.
 
 Date-time variables must be ISO local date-times such as
 `2031-01-10T14:00:00`. Quantities and amounts must be positive. The accounting
 refund amount cannot exceed the payment amount, and
-`E2E_ACCOUNTING_REFUND_KEY` must be a 1–35 character ASCII idempotency key.
+The suite generates valid 1–35 character ASCII idempotency keys.
+The customer identity number must fit the current 12-character schema limit.
 
 ## Disposable SQL Server and backend
 
@@ -85,9 +88,9 @@ SELECT maPhieuCongViecKyThuat FROM PhieuCongViecKyThuat
 WHERE vatTuSuDung = 'E2E_FIXTURE_TECHNICAL_ORDER';
 ```
 
-`frontend/e2e/specs/live-contract.test.ts` exercises seven live HTTP scenarios
+`frontend/e2e/specs/live-contract.test.ts` exercises eight live HTTP scenarios
 covering public/customer, front desk, housekeeping/technical/manager, kitchen,
-accounting/director, and HR/admin behavior. It is not a browser-driven UI
+accounting/director, HR/admin, and staff behavior. It is not a browser-driven UI
 suite; report it as live HTTP/role E2E, not UI E2E.
 
 The backend uses `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` and listens on port
@@ -167,8 +170,6 @@ $env:E2E_ACCOUNTING_PASSWORD = "<real-accounting-password>"
 $env:E2E_ACCOUNTING_INVOICE_ID = "<real-invoice-id>"
 $env:E2E_ACCOUNTING_PAYMENT_AMOUNT = "<positive-payment-amount>"
 $env:E2E_ACCOUNTING_REFUND_AMOUNT = "<positive-refund-amount>"
-$env:E2E_ACCOUNTING_REFUND_KEY = "<unique-refund-key>"
-$env:E2E_ACCOUNTING_REFUND_APPROVAL_ID = "<approved-refund-approval-id>"
 $env:E2E_DIRECTOR_EMPLOYEE_ID = "<real-director-employee-id>"
 $env:E2E_DIRECTOR_PASSWORD = "<real-director-password>"
 
@@ -176,18 +177,20 @@ $env:E2E_ADMIN_EMPLOYEE_ID = "<real-admin-employee-id>"
 $env:E2E_ADMIN_PASSWORD = "<real-admin-password>"
 $env:E2E_HR_EMPLOYEE_ID = "<real-hr-employee-id>"
 $env:E2E_HR_PASSWORD = "<real-hr-password>"
+$env:E2E_STAFF_EMPLOYEE_ID = "<real-staff-employee-id>"
+$env:E2E_STAFF_PASSWORD = "<real-staff-password>"
 
 npm run test:e2e
 ```
 
 The exact test command is run from `frontend` while the backend is running
 against the same schema. A truthful successful result has
-`configured=7 skipped=0 blocked=0` and all seven tests pass. A missing variable
+`configured=8 skipped=0 blocked=0` and all eight tests pass. A missing variable
 produces `[E2E][SKIP]`; skipped tests are not passes. An unavailable configured
 backend or response/state mismatch fails the relevant test. Do not report live
 E2E proof unless the command actually ran with no skips and passed. The
-accounting flow requires an approved refund; it does not authorize bypassing
-approval.
+accounting flow proves both rejection without approval and the real
+request/Director-approval/refund/replay flow; it never bypasses approval.
 
 ## Cleanup
 
@@ -204,8 +207,9 @@ $names = @(
   "E2E_FRONT_DESK_EMPLOYEE_ID", "E2E_FRONT_DESK_PASSWORD", "E2E_FRONT_DESK_RESERVATION_ID", "E2E_FRONT_DESK_CHECK_IN_AT", "E2E_FRONT_DESK_CHECK_OUT_AT",
   "E2E_HOUSEKEEPING_EMPLOYEE_ID", "E2E_HOUSEKEEPING_PASSWORD", "E2E_TECHNICAL_EMPLOYEE_ID", "E2E_TECHNICAL_PASSWORD", "E2E_MANAGER_EMPLOYEE_ID", "E2E_MANAGER_PASSWORD", "E2E_WORK_ORDER_ID", "E2E_WORK_ORDER_ROOM_ID",
   "E2E_KITCHEN_EMPLOYEE_ID", "E2E_KITCHEN_PASSWORD", "E2E_SERVICE_ID", "E2E_KITCHEN_STOCK_QUANTITY", "E2E_NEW_SERVICE_PRICE",
-  "E2E_ACCOUNTING_EMPLOYEE_ID", "E2E_ACCOUNTING_PASSWORD", "E2E_ACCOUNTING_INVOICE_ID", "E2E_ACCOUNTING_PAYMENT_AMOUNT", "E2E_ACCOUNTING_REFUND_AMOUNT", "E2E_ACCOUNTING_REFUND_KEY", "E2E_ACCOUNTING_REFUND_APPROVAL_ID", "E2E_DIRECTOR_EMPLOYEE_ID", "E2E_DIRECTOR_PASSWORD",
-  "E2E_ADMIN_EMPLOYEE_ID", "E2E_ADMIN_PASSWORD", "E2E_HR_EMPLOYEE_ID", "E2E_HR_PASSWORD"
+  "E2E_ACCOUNTING_EMPLOYEE_ID", "E2E_ACCOUNTING_PASSWORD", "E2E_ACCOUNTING_INVOICE_ID", "E2E_ACCOUNTING_PAYMENT_AMOUNT", "E2E_ACCOUNTING_REFUND_AMOUNT", "E2E_DIRECTOR_EMPLOYEE_ID", "E2E_DIRECTOR_PASSWORD",
+  "E2E_ADMIN_EMPLOYEE_ID", "E2E_ADMIN_PASSWORD", "E2E_HR_EMPLOYEE_ID", "E2E_HR_PASSWORD",
+  "E2E_STAFF_EMPLOYEE_ID", "E2E_STAFF_PASSWORD"
 )
 foreach ($name in $names) { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
 ```

@@ -19,19 +19,23 @@ $env:DB_PASSWORD = "<local-sqlserver-password>"
 mvn spring-boot:run
 ```
 
-Flyway applies the single canonical demo baseline `V1__baseline_schema.sql`
-from `src/main/resources/db/migration/`; Hibernate uses `ddl-auto=validate` and
-does not create or update tables. This database is disposable demo data: schema
-fixes belong in V1 and the local database is recreated. Do not add V2/V3 for
-demo-only schema fixes.
+Flyway applies exactly six demo-baseline files from
+`src/main/resources/db/migration/`: V1 schema, V2 indexes, V3 functions,
+V4 views, V5 stored procedures/business transactions, and V6 minimal triggers. Edit the owning file;
+never add V7+ or auxiliary DDL files. After checksum changes, recreate only an
+authorized demo/disposable test database; never repair checksums or rewrite
+Flyway history. Root `AGENTS.md` owns this rule. Hibernate uses
+`ddl-auto=validate` and does not create or update tables.
 
 ## Lần theo một thay đổi nghiệp vụ
 
 1. Find the endpoint in the domain controller and read its request/response DTO.
 2. Follow the service method for validation, authorization scope, state changes,
    and transaction boundaries.
-3. Check the DAO/repository and entity to see how state is persisted.
-4. If schema behavior changes, inspect/add a Flyway migration.
+3. Check the explicit database adapter and its SQL Server view/function/procedure.
+   Production has no JPA repository writer; entities remain for schema validation.
+4. If database behavior changes, edit its owning V1–V6 file and rebuild the
+   authorized demo/test database before validating Flyway.
 5. Update the focused test and the [API contract](../docs/api-contract.md) if
    the externally visible behavior changes.
 
