@@ -84,7 +84,7 @@ Thông tin đăng nhập minh họa do tập lệnh tạo:
 
 - Khách hàng: `0901234567 / hotel123`
 - Nhân viên: `FRONTDESK`, `HOUSEKEEP`, `TECHNICAL`, `ACCOUNTING`, `KITCHEN`,
-  `MANAGER`, `DIRECTOR`, `ADMIN`, `HR`, `STAFF` — tất cả dùng `hotel123`.
+  `MANAGER`, `DIRECTOR`, `ADMIN`, `HR` — tất cả dùng `hotel123`.
 
 SQL chỉ lưu giá trị băm BCrypt, không lưu mật khẩu dạng văn bản thuần.
 

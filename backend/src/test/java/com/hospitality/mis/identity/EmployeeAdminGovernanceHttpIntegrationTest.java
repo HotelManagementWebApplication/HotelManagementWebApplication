@@ -61,7 +61,7 @@ class EmployeeAdminGovernanceHttpIntegrationTest {
         save("admin", EmployeeRole.ADMIN, "admin-password");
         save("manager", EmployeeRole.MANAGER, "manager-password");
         save("hr", EmployeeRole.HR, "hr-password");
-        save("staff", EmployeeRole.STAFF, "staff-password");
+        save("staff", EmployeeRole.FRONT_DESK, "staff-password");
     }
 
     @Test
@@ -127,7 +127,7 @@ class EmployeeAdminGovernanceHttpIntegrationTest {
                         .contentType(APPLICATION_JSON).content("{\"enabled\":false}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(patch("/api/auth/employees/staff/role").header("Authorization", hrToken)
-                        .contentType(APPLICATION_JSON).content("{\"role\":\"STAFF\"}"))
+                        .contentType(APPLICATION_JSON).content("{\"role\":\"FRONT_DESK\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(patch("/api/auth/employees/staff/employment").header("Authorization", hrToken)
                         .contentType(APPLICATION_JSON).content("{\"status\":\"WORKING\"}"))

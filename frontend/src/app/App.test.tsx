@@ -19,10 +19,10 @@ describe("employee profile is the only routing authority",()=>{
     expect(captured.props.view).not.toBe("frontdesk");
   });
   it("routes by the real profile even when the login name matches another demo role",async()=>{
-    vi.spyOn(authApi,"employeeProfile").mockResolvedValue({employee_id:"REAL",full_name:"Nhân viên thật",role:"STAFF",permissions:[]});
+    vi.spyOn(authApi,"employeeProfile").mockResolvedValue({employee_id:"REAL",full_name:"Giám đốc thật",role:"DIRECTOR",permissions:[]});
     render(<App />);
     await act(async()=>{expect(await captured.props.onLogin("FRONTDESK","demo-pass")).toBeNull();});
-    expect(captured.props.view).toBe("staff");
-    expect(captured.props.role).toBe("staff");
+    expect(captured.props.view).toBe("manager");
+    expect(captured.props.role).toBe("director");
   });
 });

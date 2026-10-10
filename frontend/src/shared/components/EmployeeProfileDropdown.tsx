@@ -85,12 +85,6 @@ const ROLE_INFO_MAP: Record<string, { label: string; department: string; gradien
     gradient: "from-[#BE185D] to-[#EC4899]",
     badge: "bg-pink-50 text-pink-700 border-pink-200",
   },
-  STAFF: {
-    label: "Nhân viên Vận hành",
-    department: "Bộ phận Vận hành",
-    gradient: "from-[#334155] to-[#475569]",
-    badge: "bg-slate-50 text-slate-700 border-slate-200",
-  },
 };
 
 type PermissionInfo = {
@@ -240,7 +234,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
 
   if (!isOpen) return null;
 
-  const roleKey = profile?.role || "STAFF";
+  const roleKey = profile?.role || "";
   const roleMeta = ROLE_INFO_MAP[roleKey] ?? {
     label: currentRoleLabel || "Nhân viên",
     department: departmentName || "MaM Hotel",
@@ -327,7 +321,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
                   {displayName}
                 </p>
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-white/90 border border-white/20 shrink-0">
-                  {profile?.employee_id || "STAFF"}
+                  {profile?.employee_id || "—"}
                 </span>
               </div>
               <p className="text-xs text-white/70 flex items-center gap-1.5 mt-0.5 truncate">
@@ -410,7 +404,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
                   <BadgeCheck size={12} className="text-slate-400" /> Mã nhân viên
                 </span>
                 <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
-                  {profile?.employee_id || "STAFF"}
+                  {profile?.employee_id || "—"}
                 </span>
               </div>
 

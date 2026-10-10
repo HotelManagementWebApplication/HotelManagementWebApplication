@@ -79,7 +79,7 @@ class SqlServerPaymentReportingTest {
             .andExpect(status().isOk()).andExpect(jsonPath("$.page").value(14)).andExpect(jsonPath("$.total_elements").value(150))
             .andExpect(jsonPath("$.total_pages").value(15)).andExpect(jsonPath("$.method_counts.CASH").value(75))
             .andExpect(jsonPath("$.items[9].invoice_id").value(firstInvoice)).andExpect(jsonPath("$.items[9].reservation_id").isNumber());
-        mvc.perform(get("/api/finance/payments").with(jwt().jwt(j->j.subject("STAFF").claim("principal_type","EMPLOYEE").claim("principal_id","STAFF")).authorities(new SimpleGrantedAuthority("ROLE_STAFF"))))
+        mvc.perform(get("/api/finance/payments").with(jwt().jwt(j->j.subject("HOUSEKEEPING").claim("principal_type","EMPLOYEE").claim("principal_id","HOUSEKEEPING")).authorities(new SimpleGrantedAuthority("ROLE_HOUSEKEEPING"))))
             .andExpect(status().isForbidden());
     }
     @Test void pendingBankTransfersAggregateAllInvoices(){

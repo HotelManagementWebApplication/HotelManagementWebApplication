@@ -49,11 +49,11 @@ class EmployeeServiceTest {
         assertThat(service.list(false)).anyMatch(e->e.employeeId().equals("EMP-01"));
     }
     @Test void duplicateIdAndCustomerPhoneAreRejected(){
-        create("EMP-01",EmployeeRole.STAFF,"0909090601");
+        create("EMP-01",EmployeeRole.FRONT_DESK,"0909090601");
         code(()->service.provision("EMP-01","Duplicate","valid-password",EmployeeRole.FRONT_DESK,"invalid",null),"EMPLOYEE_EXISTS");
         Long guest=jdbc.queryForObject("INSERT KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) OUTPUT INSERTED.maKhachLuuTru VALUES(N'Employee phone test',N'0909090602',N'EMP-GUEST')",Long.class);
         jdbc.update("INSERT TaiKhoanKhachHang(maKhachLuuTru,soDienThoai,matKhau) VALUES(?,?,?)",guest,"0909090602",encoder.encode("valid-password"));
-        code(()->create("EMP-02",EmployeeRole.STAFF,"0909090602"),"PHONE_ALREADY_IN_USE");
+        code(()->create("EMP-02",EmployeeRole.FRONT_DESK,"0909090602"),"PHONE_ALREADY_IN_USE");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhanVien WHERE maNhanVien=N'EMP-02'",Integer.class)).isZero();
     }
     @Test void managerialCeilingsApplyToProvisionResetAndRoleChanges(){
@@ -64,7 +64,7 @@ class EmployeeServiceTest {
         code(()->service.setRole("EMP-hr",EmployeeRole.DIRECTOR),"ACCESS_DENIED");
         assertThat(service.resetPassword("EMP-hr","new-password").role()).isEqualTo(EmployeeRole.HR);
         actor(EmployeeRole.ADMIN);code(()->service.setEnabled("EMP-dir",false),"ACCESS_DENIED");
-        actor(EmployeeRole.HR);code(()->service.setRole("EMP-hr",EmployeeRole.STAFF),"ACCESS_DENIED");
+        actor(EmployeeRole.HR);code(()->service.setRole("EMP-hr",EmployeeRole.FRONT_DESK),"ACCESS_DENIED");
     }
     @Test void actorCannotChangeOwnRoleAccountOrSessions(){
         create("EMP-owner",EmployeeRole.DIRECTOR,"0909090606");
@@ -74,7 +74,7 @@ class EmployeeServiceTest {
         code(()->service.setEmployment("EMP-owner",new EmployeeAdminDtos.EmploymentRequest(Employee.EmploymentStatus.TERMINATED,null,null)),"SELF_ACCOUNT_STATUS_CHANGE_FORBIDDEN");
     }
     @Test void fifthFailureLocksAndSuccessDoesNotSilentlyUnlock(){
-        create("EMP-01",EmployeeRole.STAFF,"0909090601");
+        create("EMP-01",EmployeeRole.FRONT_DESK,"0909090601");
         for(int n=0;n<5;n++)service.recordLoginFailure("EMP-01");
         assertThat(service.findRequired("EMP-01").accountNonLocked()).isFalse();
         assertThat(service.findRequired("EMP-01").failedLoginAttempts()).isEqualTo(5);
@@ -85,7 +85,7 @@ class EmployeeServiceTest {
         assertThat(service.findRequired("EMP-01").lastFailedLoginAt()).isNotNull();
     }
     @Test void loginEventsAndCounterRollBackTogether(){
-        create("EMP-01",EmployeeRole.STAFF,"0909090601");
+        create("EMP-01",EmployeeRole.FRONT_DESK,"0909090601");
         assertThatThrownBy(()->new TransactionTemplate(manager).execute(status->{service.recordLoginFailure("EMP-01");throw new IllegalStateException("rollback");})).isInstanceOf(IllegalStateException.class);
         assertThat(service.loginHistory("EMP-01",0,100).totalElements()).isZero();assertThat(service.findRequired("EMP-01").failedLoginAttempts()).isZero();
         service.recordLoginFailure("EMP-none");assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM SuKienDangNhapNhanVien WHERE maNhanVien=N'EMP-none'",Integer.class)).isZero();
@@ -101,7 +101,7 @@ class EmployeeServiceTest {
         assertThat(service.setEnabled("EMP-01",true).enabled()).isTrue();
     }
     @Test void sessionRevocationChecksOwnershipAndDisablePreventsNewIssuance(){
-        create("EMP-01",EmployeeRole.STAFF,"0909090601");create("EMP-02",EmployeeRole.STAFF,"0909090602");
+        create("EMP-01",EmployeeRole.FRONT_DESK,"0909090601");create("EMP-02",EmployeeRole.FRONT_DESK,"0909090602");
         var issued=issue("EMP-01");var session=service.sessions("EMP-01").getFirst();
         code(()->service.revokeSession("EMP-02",session.id()),"SESSION_NOT_FOUND");
         service.revokeSession("EMP-01",session.id());assertThat(service.sessions("EMP-01").getFirst().revokedAt()).isNotNull();
@@ -113,14 +113,14 @@ class EmployeeServiceTest {
     }
     @Test void passwordBoundariesAndMissingEmployeeRetainErrorPrecedence(){
         code(()->service.provision("EMP-01","test",null,null,null,null),"POSITION_REQUIRED");
-        code(()->service.provision("EMP-01","test","short",EmployeeRole.STAFF,"invalid",null),"PASSWORD_REQUIRED");
+        code(()->service.provision("EMP-01","test","short",EmployeeRole.FRONT_DESK,"invalid",null),"PASSWORD_REQUIRED");
         code(()->service.resetPassword("EMP-none","short"),"EMPLOYEE_NOT_FOUND");
         code(()->service.changeOwnPassword("EMP-none","short"),"PASSWORD_REQUIRED");
-        create("EMP-01",EmployeeRole.STAFF,"0909090601");
+        create("EMP-01",EmployeeRole.FRONT_DESK,"0909090601");
         service.changeOwnPassword("EMP-01","changed-password");assertThat(encoder.matches("changed-password",service.findRequired("EMP-01").password())).isTrue();
     }
     @Test void concurrentFailuresDoNotLoseAnIncrement()throws Exception{
-        create("EMP-01",EmployeeRole.STAFF,"0909090601");
+        create("EMP-01",EmployeeRole.FRONT_DESK,"0909090601");
         var pool=Executors.newFixedThreadPool(2);var gate=new CountDownLatch(1);
         try{
             var first=pool.submit(()->{gate.await();service.recordLoginFailure("EMP-01");return true;});

@@ -99,15 +99,15 @@ class HrLifecycleIntegrationTest {
     }
 
     @Test
-    void roleCeilingAllowsManagerStaffAdministrationButRejectsDirectorElevation() {
+    void roleCeilingAllowsManagerSubordinateAdministrationButRejectsDirectorElevation() {
         Employee manager = saveEmployee("MANAGER1", EmployeeRole.MANAGER);
         Employee hr = saveEmployee("HR0004", EmployeeRole.HR);
         authenticate(manager.getEmployeeId(), EmployeeRole.MANAGER);
 
         var provisioned = employeeService.provision(
-                "STAFF001", "Staff member", "valid-password", EmployeeRole.STAFF,
+                "EMP001", "Front desk member", "valid-password", EmployeeRole.FRONT_DESK,
                 "0909000104", "Front office");
-        assertThat(provisioned.role()).isEqualTo(EmployeeRole.STAFF);
+        assertThat(provisioned.role()).isEqualTo(EmployeeRole.FRONT_DESK);
 
         assertThatThrownBy(() -> employeeService.setRole(hr.getEmployeeId(), EmployeeRole.DIRECTOR))
                 .isInstanceOf(DomainException.class)

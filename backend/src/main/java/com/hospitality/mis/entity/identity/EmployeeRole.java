@@ -32,8 +32,6 @@ public enum EmployeeRole {
     /** Bếp & F&B, chịu trách nhiệm danh mục, tồn kho và vận hành đơn nhà hàng. */
     KITCHEN(SERVICE_READ, SERVICE_WRITE, INVENTORY_READ, INVENTORY_WRITE, SERVICE_PRICE_REQUEST,
             RESTAURANT_ORDER_READ, RESTAURANT_ORDER_WRITE),
-    /** Nhân viên thông thường chỉ xem phòng và đặt phòng. */
-    STAFF(ROOM_READ, RESERVATION_READ),
     /** Nhân sự chỉ đọc dữ liệu nhân viên. */
     HR(EMPLOYEE_READ, SHIFT_READ, SHIFT_WRITE);
 
@@ -57,7 +55,7 @@ public enum EmployeeRole {
             case DIRECTOR -> true;
             case ADMIN -> targetRole != DIRECTOR;
             case MANAGER -> switch (targetRole) {
-                case HR, FRONT_DESK, HOUSEKEEPING, TECHNICAL, KITCHEN, ACCOUNTING, STAFF -> true;
+                case HR, FRONT_DESK, HOUSEKEEPING, TECHNICAL, KITCHEN, ACCOUNTING -> true;
                 default -> false;
             };
             default -> false;

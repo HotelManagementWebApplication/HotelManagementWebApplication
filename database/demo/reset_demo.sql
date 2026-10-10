@@ -295,8 +295,7 @@ VALUES
     (N'MANAGER', N'Hoàng Minh Quản', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Quản lý', N'TP.HCM', N'0902000006', 1, 1, 0, N'Đang làm việc'),
     (N'DIRECTOR', N'Đỗ Thanh Giám Đốc', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Giám đốc', N'TP.HCM', N'0902000007', 1, 1, 0, N'Đang làm việc'),
     (N'ADMIN', N'Quản Trị Hệ Thống', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Quản trị viên', N'TP.HCM', N'0902000008', 1, 1, 0, N'Đang làm việc'),
-    (N'HR', N'Nguyễn Thị Nhân Sự', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Nhân sự', N'TP.HCM', N'0902000009', 1, 1, 0, N'Đang làm việc'),
-    (N'STAFF', N'Nhân Viên Vận Hành', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Nhân viên', N'TP.HCM', N'0902000010', 1, 1, 0, N'Đang làm việc')
+    (N'HR', N'Nguyễn Thị Nhân Sự', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Nhân sự', N'TP.HCM', N'0902000009', 1, 1, 0, N'Đang làm việc')
 ;INSERT INTO DichVu
 (maDichVu, ten, gia, donViTinh, soLuongTonKho, nguongAnToan, dangHoatDong, danhMuc, moTa, duongDanAnh)
 VALUES
@@ -580,7 +579,7 @@ SELECT maNhanVien, CAST(SYSDATETIME() AS date),
        CASE WHEN maNhanVien IN (N'TECHNICAL',N'ACCOUNTING') THEN DATEADD(SECOND, 79200, CAST(CAST(SYSDATETIME() AS date) AS datetime2)) ELSE DATEADD(SECOND, 50400, CAST(CAST(SYSDATETIME() AS date) AS datetime2)) END,
        N'Đã bắt đầu', N'MANAGER'
 FROM NhanVien
-WHERE maNhanVien IN (N'FRONTDESK',N'HOUSEKEEP',N'TECHNICAL',N'ACCOUNTING',N'KITCHEN',N'MANAGER',N'HR',N'STAFF');
+WHERE maNhanVien IN (N'FRONTDESK',N'HOUSEKEEP',N'TECHNICAL',N'ACCOUNTING',N'KITCHEN',N'MANAGER',N'HR');
 SET IDENTITY_INSERT NhiemVuBuongPhong ON;
 INSERT INTO NhiemVuBuongPhong
     (maNhiemVuBuongPhong, maPhong, nguoiDuocPhanCong, trangThai, daHoanThanhChecklist, coSuCoChan, ghiChu, nguoiPhanCong, thoiDiemCapNhat)
@@ -651,8 +650,7 @@ VALUES
     (6, N'MANAGER', CAST(SYSDATETIME() AS date), DATEADD(SECOND, 29400, CAST(CAST(SYSDATETIME() AS date) AS datetime2)), DATEADD(SECOND, 63000, CAST(CAST(SYSDATETIME() AS date) AS datetime2)), N'Đi muộn', N'Nhập từ máy chấm công', N'FP-DEMO-006', N'Nhân viên đến muộn để kiểm thử cảnh báo', N'HR'),
     (7, N'DIRECTOR', CAST(SYSDATETIME() AS date), DATEADD(SECOND, 28800, CAST(CAST(SYSDATETIME() AS date) AS datetime2)), DATEADD(SECOND, 61200, CAST(CAST(SYSDATETIME() AS date) AS datetime2)), N'Có mặt', N'Nhập từ máy chấm công', N'FP-DEMO-007', N'Import từ máy vân tay demo', N'HR'),
     (8, N'ADMIN', CAST(SYSDATETIME() AS date), NULL, NULL, N'Vắng mặt', N'Nhập thủ công', NULL, N'Vắng không phép để kiểm thử trạng thái', N'HR'),
-    (9, N'HR', CAST(SYSDATETIME() AS date), NULL, NULL, N'Nghỉ phép', N'Nhập thủ công', NULL, N'Nghỉ phép để kiểm thử trạng thái', N'HR'),
-    (10, N'STAFF', CAST(SYSDATETIME() AS date), DATEADD(SECOND, 32700, CAST(CAST(SYSDATETIME() AS date) AS datetime2)), DATEADD(SECOND, 64800, CAST(CAST(SYSDATETIME() AS date) AS datetime2)), N'Đi muộn', N'Nhập từ máy chấm công', N'FP-DEMO-010', N'Nhân viên đến muộn để kiểm thử cảnh báo', N'HR');
+    (9, N'HR', CAST(SYSDATETIME() AS date), NULL, NULL, N'Nghỉ phép', N'Nhập thủ công', NULL, N'Nghỉ phép để kiểm thử trạng thái', N'HR');
 SET IDENTITY_INSERT ChamCong OFF;
 
 SET IDENTITY_INSERT DonNghiPhep ON;

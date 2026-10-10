@@ -247,7 +247,7 @@ export default function HRStation({ onBack }: Props) {
       FRONT_DESK: ["Bộ phận Lễ tân", "reception"], HOUSEKEEPING: ["Bộ phận Buồng phòng", "housekeeping"],
       KITCHEN: ["Bộ phận Bếp & Nhà hàng", "fnb"], TECHNICAL: ["Bộ phận Kỹ thuật", "technical"],
       ACCOUNTING: ["Bộ phận Kế toán", "accounting"], HR: ["Bộ phận Nhân sự", "hr"],
-      MANAGER: ["Ban quản lý", "management"], DIRECTOR: ["Ban giám đốc", "management"], ADMIN: ["Bộ phận CNTT", "admin"], STAFF: ["Bộ phận Vận hành", "operations"],
+      MANAGER: ["Ban quản lý", "management"], DIRECTOR: ["Ban giám đốc", "management"], ADMIN: ["Bộ phận CNTT", "admin"],
     }[role] ?? ["Bộ phận Vận hành", "operations"]);
     const mapEmployee = (employee: EmployeeAdmin): EmployeeProfile => {
       const [department, departmentId] = departmentFor(employee.role);
@@ -1460,7 +1460,7 @@ export default function HRStation({ onBack }: Props) {
     </div>
   );
 
-  // ── 6. TAB 3: HỒ SƠ NHÂN SỰ (STAFF DIRECTORY) ──
+  // ── 6. TAB 3: HỒ SƠ NHÂN SỰ (EMPLOYEE DIRECTORY) ──
   const filteredEmployees = useMemo(() => {
     return employees.filter(emp => {
       if (staffFilterDept !== "all" && emp.departmentId !== staffFilterDept) return false;

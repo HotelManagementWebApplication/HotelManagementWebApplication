@@ -115,7 +115,7 @@ class RoomApiContractTest {
     }
 
     @Test
-    @WithMockUser(username = "staff", roles = "STAFF")
+    @WithMockUser(username = "housekeeping", roles = "HOUSEKEEPING")
     /** Given status không thuộc enum, When search, Then trả INVALID_ROOM_STATUS. */
     void invalidRoomStatusIsRejectedByTheRoomContract() throws Exception {
         mockMvc.perform(get("/api/rooms").param("status", "NOT_A_STATUS"))
@@ -124,7 +124,7 @@ class RoomApiContractTest {
     }
 
     @Test
-    @WithMockUser(username = "staff", roles = "STAFF")
+    @WithMockUser(username = "housekeeping", roles = "HOUSEKEEPING")
     /** Given legacy room code, When search, Then hard-cut rejects it without a compatibility read. */
     void legacyRoomStatusCodeIsRejectedByTheRoomContract() throws Exception {
         mockMvc.perform(get("/api/rooms").param("status", "SAN_SANG"))

@@ -40,9 +40,9 @@ const DEMO_ROLES = [
   { label: "Kế toán", email: "ACCOUNTING", desc: "Điều phối kế toán" },
   { label: "Bếp & Nhà hàng", email: "KITCHEN", desc: "Điều phối nhà hàng & kho" },
   { label: "Nhân sự", email: "HR", desc: "Điều phối nhân sự" },
-  { label: "Quản trị", email: "ADMIN", desc: "Quản trị hệ thống" },
-  { label: "Nhân viên vận hành", email: "STAFF", desc: "Cổng nhân viên" },
 ];
+
+const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === "true";
 
 export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const [username, setUsername] = useState("");
@@ -62,7 +62,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
       sessionStorage.getItem("pending_booking_category")
     );
     setHasPendingBooking(hasPending);
-    if (hasPending && import.meta.env.DEV) {
+    if (hasPending && SHOW_DEMO_ACCOUNTS) {
       setSelectedRole("Khách hàng");
       setUsername("0901234567");
       setPassword("hotel123");
@@ -473,8 +473,8 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
             </div>
           )}
 
-          {/* ── DEMO ACCOUNT SELECTOR (Development Only) ── */}
-          {import.meta.env.DEV && (
+          {/* ── DEMO ACCOUNT SELECTOR ── */}
+          {SHOW_DEMO_ACCOUNTS && (
             <div className="mb-5 rounded-2xl bg-white border border-[#E5DDD0] shadow-sm overflow-hidden transition-all duration-300">
               {/* Quick 1-click role chips */}
               <div className="p-3 bg-[#FDFBF7] border-b border-[#F0EBE1] flex items-center justify-between gap-2">

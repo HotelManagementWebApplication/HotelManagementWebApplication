@@ -110,7 +110,7 @@ public class AuthController {
 
     /** Lấy identity/role/permission snapshot của employee hiện tại từ JWT actor và authority backend. */
     @GetMapping("/me")
-    @PreAuthorize("hasAnyRole('ADMIN','DIRECTOR','MANAGER','HR','FRONT_DESK','ACCOUNTING','HOUSEKEEPING','TECHNICAL','KITCHEN','STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN','DIRECTOR','MANAGER','HR','FRONT_DESK','ACCOUNTING','HOUSEKEEPING','TECHNICAL','KITCHEN')")
     public AuthDtos.EmployeeProfileResponse me() {
         return service.employeeMe(SecurityActor.currentPrincipal());
     }

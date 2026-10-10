@@ -140,7 +140,7 @@ public final class VietnameseCodeConverters {
                 Map.entry("MANAGER", "Quản lý"), Map.entry("FRONT_DESK", "Lễ tân"),
                 Map.entry("ACCOUNTING", "Kế toán"), Map.entry("HOUSEKEEPING", "Buồng phòng"),
                 Map.entry("TECHNICAL", "Kỹ thuật"), Map.entry("KITCHEN", "Nhà bếp"),
-                Map.entry("STAFF", "Nhân viên"), Map.entry("HR", "Nhân sự"))); }
+                Map.entry("HR", "Nhân sự"))); }
         @Override public String convertToDatabaseColumn(String value) { return mapping.convertToDatabaseColumn(value); }
         @Override public String convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
     }

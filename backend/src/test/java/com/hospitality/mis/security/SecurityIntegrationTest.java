@@ -153,7 +153,7 @@ class SecurityIntegrationTest {
         employees.save(employee("manager", "manager-password", EmployeeRole.MANAGER, "0900000001"));
         employees.save(employee("hr", "hr-password", EmployeeRole.HR, "0900000011"));
         employees.save(employee("frontdesk", "frontdesk-password", EmployeeRole.FRONT_DESK, "0900000002"));
-        employees.save(employee("staff", "staff-password", EmployeeRole.STAFF, "0900000003"));
+        employees.save(employee("staff", "staff-password", EmployeeRole.FRONT_DESK, "0900000003"));
         employees.save(employee("kitchen", "kitchen-password", EmployeeRole.KITCHEN, "0900000004"));
         employees.flush();
 
@@ -704,7 +704,7 @@ class SecurityIntegrationTest {
         String adminToken = bearer(login("admin", "admin-password").get("access_token").asText());
         provision(adminToken, "a-direct", EmployeeRole.DIRECTOR, "0900000015")
                 .andExpect(status().isForbidden());
-        provision(adminToken, "a-staff", EmployeeRole.STAFF, "0900000016")
+        provision(adminToken, "a-frontdesk", EmployeeRole.FRONT_DESK, "0900000016")
                 .andExpect(status().isCreated());
         reset(adminToken, "director")
                 .andExpect(status().isForbidden());
@@ -731,7 +731,7 @@ class SecurityIntegrationTest {
                         "PERMISSION_SHIFT_READ", "PERMISSION_SHIFT_WRITE");
 
         String hrToken = bearer(login("hr", "hr-password").get("access_token").asText());
-        provision(hrToken, "hr-created", EmployeeRole.STAFF, "0900000019")
+        provision(hrToken, "hr-created", EmployeeRole.FRONT_DESK, "0900000019")
                 .andExpect(status().isForbidden());
         reset(hrToken, "staff")
                 .andExpect(status().isForbidden());

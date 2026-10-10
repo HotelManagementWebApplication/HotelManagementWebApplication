@@ -69,9 +69,9 @@ class GuestControllerHttpScopeTest {
                 .andExpect(jsonPath("$[0].id").value(7));
     }
 
-    /** Given staff không thuộc nhóm guest reader, When đọc, Then bị 403. */
+    /** Given housekeeping không thuộc nhóm guest reader, When đọc, Then bị 403. */
     @Test
-    @WithMockUser(username = "staff", roles = "STAFF")
+    @WithMockUser(username = "housekeeping", roles = "HOUSEKEEPING")
     void unauthorizedGuestRoleReturnsStableForbiddenError() throws Exception {
         mockMvc.perform(get("/api/guests/{id}", 7L))
                 .andExpect(status().isForbidden())

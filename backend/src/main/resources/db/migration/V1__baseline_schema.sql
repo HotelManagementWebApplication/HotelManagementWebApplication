@@ -923,7 +923,7 @@ ALTER TABLE GiaoDichThanhToan ADD CONSTRAINT chkGiaoDichThanhToanloai CHECK (loa
 ALTER TABLE GiaoDichThanhToan ADD CONSTRAINT chkGiaoDichThanhToanphuongThuc CHECK (phuongThuc IN (N'Tiền mặt', N'Thẻ', N'Chuyển khoản ngân hàng'));
 ALTER TABLE GiaoDichThanhToan ADD CONSTRAINT chkGiaoDichThanhToantrangThai CHECK (trangThai IN (N'Đã hoàn tất', N'Thất bại', N'Đã vô hiệu'));
 ALTER TABLE HangDoiThongBao ADD CONSTRAINT chkHangDoiThongBaotrangThai CHECK (trangThai IN (N'Chờ gửi', N'Đã gửi', N'Gửi thất bại'));
-ALTER TABLE HangDoiThongBao ADD CONSTRAINT chkHangDoiThongBaovaiTroNguoiNhan CHECK (vaiTroNguoiNhan IN (N'Quản trị viên', N'Giám đốc', N'Quản lý', N'Lễ tân', N'Kế toán', N'Buồng phòng', N'Kỹ thuật', N'Nhà bếp', N'Nhân viên', N'Nhân sự'));
+ALTER TABLE HangDoiThongBao ADD CONSTRAINT chkHangDoiThongBaovaiTroNguoiNhan CHECK (vaiTroNguoiNhan IN (N'Quản trị viên', N'Giám đốc', N'Quản lý', N'Lễ tân', N'Kế toán', N'Buồng phòng', N'Kỹ thuật', N'Nhà bếp', N'Nhân sự'));
 ALTER TABLE HoaDon ADD CONSTRAINT chkHoaDonphuongThucThanhToan CHECK (phuongThucThanhToan IN (N'Tiền mặt', N'Thẻ', N'Chuyển khoản ngân hàng'));
 ALTER TABLE HoaDon ADD CONSTRAINT chkHoaDontrangThai CHECK (trangThai IN (N'Đã thanh toán', N'Chưa thanh toán', N'Dự kiến'));
 ALTER TABLE HoaDonGiaTriGiaTang ADD CONSTRAINT chkHoaDonGiaTriGiaTangloaiKhachHang CHECK (loaiKhachHang IN (N'Cá nhân', N'Doanh nghiệp'));
@@ -936,7 +936,7 @@ ALTER TABLE KiemTraBuongPhong ADD CONSTRAINT chkKiemTraBuongPhongtinhTrangHangMu
 ALTER TABLE LichSuHangThanhVien ADD CONSTRAINT chkLichSuHangThanhVienhangCu CHECK (hangCu IN (N'Tiêu chuẩn', N'Bạc', N'Vàng', N'Bạch kim'));
 ALTER TABLE LichSuHangThanhVien ADD CONSTRAINT chkLichSuHangThanhVienhangMoi CHECK (hangMoi IN (N'Tiêu chuẩn', N'Bạc', N'Vàng', N'Bạch kim'));
 ALTER TABLE MatHangTonKho ADD CONSTRAINT chkMatHangTonKhodanhMuc CHECK (danhMuc IN (N'Đồ vải', N'Khăn', N'Đồ dùng', N'Minibar', N'Khác'));
-ALTER TABLE NhanVien ADD CONSTRAINT chkNhanVienvaiTro CHECK (vaiTro IN (N'Quản trị viên', N'Giám đốc', N'Quản lý', N'Lễ tân', N'Kế toán', N'Buồng phòng', N'Kỹ thuật', N'Nhà bếp', N'Nhân viên', N'Nhân sự'));
+ALTER TABLE NhanVien ADD CONSTRAINT chkNhanVienvaiTro CHECK (vaiTro IN (N'Quản trị viên', N'Giám đốc', N'Quản lý', N'Lễ tân', N'Kế toán', N'Buồng phòng', N'Kỹ thuật', N'Nhà bếp', N'Nhân sự'));
 ALTER TABLE PhieuBaoTri ADD CONSTRAINT chkPhieuBaoTritrangThai CHECK (trangThai IN (N'Chưa xử lý', N'Đang bảo trì', N'Đã hoàn thành'));
 ALTER TABLE PhieuDatPhong ADD CONSTRAINT chkPhieuDatPhonghinhThucThue CHECK (hinhThucThue IN (N'Theo gói', N'Theo giờ'));
 ALTER TABLE PhieuDatPhong ADD CONSTRAINT chkPhieuDatPhongnguonDatPhong CHECK (nguonDatPhong IN (N'Trực tiếp', N'AGODA', N'BOOKING_COM', N'EXPEDIA', N'AIRBNB'));

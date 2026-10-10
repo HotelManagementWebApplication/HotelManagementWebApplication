@@ -103,7 +103,7 @@ public final class VietnameseEnumConverters {
                 value(EmployeeRole.MANAGER, "Quản lý"), value(EmployeeRole.FRONT_DESK, "Lễ tân"),
                 value(EmployeeRole.ACCOUNTING, "Kế toán"), value(EmployeeRole.HOUSEKEEPING, "Buồng phòng"),
                 value(EmployeeRole.TECHNICAL, "Kỹ thuật"), value(EmployeeRole.KITCHEN, "Nhà bếp"),
-                value(EmployeeRole.STAFF, "Nhân viên"), value(EmployeeRole.HR, "Nhân sự")); }
+                value(EmployeeRole.HR, "Nhân sự")); }
         @Override public String convertToDatabaseColumn(EmployeeRole value) { return mapping.convertToDatabaseColumn(value); }
         @Override public EmployeeRole convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
     }
