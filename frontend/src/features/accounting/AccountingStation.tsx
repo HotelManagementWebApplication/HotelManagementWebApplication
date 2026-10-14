@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import CashDenominationDialog from "./CashDenominationDialog";
 import { kitchenAccountingApi, newKitchenIdempotencyKey } from "../../shared/api/kitchenAccounting";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { authApi } from "../../shared/api/auth";
@@ -124,7 +125,8 @@ function CashHandoverPanel({
   const [formOpen, setFormOpen] = useState(false);
   const [actualAmount, setActualAmount] = useState("");
   const [nextActor, setNextActor] = useState("");
-  const [denominationText, setDenominationText] = useState("");
+  const [denominations, setDenominations] = useState<CashDenomination[]>([]);
+  const [denominationDialogOpen, setDenominationDialogOpen] = useState(false);
   const totalExpected = cashRows.reduce((s,r) => s + r.expected, 0);
   const totalActual   = cashRows.reduce((s,r) => s + r.actual, 0);
   const variance      = totalActual - totalExpected;
@@ -140,18 +142,7 @@ function CashHandoverPanel({
       window.alert("Vui lòng nhập mã nhân viên nhận ca.");
       return;
     }
-    const denominations: CashDenomination[] = [];
-    if (denominationText.trim()) {
-      for (const token of denominationText.split(",")) {
-        const [denominationValue, quantityValue] = token.split(":").map(value => value.trim());
-        const denomination = Number(denominationValue);
-        const quantity = Number(quantityValue);
-        if (!Number.isFinite(denomination) || denomination <= 0 || !Number.isInteger(quantity) || quantity <= 0) {
-          window.alert("Chi tiết mệnh giá dùng định dạng: 500000:2,200000:1");
-          return;
-        }
-        denominations.push({ denomination, quantity });
-      }
+    if (denominations.length > 0) {
       const denominationTotal = denominations.reduce((sum, line) => sum + line.denomination * line.quantity, 0);
       if (denominationTotal !== amount) {
         window.alert("Tổng chi tiết mệnh giá phải bằng số tiền bàn giao.");
@@ -315,9 +306,20 @@ function CashHandoverPanel({
               <input value={nextActor} onChange={event => setNextActor(event.target.value)} placeholder="Ví dụ: FRONTDESK" style={{ display:"block",width:"100%",height:32,marginTop:4,padding:"0 8px",border:"1px solid #CBD5E1",borderRadius:7,boxSizing:"border-box" }} />
             </label>
           </div>
-          <label style={{ display:"block",fontSize:11,color:"#475569",marginTop:9 }}>Chi tiết mệnh giá
-            <input value={denominationText} onChange={event => setDenominationText(event.target.value)} placeholder="500000:2,200000:1" style={{ display:"block",width:"100%",height:32,marginTop:4,padding:"0 8px",border:"1px solid #CBD5E1",borderRadius:7,boxSizing:"border-box" }} />
-          </label>
+          <div style={{ display:"block",fontSize:11,color:"#475569",marginTop:9 }}>
+            <span id="cash-denomination-label">Chi tiết mệnh giá</span>
+            <button type="button" aria-labelledby="cash-denomination-label" aria-haspopup="dialog" onClick={() => setDenominationDialogOpen(true)}
+              style={{ display:"block",width:"100%",minHeight:32,marginTop:4,padding:"7px 8px",border:"1px solid #CBD5E1",borderRadius:7,boxSizing:"border-box",background:"#FFF",textAlign:"left",cursor:"pointer",color:denominations.length?"#334155":"#94A3B8" }}>
+              {denominations.length ? denominations.map(line => `${fmtVND(line.denomination)} đ × ${line.quantity}`).join("; ") : "Nhấn để kiểm đếm mệnh giá tiền mặt"}
+            </button>
+          </div>
+          {denominationDialogOpen && <CashDenominationDialog value={denominations}
+            onClose={() => setDenominationDialogOpen(false)}
+            onConfirm={lines => {
+              setDenominations(lines);
+              setActualAmount(String(lines.reduce((sum, line) => sum + line.denomination * line.quantity, 0)));
+              setDenominationDialogOpen(false);
+            }} />}
           <button type="button" onClick={() => void submitHandover()} disabled={submitting} style={{ marginTop:10,height:32,padding:"0 14px",border:0,borderRadius:7,background:"#0F172A",color:"#FFF",fontSize:11,fontWeight:700,opacity:submitting?0.6:1 }}>
             {submitting ? "Đang lưu bàn giao…" : "Lưu bàn giao"}
           </button>

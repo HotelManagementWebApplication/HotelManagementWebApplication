@@ -1,0 +1,26 @@
+.cash-count-dialog { position: fixed; inset: 0; margin: auto; width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; color: #0f172a; box-shadow: 0 24px 64px #0f172a40; overflow: auto; font-family: inherit; font-size: 13px; }
+.cash-count-dialog::backdrop { background: rgb(15 23 42 / 46%); }
+.cash-count-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; border-bottom: 1px solid #e2e8f0; }
+.cash-count-header h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.cash-count-dialog button { cursor: pointer; font: inherit; }
+.cash-count-header button { display: flex; padding: 4px; border: 0; border-radius: 4px; background: transparent; color: #64748b; }
+.cash-count-content { padding: 12px 18px 0; }
+.cash-count-content table { width: 100%; border-collapse: collapse; }
+.cash-count-content th { padding: 0 0 8px; text-align: left; font-size: 12px; font-weight: 500; color: #475569; }
+.cash-count-content td { padding: 4px 0; }
+.cash-count-content th:last-child, .cash-count-content td:last-child { text-align: right; white-space: nowrap; }
+.cash-count-content td:nth-child(2) { width: 32%; padding-left: 8px; padding-right: 12px; }
+.cash-count-content th:nth-child(2) { padding-left: 8px; }
+.cash-count-content input { display: block; width: 100%; min-width: 0; height: 30px; padding: 0 9px; box-sizing: border-box; border: 1px solid #94a3b8; border-radius: 6px; font: inherit; color: #0f172a; background: #fff; }
+.cash-count-dialog :focus-visible { outline: 2px solid #16a34a; outline-offset: 2px; }
+.cash-count-note { display: inline-flex; justify-content: center; align-items: center; width: 106px; max-width: 100%; height: 28px; border: 1px solid #0f172a1a; border-radius: 3px; color: #334155; font-weight: 700; font-variant-numeric: tabular-nums; background-image: repeating-linear-gradient(120deg, transparent, transparent 5px, #ffffff30 5px, #ffffff30 6px); }
+.cash-count-totals { margin-top: 10px; padding: 10px 0 14px; border-top: 1px solid #e2e8f0; }
+.cash-count-totals div { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.cash-count-totals span { color: #64748b; }
+.cash-count-totals strong { font-variant-numeric: tabular-nums; }
+.cash-count-content p[role=alert] { color: #b91c1c; margin-bottom: 12px; }
+.cash-count-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid #e2e8f0; }
+.cash-count-footer button { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; color: #334155; font-size: 12px; font-weight: 600; }
+.cash-count-footer button[type=submit] { border-color: #16a34a; background: #16a34a; color: white; }
+.cash-count-footer button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 400px) { .cash-count-content { padding-left: 12px; padding-right: 12px; } .cash-count-note { width: 90px; font-size: 12px; } }

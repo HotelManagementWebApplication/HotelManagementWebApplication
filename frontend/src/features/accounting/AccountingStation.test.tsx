@@ -18,6 +18,23 @@ describe("Accounting server pagination",()=>{
     vi.spyOn(enterpriseApi,"ota").mockResolvedValue([]); vi.spyOn(enterpriseApi,"vatInvoices").mockResolvedValue([]);
     vi.spyOn(api,"reconciliation").mockResolvedValue({from_date:"2026-10-09",to_date:"2026-10-09",totals_by_method:{CASH:15000000},total_payments:15000000,total_refunds:0,net_total:15000000,recognized_revenue:15000000,outstanding_partner_debt:0,cash_variance:0,completed_transactions:150,pending_bank_transfers:0});
   });
+  it("fills the handover amount from the popup and preserves confirmed counts after cancel", async()=>{
+    vi.spyOn(api,"payments").mockResolvedValue(result(0,0));
+    mount(); await screen.findByText("Hiển thị 0–0 trên 0 giao dịch");
+    fireEvent.click(screen.getByRole("button",{name:"Ghi nhận bàn giao"}));
+    fireEvent.click(screen.getByRole("button",{name:"Chi tiết mệnh giá"}));
+    fireEvent.change(screen.getAllByRole("spinbutton")[0],{target:{value:"2"}});
+    fireEvent.change(screen.getAllByRole("spinbutton")[1],{target:{value:"3"}});
+    fireEvent.click(screen.getByRole("button",{name:"Xác nhận & Điền"}));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect((screen.getByLabelText("Số tiền thực tế") as HTMLInputElement).value).toBe("1600000");
+    fireEvent.click(screen.getByRole("button",{name:"Chi tiết mệnh giá"}));
+    expect((screen.getAllByRole("spinbutton")[0] as HTMLInputElement).value).toBe("2");
+    fireEvent.change(screen.getAllByRole("spinbutton")[0],{target:{value:"8"}});
+    fireEvent.click(screen.getByRole("button",{name:"Hủy bỏ"}));
+    expect((screen.getByLabelText("Số tiền thực tế") as HTMLInputElement).value).toBe("1600000");
+    expect(screen.getByRole("button",{name:"Chi tiết mệnh giá"}).textContent).toContain("× 2");
+  });
   it("fetches only the selected page, shows records after 100 and keeps whole-day KPIs",async()=>{
     const invoices=vi.spyOn(api,"invoices"),payments=vi.spyOn(api,"payments").mockImplementation(async(q)=>result(q?.page??0));
     mount(); await screen.findByText("Hiển thị 1–10 trên 150 giao dịch");
