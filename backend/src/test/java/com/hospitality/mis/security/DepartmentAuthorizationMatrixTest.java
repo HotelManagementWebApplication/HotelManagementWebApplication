@@ -121,6 +121,7 @@ class DepartmentAuthorizationMatrixTest {
                 java.time.LocalDate.now(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
                 List.of(), Map.of(), List.of(), 0, 20, 0, 0));
         when(mock22.list(any(), any(), any())).thenReturn(List.of());
+        when(mock22.shiftAssignments(anyString(), anyString())).thenReturn(List.of());
         when(mock23.list(any(), any())).thenReturn(List.of());
         when(mock24.canResetEmployee(any(), anyString())).thenReturn(true);
         when(mock24.canManageRole(any(), any())).thenReturn(true);
@@ -189,7 +190,8 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("GET", "/api/room-types/STD/price-history", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
             new Endpoint("GET", "/api/front-desk/dashboard", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK", "{}"),
             new Endpoint("GET", "/api/operations/housekeeping/tasks", "ADMIN,DIRECTOR,MANAGER,HOUSEKEEPING", "{}"),
-            new Endpoint("POST", "/api/operations/housekeeping/tasks", "ADMIN,DIRECTOR,MANAGER", "{\"room_id\":\"101\"}"),
+            new Endpoint("GET", "/api/operations/housekeeping/assignments?shiftCode=AFTERNOON", "ADMIN,DIRECTOR,MANAGER,HR", "{}"),
+            new Endpoint("POST", "/api/operations/housekeeping/tasks", "ADMIN,DIRECTOR,MANAGER,HR", "{\"room_id\":\"101\",\"assignee\":\"HK01\",\"shift_date\":\"2026-10-15\",\"shift_code\":\"AFTERNOON\"}"),
             new Endpoint("PATCH", "/api/operations/housekeeping/tasks/1", "ADMIN,DIRECTOR,MANAGER,HOUSEKEEPING", "{\"status\":\"CLEANED\"}"),
             new Endpoint("GET", "/api/operations/housekeeping/checklist-templates", "ADMIN,DIRECTOR,MANAGER,HOUSEKEEPING", "{}"),
             new Endpoint("POST", "/api/operations/housekeeping/checklist-templates", "ADMIN,DIRECTOR,MANAGER,HOUSEKEEPING", "{\"name\":\"Bathroom\"}"),

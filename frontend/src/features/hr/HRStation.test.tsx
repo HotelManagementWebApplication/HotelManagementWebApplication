@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import HRStation from "./HRStation";
 import { authApi } from "../../shared/api/auth";
 import { enterpriseApi } from "../../shared/api/enterprise";
+import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
 import { hrGovernanceApi } from "../../shared/api/hrGovernance";
 import { localDateValue } from "../../shared/utils/localDate";
 
@@ -61,6 +62,51 @@ describe("HRStation weekly shift schedule", () => {
     }));
     expect(await screen.findByText("FD002")).toBeTruthy();
     expect(screen.getByText("temp-password")).toBeTruthy();
+  });
+
+  it("assigns a room only to a housekeeping employee with the selected live shift", async () => {
+    const date = localDateValue();
+    const startsAt = new Date(Date.now() - 60_000).toISOString();
+    const endsAt = new Date(Date.now() + 60 * 60_000).toISOString();
+    const staff = (employeeId: string, role: "HOUSEKEEPING" | "FRONT_DESK") => ({
+      employee_id: employeeId, full_name: employeeId, phone: "0901234567", role, enabled: true,
+      account_non_locked: true, failed_login_attempts: 0, employment_status: "WORKING" as const,
+    });
+    vi.mocked(hrGovernanceApi.employees).mockResolvedValue([
+      staff("HK01", "HOUSEKEEPING"), staff("HK02", "HOUSEKEEPING"), staff("FD01", "FRONT_DESK"),
+    ]);
+    vi.mocked(hrGovernanceApi.shifts).mockResolvedValue([
+      { id: 1, employee_id: "HK01", shift_date: date, shift_code: "AFTERNOON", starts_at: startsAt, ends_at: endsAt, status: "STARTED", created_by: "HR01" },
+      { id: 2, employee_id: "FD01", shift_date: date, shift_code: "AFTERNOON", starts_at: startsAt, ends_at: endsAt, status: "STARTED", created_by: "HR01" },
+    ]);
+    vi.spyOn(housekeepingTechnicalApi, "rooms").mockResolvedValue([
+      { id: "101", name: "101", room_type_id: "STD", room_type_name: "Standard", daily_price: 100, floor: 1, status: "available" },
+    ]);
+    const shiftAssignments = vi.spyOn(housekeepingTechnicalApi, "shiftAssignments").mockResolvedValue([
+      { employee_id: "HK01", full_name: "HK01", shift_code: "AFTERNOON", rooms: [{ task_id: 8, room_id: "105", status: "IN_PROGRESS" }] },
+    ]);
+    const createTask = vi.spyOn(housekeepingTechnicalApi, "createTask").mockResolvedValue({
+      id: 12, room_id: "101", assignee: "HK01", status: "NEEDS_CLEANING", checklist_complete: false,
+      blocking_incident: false, note: null, assigned_by: "HR01", updated_at: startsAt,
+    });
+
+    render(<HRStation onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", {name: "Phân công buồng phòng"}));
+    const shiftSelect = await screen.findByLabelText("Buổi làm việc *");
+    fireEvent.change(shiftSelect, {target: {value: "AFTERNOON"}});
+    expect(await screen.findByText("Phòng 105")).toBeTruthy();
+    expect(shiftAssignments).toHaveBeenCalledWith("AFTERNOON");
+    const employeeSelect = screen.getByLabelText("Nhân viên buồng phòng *");
+    expect(within(employeeSelect).getByRole("option", {name: /HK01/})).toBeTruthy();
+    expect(within(employeeSelect).queryByRole("option", {name: /HK02|FD01/})).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Phòng cần dọn *"), {target: {value: "101"}});
+    fireEvent.change(employeeSelect, {target: {value: "HK01"}});
+    fireEvent.click(screen.getByRole("button", {name: "Phân công dọn phòng"}));
+    await waitFor(() => expect(createTask).toHaveBeenCalledWith({
+      room_id: "101", assignee: "HK01", shift_date: date, shift_code: "AFTERNOON",
+      note: `Giao trong Ca chiều · ${date}`,
+    }));
   });
   beforeEach(() => {
     vi.restoreAllMocks();

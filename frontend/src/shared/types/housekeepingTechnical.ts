@@ -11,7 +11,9 @@ export const ROOM_STATUS_VALUES = ["available", "occupied", "cleaning", "mainten
 export type RoomStatus = typeof ROOM_STATUS_VALUES[number];
 
 export interface HousekeepingTask { id: number; room_id: string; assignee: string | null; status: HousekeepingStatus; checklist_complete: boolean; blocking_incident: boolean; note: string | null; assigned_by: string | null; updated_at: string; }
-export interface HousekeepingTaskCreateRequest { room_id: string; assignee: string; note?: string; }
+export interface HousekeepingAssignedRoom { task_id: number; room_id: string; status: HousekeepingStatus; }
+export interface HousekeepingShiftAssignment { employee_id: string; full_name: string; shift_code: string; rooms: HousekeepingAssignedRoom[]; }
+export interface HousekeepingTaskCreateRequest { room_id: string; assignee: string; note?: string; shift_date?: string; shift_code?: string; }
 export interface HousekeepingTaskUpdateRequest { status: HousekeepingStatus; note?: string; assignee?: string; }
 
 export interface ChecklistTemplate { id: number; name: string; active: boolean; }

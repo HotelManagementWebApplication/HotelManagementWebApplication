@@ -13,6 +13,7 @@ describe("housekeeping and technical API contract", () => {
 
   it("uses exact read paths and query names", async () => {
     await housekeepingTechnicalApi.tasks({ roomId: "101", status: "NEEDS_CLEANING" });
+    await housekeepingTechnicalApi.shiftAssignments("AFTERNOON");
     await housekeepingTechnicalApi.checklistTemplates();
     await housekeepingTechnicalApi.workOrders({ roomId: "101", status: "WAITING_ACCEPTANCE" });
     await housekeepingTechnicalApi.equipment("101");
@@ -21,6 +22,7 @@ describe("housekeeping and technical API contract", () => {
     await housekeepingTechnicalApi.availability("2026-09-18T00:00:00Z", "2026-09-19T00:00:00Z", "DELUXE");
     expect(request.mock.calls.map(call => call[0])).toEqual([
       "/api/operations/housekeeping/tasks?roomId=101&status=NEEDS_CLEANING",
+      "/api/operations/housekeeping/assignments?shiftCode=AFTERNOON",
       "/api/operations/housekeeping/checklist-templates",
       "/api/operations/technical/work-orders?roomId=101&status=WAITING_ACCEPTANCE",
       "/api/rooms/101/equipment", "/api/operations/maintenance/room/101",

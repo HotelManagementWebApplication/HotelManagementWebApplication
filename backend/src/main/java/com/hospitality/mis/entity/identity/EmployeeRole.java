@@ -35,7 +35,7 @@ public enum EmployeeRole {
     /** Nhân viên thông thường chỉ xem phòng và đặt phòng. */
     STAFF(ROOM_READ, RESERVATION_READ),
     /** Nhân sự có thể tiếp nhận nhân viên nhưng không quản trị tài khoản hiện có. */
-    HR(EMPLOYEE_READ, EMPLOYEE_PROVISION, SHIFT_READ, SHIFT_WRITE);
+    HR(EMPLOYEE_READ, EMPLOYEE_PROVISION, ROOM_READ, HOUSEKEEPING_TASK_ASSIGN, SHIFT_READ, SHIFT_WRITE);
 
     /** Tập quyền bất biến được suy ra khi enum khởi tạo. */
     private final Set<Permission> permissions;

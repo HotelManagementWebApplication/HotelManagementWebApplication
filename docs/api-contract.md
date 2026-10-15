@@ -87,7 +87,7 @@ là `ADMIN`, `DIRECTOR`, `MANAGER`, `FRONT_DESK`, `HOUSEKEEPING`, `TECHNICAL`,
 - `TECHNICAL`: room/catalog/admin, equipment, reservation read, maintenance,
   technical work order read/write/release, incident handoff, notification read.
 - `KITCHEN`: service read/write, inventory read/write, service-price request.
-- `HR`: employee read, shift read/write. `STAFF`: room read, reservation read.
+- `HR`: employee read/provision, room read, housekeeping task assignment, shift read/write. HR only assigns a room to an active housekeeping employee whose shift is currently in progress; it cannot read or update housekeeping tasks. `STAFF`: room read, reservation read.
 
 Các capability kiểm tra thêm vai trò/phạm vi: approver phải khác requester;
 refund approval chỉ `DIRECTOR`; activation room/service cần role được phép;
@@ -262,7 +262,8 @@ trả `REFUND_EXCEEDS_PAID`, hoặc không tìm thấy payment gốc trả
 | Method và path | Query/body/header | Capability |
 |---|---|---|
 | `GET /api/operations/housekeeping/tasks` | Query hiện bind là `roomId`, `assignee`, `status` | `HOUSEKEEPING_TASK_READ` |
-| `POST /api/operations/housekeeping/tasks` | Body `room_id`, `assignee`, `note`; header bắt buộc `Idempotency-Key` | `HOUSEKEEPING_TASK_ASSIGN`; 200 |
+| `GET /api/operations/housekeeping/assignments` | Query `shiftCode` | `HOUSEKEEPING_TASK_ASSIGN`; chỉ trả nhân viên HOUSEKEEPING đang trong ca hôm nay và các task còn mở của họ |
+| `POST /api/operations/housekeeping/tasks` | Body `room_id`, `assignee`, `note`, HR gửi thêm `shift_date`, `shift_code`; header bắt buộc `Idempotency-Key` | `HOUSEKEEPING_TASK_ASSIGN`; HR chỉ giao cho HOUSEKEEPING có ca hiện tại trong hôm nay; 200 |
 | `PATCH /api/operations/housekeeping/tasks/{id}` | Body chỉ `status`, `note`, `assignee`; header bắt buộc `Idempotency-Key` | `HOUSEKEEPING_TASK_WRITE`; chỉ assignee hoặc management có scope |
 | `GET /api/operations/housekeeping/checklist-templates` | Không body | `HOUSEKEEPING_TASK_READ` |
 | `POST /api/operations/housekeeping/checklist-templates` | Body `name` | `HOUSEKEEPING_TASK_WRITE` |

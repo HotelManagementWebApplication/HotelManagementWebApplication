@@ -7,6 +7,8 @@ import com.hospitality.mis.dto.operations.HousekeepingChecklistDtos;
 import com.hospitality.mis.entity.operations.HousekeepingTaskStatus;
 import com.hospitality.mis.service.operations.HousekeepingService;
 import com.hospitality.mis.service.operations.HousekeepingChecklistService;
+import com.hospitality.mis.service.identity.EmployeeService;
+import com.hospitality.mis.service.identity.EmployeeShiftService;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,6 +29,8 @@ class SqlServerHousekeepingTaskTest {
     @Autowired HousekeepingService housekeeping;
     @Autowired HousekeepingChecklistService checklists;
     @Autowired HousekeepingTaskDatabase database;
+    @Autowired EmployeeService employees;
+    @Autowired EmployeeShiftService shifts;
     @Autowired Clock clock;
     @Autowired PlatformTransactionManager transactions;
     @BeforeEach void seed(){
@@ -57,7 +61,7 @@ class SqlServerHousekeepingTaskTest {
     }
     @Test void durableReplayReturnsOriginalSnapshotAcrossServiceInstancesAndRoleScope(){
         var first=create("hkc-replay");update(first.id(),"IN_PROGRESS","hkc-mutate");
-        var newInstance=new HousekeepingService(database,clock);
+        var newInstance=new HousekeepingService(database,employees,shifts,clock);
         assertThat(newInstance.create(request(),MANAGER,"hkc-replay")).isEqualTo(first);
         code(()->housekeeping.create(new HousekeepingDtos.CreateRequest(ROOM,WORKER,"changed"),MANAGER,"hkc-replay"),"IDEMPOTENCY_KEY_CONFLICT");
         actor(OTHER,"ROLE_MANAGER");code(()->housekeeping.create(request(),OTHER,"hkc-replay"),"IDEMPOTENCY_KEY_CONFLICT");

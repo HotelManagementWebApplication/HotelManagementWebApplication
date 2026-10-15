@@ -2,10 +2,12 @@ import { Fragment, useEffect, useState, useMemo } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { hrGovernanceApi } from "../../shared/api/hrGovernance";
 import { enterpriseApi } from "../../shared/api/enterprise";
+import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
 import { authApi } from "../../shared/api/auth";
 import { EmployeeProfileDropdown } from "../../shared/components/EmployeeProfileDropdown";
 import type { AttendanceRecord as ApiAttendanceRecord, LeaveRequest as ApiLeaveRequest } from "../../shared/types/enterprise";
 import type { EmployeeAdmin, Shift } from "../../shared/types/hrGovernance";
+import type { HousekeepingShiftAssignment, HousekeepingTaskCreateRequest, Room } from "../../shared/types/housekeepingTechnical";
 import { employeeRoleLabel } from "../../shared/types/api";
 import type { EmployeeProfileDto } from "../../shared/types/api";
 import { localDateValue } from "../../shared/utils/localDate";
@@ -59,11 +61,13 @@ import {
 /* ══════════════════════════════════════════════════════════
    TYPES & INTERFACES
 ══════════════════════════════════════════════════════════ */
-type TabType = "overview" | "schedule" | "staff" | "attendance" | "leaves";
+type TabType = "overview" | "schedule" | "housekeeping" | "staff" | "attendance" | "leaves";
 const WEEKDAY_LABELS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 const HR_PROVISIONABLE_ROLES = ["FRONT_DESK", "ACCOUNTING", "HOUSEKEEPING", "TECHNICAL", "KITCHEN", "HR", "STAFF"] as const;
 type HrProvisionableRole = (typeof HR_PROVISIONABLE_ROLES)[number];
 type ProvisionedEmployee = Awaited<ReturnType<typeof enterpriseApi.autoProvisionEmployee>>;
+const HOUSEKEEPING_SHIFT_LABELS: Record<string, string> = { MORNING: "Ca sáng", AFTERNOON: "Ca chiều", NIGHT: "Ca đêm" };
+const HOUSEKEEPING_STATUS_LABELS: Record<string, string> = { NEEDS_CLEANING: "Cần dọn", IN_PROGRESS: "Đang dọn", CLEANED: "Đã dọn", WAITING_TECHNICAL: "Chờ kỹ thuật" };
 
 type ShiftType = "morning" | "afternoon" | "night" | "off";
 
@@ -208,6 +212,20 @@ export default function HRStation({ onBack }: Props) {
   const [isCreatingEmployee, setIsCreatingEmployee] = useState(false);
   const [createdEmployee, setCreatedEmployee] = useState<ProvisionedEmployee | null>(null);
   const [employeeRefreshKey, setEmployeeRefreshKey] = useState(0);
+  const [housekeepingRooms, setHousekeepingRooms] = useState<Room[]>([]);
+  const [housekeepingEmployees, setHousekeepingEmployees] = useState<EmployeeAdmin[]>([]);
+  const [housekeepingShifts, setHousekeepingShifts] = useState<Shift[]>([]);
+  const [housekeepingAssignments, setHousekeepingAssignments] = useState<HousekeepingShiftAssignment[]>([]);
+  const [isLoadingHousekeepingAssignments, setIsLoadingHousekeepingAssignments] = useState(false);
+  const [housekeepingAssignmentError, setHousekeepingAssignmentError] = useState<string | null>(null);
+  const [selectedHousekeepingShift, setSelectedHousekeepingShift] = useState("");
+  const [selectedHousekeepingRoom, setSelectedHousekeepingRoom] = useState("");
+  const [selectedHousekeepingEmployee, setSelectedHousekeepingEmployee] = useState("");
+  const [housekeepingNote, setHousekeepingNote] = useState("");
+  const [isLoadingHousekeeping, setIsLoadingHousekeeping] = useState(false);
+  const [isAssigningHousekeeping, setIsAssigningHousekeeping] = useState(false);
+  const [housekeepingRefreshKey, setHousekeepingRefreshKey] = useState(0);
+  const [housekeepingLoadError, setHousekeepingLoadError] = useState<string | null>(null);
   const [staffFilterDept, setStaffFilterDept] = useState("all");
   const [staffFilterStatus, setStaffFilterStatus] = useState("all");
 
@@ -379,6 +397,85 @@ export default function HRStation({ onBack }: Props) {
       showToast(apiErrorMessage(error, "Không thể tạo tài khoản nhân viên. Vui lòng kiểm tra thông tin và thử lại."));
     } finally {
       setIsCreatingEmployee(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentTab !== "housekeeping") return;
+    let active = true;
+    const date = localDateValue();
+    setIsLoadingHousekeeping(true);
+    setHousekeepingLoadError(null);
+    Promise.all([
+      housekeepingTechnicalApi.rooms(),
+      hrGovernanceApi.employees(),
+      hrGovernanceApi.shifts({ date, to: date }),
+    ]).then(([rooms, employeeRows, shifts]) => {
+      if (!active) return;
+      setHousekeepingRooms(rooms.filter(room => room.status === "available" || room.status === "reserved"));
+      setHousekeepingEmployees(employeeRows.filter(employee => employee.role === "HOUSEKEEPING" && employee.enabled && employee.employment_status === "WORKING"));
+      setHousekeepingShifts(shifts);
+    }).catch(error => {
+      if (active) setHousekeepingLoadError(apiErrorMessage(error, "Không thể tải phòng, nhân viên hoặc lịch ca buồng phòng."));
+    }).finally(() => {
+      if (active) setIsLoadingHousekeeping(false);
+    });
+    return () => { active = false; };
+  }, [currentTab, housekeepingRefreshKey]);
+
+  useEffect(() => {
+    if (currentTab !== "housekeeping" || !selectedHousekeepingShift) {
+      setHousekeepingAssignments([]);
+      setHousekeepingAssignmentError(null);
+      return;
+    }
+    let active = true;
+    setIsLoadingHousekeepingAssignments(true);
+    setHousekeepingAssignmentError(null);
+    housekeepingTechnicalApi.shiftAssignments(selectedHousekeepingShift).then(assignments => {
+      if (active) setHousekeepingAssignments(assignments);
+    }).catch(error => {
+      if (active) setHousekeepingAssignmentError(apiErrorMessage(error, "Không thể tải bảng phân công buồng phòng."));
+    }).finally(() => {
+      if (active) setIsLoadingHousekeepingAssignments(false);
+    });
+    return () => { active = false; };
+  }, [currentTab, housekeepingRefreshKey, selectedHousekeepingShift]);
+
+  const liveHousekeepingShifts = housekeepingShifts.filter(shift =>
+    (shift.status === "ASSIGNED" || shift.status === "STARTED")
+      && new Date(shift.starts_at).getTime() <= Date.now()
+      && new Date(shift.ends_at).getTime() > Date.now());
+  const housekeepingShiftOptions = [...new Set(liveHousekeepingShifts
+    .filter(shift => housekeepingEmployees.some(employee => employee.employee_id === shift.employee_id))
+    .map(shift => shift.shift_code))];
+  const eligibleHousekeepingEmployees = housekeepingEmployees.filter(employee =>
+    liveHousekeepingShifts.some(shift => shift.employee_id === employee.employee_id && shift.shift_code === selectedHousekeepingShift));
+
+  const handleAssignHousekeeping = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const employee = eligibleHousekeepingEmployees.find(item => item.employee_id === selectedHousekeepingEmployee);
+    if (!employee || !selectedHousekeepingRoom || !selectedHousekeepingShift) return;
+    setIsAssigningHousekeeping(true);
+    try {
+      const date = localDateValue();
+      const request: HousekeepingTaskCreateRequest = {
+        room_id: selectedHousekeepingRoom,
+        assignee: employee.employee_id,
+        shift_date: date,
+        shift_code: selectedHousekeepingShift,
+        note: [`Giao trong ${HOUSEKEEPING_SHIFT_LABELS[selectedHousekeepingShift] ?? selectedHousekeepingShift} · ${date}`, housekeepingNote.trim()].filter(Boolean).join(" — "),
+      };
+      const task = await housekeepingTechnicalApi.createTask(request);
+      showToast(`Đã giao phòng ${task.room_id} cho ${employee.full_name} · ${HOUSEKEEPING_SHIFT_LABELS[selectedHousekeepingShift] ?? selectedHousekeepingShift}.`);
+      setSelectedHousekeepingRoom("");
+      setSelectedHousekeepingEmployee("");
+      setHousekeepingNote("");
+      setHousekeepingRefreshKey(key => key + 1);
+    } catch (error) {
+      showToast(apiErrorMessage(error, "Không thể phân công phòng. Vui lòng tải lại dữ liệu và thử lại."));
+    } finally {
+      setIsAssigningHousekeeping(false);
     }
   };
 
@@ -801,6 +898,123 @@ export default function HRStation({ onBack }: Props) {
     </header>
   );
 
+  const HousekeepingAssignmentView = (
+    <section className="space-y-4">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h2 className="font-serif text-xl font-bold text-gray-900">Phân công buồng phòng</h2>
+          <p className="mt-1 text-xs text-gray-500">Ca đang diễn ra · {todayLabel}</p>
+        </div>
+        <span className="text-xs text-gray-500">{housekeepingRooms.length} phòng sẵn sàng</span>
+      </div>
+
+      {housekeepingLoadError && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>{housekeepingLoadError}</span>
+          <button type="button" onClick={() => setHousekeepingRefreshKey(key => key + 1)} className="font-semibold underline">Tải lại</button>
+        </div>
+      )}
+
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]">
+      <form onSubmit={handleAssignHousekeeping} className="space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-xs">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="hk-assignment-shift" className="mb-1 block text-xs font-semibold text-gray-700">Buổi làm việc *</label>
+            <select id="hk-assignment-shift" required value={selectedHousekeepingShift} onChange={event => { setSelectedHousekeepingShift(event.target.value); setSelectedHousekeepingEmployee(""); }} disabled={isLoadingHousekeeping || housekeepingShiftOptions.length === 0} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-emerald-600 focus:outline-none disabled:opacity-60">
+              <option value="">{isLoadingHousekeeping ? "Đang tải ca..." : "Chọn buổi đang diễn ra"}</option>
+              {housekeepingShiftOptions.map(code => <option key={code} value={code}>{HOUSEKEEPING_SHIFT_LABELS[code] ?? code}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="hk-assignment-room" className="mb-1 block text-xs font-semibold text-gray-700">Phòng cần dọn *</label>
+            <select id="hk-assignment-room" required value={selectedHousekeepingRoom} onChange={event => setSelectedHousekeepingRoom(event.target.value)} disabled={isLoadingHousekeeping || housekeepingRooms.length === 0} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-emerald-600 focus:outline-none disabled:opacity-60">
+              <option value="">{isLoadingHousekeeping ? "Đang tải phòng..." : "Chọn phòng"}</option>
+              {housekeepingRooms.map(room => <option key={room.id} value={room.id}>Phòng {room.id} · Tầng {room.floor} · {room.status === "reserved" ? "Đã đặt" : "Sẵn sàng"}</option>)}
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="hk-assignment-employee" className="mb-1 block text-xs font-semibold text-gray-700">Nhân viên buồng phòng *</label>
+            <select id="hk-assignment-employee" required value={selectedHousekeepingEmployee} onChange={event => setSelectedHousekeepingEmployee(event.target.value)} disabled={!selectedHousekeepingShift || eligibleHousekeepingEmployees.length === 0} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-emerald-600 focus:outline-none disabled:opacity-60">
+              <option value="">{!selectedHousekeepingShift ? "Chọn buổi trước" : eligibleHousekeepingEmployees.length ? "Chọn nhân viên đang trong ca" : "Không có nhân viên trong buổi này"}</option>
+              {eligibleHousekeepingEmployees.map(employee => <option key={employee.employee_id} value={employee.employee_id}>{employee.full_name} · {employee.employee_id}</option>)}
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="hk-assignment-note" className="mb-1 block text-xs font-semibold text-gray-700">Ghi chú dọn phòng</label>
+            <textarea id="hk-assignment-note" rows={3} value={housekeepingNote} onChange={event => setHousekeepingNote(event.target.value)} className="w-full resize-y rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:border-emerald-600 focus:outline-none" />
+          </div>
+        </div>
+
+        {housekeepingShiftOptions.length === 0 && !isLoadingHousekeeping && !housekeepingLoadError && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2.5">
+            <p className="text-xs text-gray-500">Chưa có nhân viên buồng phòng trong ca đang diễn ra hôm nay.</p>
+            <button type="button" onClick={() => setCurrentTab("schedule")} className="text-xs font-semibold text-emerald-700 hover:text-emerald-900">Mở lịch phân ca</button>
+          </div>
+        )}
+        {housekeepingRooms.length === 0 && !isLoadingHousekeeping && !housekeepingLoadError && (
+          <p className="rounded-lg bg-gray-50 px-3 py-2.5 text-xs text-gray-500">Hiện không có phòng sẵn sàng để giao dọn.</p>
+        )}
+
+        <div className="flex justify-end border-t border-gray-100 pt-3">
+          <button type="submit" disabled={isLoadingHousekeeping || isAssigningHousekeeping || !selectedHousekeepingShift || !selectedHousekeepingRoom || !selectedHousekeepingEmployee} className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">
+            {isAssigningHousekeeping ? "Đang phân công..." : "Phân công dọn phòng"}
+          </button>
+        </div>
+      </form>
+      <section aria-labelledby="hk-assignment-roster-title" className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs">
+        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3.5">
+          <h3 id="hk-assignment-roster-title" className="font-serif text-base font-bold text-gray-900">Nhân viên trong ca</h3>
+          {selectedHousekeepingShift && <span className="text-xs text-gray-500">{housekeepingAssignments.length} người</span>}
+        </div>
+        {!selectedHousekeepingShift ? (
+          <p className="px-4 py-5 text-sm text-gray-500">Chọn buổi làm việc để xem phòng đã phân.</p>
+        ) : isLoadingHousekeepingAssignments ? (
+          <p className="px-4 py-5 text-sm text-gray-500">Đang tải bảng phân công...</p>
+        ) : housekeepingAssignmentError ? (
+          <div role="alert" className="flex items-center justify-between gap-3 px-4 py-4 text-sm text-red-700">
+            <span>{housekeepingAssignmentError}</span>
+            <button type="button" onClick={() => setHousekeepingRefreshKey(key => key + 1)} className="font-semibold underline">Tải lại</button>
+          </div>
+        ) : housekeepingAssignments.length === 0 ? (
+          <p className="px-4 py-5 text-sm text-gray-500">Không có nhân viên buồng phòng trong ca này.</p>
+        ) : (
+          <div className="max-h-[560px] overflow-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 bg-gray-50 text-xs text-gray-500">
+                <tr><th className="px-4 py-3 font-semibold">Nhân viên</th><th className="px-4 py-3 font-semibold">Phòng được phân</th></tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {housekeepingAssignments.map(assignment => (
+                  <tr key={assignment.employee_id}>
+                    <td className="whitespace-nowrap px-4 py-3 align-top">
+                      <p className="font-semibold text-gray-800">{assignment.full_name}</p>
+                      <p className="mt-0.5 font-mono text-xs text-gray-500">{assignment.employee_id}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      {assignment.rooms.length === 0 ? (
+                        <span className="text-xs text-gray-400">Chưa có phòng</span>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          {assignment.rooms.map(room => (
+                            <li key={room.task_id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                              <span className="font-semibold text-gray-800">Phòng {room.room_id}</span>
+                              <span className="text-xs text-gray-500">{HOUSEKEEPING_STATUS_LABELS[room.status] ?? room.status}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      </div>
+    </section>
+  );
+
   // ── 2. SIDEBAR NAVIGATION ──
   const Sidebar = (
     <aside className="w-56 bg-white border-r border-gray-100 flex flex-col justify-between shrink-0">
@@ -827,6 +1041,18 @@ export default function HRStation({ onBack }: Props) {
         >
           <CalendarDays className={`w-4 h-4 ${currentTab === "schedule" ? "text-[#008A4B]" : "text-gray-400"}`} />
           <span>Lịch phân ca</span>
+        </button>
+
+        <button
+          onClick={() => setCurrentTab("housekeeping")}
+          className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+            currentTab === "housekeeping"
+              ? "bg-[#EAF8F0] text-[#008A4B] font-semibold"
+              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+          }`}
+        >
+          <BedDouble className={`w-4 h-4 ${currentTab === "housekeeping" ? "text-[#008A4B]" : "text-gray-400"}`} />
+          <span>Phân công buồng phòng</span>
         </button>
 
         <button
@@ -2407,6 +2633,8 @@ export default function HRStation({ onBack }: Props) {
 
             {/* When Tab is 'overview' */}
             {currentTab === "overview" && OverviewView}
+
+            {currentTab === "housekeeping" && HousekeepingAssignmentView}
 
             {/* When Tab is 'staff' */}
             {currentTab === "staff" && StaffView}

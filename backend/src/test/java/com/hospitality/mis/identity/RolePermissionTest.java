@@ -27,8 +27,10 @@ class RolePermissionTest {
                         Permission.FINANCE_WRITE);
         assertThat(EmployeeRole.HR.permissions())
                 .containsExactlyInAnyOrder(Permission.EMPLOYEE_READ, Permission.EMPLOYEE_PROVISION,
+                        Permission.ROOM_READ, Permission.HOUSEKEEPING_TASK_ASSIGN,
                         Permission.SHIFT_READ, Permission.SHIFT_WRITE)
                 .doesNotContain(Permission.EMPLOYEE_PASSWORD_RESET,
+                        Permission.HOUSEKEEPING_TASK_READ, Permission.HOUSEKEEPING_TASK_WRITE,
                         Permission.BILLING_READ, Permission.BILLING_WRITE, Permission.PAYMENT_WRITE,
                         Permission.FINANCE_READ, Permission.FINANCE_WRITE);
     }
