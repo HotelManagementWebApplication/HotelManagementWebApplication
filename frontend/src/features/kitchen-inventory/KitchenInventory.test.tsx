@@ -46,7 +46,7 @@ describe("Kitchen & restaurant operations", () => {
     expect(await screen.findByText("MaM Restaurant")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name:"Xác nhận phục vụ" }));
     await waitFor(() => expect(kitchenAccountingApi.markRestaurantBookingUsed).toHaveBeenCalledWith(71));
-    expect((await screen.findAllByText("Đã phục vụ")).length).toBeGreaterThanOrEqual(2);
+    expect((await screen.findAllByText("Đang sử dụng")).length).toBeGreaterThanOrEqual(2);
   });
 
   it("separates physical stock from services and filters food, drinks and household goods", async () => {
