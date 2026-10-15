@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import KitchenInventory from "./KitchenInventory";
 import { kitchenAccountingApi } from "../../shared/api/kitchenAccounting";
 import { authApi } from "../../shared/api/auth";
+import { serviceAvailabilityApi } from "../../shared/api/serviceAvailability";
 
 describe("Kitchen & restaurant operations", () => {
   const booking = {
@@ -19,6 +20,11 @@ describe("Kitchen & restaurant operations", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(serviceAvailabilityApi,"list").mockResolvedValue([
+      {service_id:"MAMREST",unit:"suất",capacity:20,booked:0,available:20,mode:"UNITS"},
+      {service_id:"SPAMASS",unit:"suất",capacity:20,booked:0,available:20,mode:"UNITS"},
+      {service_id:"INROOMQA",unit:"suất",capacity:20,booked:20,available:0,mode:"UNITS"},
+    ]);
     vi.spyOn(authApi, "employeeProfile").mockResolvedValue({ employee_id:"KITCHEN", full_name:"Võ Minh Bếp", role:"KITCHEN", permissions:["INVENTORY_WRITE","RESTAURANT_ORDER_WRITE","SERVICE_PRICE_REQUEST"] });
     vi.spyOn(kitchenAccountingApi, "services").mockResolvedValue([service, spaService, outOfStockService]);
     vi.spyOn(kitchenAccountingApi, "inventoryMovements").mockResolvedValue([]);
@@ -41,9 +47,95 @@ describe("Kitchen & restaurant operations", () => {
     expect((await screen.findAllByText("Đã phục vụ")).length).toBeGreaterThanOrEqual(2);
   });
 
+  it("separates physical stock from services and filters food, drinks and household goods", async () => {
+    const food = { ...service, id:"FOODPHO", name:"Phở bò", category:"food", active:false };
+    const drink = { ...service, id:"DRNKTEA", name:"Trà đào", category:"beverage", active:false };
+    const household = { ...service, id:"HHKETTLE", name:"Ấm đun nước", category:"room-amenity", active:false };
+    vi.mocked(kitchenAccountingApi.services).mockResolvedValue([service, spaService, food, drink, household]);
+    render(<KitchenInventory onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name:"Kho" }));
+    expect(await screen.findByText("SKU: FOODPHO")).toBeTruthy();
+    expect(screen.getByText("SKU: DRNKTEA")).toBeTruthy();
+    expect(screen.getByText("SKU: HHKETTLE")).toBeTruthy();
+    expect(screen.queryByText("SKU: MAMREST")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name:"Món ăn" }));
+    expect(screen.getByText("SKU: FOODPHO")).toBeTruthy();
+    expect(screen.queryByText("SKU: DRNKTEA")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name:"Thức uống" }));
+    expect(screen.getByText("SKU: DRNKTEA")).toBeTruthy();
+    expect(screen.queryByText("SKU: FOODPHO")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name:"Đồ gia dụng" }));
+    expect(screen.getByText("SKU: HHKETTLE")).toBeTruthy();
+    expect(screen.queryByText("SKU: DRNKTEA")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name:"Dịch vụ" }));
+    expect(screen.getByText("SKU: MAMREST")).toBeTruthy();
+    expect(screen.getByText("SKU: SPAMASS")).toBeTruthy();
+    expect(screen.queryByText("SKU: HHKETTLE")).toBeNull();
+    expect(screen.queryByRole("button", { name:"Món ăn" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name:"Kho" }));
+    expect(screen.getByText("SKU: FOODPHO")).toBeTruthy();
+  });
+
+  it("shows only minibar stock in its filter and keeps it out of hotel services", async () => {
+    const minibarDrink = { ...service, id:"MINICOLA", name:"Minibar · Cola", category:"beverage", active:false };
+    const minibarSnack = { ...service, id:"MININUTS", name:"Minibar · Hạt điều", category:"food", active:false };
+    const kitchenFood = { ...service, id:"FOODRICE", name:"Cơm chiên", category:"food", active:false };
+    const household = { ...service, id:"HHGLASS", name:"Ly thủy tinh", category:"room-amenity", active:false };
+    vi.mocked(kitchenAccountingApi.services).mockResolvedValue([service, minibarDrink, minibarSnack, kitchenFood, household]);
+    render(<KitchenInventory onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name:"Kho" }));
+    await screen.findByText("SKU: MINICOLA");
+    fireEvent.click(screen.getByRole("button", { name:"Minibar" }));
+    expect(screen.getByText("SKU: MINICOLA")).toBeTruthy();
+    expect(screen.getByText("SKU: MININUTS")).toBeTruthy();
+    expect(screen.queryByText("SKU: FOODRICE")).toBeNull();
+    expect(screen.queryByText("SKU: HHGLASS")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name:"Dịch vụ" }));
+    expect(screen.getByText("SKU: MAMREST")).toBeTruthy();
+    expect(screen.queryByText("SKU: MINICOLA")).toBeNull();
+  });
+
+  it("uses dated availability with resource units while keeping billing units and stock prices", async () => {
+    vi.mocked(kitchenAccountingApi.services).mockResolvedValue([
+      {...service,id:"BADMINTON",name:"Cầu lông",category:"recreation",unit:"giờ",stock:16},
+      {...service,id:"BOARDROOM",name:"Phòng họp",category:"business",unit:"ngày",stock:4},
+      {...service,id:"HHGLASS",name:"Ly thủy tinh",category:"room-amenity",unit:"cái",price:25000,active:false},
+    ]);
+    vi.mocked(serviceAvailabilityApi.list).mockImplementation(async(from)=>[
+      {service_id:"BADMINTON",unit:"sân",capacity:2,booked:from.includes("T12:")?2:1,available:from.includes("T12:")?0:1,mode:"DURATION"},
+      {service_id:"BOARDROOM",unit:"phòng",capacity:1,booked:0,available:1,mode:"DURATION"},
+    ]);
+    render(<KitchenInventory onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button",{name:"Dịch vụ"}));
+    expect(await screen.findByText("1 sân")).toBeTruthy();
+    expect(screen.getAllByText("1 phòng")).toHaveLength(2);
+    const courtRow=screen.getByText("SKU: BADMINTON").closest("tr")!;
+    expect(within(courtRow).getByText("giờ")).toBeTruthy();
+    expect(within(courtRow).queryByText("16 giờ")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Từ thời điểm"),{target:{value:"2035-01-10T12:00"}});
+    fireEvent.change(screen.getByLabelText("Đến thời điểm"),{target:{value:"2035-01-10T13:00"}});
+    expect(await screen.findByText("0 sân")).toBeTruthy();
+    expect(serviceAvailabilityApi.list).toHaveBeenLastCalledWith("2035-01-10T12:00","2035-01-10T13:00");
+    fireEvent.click(screen.getByRole("button",{name:"Kho"}));
+    const stockRow=screen.getByText("SKU: HHGLASS").closest("tr")!;
+    expect(within(stockRow).getByText("25.000")).toBeTruthy();
+    expect(within(stockRow).getByText("cái")).toBeTruthy();
+    expect(screen.queryByLabelText("Từ thời điểm")).toBeNull();
+  });
+
+  it("does not show stale or fake zero availability when the schedule request fails", async()=>{
+    vi.mocked(serviceAvailabilityApi.list).mockRejectedValue(new Error("Lỗi tải lịch"));
+    render(<KitchenInventory onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button",{name:"Dịch vụ"}));
+    await screen.findByRole("alert");
+    expect((await screen.findAllByText("Chưa tải được lịch")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("0 suất")).toBeNull();
+  });
+
+
   it("records stock intake from the inventory screen with an auditable reason", async () => {
     render(<KitchenInventory onBack={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name:"Kho và Dịch vụ" }));
+    fireEvent.click(screen.getByRole("button", { name:"Dịch vụ" }));
     expect(await screen.findByText("SKU: MAMREST")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name:"Điều chỉnh" })[0]);
     expect(await screen.findByRole("dialog", { name:"Ghi nhận phiếu kho và dịch vụ" })).toBeTruthy();
@@ -55,9 +147,29 @@ describe("Kitchen & restaurant operations", () => {
     expect((await screen.findByRole("status")).textContent).toContain("đã được ghi nhận");
   });
 
+  it("only offers receiving, issuing and wastage, and asks for a room only for issuing", async () => {
+    render(<KitchenInventory onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name:"Dịch vụ" }));
+    await screen.findByText("SKU: MAMREST");
+    fireEvent.click(screen.getAllByRole("button", { name:"Điều chỉnh" })[0]);
+    expect(screen.queryByLabelText("Chọn phòng nhận (tùy chọn)")).toBeNull();
+    expect(screen.queryByRole("option", { name:"Trả lại kho" })).toBeNull();
+    expect(screen.queryByRole("option", { name:/Điều chỉnh kiểm kê/ })).toBeNull();
+    expect(screen.getByRole("option", { name:"Hao hụt" })).toBeTruthy();
+    const type=screen.getByLabelText("Loại phiếu");
+    fireEvent.change(type,{target:{value:"ISSUE"}});
+    fireEvent.change(screen.getByLabelText("Chọn phòng nhận (tùy chọn)"),{target:{value:"502"}});
+    fireEvent.change(type,{target:{value:"WASTE"}});
+    expect(screen.queryByLabelText("Chọn phòng nhận (tùy chọn)")).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText("Ví dụ: Cấp cho buồng phòng – phòng 502"),{target:{value:"Hàng hỏng"}});
+    fireEvent.click(screen.getByRole("button", { name:"Lưu phiếu" }));
+    await waitFor(()=>expect(kitchenAccountingApi.recordInventoryMovement).toHaveBeenCalledWith(
+      {service_id:"MAMREST",type:"WASTE",quantity:1,reason:"Hàng hỏng"},expect.any(String)));
+  });
+
   it("creates price requests for a selected backend service, not free-form labels", async () => {
     render(<KitchenInventory onBack={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name:"Kho và Dịch vụ" }));
+    fireEvent.click(screen.getByRole("button", { name:"Dịch vụ" }));
     expect(await screen.findByText("SKU: MAMREST")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name:"Đề xuất giá dịch vụ" }));
     fireEvent.click(screen.getByRole("button", { name:"Tạo yêu cầu" }));
@@ -68,9 +180,11 @@ describe("Kitchen & restaurant operations", () => {
       "MAMREST", { price:300000, reason:"Giá đầu vào thay đổi" }, expect.any(String)));
   });
 
+
+
   it("filters by actual backend categories and handles the out-of-stock status", async () => {
     render(<KitchenInventory onBack={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name:"Kho và Dịch vụ" }));
+    fireEvent.click(screen.getByRole("button", { name:"Dịch vụ" }));
     expect(await screen.findByText("SKU: MAMREST")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name:"Nhà hàng" }));
     expect(screen.getByText("SKU: MAMREST")).toBeTruthy();

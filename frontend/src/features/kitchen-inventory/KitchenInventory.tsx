@@ -1,4 +1,6 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
+import StockReturnsPanel from "../stock-returns/StockReturnsPanel";
+import { serviceAvailabilityApi, type ServiceAvailability } from "../../shared/api/serviceAvailability";
 import { kitchenAccountingApi, newKitchenIdempotencyKey } from "../../shared/api/kitchenAccounting";
 import { authApi } from "../../shared/api/auth";
 import { ApiError, apiErrorMessage } from "../../shared/api/client";
@@ -10,7 +12,7 @@ import { localDateValue } from "../../shared/utils/localDate";
 import { formatVnd } from "../../shared/utils/money";
 import {
   Package, ArrowLeftRight, Tag, BarChart2,
-  Search, Bell, ChevronDown, Plus,
+  Search, ChevronDown, Plus,
   AlertTriangle, ShoppingCart, FileText,
   MoreVertical, ArrowUpRight, ArrowDownRight, LogOut,
   CheckSquare, Calendar, Upload, TrendingUp, Download,
@@ -21,7 +23,7 @@ import {
 /* ══════════════════════════════════════════════════════════
    TYPES
 ══════════════════════════════════════════════════════════ */
-type NavPage   = "restaurant" | "inventory" | "transactions" | "pricing" | "reports";
+type NavPage   = "restaurant" | "inventory" | "services" | "returns" | "transactions" | "pricing" | "reports";
 type StockStatus = "in-stock" | "low-stock" | "out-of-stock";
 type TxType    = "import" | "export" | "waste" | "adjustment";
 type PriceStatus = "pending" | "approved" | "rejected" | "expired" | "consumed";
@@ -33,11 +35,8 @@ interface InventoryItem {
   stock: number; reorder: number; active: boolean; imageUrl: string | null;
   emoji: string;
 }
-interface MinibarUsage {
-  item: string; qty: number; time: string; staff: string; movementType: MovementType;
-}
 interface Transaction {
-  id: string; date: string; occurredAt: string; type: TxType; movementType: MovementType;
+  id: string; serviceId: string; date: string; occurredAt: string; type: TxType; movementType: MovementType;
   item: string; qty: number; amount: number;
   staff: string; status: TxStatus; note?: string;
 }
@@ -70,15 +69,28 @@ const STATUS_CFG: Record<StockStatus, { label: string; bg: string; text: string;
 };
 
 const CATEGORY_LABEL: Record<string,string> = {
+  food:"Món ăn", beverage:"Thức uống",
   "Minibar Beverage":"Đồ uống minibar", "Minibar Snack":"Đồ ăn nhẹ minibar",
   "Kitchen Dry":"Nguyên liệu khô", "Kitchen Fresh":"Nguyên liệu tươi",
   "fine-dining":"Nhà hàng", transport:"Vận chuyển", spa:"Spa",
   inroom:"Dịch vụ tại phòng", recreation:"Giải trí", business:"Dịch vụ doanh nghiệp", other:"Khác",
-  "room-amenity":"Vật dụng phòng",
+  "room-amenity":"Đồ gia dụng",
 };
+const STOCK_CATEGORIES = new Set(["food", "beverage", "room-amenity", "Minibar Beverage", "Minibar Snack", "Kitchen Dry", "Kitchen Fresh"]);
+const isStockItem = (item: InventoryItem) => STOCK_CATEGORIES.has(item.category);
 const UNIT_LABEL: Record<string,string> = { Can:"lon", Bottle:"chai", Box:"hộp", Pack:"gói", Kg:"kg", Pcs:"cái", Liter:"lít", Block:"khối" };
 
 const CAT_COLORS: Record<string, { bg: string; text: string }> = {
+  business:          { bg:"#DBEAFE",text:"#1D4ED8" },
+  inroom:            { bg:"#EDE9FE",text:"#6D28D9" },
+  recreation:        { bg:"#DCFCE7",text:"#166534" },
+  "fine-dining":     { bg:"#FFEDD5",text:"#9A3412" },
+  spa:               { bg:"#FCE7F3",text:"#9D174D" },
+  transport:         { bg:"#CFFAFE",text:"#155E75" },
+  laundry:           { bg:"#E0E7FF",text:"#3730A3" },
+  other:             { bg:"#F1F5F9",text:"#475569" },
+  food:              { bg:"#FEF3C7",text:"#92400E" },
+  beverage:          { bg:"#D1FAE5",text:"#065F46" },
   "Minibar Beverage": { bg:"#DBEAFE",text:"#1D4ED8" },
   "Minibar Snack":    { bg:"#FEF9C3",text:"#92400E" },
   "Kitchen Dry":      { bg:"#FEF3C7",text:"#78350F" },
@@ -113,12 +125,14 @@ const STATUS_OPTIONS = [["All Status","Tất cả trạng thái"],["In Stock","C
 /* ══════════════════════════════════════════════════════════
    STOCK BAR
 ══════════════════════════════════════════════════════════ */
-function StockBar({ item }: { item: InventoryItem }) {
-  const pct  = stockPct(item);
-  const clr  = item.stock === 0 ? "#94A3B8" : item.stock <= item.reorder ? "#F59E0B" : "#16A34A";
+function StockBar({ item, availability }: { item: InventoryItem; availability?:ServiceAvailability }) {
+  const value=availability?.available ?? item.stock;
+  const unit=availability?.unit ?? UNIT_LABEL[item.unit] ?? item.unit;
+  const pct=availability ? (availability.capacity>0?Math.min(100,Math.round(value/availability.capacity*100)):0) : stockPct(item);
+  const clr=value===0?"#94A3B8":!availability&&value<=item.reorder?"#F59E0B":"#16A34A";
   return (
     <div style={{ minWidth:120 }}>
-      <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",marginBottom:3 }}>{item.stock} {UNIT_LABEL[item.unit] ?? item.unit}</p>
+      <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",marginBottom:3 }}>{value} {unit}</p>
       <div style={{ height:6,background:"#E2E8F0",borderRadius:99,overflow:"hidden" }}>
         <div style={{ height:"100%",width:`${pct}%`,borderRadius:99,background:clr }} />
       </div>
@@ -129,8 +143,8 @@ function StockBar({ item }: { item: InventoryItem }) {
 /* ══════════════════════════════════════════════════════════
    KPI BAR
 ══════════════════════════════════════════════════════════ */
-function KpiBar({ items, transactions, priceRequests }: { items: InventoryItem[]; transactions: Transaction[]; priceRequests: PriceRequest[] }) {
-  const lowStock = items.filter(item => stockStatus(item) === "low-stock" || stockStatus(item) === "out-of-stock").length;
+function KpiBar({ items, transactions, priceRequests, availability }: { items: InventoryItem[]; transactions: Transaction[]; priceRequests: PriceRequest[];availability?:ServiceAvailability[]|null }) {
+  const lowStock = availability===undefined?items.filter(item => stockStatus(item) === "low-stock" || stockStatus(item) === "out-of-stock").length:availability?.filter(row=>row.available===0).length;
   const today = localDateValue();
   const consumedToday = transactions.filter(transaction => transaction.movementType === "ISSUE" && localDateValue(new Date(transaction.occurredAt)) === today)
     .reduce((sum, transaction) => sum + transaction.amount, 0);
@@ -139,10 +153,10 @@ function KpiBar({ items, transactions, priceRequests }: { items: InventoryItem[]
     <div style={{ display:"flex",gap:16,padding:"16px 24px",background:"#F8FAFC",flexShrink:0,
       borderBottom:"1px solid #E2E8F0" }}>
       {[
-        { label:"Tổng danh mục",   val:String(items.length),       sub:"Theo danh mục kho và dịch vụ", up:false,  iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:Package },
-        { label:"Cảnh báo sắp hết",val:String(lowStock),     sub:"Theo ngưỡng tồn kho",up:false, iconBg:"#FEF3C7",iconColor:"#F59E0B",Icon:AlertTriangle },
-        { label:"Tiêu thụ hôm nay",val:fmtVNDFull(consumedToday),sub:"Theo phiếu kho đã ghi nhận", up:false,  iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:ShoppingCart },
-        { label:"Chờ phê duyệt",    val:String(pendingRequests),         sub:"Đề xuất giá đang chờ duyệt",   up:false, iconBg:"#FFE4E6",iconColor:"#DC2626",Icon:FileText },
+        { label:"Tổng danh mục",val:String(items.length),iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:Package },
+        { label:"Cảnh báo sắp hết",val:lowStock===undefined?"—":String(lowStock),iconBg:"#FEF3C7",iconColor:"#F59E0B",Icon:AlertTriangle },
+        { label:"Tiêu thụ hôm nay",val:fmtVNDFull(consumedToday),iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:ShoppingCart },
+        { label:"Chờ phê duyệt",val:String(pendingRequests),iconBg:"#FFE4E6",iconColor:"#DC2626",Icon:FileText },
       ].map(k => (
         <div key={k.label} style={{ flex:1,background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",
           padding:"16px 20px",display:"flex",alignItems:"center",gap:14,
@@ -155,10 +169,6 @@ function KpiBar({ items, transactions, priceRequests }: { items: InventoryItem[]
             <p style={{ fontSize:11,color:"#64748B",marginBottom:3 }}>{k.label}</p>
             <p style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:800,
               color:"#0F172A",lineHeight:1,marginBottom:3 }}>{k.val}</p>
-            <div style={{ display:"flex",alignItems:"center",gap:3 }}>
-              {k.up && <ArrowUpRight size={11} style={{ color:"#16A34A" }} />}
-              <span style={{ fontSize:11,color:k.up?"#16A34A":"#94A3B8",fontWeight:k.up?600:400 }}>{k.sub}</span>
-            </div>
           </div>
         </div>
       ))}
@@ -167,51 +177,7 @@ function KpiBar({ items, transactions, priceRequests }: { items: InventoryItem[]
 }
 
 /* ══════════════════════════════════════════════════════════
-   RIGHT MINIBAR PANEL
-══════════════════════════════════════════════════════════ */
-function MinibarPanel({ usage = [], onSeeAll }: { usage?: MinibarUsage[]; onSeeAll: () => void }) {
-  return (
-    <div style={{ width:310,flexShrink:0,background:"#FFF",borderLeft:"1px solid #E2E8F0",
-      display:"flex",flexDirection:"column",overflow:"hidden" }}>
-      {/* Header */}
-      <div style={{ padding:"14px 16px",borderBottom:"1px solid #F1F5F9" }}>
-        <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:2 }}>
-          <p style={{ fontSize:13,fontWeight:700,color:"#0F172A" }}>Biến động tồn kho gần đây</p>
-          <button onClick={onSeeAll} style={{ fontSize:11,fontWeight:600,color:"#2563EB",cursor:"pointer",whiteSpace:"nowrap" }}>
-            Xem tất cả →
-          </button>
-        </div>
-        <p style={{ fontSize:11,color:"#94A3B8" }}>Đọc từ sổ biến động backend; không gán phòng nếu phiếu không có dữ liệu phòng.</p>
-      </div>
-
-      {/* Table header */}
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 54px 32px 45px",
-        gap:4,padding:"7px 16px",background:"#F8FAFC",borderBottom:"1px solid #F1F5F9" }}>
-        {["Mặt hàng","Phiếu","SL","NV"].map(h => (
-          <span key={h} style={{ fontSize:10,fontWeight:700,color:"#64748B",
-            textTransform:"uppercase",letterSpacing:"0.05em" }}>{h}</span>
-        ))}
-      </div>
-
-      {/* Rows */}
-      <div style={{ flex:1,overflowY:"auto" }}>
-        {usage.map((u, i) => (
-          <div key={i} style={{ display:"grid",gridTemplateColumns:"1fr 54px 32px 45px",
-            gap:4,padding:"9px 16px",borderBottom:"1px solid #F8FAFC",alignItems:"center" }} title={`${u.time} · ${u.staff}`}>
-            <div style={{minWidth:0}}><span style={{ display:"block",fontSize:11,color:"#334155",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{u.item}</span><span style={{fontSize:10,color:"#94A3B8"}}>{u.time}</span></div>
-            <span style={{fontSize:9,fontWeight:700,color:u.movementType==="ISSUE"?"#1D4ED8":u.movementType==="WASTE"?"#BE123C":"#475569"}}>{u.movementType}</span>
-            <span style={{ fontSize:12,fontWeight:700,color:u.qty<0?"#DC2626":"#166534" }}>{u.qty>0?"+":""}{u.qty}</span>
-            <span style={{fontSize:10,color:"#64748B",overflow:"hidden",textOverflow:"ellipsis"}}>{u.staff}</span>
-          </div>
-        ))}
-        {usage.length === 0 && <p style={{padding:18,textAlign:"center",fontSize:11,color:"#94A3B8"}}>Chưa có biến động kho.</p>}
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════
-   PRICE REQUEST MODAL (SẾP / QUẢN LÝ PHÊ DUYỆT)
+   PRICE REQUEST MODAL
 ══════════════════════════════════════════════════════════ */
 function PriceRequestModal({
   item,
@@ -425,10 +391,8 @@ function PriceRequestModal({
 
 const MOVEMENT_OPTIONS: [MovementType, string][] = [
   ["RECEIVE", "Nhập kho"],
-  ["ISSUE", "Xuất sử dụng / cấp phát"],
-  ["WASTE", "Hao hụt / hủy"],
-  ["RETURN", "Trả lại kho"],
-  ["ADJUST", "Điều chỉnh kiểm kê (+ / −)"],
+  ["ISSUE", "Xuất kho"],
+  ["WASTE", "Hao hụt"],
 ];
 
 function InventoryMovementModal({
@@ -460,12 +424,12 @@ function InventoryMovementModal({
   const submit = async () => {
     const parsedQuantity = Number(quantity);
     if (!serviceId || !selected) { setError("Chọn danh mục cần ghi nhận."); return; }
-    if (!Number.isSafeInteger(parsedQuantity) || parsedQuantity === 0 || (type !== "ADJUST" && parsedQuantity < 1)) {
-      setError(type === "ADJUST" ? "Số điều chỉnh phải là số nguyên khác 0; nhập âm nếu giảm tồn." : "Số lượng phải là số nguyên lớn hơn 0.");
+    if (!Number.isSafeInteger(parsedQuantity) || parsedQuantity < 1) {
+      setError("Số lượng phải là số nguyên lớn hơn 0.");
       return;
     }
     let finalReason = reason.trim();
-    if (selectedRoom && !finalReason.includes(selectedRoom)) {
+    if (type === "ISSUE" && selectedRoom && !finalReason.includes(selectedRoom)) {
       finalReason = finalReason ? `${finalReason} (Phòng ${selectedRoom})` : `Cấp cho phòng ${selectedRoom}`;
     }
     if (!finalReason) { setError("Nhập lý do để lưu dấu vết kiểm soát kho và dịch vụ."); return; }
@@ -496,38 +460,32 @@ function InventoryMovementModal({
           </label>
           <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
             <label style={{ display:"grid",gap:5,fontSize:11,fontWeight:700,color:"#334155" }}>Loại phiếu
-              <select value={type} onChange={event => setType(event.target.value as MovementType)} disabled={saving} style={{ height:38,padding:"0 10px",border:"1px solid #CBD5E1",borderRadius:8,background:"#FFF",fontSize:12 }}>
+              <select value={type} onChange={event => { setType(event.target.value as MovementType); setSelectedRoom(""); }} disabled={saving} style={{ height:38,padding:"0 10px",border:"1px solid #CBD5E1",borderRadius:8,background:"#FFF",fontSize:12 }}>
                 {MOVEMENT_OPTIONS.map(([value,label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </label>
-            <label style={{ display:"grid",gap:5,fontSize:11,fontWeight:700,color:"#334155" }}>Số lượng / Slot {type === "ADJUST" ? "(âm hoặc dương)" : ""}
-              <input type="number" step="1" value={quantity} onChange={event => setQuantity(event.target.value)} disabled={saving} style={{ height:38,padding:"0 10px",border:"1px solid #CBD5E1",borderRadius:8,fontSize:13 }} />
+            <label style={{ display:"grid",gap:5,fontSize:11,fontWeight:700,color:"#334155" }}>Số lượng / Slot
+              <input type="number" min="1" step="1" value={quantity} onChange={event => setQuantity(event.target.value)} disabled={saving} style={{ height:38,padding:"0 10px",border:"1px solid #CBD5E1",borderRadius:8,fontSize:13 }} />
             </label>
           </div>
           {selected && (
             <div style={{ padding:"10px 12px",borderRadius:8,background:"#F8FAFC",fontSize:11,color:"#475569",border:"1px solid #F1F5F9" }}>
               <p style={{ margin:0 }}>
-                Tồn hiện tại: <strong>{selected.stock} {isService ? "slot khả dụng" : (UNIT_LABEL[selected.unit] ?? selected.unit)}</strong> · Ngưỡng đảm bảo: <strong>{selected.reorder}</strong>
+                {isService?"Số lượng quản lý":"Tồn hiện tại"}: <strong>{selected.stock} {UNIT_LABEL[selected.unit] ?? selected.unit}</strong> · Ngưỡng đảm bảo: <strong>{selected.reorder}</strong>
               </p>
               <p style={{ margin:"4px 0 0",fontSize:10,color:"#94A3B8",fontStyle:"italic" }}>
-                * Nếu là dịch vụ: số slot khả dụng; nếu là đồ dùng: đơn vị mặt hàng.
+                {isService?"Đơn vị dùng cho phiếu; số sân, phòng và suất còn lại được tính riêng theo lịch đặt.":"Số lượng được ghi theo đơn vị mặt hàng."}
               </p>
             </div>
           )}
-          <label style={{ display:"grid",gap:5,fontSize:11,fontWeight:700,color:"#334155" }}>Chọn phòng nhận (tùy chọn)
-            <select value={selectedRoom} onChange={event => {
-              const r = event.target.value;
-              setSelectedRoom(r);
-              if (r && !reason.includes(`phòng ${r}`)) {
-                setReason(prev => prev ? `${prev} (Phòng ${r})` : `Cấp cho phòng ${r}`);
-              }
-            }} disabled={saving} style={{ height:38,padding:"0 10px",border:"1px solid #CBD5E1",borderRadius:8,background:"#FFF",fontSize:12 }}>
+          {type === "ISSUE" && <label style={{ display:"grid",gap:5,fontSize:11,fontWeight:700,color:"#334155" }}>Chọn phòng nhận (tùy chọn)
+            <select value={selectedRoom} onChange={event => setSelectedRoom(event.target.value)} disabled={saving} style={{ height:38,padding:"0 10px",border:"1px solid #CBD5E1",borderRadius:8,background:"#FFF",fontSize:12 }}>
               <option value="">-- Không chỉ định phòng (xuất nội bộ / kho chung) --</option>
               {["101","102","103","201","202","203","301","302","401","501","502","601","701","801","802"].map(room => (
                 <option key={room} value={room}>Phòng {room}</option>
               ))}
             </select>
-          </label>
+          </label>}
           <label style={{ display:"grid",gap:5,fontSize:11,fontWeight:700,color:"#334155" }}>Lý do / nơi nhận
             <textarea value={reason} maxLength={500} rows={3} onChange={event => setReason(event.target.value)} disabled={saving} placeholder="Ví dụ: Cấp cho buồng phòng – phòng 502" style={{ resize:"vertical",padding:"9px 10px",border:"1px solid #CBD5E1",borderRadius:8,fontSize:12 }} />
           </label>
@@ -549,20 +507,22 @@ function InventoryScreen({
   priceRequests,
   onAddPriceRequest,
   onOpenMovement,
-  onSeeAll,
   searchQuery,
   loading,
-  usage = [],
   items = [],
   requesterName,
+  servicesView = false,
+  refreshKey = 0,
+  onAvailabilityChange,
 }: {
+  servicesView?: boolean;
+  refreshKey?:number;
+  onAvailabilityChange?:(rows:ServiceAvailability[]|null)=>void;
   priceRequests: PriceRequest[];
   onAddPriceRequest: (req: PriceRequest) => Promise<void>;
   onOpenMovement: (serviceId: string | undefined, type: MovementType, reason?: string) => void;
-  onSeeAll: () => void;
   searchQuery: string;
   loading: boolean;
-  usage?: MinibarUsage[];
   items?: InventoryItem[];
   requesterName?: string;
 }) {
@@ -573,6 +533,26 @@ function InventoryScreen({
   const [page, setPage]      = useState(1);
   const [modalItem, setModalItem] = useState<InventoryItem|null>(null);
   const [toastMessage, setToastMessage] = useState<string|null>(null);
+  const [fromTime,setFromTime]=useState(()=>`${localDateValue()}T08:00`);
+  const [toTime,setToTime]=useState(()=>`${localDateValue()}T09:00`);
+  const [availability,setAvailability]=useState<ServiceAvailability[]>([]);
+  const [availabilityLoading,setAvailabilityLoading]=useState(servicesView);
+  const [availabilityError,setAvailabilityError]=useState("");
+  const [scheduleRefresh,setScheduleRefresh]=useState(0);
+  useEffect(()=>{
+    if(!servicesView)return;
+    let active=true;setAvailability([]);setAvailabilityError("");onAvailabilityChange?.(null);
+    if(!fromTime||!toTime||fromTime>=toTime||new Date(toTime).getTime()-new Date(fromTime).getTime()>31*86400000){
+      setAvailabilityLoading(false);setAvailabilityError("Chọn thời gian kết thúc sau thời gian bắt đầu, tối đa 31 ngày.");return;
+    }
+    setAvailabilityLoading(true);
+    serviceAvailabilityApi.list(fromTime,toTime)
+      .then(rows=>{if(active){setAvailability(rows);onAvailabilityChange?.(rows);}})
+      .catch(cause=>{if(active)setAvailabilityError(apiErrorMessage(cause,"Không thể tải lịch khả dụng."));})
+      .finally(()=>{if(active)setAvailabilityLoading(false);});
+    return ()=>{active=false;};
+  },[servicesView,fromTime,toTime,scheduleRefresh,refreshKey,onAvailabilityChange]);
+  const availabilityById=useMemo(()=>new Map(availability.map(row=>[row.service_id,row])),[availability]);
   const PER_PAGE = 10;
   const categoryOptions = useMemo<[string,string][]>(() => [
       ["All Categories", "Tất cả danh mục"],
@@ -584,25 +564,27 @@ function InventoryScreen({
   const filtered = useMemo(() => {
     let rs = items;
     if (quickTag === "food") {
-      rs = rs.filter(i => ["fine-dining", "Kitchen Fresh", "Kitchen Dry", "Minibar Snack"].includes(i.category) || i.name.toLowerCase().includes("ăn") || i.name.toLowerCase().includes("món") || i.name.toLowerCase().includes("bánh"));
+      rs = rs.filter(i => ["food", "Kitchen Fresh", "Kitchen Dry", "Minibar Snack"].includes(i.category));
     } else if (quickTag === "drinks") {
-      rs = rs.filter(i => ["Minibar Beverage"].includes(i.category) || i.name.toLowerCase().includes("nước") || i.name.toLowerCase().includes("trà") || i.name.toLowerCase().includes("rượu") || i.name.toLowerCase().includes("cà phê") || i.name.toLowerCase().includes("bia"));
+      rs = rs.filter(i => ["beverage", "Minibar Beverage"].includes(i.category));
+    } else if (quickTag === "household") {
+      rs = rs.filter(i => i.category === "room-amenity");
     } else if (quickTag === "minibar") {
-      rs = rs.filter(i => i.category.toLowerCase().includes("minibar"));
+      rs = rs.filter(i => i.category.toLowerCase().includes("minibar") || i.sku.toUpperCase().startsWith("MINI"));
     } else if (quickTag === "service") {
       rs = rs.filter(i => ["spa", "transport", "recreation", "business", "inroom"].includes(i.category));
     } else if (cat !== "All Categories") {
       rs = rs.filter(i => i.category === cat);
     }
     if (status === "Low Stock")   rs = rs.filter(i => stockStatus(i) === "low-stock");
-    if (status === "In Stock")    rs = rs.filter(i => stockStatus(i) === "in-stock");
-    if (status === "Out of Stock") rs = rs.filter(i => stockStatus(i) === "out-of-stock");
+    if (status === "In Stock")    rs = rs.filter(i => servicesView?(availabilityById.get(i.id)?.available??0)>0:stockStatus(i)==="in-stock");
+    if (status === "Out of Stock") rs = rs.filter(i => servicesView?availabilityById.get(i.id)?.available===0:stockStatus(i)==="out-of-stock");
     if (search.trim() || searchQuery.trim()) {
       const q = (searchQuery.trim() || search.trim()).toLowerCase();
       rs = rs.filter(i => i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q) || i.category.toLowerCase().includes(q));
     }
     return rs;
-  }, [search, searchQuery, quickTag, cat, status, items]);
+  }, [search, searchQuery, quickTag, cat, status, items,servicesView,availabilityById]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE) || 1;
   const pageItems  = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -614,9 +596,17 @@ function InventoryScreen({
 
         {/* Section heading */}
         <div style={{ marginBottom:14 }}>
-          <h2 style={{ fontSize:16,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Danh mục kho và dịch vụ</h2>
-          <p style={{ fontSize:12,color:"#94A3B8" }}>Theo dõi danh mục kho, minibar và các dịch vụ khách sạn</p>
+          <h2 style={{ fontSize:16,fontWeight:700,color:"#0F172A",marginBottom:2 }}>{servicesView ? "Danh mục dịch vụ" : "Danh mục kho"}</h2>
+          <p style={{ fontSize:12,color:"#94A3B8" }}>{servicesView ? "Quản lý dịch vụ nhà hàng, spa, vận chuyển và tiện ích khách sạn" : "Quản lý món ăn, thức uống, minibar và đồ gia dụng"}</p>
         </div>
+
+        {servicesView&&<div style={{display:"flex",alignItems:"end",gap:12,flexWrap:"wrap",padding:14,marginBottom:14,border:"1px solid #E2E8F0",borderRadius:10,background:"#FFF"}}>
+          <label style={{display:"grid",gap:5,fontSize:12,color:"#475569"}}>Từ thời điểm<input type="datetime-local" value={fromTime} onChange={event=>{setFromTime(event.target.value);setPage(1);}} style={{height:34,padding:"0 8px",border:"1px solid #CBD5E1",borderRadius:6}}/></label>
+          <label style={{display:"grid",gap:5,fontSize:12,color:"#475569"}}>Đến thời điểm<input type="datetime-local" value={toTime} onChange={event=>{setToTime(event.target.value);setPage(1);}} style={{height:34,padding:"0 8px",border:"1px solid #CBD5E1",borderRadius:6}}/></label>
+          <button type="button" onClick={()=>setScheduleRefresh(value=>value+1)} style={{height:34,padding:"0 12px",fontSize:12,fontFamily:"inherit",fontWeight:400,border:"1px solid #CBD5E1",borderRadius:6,background:"#FFF",cursor:"pointer"}}>Tải lại lịch</button>
+          <span style={{fontSize:11,color:"#64748B"}}>Khả dụng trong toàn bộ khoảng thời gian đã chọn</span>
+        </div>}
+        {servicesView&&availabilityError&&<p role="alert" style={{fontSize:12,color:"#B91C1C",marginBottom:12}}>{availabilityError}</p>}
 
         {/* Toolbar */}
         <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap" }}>
@@ -633,7 +623,7 @@ function InventoryScreen({
             <select value={status} onChange={e=>{ setStatus(e.target.value); setPage(1); }}
               style={{ height:34,padding:"0 26px 0 10px",borderRadius:8,border:"1px solid #E2E8F0",
                 background:"#F8FAFC",fontSize:12,outline:"none",cursor:"pointer",appearance:"none" }}>
-              {STATUS_OPTIONS.map(([value,label]) => <option key={value} value={value}>{label}</option>)}
+              {(servicesView?[["All Status","Tất cả trạng thái"],["In Stock","Còn chỗ"],["Out of Stock","Hết chỗ"]]:STATUS_OPTIONS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}
             </select>
             <ChevronDown size={11} style={{ position:"absolute",right:7,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
           </div>
@@ -641,13 +631,13 @@ function InventoryScreen({
 
         {/* Category filter pills & Quick tags */}
         <div style={{ display:"flex",gap:6,marginBottom:14,flexWrap:"wrap",alignItems:"center" }}>
-          {[
+          {(servicesView ? [{ id:"all", label:"Tất cả" }] : [
             { id:"all", label:"Tất cả" },
-            { id:"food", label:"Đồ ăn" },
+            { id:"food", label:"Món ăn" },
             { id:"drinks", label:"Thức uống" },
+            { id:"household", label:"Đồ gia dụng" },
             { id:"minibar", label:"Minibar" },
-            { id:"service", label:"Dịch vụ" },
-          ].map(tag => {
+          ]).map(tag => {
             const active = quickTag === tag.id && cat === "All Categories";
             return (
               <button key={tag.id} onClick={() => { setQuickTag(tag.id); setCat("All Categories"); setPage(1); }}
@@ -659,7 +649,7 @@ function InventoryScreen({
             );
           })}
           <span style={{ height:18,width:1,background:"#E2E8F0",margin:"0 3px" }} />
-          {categoryOptions.filter(([value]) => value !== "All Categories").map(([value,label]) => {
+          {categoryOptions.filter(([value]) => value !== "All Categories" && (servicesView || !["food", "beverage", "room-amenity"].includes(value))).map(([value,label]) => {
             const active = cat === value && quickTag === "all";
             return (
               <button key={value} onClick={() => { setCat(value); setQuickTag("all"); setPage(1); }}
@@ -678,7 +668,7 @@ function InventoryScreen({
           <table style={{ width:"100%",minWidth:1040,borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:"#F8FAFC" }}>
-                {["Tên danh mục / dịch vụ","Phân loại","Đơn vị","Giá niêm yết","Tồn kho / Slot","Ngưỡng đảm bảo","Trạng thái","Hành động"].map(h => (
+                {["Tên danh mục / dịch vụ","Phân loại",servicesView?"Đơn vị tính giá":"Đơn vị",servicesView?"Giá niêm yết":"Đơn giá (đ)",servicesView?"Khả dụng":"Tồn kho",servicesView?"Tổng công suất":"Ngưỡng đảm bảo","Trạng thái","Hành động"].map(h => (
                   <th key={h} style={{ padding:"9px 12px",fontSize:11,fontWeight:700,color:"#64748B",
                     textAlign:"left",whiteSpace:"nowrap",letterSpacing:"0.04em",
                     borderBottom:"1px solid #E2E8F0",textTransform:"uppercase" }}>{h}</th>
@@ -688,7 +678,8 @@ function InventoryScreen({
             <tbody>
               {pageItems.map((item, i) => {
                 const st   = stockStatus(item);
-                const cfg  = STATUS_CFG[st];
+                const available=availabilityById.get(item.id);
+                const cfg = servicesView?(available?{...STATUS_CFG[available.available>0?"in-stock":"out-of-stock"],label:available.available>0?"Còn chỗ":"Hết chỗ"}:{...STATUS_CFG["out-of-stock"],label:"Chưa có lịch"}):STATUS_CFG[st];
                 const catC = CAT_COLORS[item.category] ?? { bg:"#F8FAFC",text:"#475569" };
                 const pendingReq = priceRequests.find(pr => (pr.sku === item.sku || pr.item.toLowerCase() === item.name.toLowerCase()) && pr.status === "pending");
                 return (
@@ -717,8 +708,7 @@ function InventoryScreen({
                     {/* Giá niêm yết */}
                     <td style={{ padding:"9px 12px",fontSize:12,fontWeight:600,color:"#0F172A",
                       fontFamily:"'JetBrains Mono',monospace" }}>
-                      {item.active ? item.price.toLocaleString("vi-VN") : "—"}
-                      {!item.active && <div style={{fontFamily:"system-ui",fontSize:10,fontWeight:400,color:"#64748B",marginTop:3}}>Không bán cho khách</div>}
+                      {item.price.toLocaleString("vi-VN")}
                       {pendingReq && (
                         <div style={{ fontSize:10,color:"#D97706",fontWeight:600,marginTop:3,display:"flex",alignItems:"center",gap:3,fontFamily:"system-ui" }}>
                           <Clock size={10} /> Đề xuất: {pendingReq.newPrice.toLocaleString("vi-VN")}
@@ -726,9 +716,9 @@ function InventoryScreen({
                       )}
                     </td>
                     {/* Tồn kho hiện tại */}
-                    <td style={{ padding:"9px 12px",minWidth:130 }}><StockBar item={item} /></td>
+                    <td style={{ padding:"9px 12px",minWidth:130 }}>{servicesView?availabilityLoading?<span style={{fontSize:11,color:"#94A3B8"}}>Đang tải lịch…</span>:available?<StockBar item={item} availability={available}/>:<span style={{fontSize:11,color:"#94A3B8"}}>{availabilityError?"Chưa tải được lịch":"Chưa cấu hình lịch"}</span>:<StockBar item={item}/>}</td>
                     {/* Ngưỡng đảm bảo */}
-                    <td style={{ padding:"9px 12px",fontSize:12,color:"#64748B" }}>{item.reorder}</td>
+                    <td style={{ padding:"9px 12px",fontSize:12,color:"#64748B" }}>{servicesView?(available?`${available.capacity} ${available.unit}`:"—"):item.reorder}</td>
                     {/* Trạng thái */}
                     <td style={{ padding:"9px 12px" }}>
                       <div style={{ display:"flex",alignItems:"center",gap:5 }}>
@@ -795,9 +785,6 @@ function InventoryScreen({
           </div>
         </div>
       </div>
-
-      {/* Right minibar panel */}
-      <MinibarPanel usage={usage} onSeeAll={onSeeAll} />
 
       {/* Modal đề xuất đổi giá */}
       {modalItem && (
@@ -1564,14 +1551,18 @@ function RestaurantScreen({ bookings, date, loading, error, busyId, searchQuery,
 
 const NAV: { id: NavPage; label: string; Icon: React.ElementType }[] = [
   { id:"restaurant",   label:"Điều phối nhà hàng",  Icon:Utensils },
-  { id:"inventory",    label:"Kho và Dịch vụ",       Icon:Package },
+  { id:"inventory",    label:"Kho",                Icon:Package },
+  { id:"services",     label:"Dịch vụ",            Icon:Tag },
+  { id:"returns",      label:"Duyệt trả kho",      Icon:RefreshCw },
   { id:"pricing",      label:"Đề xuất giá dịch vụ", Icon:Tag },
   { id:"reports",      label:"Báo cáo tiêu thụ",    Icon:BarChart2 },
 ];
 
 const NAV_LABELS: Record<NavPage, string> = {
   restaurant:   "Điều phối nhà hàng",
-  inventory:    "Kho và Dịch vụ",
+  inventory:    "Kho",
+  services:     "Dịch vụ",
+  returns:      "Duyệt trả kho",
   transactions: "Nhập – Xuất kho",
   pricing:      "Đề xuất giá dịch vụ",
   reports:      "Báo cáo tiêu thụ",
@@ -1582,6 +1573,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
   const [globalSearch, setGlobalSearch] = useState("");
   const [priceRequests, setPriceRequests] = useState<PriceRequest[]>([]);
   const [liveItems, setLiveItems] = useState<InventoryItem[]>([]);
+  const [availabilitySummary,setAvailabilitySummary]=useState<ServiceAvailability[]|null>(null);
   const [liveTransactions, setLiveTransactions] = useState<Transaction[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
   const [inventoryError, setInventoryError] = useState<string | null>(null);
@@ -1589,6 +1581,8 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
   const [movementDialog, setMovementDialog] = useState<{ serviceId?: string; type: MovementType; reason?: string } | null>(null);
   const [movementNotice, setMovementNotice] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<EmployeeProfileDto | null>(null);
+  const profileRoleLabel = userProfile?.role && userProfile.role !== "KITCHEN"
+    ? employeeRoleLabel(userProfile.role) : "Quản lý kho và dịch vụ";
   const [topProfileOpen, setTopProfileOpen] = useState(false);
   const [sidebarProfileOpen, setSidebarProfileOpen] = useState(false);
   const [restaurantDate, setRestaurantDate] = useState(() => localDateValue());
@@ -1600,13 +1594,10 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
 
   const todayLabel = useMemo(() => new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" }), []);
 
-  const liveUsage: MinibarUsage[] = liveTransactions.slice(0, 10).map(transaction => ({
-    item: transaction.item,
-    qty: transaction.qty,
-    time: transaction.date,
-    staff: transaction.staff,
-    movementType: transaction.movementType,
-  }));
+  const catalogItems = liveItems.filter(item => page === "inventory" ? isStockItem(item) : page === "services" ? !isStockItem(item) : true);
+  const catalogIds = new Set(catalogItems.map(item => item.id));
+  const catalogTransactions = liveTransactions.filter(transaction => catalogIds.has(transaction.serviceId));
+  const catalogPriceRequests = priceRequests.filter(request => catalogIds.has(request.sku));
 
   useEffect(() => {
     let active = true;
@@ -1654,6 +1645,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
             : movement.type === "ISSUE" ? "export" : movement.type === "WASTE" ? "waste" : "adjustment";
           return [{
             id: String(movement.id),
+            serviceId: movement.service_id,
             date: new Date(movement.occurred_at).toLocaleString("vi-VN"),
             occurredAt: movement.occurred_at,
             type,
@@ -1828,7 +1820,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
             </div>
             <div>
               <p style={{ fontSize:11,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || "Võ Minh Kho và Dịch vụ"}</p>
-              <p style={{ fontSize:10,color:"#94A3B8" }}>{userProfile?.role ? employeeRoleLabel(userProfile.role) : "Kho và Dịch vụ"}</p>
+              <p style={{ fontSize:10,color:"#94A3B8" }}>{profileRoleLabel}</p>
             </div>
           </div>
           <button onClick={onBack}
@@ -1840,7 +1832,8 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
             onClose={()=>setSidebarProfileOpen(false)}
             onLogout={onBack}
             align="bottom-left"
-            currentRoleLabel={userProfile?.role ? employeeRoleLabel(userProfile.role) : "Kho và Dịch vụ"}
+            currentRoleLabel={profileRoleLabel}
+            roleLabelOverride={userProfile?.role === "KITCHEN" ? profileRoleLabel : undefined}
             departmentName="Bộ phận Kho và Dịch vụ"
           />
         </div>
@@ -1874,7 +1867,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
               </div>
               <div>
                 <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || "Võ Minh Kho và Dịch vụ"}</p>
-                <p style={{ fontSize:10,color:"#94A3B8" }}>{userProfile?.role ? employeeRoleLabel(userProfile.role) : "Kho và Dịch vụ"}</p>
+                <p style={{ fontSize:10,color:"#94A3B8" }}>{profileRoleLabel}</p>
               </div>
               <ChevronDown size={12} style={{ color:"#94A3B8" }} />
             </div>
@@ -1883,19 +1876,20 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
               onClose={()=>setTopProfileOpen(false)}
               onLogout={onBack}
               align="top-right"
-              currentRoleLabel={userProfile?.role ? employeeRoleLabel(userProfile.role) : "Kho và Dịch vụ"}
+              currentRoleLabel={profileRoleLabel}
+              roleLabelOverride={userProfile?.role === "KITCHEN" ? profileRoleLabel : undefined}
               departmentName="Bộ phận Kho và Dịch vụ"
             />
           </div>
         </header>
 
         {/* PAGE TITLE (inventory only) */}
-        {page === "inventory" && (
+        {(page === "inventory" || page === "services") && (
           <div style={{ padding:"14px 22px",background:"#FFF",borderBottom:"1px solid #E2E8F0",flexShrink:0 }}>
             <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between" }}>
               <div>
                 <h1 style={{ fontSize:22,fontWeight:800,color:"#0F172A",marginBottom:3 }}>
-                  Kho và Dịch vụ
+                  {page === "services" ? "Dịch vụ" : "Kho"}
                 </h1>
                 <p style={{ fontSize:13,color:"#64748B" }}>Quản lý danh mục kho, dịch vụ khách sạn và định mức cung ứng</p>
               </div>
@@ -1909,7 +1903,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
         )}
 
         {/* KPI */}
-          {page !== "restaurant" && <KpiBar items={liveItems} transactions={liveTransactions} priceRequests={priceRequests} />}
+          {page !== "restaurant" && <KpiBar items={catalogItems} transactions={catalogTransactions} priceRequests={catalogPriceRequests} availability={page==="services"?availabilitySummary:undefined}/>}
 
         {inventoryError && <div role="alert" style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"9px 16px",background:"#FFF1F2",borderBottom:"1px solid #FECDD3",color:"#BE123C",fontSize:12 }}>
           <span>{inventoryError}</span><button onClick={() => setInventoryRefreshKey(key => key + 1)} style={{ border:"1px solid #FDA4AF",borderRadius:7,background:"#FFF",padding:"5px 9px",color:"#9F1239",fontSize:11,fontWeight:700,cursor:"pointer" }}>Tải lại dữ liệu kho</button>
@@ -1919,13 +1913,15 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
         {/* CONTENT */}
         <div style={{ flex:1,display:"flex",overflow:"hidden" }}>
           {page === "restaurant" && <RestaurantScreen bookings={restaurantBookings} date={restaurantDate} loading={restaurantLoading} error={restaurantError} busyId={restaurantBusyId} searchQuery={globalSearch} onDateChange={setRestaurantDate} onRefresh={() => setRestaurantRefreshKey(key => key + 1)} onMarkUsed={booking => void handleMarkRestaurantUsed(booking)} />}
-          {page === "inventory"    && (
+          {(page === "inventory" || page === "services") && (
             <InventoryScreen
-              items={liveItems}
-              usage={liveUsage}
+              key={page}
+              servicesView={page === "services"}
+              refreshKey={inventoryRefreshKey}
+              onAvailabilityChange={setAvailabilitySummary}
+              items={catalogItems}
               priceRequests={priceRequests}
               onOpenMovement={(serviceId,type,reason) => setMovementDialog({ serviceId,type,reason })}
-              onSeeAll={() => setPage("transactions")}
               searchQuery={globalSearch}
               loading={inventoryLoading}
               onAddPriceRequest={handleAddPriceRequest}
@@ -1933,6 +1929,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
             />
           )}
           {page === "transactions" && <TransactionsScreen transactions={liveTransactions} onOpenMovement={(type,reason) => setMovementDialog({ type,reason })} searchQuery={globalSearch} />}
+          {page === "returns" && <StockReturnsPanel warehouse onChanged={()=>setInventoryRefreshKey(key=>key+1)}/>}
           {page === "pricing"      && (
             <PricingScreen
               requests={priceRequests}
@@ -1947,7 +1944,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
           {page === "reports"      && <ReportsScreen items={liveItems} transactions={liveTransactions} />}
         </div>
       </div>
-      {movementDialog && <InventoryMovementModal items={liveItems} initialServiceId={movementDialog.serviceId} initialType={movementDialog.type} initialReason={movementDialog.reason} onClose={() => setMovementDialog(null)} onSubmit={handleInventoryMovement} />}
+      {movementDialog && <InventoryMovementModal items={catalogItems} initialServiceId={movementDialog.serviceId} initialType={movementDialog.type} initialReason={movementDialog.reason} onClose={() => setMovementDialog(null)} onSubmit={handleInventoryMovement} />}
     </div>
   );
 }
