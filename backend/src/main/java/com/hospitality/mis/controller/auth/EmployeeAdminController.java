@@ -61,7 +61,7 @@ public class EmployeeAdminController {
 
     @PostMapping("/auto-provision")
     @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
-    @PreAuthorize("@departmentAccess.allows(authentication, 'EMPLOYEE_PROVISION') && @employeeService.canManageRole(authentication, #request.role())")
+    @PreAuthorize("hasRole('ADMIN') && @employeeService.canManageRole(authentication, #request.role())")
     public com.hospitality.mis.dto.auth.AuthDtos.AutoProvisionResponse autoProvision(
             @Valid @RequestBody com.hospitality.mis.dto.auth.AuthDtos.AutoProvisionRequest request) {
         return service.provisionAuto(request);

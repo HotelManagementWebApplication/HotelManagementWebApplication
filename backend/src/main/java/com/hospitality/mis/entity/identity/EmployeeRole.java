@@ -32,7 +32,7 @@ public enum EmployeeRole {
     /** Bếp & F&B, chịu trách nhiệm danh mục, tồn kho và vận hành đơn nhà hàng. */
     KITCHEN(SERVICE_READ, SERVICE_WRITE, INVENTORY_READ, INVENTORY_WRITE, SERVICE_PRICE_REQUEST,
             RESTAURANT_ORDER_READ, RESTAURANT_ORDER_WRITE),
-    /** Nhân sự chỉ đọc dữ liệu nhân viên. */
+    /** Nhân sự quản lý hồ sơ/phân ca và đề nghị tiếp nhận; không tự cấp tài khoản/quyền. */
     HR(EMPLOYEE_READ, SHIFT_READ, SHIFT_WRITE);
 
     /** Tập quyền bất biến được suy ra khi enum khởi tạo. */

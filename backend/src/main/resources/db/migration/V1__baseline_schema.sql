@@ -117,6 +117,56 @@ CREATE TABLE NhanVien (
 
 
 -- =============================================================================
+-- Hồ sơ nhân sự và đề nghị tiếp nhận (chưa có tài khoản khi chưa duyệt)
+-- =============================================================================
+CREATE TABLE HoSoNhanSu (
+    maNhanVien NVARCHAR(10) NOT NULL,
+    gioiTinh NVARCHAR(20),
+    ngaySinh DATE,
+    soGiayToTuyThan NVARCHAR(12),
+    ngayVaoLam DATE,
+    loaiHopDong NVARCHAR(20),
+    phienBan BIGINT NOT NULL DEFAULT 1,
+    nguoiCapNhat NVARCHAR(10) NOT NULL,
+    thoiDiemCapNhat DATETIMEOFFSET(6) NOT NULL,
+    CONSTRAINT pkHoSoNhanSu PRIMARY KEY (maNhanVien),
+    CONSTRAINT fkHoSoNhanSu01 FOREIGN KEY (maNhanVien) REFERENCES NhanVien(maNhanVien),
+    CONSTRAINT fkHoSoNhanSu02 FOREIGN KEY (nguoiCapNhat) REFERENCES NhanVien(maNhanVien),
+    CONSTRAINT chkHoSoNhanSu01 CHECK (gioiTinh IS NULL OR gioiTinh IN (N'Nam',N'Nữ',N'Khác',N'Không cung cấp')),
+    CONSTRAINT chkHoSoNhanSu02 CHECK (loaiHopDong IS NULL OR loaiHopDong IN (N'Thử việc',N'Không thời hạn',N'Có thời hạn',N'Thời vụ')),
+    CONSTRAINT chkHoSoNhanSu03 CHECK (soGiayToTuyThan IS NULL OR (LEN(soGiayToTuyThan) IN (9,12) AND soGiayToTuyThan NOT LIKE N'%[^0-9]%')),
+    CONSTRAINT chkHoSoNhanSu04 CHECK (ngayVaoLam IS NULL OR ngaySinh IS NULL OR ngayVaoLam > ngaySinh),
+    CONSTRAINT chkHoSoNhanSu05 CHECK (phienBan > 0)
+);
+
+CREATE TABLE DeNghiTiepNhanNhanVien (
+    maDeNghi UNIQUEIDENTIFIER NOT NULL,
+    duLieuHoSo NVARCHAR(MAX) NOT NULL,
+    vaiTroDeXuat NVARCHAR(30) COLLATE Vietnamese_100_CS_AS NOT NULL,
+    lyDo NVARCHAR(500) NOT NULL,
+    trangThai NVARCHAR(20) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Bản nháp',
+    nguoiDeNghi NVARCHAR(10) NOT NULL,
+    nguoiXetDuyet NVARCHAR(10),
+    lyDoQuyetDinh NVARCHAR(500),
+    maNhanVien NVARCHAR(10),
+    phienBan BIGINT NOT NULL DEFAULT 1,
+    thoiDiemTao DATETIMEOFFSET(6) NOT NULL,
+    thoiDiemGui DATETIMEOFFSET(6),
+    thoiDiemQuyetDinh DATETIMEOFFSET(6),
+    CONSTRAINT pkDeNghiTiepNhanNhanVien PRIMARY KEY (maDeNghi),
+    CONSTRAINT fkDeNghiTiepNhanNhanVien01 FOREIGN KEY (nguoiDeNghi) REFERENCES NhanVien(maNhanVien),
+    CONSTRAINT fkDeNghiTiepNhanNhanVien02 FOREIGN KEY (nguoiXetDuyet) REFERENCES NhanVien(maNhanVien),
+    CONSTRAINT fkDeNghiTiepNhanNhanVien03 FOREIGN KEY (maNhanVien) REFERENCES NhanVien(maNhanVien),
+    CONSTRAINT chkDeNghiTiepNhanNhanVien01 CHECK (ISJSON(duLieuHoSo)=1),
+    CONSTRAINT chkDeNghiTiepNhanNhanVien02 CHECK (trangThai IN (N'Bản nháp',N'Chờ duyệt',N'Cần bổ sung',N'Bị từ chối',N'Đã duyệt')),
+    CONSTRAINT chkDeNghiTiepNhanNhanVien03 CHECK (vaiTroDeXuat IN (N'Quản trị viên',N'Giám đốc',N'Quản lý',N'Lễ tân',N'Kế toán',N'Buồng phòng',N'Kỹ thuật',N'Nhà bếp',N'Nhân sự')),
+    CONSTRAINT chkDeNghiTiepNhanNhanVien04 CHECK (nguoiXetDuyet IS NULL OR nguoiXetDuyet <> nguoiDeNghi),
+    CONSTRAINT chkDeNghiTiepNhanNhanVien05 CHECK ((trangThai=N'Đã duyệt' AND maNhanVien IS NOT NULL) OR (trangThai<>N'Đã duyệt' AND maNhanVien IS NULL)),
+    CONSTRAINT chkDeNghiTiepNhanNhanVien06 CHECK (phienBan > 0),
+    CONSTRAINT chkDeNghiTiepNhanNhanVien07 CHECK (trangThai NOT IN (N'Đã duyệt',N'Cần bổ sung',N'Bị từ chối') OR (nguoiXetDuyet IS NOT NULL AND thoiDiemQuyetDinh IS NOT NULL AND LEN(LTRIM(RTRIM(lyDoQuyetDinh)))>0))
+);
+
+-- =============================================================================
 -- Bảng PhieuDatPhong
 -- =============================================================================
 CREATE TABLE PhieuDatPhong (

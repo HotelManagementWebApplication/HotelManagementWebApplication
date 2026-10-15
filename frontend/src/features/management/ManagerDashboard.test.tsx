@@ -7,6 +7,7 @@ import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical
 import { frontDeskApi } from "../../shared/api/frontDesk";
 import { kitchenAccountingApi } from "../../shared/api/kitchenAccounting";
 import { enterpriseApi } from "../../shared/api/enterprise";
+import { personnelApi } from "../../shared/api/personnel";
 
 describe("ManagerDashboard Interface and Acceptance Workflow", () => {
   const onBack = vi.fn();
@@ -32,6 +33,8 @@ describe("ManagerDashboard Interface and Acceptance Workflow", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(personnelApi, "profiles").mockResolvedValue([]);
+    vi.spyOn(personnelApi, "requests").mockResolvedValue([]);
 
     // Mock manager profile
     vi.spyOn(authApi, "employeeProfile").mockResolvedValue({

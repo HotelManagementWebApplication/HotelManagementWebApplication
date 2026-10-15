@@ -185,3 +185,8 @@ CREATE INDEX idxDatDichVuKhachSan01
 
 CREATE INDEX idxDatDichVuKhachSan02
     ON DatDichVuKhachSan (maPhieuDatPhong, maPhong, maDichVu, thoiDiemDuKien, trangThai);
+
+-- Hồ sơ nhân sự: một giấy tờ cho một nhân viên; một tài khoản cho một đề nghị.
+CREATE UNIQUE INDEX ukHoSoNhanSuGiayTo ON HoSoNhanSu(soGiayToTuyThan) WHERE soGiayToTuyThan IS NOT NULL;
+CREATE UNIQUE INDEX ukDeNghiTiepNhanNhanVien ON DeNghiTiepNhanNhanVien(maNhanVien) WHERE maNhanVien IS NOT NULL;
+CREATE INDEX idxDeNghiTiepNhanNhanVien01 ON DeNghiTiepNhanNhanVien(trangThai,thoiDiemTao);

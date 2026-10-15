@@ -1050,6 +1050,30 @@ FROM dbo.NhanVien;
 GO
 
 -- =============================================================================
+-- vwHoSoNhanSu: DTO hồ sơ, không chứa mật khẩu hay thông tin lương.
+-- =============================================================================
+CREATE VIEW dbo.vwHoSoNhanSu
+AS
+SELECT n.maNhanVien,n.vaiTro,n.trangThaiLamViec,n.duocKichHoat,
+    COALESCE(h.phienBan,0) AS phienBan,h.nguoiCapNhat,h.thoiDiemCapNhat,
+    (SELECT n.hoVaTen AS full_name,n.soDienThoai AS phone,n.email,n.diaChi AS address,
+        CASE h.gioiTinh WHEN N'Nam' THEN 'MALE' WHEN N'Nữ' THEN 'FEMALE' WHEN N'Khác' THEN 'OTHER' WHEN N'Không cung cấp' THEN 'UNDISCLOSED' END AS gender,
+        h.ngaySinh AS birth_date,h.soGiayToTuyThan AS identity_number,h.ngayVaoLam AS hire_date,
+        CASE h.loaiHopDong WHEN N'Thử việc' THEN 'PROBATION' WHEN N'Không thời hạn' THEN 'PERMANENT' WHEN N'Có thời hạn' THEN 'FIXED_TERM' WHEN N'Thời vụ' THEN 'SEASONAL' END AS contract_type
+     FOR JSON PATH,INCLUDE_NULL_VALUES,WITHOUT_ARRAY_WRAPPER) AS duLieuHoSo
+FROM dbo.NhanVien n LEFT JOIN dbo.HoSoNhanSu h ON h.maNhanVien=n.maNhanVien;
+GO
+
+-- =============================================================================
+-- vwDeNghiNhanVien
+-- =============================================================================
+CREATE VIEW dbo.vwDeNghiNhanVien AS
+SELECT maDeNghi,duLieuHoSo,vaiTroDeXuat,lyDo,trangThai,nguoiDeNghi,nguoiXetDuyet,
+    lyDoQuyetDinh,maNhanVien,phienBan,thoiDiemTao,thoiDiemGui,thoiDiemQuyetDinh
+FROM dbo.DeNghiTiepNhanNhanVien;
+GO
+
+-- =============================================================================
 -- vwSuKienDangNhapNhanVien
 -- =============================================================================
 CREATE VIEW dbo.vwSuKienDangNhapNhanVien

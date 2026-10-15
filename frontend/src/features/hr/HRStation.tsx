@@ -12,6 +12,7 @@ import { localDateValue } from "../../shared/utils/localDate";
 import { apiErrorMessage } from "../../shared/api/client";
 import { downloadCsv, parseCsv } from "../../shared/utils/csv";
 import { summarizeAttendance } from "./attendanceSummary";
+import { PersonnelWorkspace } from "./PersonnelWorkspace";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -107,19 +108,12 @@ interface EmployeeProfile {
   id: string;
   enabled: boolean;
   name: string;
-  gender: "Nam" | "Nữ" | "—";
-  dob: string;
   avatar: string;
   department: string;
   departmentId: string;
   role: string;
   email: string;
   phone: string;
-  idCard: string;
-  joinDate: string;
-  contractType: "Chính thức" | "Thử việc" | "Thời vụ" | "—";
-  salaryGrade: string;
-  leaveBalance: number | null; // null khi backend chưa cung cấp
   status: "Đang làm việc" | "Thử việc" | "Tạm hoãn" | "Đã nghỉ việc";
 }
 
@@ -203,12 +197,7 @@ export default function HRStation({ onBack }: Props) {
 
   // ── Tab 3 (Hồ sơ nhân sự) states ──
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
-  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeProfile | null>(null);
-  const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
-  const [staffFilterDept, setStaffFilterDept] = useState("all");
-  const [staffFilterStatus, setStaffFilterStatus] = useState("all");
-
-  // New employee form state
+  const [personnelRevision, setPersonnelRevision] = useState(0);
 
   // ── Tab 4 (Chấm công) states ──
   const [allAttendance, setAllAttendance] = useState<ApiAttendanceRecord[]>([]);
@@ -261,10 +250,9 @@ export default function HRStation({ onBack }: Props) {
     const mapEmployee = (employee: EmployeeAdmin): EmployeeProfile => {
       const [department, departmentId] = departmentFor(employee.role);
       return {
-        id: employee.employee_id, enabled: employee.enabled, name: employee.full_name, gender: "—", dob: "—",
+        id: employee.employee_id, enabled: employee.enabled, name: employee.full_name,
         avatar: employeeAvatar(employee.full_name),
         department, departmentId, role: employee.role, email: employee.email ?? "—", phone: employee.phone,
-        idCard: "—", joinDate: "—", contractType: "—", salaryGrade: "Chưa được cung cấp", leaveBalance: null,
         status: employee.employment_status === "TERMINATED" ? "Đã nghỉ việc" : employee.employment_status === "ON_LEAVE" ? "Tạm hoãn" : "Đang làm việc",
       };
     };
@@ -360,7 +348,7 @@ export default function HRStation({ onBack }: Props) {
       .catch(err => console.warn("Backend HR profile unavailable:", err));
 
     return () => { active = false; };
-  }, [attendanceDate, today, weekDates]);
+  }, [attendanceDate, today, weekDates, personnelRevision]);
 
   const todayLabel = useMemo(() => {
     return today.toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" });
@@ -1239,11 +1227,20 @@ export default function HRStation({ onBack }: Props) {
         </div>
 
         <div className="mt-4 pt-3 border-t border-gray-100 text-center">
-          <p className="text-[11px] text-gray-400">Dữ liệu tự động cập nhật theo ca trực thời gian thực</p>
+          <p className="text-[11px] text-gray-400">Theo lịch ca và đơn nghỉ phép đã ghi nhận trên hệ thống.</p>
         </div>
       </div>
     </div>
   );
+
+  const activeHeadcount = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const employee of employees) {
+      if (employee.enabled && employee.status === "Đang làm việc") counts.set(employee.department, (counts.get(employee.department) || 0) + 1);
+    }
+    const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+    return { total, departments: [...counts.entries()].sort(([a], [b]) => a.localeCompare(b, "vi")).map(([name, count]) => ({ name, count, pct: total ? Math.round(count * 100 / total) : 0 })) };
+  }, [employees]);
 
   // ── 5. TAB 1: TỔNG QUAN (HR EXECUTIVE OVERVIEW) ──
   const OverviewView = (
@@ -1258,7 +1255,7 @@ export default function HRStation({ onBack }: Props) {
             Xin chào, {userProfile?.full_name || "Quản lý Nhân sự"}
           </h2>
           <p className="text-emerald-100/80 text-xs leading-relaxed">
-            Hôm nay đã phân ca cho {shiftCounts.totalActive}/{employees.length} nhân viên. Có {totalUnreadNotifs} đơn đang chờ Quản lý hoặc Giám đốc duyệt.
+            Hôm nay đã phân ca cho {shiftCounts.totalActive}/{activeHeadcount.total} nhân viên đang làm việc. Có {totalUnreadNotifs} đơn đang chờ Quản lý hoặc Giám đốc duyệt.
           </p>
         </div>
         <div className="absolute right-4 -bottom-6 w-48 h-48 rounded-full bg-emerald-600/20 blur-2xl pointer-events-none" />
@@ -1272,26 +1269,19 @@ export default function HRStation({ onBack }: Props) {
         {/* Headcount by department */}
         <div className="lg:col-span-6 bg-white rounded-2xl p-5 border border-gray-100 shadow-xs">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-sans font-bold text-gray-900 text-sm">Phân bổ nhân sự theo phòng ban</h3>
-            <span className="text-xs text-gray-400 font-medium">Tổng: 65 nhân sự</span>
+            <h3 className="font-sans font-bold text-gray-900 text-sm">Nhân sự đang làm việc theo phòng ban</h3>
+            <span className="text-xs text-gray-400 font-medium">Tổng: {activeHeadcount.total} nhân sự</span>
           </div>
 
           <div className="space-y-3.5">
-            {[
-              { name: "Bộ phận Buồng phòng", count: 20, pct: 31, color: "bg-blue-500" },
-              { name: "Bộ phận Bếp & Nhà hàng", count: 16, pct: 25, color: "bg-emerald-500" },
-              { name: "Bộ phận Lễ tân", count: 12, pct: 18, color: "bg-amber-500" },
-              { name: "Bộ phận Kỹ thuật & Bảo trì", count: 8, pct: 12, color: "bg-purple-500" },
-              { name: "Kế toán & Tài chính", count: 5, pct: 8, color: "bg-indigo-500" },
-              { name: "Khối Quản lý & Điều hành", count: 4, pct: 6, color: "bg-gray-700" },
-            ].map(item => (
+            {activeHeadcount.departments.map(item => (
               <div key={item.name}>
                 <div className="flex justify-between text-xs mb-1">
                   <span className="font-medium text-gray-700">{item.name}</span>
                   <span className="text-gray-500 font-semibold">{item.count} nhân viên ({item.pct}%)</span>
                 </div>
                 <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.pct}%` }} />
+                  <div className="h-full rounded-full bg-emerald-600" style={{ width: `${item.pct}%` }} />
                 </div>
               </div>
             ))}
@@ -1302,7 +1292,7 @@ export default function HRStation({ onBack }: Props) {
         <div className="lg:col-span-6 bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-sans font-bold text-gray-900 text-sm">Giám sát ca trực thời gian thực</h3>
+              <h3 className="font-sans font-bold text-gray-900 text-sm">Nhân sự theo ca hôm nay</h3>
               <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
                 ● {today.toLocaleDateString("vi-VN")}
               </span>
@@ -1363,7 +1353,7 @@ export default function HRStation({ onBack }: Props) {
           </div>
 
           <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-            <span>Tự động đồng bộ với hệ thống máy chấm công</span>
+            <span>Theo lịch phân ca và chấm công đã ghi nhận</span>
             <button
               onClick={() => setCurrentTab("attendance")}
               className="text-emerald-700 font-semibold hover:underline"
@@ -1376,61 +1366,13 @@ export default function HRStation({ onBack }: Props) {
 
       {/* Row 3: Contracts alerts & Quick Action Shortcuts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Alerts & Reminders */}
-        <div className="lg:col-span-8 bg-white rounded-2xl p-5 border border-gray-100 shadow-xs">
-          <h3 className="font-sans font-bold text-gray-900 text-sm mb-3">
-            Cảnh báo nghiệp vụ nhân sự cần chú ý
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="p-3 rounded-xl bg-orange-50/80 border border-orange-100">
-              <div className="flex items-center gap-2 text-orange-800 text-xs font-bold mb-1">
-                <AlertCircle className="w-4 h-4 text-orange-600" />
-                <span>Tái ký hợp đồng (3)</span>
-              </div>
-              <p className="text-[11px] text-gray-600">
-                3 nhân viên hết hạn HĐLĐ trong 30 ngày tới cần lập tờ trình gia hạn.
-              </p>
-              <button
-                onClick={() => setCurrentTab("staff")}
-                className="mt-2 text-[11px] font-semibold text-orange-700 hover:underline"
-              >
-                Xem danh sách →
-              </button>
-            </div>
-
-            <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-100">
-              <div className="flex items-center gap-2 text-blue-800 text-xs font-bold mb-1">
-                <Award className="w-4 h-4 text-blue-600" />
-                <span>Xét duyệt thử việc (2)</span>
-              </div>
-              <p className="text-[11px] text-gray-600">
-                Đỗ Hương & 1 nhân sự hoàn thành 2 tháng thử việc cần đánh giá KPI.
-              </p>
-              <button
-                onClick={() => setCurrentTab("staff")}
-                className="mt-2 text-[11px] font-semibold text-blue-700 hover:underline"
-              >
-                Đánh giá KPI →
-              </button>
-            </div>
-
-            <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-100">
-              <div className="flex items-center gap-2 text-emerald-800 text-xs font-bold mb-1">
-                <Coffee className="w-4 h-4 text-emerald-600" />
-                <span>Sinh nhật tháng 9 (4)</span>
-              </div>
-              <p className="text-[11px] text-gray-600">
-                Lên danh sách gửi quà và thiệp chúc mừng sinh nhật cán bộ nhân viên.
-              </p>
-              <button
-                onClick={() => showToast("Đã gửi email chúc mừng sinh nhật tháng 9!")}
-                className="mt-2 text-[11px] font-semibold text-emerald-700 hover:underline"
-              >
-                Gửi chúc mừng →
-              </button>
-            </div>
-          </div>
+        <div className="lg:col-span-8 rounded-2xl border border-gray-100 bg-white p-5 shadow-xs">
+          <h3 className="mb-3 font-sans text-sm font-bold text-gray-900">Quy trình tiếp nhận nhân viên</h3>
+          <ol className="space-y-3 text-sm leading-6 text-gray-600">
+            <li><strong className="text-gray-900">1. HR lập và gửi hồ sơ.</strong> Có thể lưu nháp để bổ sung thông tin trước khi gửi duyệt.</li>
+            <li><strong className="text-gray-900">2. Quản lý/Giám đốc xét duyệt.</strong> Hồ sơ được chấp thuận, yêu cầu bổ sung hoặc từ chối kèm lý do.</li>
+            <li><strong className="text-gray-900">3. Cấp tài khoản khi được duyệt.</strong> HR tiếp tục quản lý hồ sơ, lịch ca, chấm công và nghỉ phép trên cùng mã nhân viên.</li>
+          </ol>
         </div>
 
         {/* Quick Actions */}
@@ -1438,18 +1380,18 @@ export default function HRStation({ onBack }: Props) {
           <h3 className="font-sans font-bold text-gray-900 text-sm mb-3">Tác vụ nhanh</h3>
           <div className="space-y-2">
             <button
-              onClick={() => setIsAddEmployeeModalOpen(true)}
+              onClick={() => setCurrentTab("staff")}
               className="w-full flex items-center justify-between p-2.5 rounded-xl bg-gray-50 hover:bg-emerald-50 text-gray-700 hover:text-emerald-800 text-xs font-medium transition-colors cursor-pointer border border-gray-100 hover:border-emerald-200"
             >
               <div className="flex items-center gap-2">
                 <Plus className="w-4 h-4 text-emerald-600" />
-                <span>Hướng dẫn tiếp nhận</span>
+                <span>Hồ sơ & Tiếp nhận nhân viên</span>
               </div>
               <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
             </button>
 
             <button
-              onClick={() => setCurrentTab("schedule")}
+              onClick={() => { setWeekOffset(1); setCurrentTab("schedule"); }}
               className="w-full flex items-center justify-between p-2.5 rounded-xl bg-gray-50 hover:bg-emerald-50 text-gray-700 hover:text-emerald-800 text-xs font-medium transition-colors cursor-pointer border border-gray-100 hover:border-emerald-200"
             >
               <div className="flex items-center gap-2">
@@ -1480,160 +1422,7 @@ export default function HRStation({ onBack }: Props) {
   );
 
   // ── 6. TAB 3: HỒ SƠ NHÂN SỰ (EMPLOYEE DIRECTORY) ──
-  const filteredEmployees = useMemo(() => {
-    return employees.filter(emp => {
-      if (staffFilterDept !== "all" && emp.departmentId !== staffFilterDept) return false;
-      if (staffFilterStatus !== "all" && emp.status !== staffFilterStatus) return false;
-      if (globalSearch) {
-        const q = globalSearch.toLowerCase();
-        return (
-          emp.name.toLowerCase().includes(q) ||
-          emp.role.toLowerCase().includes(q) ||
-          emp.id.toLowerCase().includes(q) ||
-          emp.department.toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
-  }, [employees, staffFilterDept, staffFilterStatus, globalSearch]);
-
-  const StaffView = (
-    <div className="space-y-5">
-      {/* Top action & filter bar */}
-      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Dept filter */}
-          <div className="relative">
-            <select
-              value={staffFilterDept}
-              onChange={e => setStaffFilterDept(e.target.value)}
-              className="appearance-none bg-gray-50 border border-gray-200 text-xs font-medium text-gray-700 rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs"
-            >
-              <option value="all">Tất cả phòng ban</option>
-              {Array.from(new Map(employees.map(employee => [employee.departmentId, employee.department])).entries()).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          {/* Status filter */}
-          <div className="relative">
-            <select
-              value={staffFilterStatus}
-              onChange={e => setStaffFilterStatus(e.target.value)}
-              className="appearance-none bg-gray-50 border border-gray-200 text-xs font-medium text-gray-700 rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs"
-            >
-              <option value="all">Tất cả trạng thái</option>
-              <option value="Đang làm việc">Đang làm việc</option>
-              <option value="Tạm hoãn">Tạm hoãn</option>
-              <option value="Đã nghỉ việc">Đã nghỉ việc</option>
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          <span className="text-xs text-gray-500 ml-2">
-            Tìm thấy <strong>{filteredEmployees.length}</strong> nhân sự
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => downloadCsv(`ho-so-nhan-su-${localDateValue()}.csv`, [["Mã NV", "Họ tên", "Bộ phận", "Vai trò", "Email", "Điện thoại", "Trạng thái"], ...filteredEmployees.map(employee => [employee.id, employee.name, employee.department, employeeRoleLabel(employee.role), employee.email, employee.phone, employee.status])])}
-            disabled={filteredEmployees.length === 0}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer shadow-2xs"
-          >
-            <Download className="w-3.5 h-3.5 text-gray-500" />
-            <span>Xuất CSV (Excel)</span>
-          </button>
-
-          <button
-            onClick={() => setIsAddEmployeeModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer shadow-xs"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Hướng dẫn tiếp nhận</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Employees Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[780px] text-left border-collapse">
-            <thead>
-              <tr className="bg-[#F8F9FA] text-[11px] font-semibold text-gray-600 border-b border-gray-100 uppercase tracking-wider">
-                <th className="py-3 px-4">Mã NV</th>
-                <th className="py-3 px-4">Nhân viên</th>
-                <th className="py-3 px-4">Bộ phận</th>
-                <th className="py-3 px-4">Liên hệ</th>
-                <th className="py-3 px-4">Hợp đồng</th>
-                <th className="py-3 px-4">Ngày vào làm</th>
-                <th className="py-3 px-4">Trạng thái</th>
-                <th className="py-3 px-4 text-center">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 text-xs">
-                {filteredEmployees.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">Không có nhân viên phù hợp với bộ lọc.</td></tr>}
-              {filteredEmployees.map(emp => (
-                <tr key={emp.id} className="hover:bg-gray-50/70 transition-colors">
-                  <td className="py-3.5 px-4 font-mono font-semibold text-gray-700">
-                    {emp.id}
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={emp.avatar}
-                        alt={emp.name}
-                        className="w-8 h-8 rounded-full object-cover ring-1 ring-gray-200"
-                      />
-                      <div>
-                        <p className="font-semibold text-gray-900 leading-tight">{emp.name}</p>
-                        <p className="text-[11px] text-gray-500 leading-tight mt-0.5">{employeeRoleLabel(emp.role)}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-4 text-gray-700 font-medium">
-                    {emp.department}
-                  </td>
-                  <td className="py-3.5 px-4 text-gray-600">
-                    <p className="text-[11px]">{emp.phone}</p>
-                    <p className="text-[10px] text-gray-400">{emp.email}</p>
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                      emp.contractType === "Chính thức"
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
-                        : emp.contractType === "Thử việc"
-                        ? "bg-amber-50 text-amber-700 border border-amber-200/60"
-                        : "bg-blue-50 text-blue-700 border border-blue-200/60"
-                    }`}>
-                      {emp.contractType}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4 text-gray-600 font-mono text-[11px]">
-                    {emp.joinDate}
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${emp.status === "Đang làm việc" ? "text-emerald-700" : emp.status === "Tạm hoãn" ? "text-amber-700" : "text-gray-500"}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                      {emp.status}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    <button
-                      onClick={() => setSelectedEmployee(emp)}
-                      className="px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-emerald-200/60"
-                    >
-                      Xem hồ sơ
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
+  const StaffView = <PersonnelWorkspace mode="hr" search={globalSearch} onChanged={() => setPersonnelRevision(value => value + 1)} />;
 
   // ── 7. TAB 4: CHẤM CÔNG (TIME & ATTENDANCE) ──
   const AttendanceView = (
@@ -2028,109 +1817,6 @@ export default function HRStation({ onBack }: Props) {
     </div>
   );
 
-  // Employee accounts are created only by roles with EMPLOYEE_PROVISION.
-  const AddEmployeeModal = isAddEmployeeModalOpen && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div role="dialog" aria-modal="true" aria-labelledby="employee-access-title" className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl">
-        <h3 id="employee-access-title" className="font-sans font-bold text-gray-900">Tiếp nhận nhân viên mới</h3>
-        <p className="mt-3 text-sm leading-6 text-gray-600">Quản lý hoặc Giám đốc mở mục Nhân sự, chọn “Thêm nhân viên”, điền thông tin và cấp vai trò phù hợp. Admin cũng có thể cấp tài khoản tại mục Tài khoản. Sau khi tạo, HR tải lại danh sách để tiếp nhận và quản lý lịch, chấm công, nghỉ phép. Quyền cấp tài khoản và vai trò thuộc Ban quản lý và Admin.</p>
-        <button type="button" onClick={() => setIsAddEmployeeModalOpen(false)} className="mt-5 px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm">Đã hiểu</button>
-      </div>
-    </div>
-  );
-
-  // Drawer / Modal: View Employee Details
-  const EmployeeDetailModal = selectedEmployee && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4 animate-in fade-in">
-      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative max-h-[90vh] overflow-y-auto">
-        <button
-          onClick={() => setSelectedEmployee(null)}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        <div className="flex items-center gap-4 pb-5 border-b border-gray-100">
-          <img
-            src={selectedEmployee.avatar}
-            alt={selectedEmployee.name}
-            className="w-16 h-16 rounded-full object-cover ring-2 ring-emerald-600/30"
-          />
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-sans font-bold text-gray-900 text-lg">{selectedEmployee.name}</h3>
-              <span className="font-mono text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
-                {selectedEmployee.id}
-              </span>
-            </div>
-            <p className="text-xs text-gray-600 font-medium">{employeeRoleLabel(selectedEmployee.role)} • {selectedEmployee.department}</p>
-            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-semibold mt-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              {selectedEmployee.status}
-            </span>
-          </div>
-        </div>
-
-        <div className="py-4 space-y-3 text-xs">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="p-2.5 rounded-lg bg-gray-50">
-              <span className="text-gray-400 block text-[10px]">Số điện thoại:</span>
-              <span className="font-semibold text-gray-800">{selectedEmployee.phone}</span>
-            </div>
-            <div className="p-2.5 rounded-lg bg-gray-50">
-              <span className="text-gray-400 block text-[10px]">Email công ty:</span>
-              <span className="font-semibold text-gray-800">{selectedEmployee.email}</span>
-            </div>
-            <div className="p-2.5 rounded-lg bg-gray-50">
-              <span className="text-gray-400 block text-[10px]">Số CCCD / CMND:</span>
-              <span className="font-semibold text-gray-800 font-mono">{selectedEmployee.idCard}</span>
-            </div>
-            <div className="p-2.5 rounded-lg bg-gray-50">
-              <span className="text-gray-400 block text-[10px]">Ngày sinh:</span>
-              <span className="font-semibold text-gray-800">{selectedEmployee.dob}</span>
-            </div>
-            <div className="p-2.5 rounded-lg bg-gray-50">
-              <span className="text-gray-400 block text-[10px]">Ngày vào làm:</span>
-              <span className="font-semibold text-gray-800">{selectedEmployee.joinDate}</span>
-            </div>
-            <div className="p-2.5 rounded-lg bg-gray-50">
-              <span className="text-gray-400 block text-[10px]">Quỹ phép năm còn lại:</span>
-              <span className="font-semibold text-emerald-700">{selectedEmployee.leaveBalance == null ? "Chưa có dữ liệu backend" : `${selectedEmployee.leaveBalance} / 12 ngày`}</span>
-            </div>
-          </div>
-
-          <div className="p-3 rounded-lg bg-emerald-50/60 border border-emerald-100 flex items-center justify-between">
-            <div>
-              <span className="text-emerald-900 font-bold block">Bậc lương hiện tại:</span>
-              <span className="text-emerald-800 font-medium">{selectedEmployee.salaryGrade}</span>
-            </div>
-            <span className="text-[10px] bg-emerald-200/60 text-emerald-900 font-semibold px-2 py-0.5 rounded-full">
-              Dữ liệu hợp đồng
-            </span>
-          </div>
-        </div>
-
-        <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
-          <button
-            onClick={() => {
-              showToast(`Đã in sơ yếu lý lịch của ${selectedEmployee.name}`);
-            }}
-            className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer"
-          >
-            In hồ sơ
-          </button>
-          <button
-            onClick={() => setSelectedEmployee(null)}
-            className="px-4 py-1.5 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg cursor-pointer"
-          >
-            Đóng
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Modal: Create Leave Request
   const CreateLeaveModal = isCreateLeaveModalOpen && (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4 animate-in fade-in">
       <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100">
@@ -2331,8 +2017,6 @@ export default function HRStation({ onBack }: Props) {
 
       {/* Modals */}
       {ShiftEditModal}
-      {AddEmployeeModal}
-      {EmployeeDetailModal}
       {CreateLeaveModal}
       {AttendanceEditModal}
     </div>
