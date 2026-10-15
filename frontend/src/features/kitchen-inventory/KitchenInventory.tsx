@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import StockReturnsPanel from "../stock-returns/StockReturnsPanel";
 import ProposalDialog from "./ProposalDialog";
 import StockNotifications, { type StockActivity } from "./StockNotifications";
+import StockVoucherDialog from "./StockVoucherDialog";
+import type { VoucherMovement } from "./stockVoucher";
 import { catalogProposalsApi, type CatalogProposal } from "../../shared/api/catalogProposals";
 import { serviceAvailabilityApi, type ServiceAvailability } from "../../shared/api/serviceAvailability";
 import { kitchenAccountingApi, newKitchenIdempotencyKey } from "../../shared/api/kitchenAccounting";
@@ -38,7 +40,7 @@ interface InventoryItem {
   stock: number; reorder: number; active: boolean; imageUrl: string | null;
   emoji: string;
 }
-interface Transaction {
+interface Transaction extends VoucherMovement {
   id: string; serviceId: string; date: string; occurredAt: string; type: TxType; movementType: MovementType;
   item: string; qty: number; amount: number;
   staff: string; status: TxStatus; note?: string;
@@ -835,8 +837,9 @@ function InventoryScreen({
 /* ══════════════════════════════════════════════════════════
    TRANSACTIONS SCREEN
 ══════════════════════════════════════════════════════════ */
-function TransactionsScreen({ transactions = [], onOpenMovement, searchQuery }: { transactions?: Transaction[]; onOpenMovement: (type: MovementType, reason?: string) => void; searchQuery: string }) {
+function TransactionsScreen({ transactions = [], searchQuery }: { transactions?: Transaction[]; searchQuery: string }) {
   const [txTab, setTxTab] = useState<"all"|TxType>("all");
+  const [exportOpen,setExportOpen] = useState(false);
   const filtered = transactions.filter(t => (txTab === "all" || t.type === txTab)
     && (!searchQuery.trim() || `${t.item} ${t.note ?? ""} ${t.staff}`.toLowerCase().includes(searchQuery.trim().toLowerCase())));
 
@@ -847,18 +850,7 @@ function TransactionsScreen({ transactions = [], onOpenMovement, searchQuery }: 
           <h2 style={{ fontSize:18,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Nhập – Xuất kho</h2>
           <p style={{ fontSize:12,color:"#94A3B8" }}>Lịch sử nhập xuất và quản lý phiếu kho</p>
         </div>
-        <div style={{ display:"flex",gap:8 }}>
-          <button onClick={() => onOpenMovement("RECEIVE")} style={{ height:34,padding:"0 14px",borderRadius:8,border:"1px solid #E2E8F0",
-            background:"#FFF",color:"#475569",fontSize:12,cursor:"pointer",
-            display:"flex",alignItems:"center",gap:5 }}>
-            <Upload size={12} /> Tạo phiếu nhập
-          </button>
-          <button onClick={() => onOpenMovement("ISSUE")} style={{ height:34,padding:"0 14px",borderRadius:8,
-            background:"#0F172A",color:"#FFF",fontSize:12,fontWeight:600,cursor:"pointer",
-            display:"flex",alignItems:"center",gap:5 }}>
-            <ArrowDownRight size={12} /> Tạo phiếu xuất
-          </button>
-        </div>
+        <button type="button" onClick={()=>setExportOpen(true)} disabled={filtered.length===0} style={{height:34,padding:"0 14px",borderRadius:8,border:0,background:"#0F172A",color:"#FFF",fontSize:12,fontWeight:600,cursor:filtered.length?"pointer":"default",opacity:filtered.length?1:.5,display:"flex",alignItems:"center",gap:6}}><Download size={14}/>Xuất phiếu</button>
       </div>
 
       {/* Tabs */}
@@ -920,6 +912,7 @@ function TransactionsScreen({ transactions = [], onOpenMovement, searchQuery }: 
           </tbody>
         </table>
       </div>
+      {exportOpen&&<StockVoucherDialog movements={filtered} onClose={()=>setExportOpen(false)}/>}
     </div>
   );
 }
@@ -1569,7 +1562,6 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
     movementType: transaction.movementType,
   }));
 
-
   useEffect(() => {
     let active = true;
     authApi.employeeProfile()
@@ -1622,9 +1614,15 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
             type,
             movementType: movement.type,
             item: `${item.name} (${item.sku})`,
+            itemName:item.name,
+            unit:item.unit,
+            unitPrice:item.price,
+            staffName:movement.actor_name??undefined,
+            stockBefore:movement.stock_before,
+            stockAfter:movement.stock_after,
             qty: signedQuantity,
             amount: item.price * Math.abs(movement.quantity),
-            staff: movement.actor_id,
+            staff: movement.actor_name || movement.actor_id,
             status: "completed",
             note: movement.reason || undefined,
           }];
@@ -1917,7 +1915,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
               requesterName={userProfile?.full_name ? `${userProfile.full_name} (${employeeRoleLabel(userProfile.role)})` : "Bộ phận Kho và Dịch vụ"}
             />
           )}
-          {page === "transactions" && <TransactionsScreen transactions={liveTransactions} onOpenMovement={(type,reason) => setMovementDialog({ type,reason })} searchQuery={globalSearch} />}
+          {page === "transactions" && <TransactionsScreen transactions={liveTransactions} searchQuery={globalSearch} />}
           {page === "returns" && <StockReturnsPanel warehouse onChanged={()=>setInventoryRefreshKey(key=>key+1)}/>}
           {page === "pricing"      && (
             <PricingScreen

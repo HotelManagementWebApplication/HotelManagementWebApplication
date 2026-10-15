@@ -16,7 +16,7 @@ export interface InventoryMovementRequest { service_id: string; type: MovementTy
 export interface PriceChangeRequest { price: number; reason: string; }
 export interface InvoiceAdjustmentRequest { delta: number; reason: string; }
 export interface PriceHistory { id: number; service_id: string; price: number; changed_by: string; approval_id: number | null; effective_at: string | null; }
-export interface InventoryMovement { id: number; service_id: string; type: MovementType; quantity: number; actor_id: string; occurred_at: string; reason: string | null; }
+export interface InventoryMovement { id: number; service_id: string; type: MovementType; quantity: number; actor_id: string; actor_name?: string | null; stock_before?: number | null; stock_after?: number | null; occurred_at: string; reason: string | null; }
 export interface InventoryReport { service_id: string; from: string | null; to: string | null; received: number; issued: number; wasted: number; returned: number; adjusted: number; net_change: number; }
 
 export interface Approval { id: number; requester: string; action: string; target_id: string; payload: string; amount: number | null; reason: string; risk: string; status: ApprovalStatus; approver: string | null; decided_at: string | null; expires_at: string | null; consumed_at: string | null; requested_at: string; idempotency_key: string | null; }

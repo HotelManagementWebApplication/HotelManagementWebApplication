@@ -157,6 +157,12 @@ describe("Kitchen & restaurant operations", () => {
     fireEvent.click(screen.getByRole("button", { name:"Xem tất cả biến động" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(await screen.findByText("Nhập kiểm thử thông báo")).toBeTruthy();
+    expect(screen.queryByRole("button",{name:"Tạo phiếu nhập"})).toBeNull();
+    expect(screen.queryByRole("button",{name:"Tạo phiếu xuất"})).toBeNull();
+    fireEvent.click(screen.getByRole("button",{name:"Xuất phiếu"}));
+    expect(screen.getByRole("dialog",{name:"Xuất phiếu biến động kho"})).toBeTruthy();
+    expect(screen.getByRole("button",{name:/Xuất tất cả biến động/})).toBeTruthy();
+    expect(screen.getByRole("button",{name:/Xuất riêng từng biến động/})).toBeTruthy();
   });
 
   it("records stock intake from the inventory screen with an auditable reason", async () => {
