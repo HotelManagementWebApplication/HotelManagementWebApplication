@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { serviceConsumptionApi, type ServiceConsumption } from "../../shared/api/serviceSchedule";
+import { apiErrorMessage } from "../../shared/api/client";
+import { useEffect, useMemo, useState } from "react";
 import { BarChart3, BedDouble, BriefcaseBusiness, CalendarDays, Car, CircleHelp, Download, Dumbbell, Flower2, Package, PieChart, Shirt, Utensils } from "lucide-react";
 import { formatVnd } from "../../shared/utils/money";
 import { localDateValue } from "../../shared/utils/localDate";
@@ -32,14 +34,24 @@ function ConsumptionTrend({days,issueCount}:{days:TrendDay[];issueCount:number})
       <rect x={x(index)-34} y={top} width={68} height={bottom-top} fill="transparent"/>
       {(["services","stock"] as const).map(key=>{const upper=day[key]>=day[key==="services"?"stock":"services"];const offset=close&&!upper?16:-12;return <g key={key}><circle cx={x(index)} cy={y(day[key])} r={focused===index?5:4} fill={key==="services"?"#1D4ED8":"#60A5FA"}/>{hasValue&&<text x={x(index)} y={y(day[key])+offset+(close&&day.services===day.stock&&key==="stock"?28:0)} textAnchor="middle" className="ki-report-value">{quantity(day[key])}</text>}</g>;})}
     </g>;})}
-    {!hasValue&&<text x="400" y="116" textAnchor="middle" className="ki-report-empty-chart">{issueCount===0?"Chưa có phiếu xuất dùng trong kỳ này":"Các phiếu trong kỳ có giá trị tham chiếu bằng 0"}</text>}
+    {!hasValue&&<text x="400" y="116" textAnchor="middle" className="ki-report-empty-chart">{issueCount===0?"Chưa có lượt sử dụng hoặc phiếu xuất dùng trong kỳ này":"Các lượt trong kỳ có giá trị bằng 0"}</text>}
   </svg></div>;
 }
 
 export default function ConsumptionReports({items,transactions}:{items:ReportItem[];transactions:ReportMovement[]}) {
   const [endDate,setEndDate]=useState(()=>localDateValue());
   const [tab,setTab]=useState<ReportTab>("stock");
-  const report=useMemo(()=>buildConsumptionReport(items,transactions,endDate),[items,transactions,endDate]);
+  const [usages,setUsages]=useState<ServiceConsumption[]>([]);
+  const [usageError,setUsageError]=useState<string|null>(null);
+  const [usageLoading,setUsageLoading]=useState(true);
+  const [retry,setRetry]=useState(0);
+  useEffect(()=>{let active=true;setUsages([]);setUsageError(null);setUsageLoading(true);
+    const start=new Date(`${endDate}T00:00:00`);start.setDate(start.getDate()-6);
+    serviceConsumptionApi.list(localDateValue(start),endDate).then(rows=>{if(active)setUsages(rows);})
+      .catch(error=>{if(active)setUsageError(apiErrorMessage(error,"Không tải được các lượt sử dụng dịch vụ."));})
+      .finally(()=>{if(active)setUsageLoading(false);});
+    return()=>{active=false;};},[endDate,retry]);
+  const report=useMemo(()=>buildConsumptionReport(items,transactions,endDate,usages),[items,transactions,endDate,usages]);
   const rows=tab==="stock"?report.stock:report.services;
   const total=rows.reduce((sum,row)=>sum+row.amount,0);
   const download=()=>{
@@ -47,14 +59,16 @@ export default function ConsumptionReports({items,transactions}:{items:ReportIte
     const anchor=document.createElement("a");anchor.href=url;anchor.download=`bao-cao-${tab==="stock"?"hang-xuat-dung":"dich-vu"}-${report.start}-${report.end}.csv`;anchor.click();URL.revokeObjectURL(url);
   };
   return <div className="ki-consumption-reports">
-    <div className="ki-report-page-header"><div><h2>Báo cáo tiêu thụ</h2><p>Theo dõi dịch vụ và hàng xuất dùng trong 7 ngày · {report.days[0].label} – {report.days[6].label}</p></div><div className="ki-report-page-actions"><label><CalendarDays size={15}/><input aria-label="Ngày báo cáo" type="date" value={endDate} onChange={event=>{if(event.target.value)setEndDate(event.target.value);}}/></label><button type="button" onClick={download}><Download size={15}/>Xuất báo cáo</button></div></div>
+    <div className="ki-report-page-header"><div><h2>Báo cáo tiêu thụ</h2><p>Theo dõi dịch vụ và hàng xuất dùng trong 7 ngày · {report.days[0].label} – {report.days[6].label}</p></div><div className="ki-report-page-actions"><label><CalendarDays size={15}/><input aria-label="Ngày báo cáo" type="date" value={endDate} onChange={event=>{if(event.target.value)setEndDate(event.target.value);}}/></label><button type="button" onClick={download} disabled={tab==="services"&&(usageLoading||Boolean(usageError))}><Download size={15}/>Xuất báo cáo</button></div></div>
+    {usageError&&<p role="alert">{usageError} <button onClick={()=>setRetry(value=>value+1)}>Tải lại</button></p>}
+    {usageLoading&&<p role="status">Đang tải lượt sử dụng dịch vụ…</p>}
     <div className="ki-report-overview">
-      <section className="ki-report-card ki-report-trend" aria-labelledby="consumption-trend-title"><header><h3 id="consumption-trend-title"><BarChart3 size={20}/>Xu hướng tiêu thụ</h3><div className="ki-report-legend"><span><i/>Giá trị dịch vụ</span><span><i/>Giá trị xuất dùng</span></div></header><ConsumptionTrend days={report.days} issueCount={report.issueCount}/><p className="ki-report-reference-note"><CircleHelp size={12}/>Giá trị tham chiếu theo đơn giá danh mục hiện tại.</p></section>
+      <section className="ki-report-card ki-report-trend" aria-labelledby="consumption-trend-title"><header><h3 id="consumption-trend-title"><BarChart3 size={20}/>Xu hướng tiêu thụ</h3><div className="ki-report-legend"><span><i/>Giá trị dịch vụ</span><span><i/>Giá trị xuất dùng</span></div></header><ConsumptionTrend days={report.days} issueCount={report.issueCount}/><p className="ki-report-reference-note"><CircleHelp size={12}/>Dịch vụ: giá đã ghi nhận, trừ phần miễn phí. Hàng xuất dùng: đơn giá danh mục hiện tại.</p></section>
       <section className="ki-report-card ki-report-groups" aria-labelledby="service-groups-title"><header><h3 id="service-groups-title"><PieChart size={21}/>Tiêu thụ theo nhóm dịch vụ</h3></header><div className="ki-report-group-list">{report.groups.map((group,index)=>{const Icon=groupIcons[group.category]??Package;const color=colors[index%colors.length];return <div key={group.category} className="ki-report-group"><span className="ki-report-group-icon" style={{color}}><Icon size={20}/></span><div><div className="ki-report-group-label"><strong>{group.label}</strong><span>{quantity(Number(group.percent.toFixed(1)))}%</span><b>{formatVnd(group.amount)}</b></div><div className="ki-report-progress" role="progressbar" aria-label={group.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Number(group.percent.toFixed(1))}><span style={{width:`${group.percent}%`,background:color}}/></div></div></div>;})}{report.groups.length===0&&<div className="ki-report-empty"><PieChart size={30}/><p>Chưa có tiêu thụ dịch vụ trong kỳ đã chọn.</p></div>}</div></section>
     </div>
     <section className="ki-report-card ki-report-details" aria-labelledby="consumption-details-title"><header><h3 id="consumption-details-title"><Package size={20}/>Chi tiết tiêu thụ</h3><div className="ki-report-tabs" role="tablist" aria-label="Loại chi tiết tiêu thụ"><button id="report-services-tab" role="tab" aria-selected={tab==="services"} aria-controls="report-consumption-table" onClick={()=>setTab("services")}>Dịch vụ</button><button id="report-stock-tab" role="tab" aria-selected={tab==="stock"} aria-controls="report-consumption-table" onClick={()=>setTab("stock")}>Hàng xuất dùng</button></div></header>
       <div id="report-consumption-table" role="tabpanel" aria-labelledby={tab==="stock"?"report-stock-tab":"report-services-tab"} className="ki-report-table-scroll"><table><thead><tr>{["#","Mã hàng",tab==="stock"?"Tên mặt hàng":"Tên dịch vụ","ĐVT",tab==="stock"?"SL xuất dùng":"SL sử dụng","Đơn giá tham chiếu","Thành tiền",...(tab==="stock"?["Tồn cuối"]:[])].map(title=><th key={title}>{title}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={row.item.id}><td>{index+1}</td><td className="ki-report-sku">{row.item.id}</td><td>{row.item.name}</td><td>{row.item.unit}</td><td>{quantity(row.quantity)}</td><td>{formatVnd(row.item.price)}</td><td>{formatVnd(row.amount)}</td>{tab==="stock"&&<td><span className={row.endingStock===0?"ki-report-no-stock":row.endingStock!=null&&row.endingStock<=row.item.reorder?"ki-report-low-stock":""}>{row.endingStock==null?"—":quantity(row.endingStock)}</span></td>}</tr>)}{rows.length===0&&<tr><td colSpan={tab==="stock"?8:7} className="ki-report-empty-cell">{tab==="stock"?"Chưa có hàng xuất dùng trong kỳ đã chọn.":"Chưa có dịch vụ sử dụng trong kỳ đã chọn."}</td></tr>}</tbody></table></div>
-      <footer><span>Hiển thị {rows.length} {tab==="stock"?"mặt hàng":"dịch vụ"} · {report.days[0].label} – {report.days[6].label}</span><span>Tổng giá trị tham chiếu: <strong>{formatVnd(total)}</strong></span></footer>
+      <footer><span>Hiển thị {rows.length} {tab==="stock"?"mặt hàng":"dịch vụ"} · {report.days[0].label} – {report.days[6].label}</span><span>{tab==="stock"?"Tổng giá trị tham chiếu:":"Tổng giá trị dịch vụ đã dùng:"} <strong>{formatVnd(total)}</strong></span></footer>
     </section>
   </div>;
 }

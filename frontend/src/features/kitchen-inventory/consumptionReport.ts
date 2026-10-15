@@ -1,3 +1,4 @@
+import type { ServiceConsumption } from "../../shared/api/serviceSchedule";
 import type { MovementType } from "../../shared/types/kitchenAccounting";
 import { localDateValue, parseApiDate } from "../../shared/utils/localDate";
 
@@ -23,7 +24,7 @@ function endingStock(item:ReportItem,movements:ReportMovement[],end:string):numb
   return end===localDateValue()?item.stock:null;
 }
 
-export function buildConsumptionReport(items:ReportItem[],movements:ReportMovement[],end:string) {
+export function buildConsumptionReport(items:ReportItem[],movements:ReportMovement[],end:string,usages:ServiceConsumption[]) {
   const endDate=parseApiDate(end);const startDate=new Date(endDate);startDate.setDate(startDate.getDate()-6);
   const start=localDateValue(startDate);
   const days=Array.from({length:7},(_,index)=>{
@@ -37,12 +38,21 @@ export function buildConsumptionReport(items:ReportItem[],movements:ReportMoveme
   movements.forEach(movement=>{
     const day=byDay.get(localDateValue(parseApiDate(movement.occurredAt)));
     const item=itemById.get(movement.serviceId);
-    if(!day||!item||movement.movementType!=="ISSUE")return;
+    if(!day||!item||!item.isStock||movement.movementType!=="ISSUE")return;
     issueCount++;
     const quantity=Math.abs(movement.qty);const amount=quantity*item.price;
     day[item.isStock?"stock":"services"]+=amount;
     const row=totals.get(item.id)??{item,quantity:0,amount:0,endingStock:null};
     row.quantity+=quantity;row.amount+=amount;totals.set(item.id,row);
+  });
+  usages.forEach(usage=>{
+    const day=byDay.get(localDateValue(parseApiDate(usage.occurred_at)));
+    const item=itemById.get(usage.service_id);
+    if(!day||!item||item.isStock)return;
+    issueCount++;
+    day.services+=usage.amount_due;
+    const row=totals.get(item.id)??{item,quantity:0,amount:0,endingStock:null};
+    row.quantity+=usage.quantity;row.amount+=usage.amount_due;totals.set(item.id,row);
   });
   const rows=[...totals.values()].map(row=>({...row,endingStock:row.item.isStock?endingStock(row.item,movements,end):null}))
     .sort((a,b)=>b.amount-a.amount||a.item.name.localeCompare(b.item.name,"vi"));
