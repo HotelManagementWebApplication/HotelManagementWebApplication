@@ -35,6 +35,14 @@ interface Approval {
   rawWorkOrderId?: number;
 }
 
+interface ManagerNotification {
+  id: string;
+  icon: string;
+  message: string;
+  time: string;
+  page: NavPage;
+}
+
 const NOTIFICATIONS: never[] = [];
 
 /* bar chart data */
@@ -84,6 +92,8 @@ type ApprovalDecision = Exclude<ApprovalStatus, "pending">;
 
 function OverviewScreen({
   onNavApprovals,
+  onNavigateOperations,
+  onNavigateNotifications,
   role,
   approvalsData = [],
   rooms = [],
@@ -93,6 +103,8 @@ function OverviewScreen({
   onDecision
 }: {
   onNavApprovals: () => void;
+  onNavigateOperations: () => void;
+  onNavigateNotifications: () => void;
   role: ManagerRole;
   approvalsData?: Approval[];
   rooms?: ApiRoom[];
@@ -246,7 +258,7 @@ function OverviewScreen({
           <div style={{ padding:"14px 18px",borderBottom:"1px solid #F1F5F9",
             display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <p style={{ fontSize:14,fontWeight:700,color:"#0F172A" }}>Tình hình vận hành các bộ phận</p>
-            <button style={{ fontSize:11,fontWeight:600,color:"#2563EB",cursor:"pointer",
+            <button onClick={onNavigateOperations} style={{ fontSize:11,fontWeight:600,color:"#2563EB",cursor:"pointer",
               display:"flex",alignItems:"center",gap:3 }}>Xem chi tiết <ArrowRight size={12} /></button>
           </div>
           <div style={{ padding:"12px 18px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
@@ -435,7 +447,7 @@ function OverviewScreen({
           <div style={{ padding:"12px 14px",borderBottom:"1px solid #F1F5F9",
             display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <p style={{ fontSize:12,fontWeight:700,color:"#0F172A" }}>Thông báo &amp; Cảnh báo</p>
-            <button style={{ fontSize:10,fontWeight:600,color:"#2563EB",cursor:"pointer",
+            <button onClick={onNavigateNotifications} style={{ fontSize:10,fontWeight:600,color:"#2563EB",cursor:"pointer",
               display:"flex",alignItems:"center",gap:2 }}>Xem tất cả <ArrowRight size={10} /></button>
           </div>
           <div>
@@ -783,6 +795,7 @@ function IncidentsScreen({ incidents }: { incidents: EquipmentIncident[] }) {
 ══════════════════════════════════════════════════════════ */
 export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; onBack: () => void }) {
   const [page, setPage] = useState<NavPage>("overview");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [liveApprovals, setLiveApprovals] = useState<Approval[]>([]);
   const [liveLeaveRequests, setLiveLeaveRequests] = useState<LeaveRequest[]>([]);
   const [liveRooms, setLiveRooms] = useState<ApiRoom[]>([]);
@@ -939,6 +952,20 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
   }, [liveApprovals, leaveApprovals, technicalApprovals]);
 
   const pendingCount = approvalsForRole(role, allApprovals).length;
+  const managerNotifications = useMemo<ManagerNotification[]>(() => [
+    ...liveIncidents.filter(item => item.handoff_status !== "RESOLVED").map(item => ({
+      id: `incident-${item.id}`, icon: "⚠", message: `Phòng ${item.room_id}: ${item.equipment_name}`,
+      time: `Sự cố ${item.handoff_status}`, page: "incidents" as const,
+    })),
+    ...approvalsForRole(role, allApprovals).map(item => ({
+      id: `approval-${item.id}`, icon: item.emoji, message: item.title,
+      time: item.badge, page: "approvals" as const,
+    })),
+  ], [allApprovals, liveIncidents, role]);
+  const showAllNotifications = () => {
+    setNotificationsOpen(false);
+    setPage(managerNotifications[0]?.page ?? "approvals");
+  };
 
   const handleApprovalDecision = async (id: string, action: ApprovalDecision) => {
     if (id.startsWith("leave-")) {
@@ -1122,12 +1149,42 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
           </div>
 
           {/* Bell */}
-          <button style={{ width:34,height:34,borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0",
-            display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative" }}>
-            <Bell size={14} style={{ color:"#475569" }} />
-            {pendingCount > 0 && <span style={{ position:"absolute",top:5,right:5,width:8,height:8,borderRadius:99,background:"#EF4444",
-              display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,color:"#FFF",fontWeight:800 }}>{pendingCount}</span>}
-          </button>
+          <div style={{ position:"relative" }}>
+            <button aria-label="Thông báo" aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen(open => !open)}
+              style={{ width:34,height:34,borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0",
+                display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative" }}>
+              <Bell size={14} style={{ color:"#475569" }} />
+              {managerNotifications.length > 0 && <span style={{ position:"absolute",top:-5,right:-5,minWidth:16,height:16,borderRadius:99,background:"#EF4444",
+                display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",fontSize:9,color:"#FFF",fontWeight:800 }}>{managerNotifications.length}</span>}
+            </button>
+            {notificationsOpen && (
+              <div role="dialog" aria-label="Thông báo" style={{ position:"absolute",top:42,right:0,width:360,maxWidth:"calc(100vw - 24px)",
+                background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,boxShadow:"0 12px 32px rgba(15,23,42,.16)",zIndex:100,padding:"6px 0" }}>
+                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",borderBottom:"1px solid #F1F5F9" }}>
+                  <strong style={{ fontSize:12,color:"#0F172A" }}>Thông báo &amp; Cảnh báo</strong>
+                  <button onClick={() => setNotificationsOpen(false)} aria-label="Đóng thông báo" style={{ border:0,background:"transparent",color:"#64748B",cursor:"pointer",fontSize:11 }}>Đóng</button>
+                </div>
+                {managerNotifications.length === 0 ? (
+                  <p style={{ padding:"18px 14px",fontSize:12,color:"#94A3B8",textAlign:"center" }}>Hiện không có thông báo mới.</p>
+                ) : (
+                  <div style={{ maxHeight:320,overflowY:"auto" }}>
+                    {managerNotifications.slice(0,8).map(notification => (
+                      <button key={notification.id} onClick={() => { setNotificationsOpen(false); setPage(notification.page); }}
+                        style={{ width:"100%",display:"flex",alignItems:"flex-start",gap:9,padding:"10px 14px",border:0,borderBottom:"1px solid #F8FAFC",background:"#FFF",textAlign:"left",cursor:"pointer" }}>
+                        <span aria-hidden="true" style={{ fontSize:15 }}>{notification.icon}</span>
+                        <span style={{ flex:1,minWidth:0 }}>
+                          <span style={{ display:"block",fontSize:11,fontWeight:600,color:"#0F172A",lineHeight:1.4 }}>{notification.message}</span>
+                          <span style={{ display:"block",marginTop:3,fontSize:10,color:"#94A3B8" }}>{notification.time}</span>
+                        </span>
+                        <ArrowRight size={12} style={{ color:"#94A3B8",flexShrink:0,marginTop:3 }} />
+                      </button>
+                    ))}
+                    <button onClick={showAllNotifications} style={{ width:"100%",padding:"10px 14px",border:0,background:"#FFF",color:"#2563EB",fontSize:11,fontWeight:700,textAlign:"left",cursor:"pointer" }}>Xem tất cả</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Avatar */}
           <div style={{ position:"relative" }}>
@@ -1179,7 +1236,7 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
 
         {/* CONTENT */}
         <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}>
-          {page==="overview"   && <OverviewScreen role={role} approvalsData={allApprovals} rooms={liveRooms} invoices={liveInvoices} incidents={liveIncidents} techOrders={liveTechnicalOrders} onDecision={handleApprovalDecision} onNavApprovals={() => setPage("approvals")} />}
+          {page==="overview"   && <OverviewScreen role={role} approvalsData={allApprovals} rooms={liveRooms} invoices={liveInvoices} incidents={liveIncidents} techOrders={liveTechnicalOrders} onDecision={handleApprovalDecision} onNavApprovals={() => setPage("approvals")} onNavigateOperations={() => setPage("operations")} onNavigateNotifications={showAllNotifications} />}
           {page==="approvals"  && <ApprovalsScreen role={role} approvalsData={allApprovals} onDecision={handleApprovalDecision} />}
           {page==="reports"    && <ReportsScreen invoices={liveInvoices} rooms={liveRooms} expenses={liveExpenses} />}
           {page==="operations" && <OperationsScreen

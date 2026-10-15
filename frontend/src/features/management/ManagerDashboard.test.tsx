@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ManagerDashboard from "./ManagerDashboard";
 import { authApi } from "../../shared/api/auth";
@@ -21,6 +21,26 @@ describe("ManagerDashboard Interface and Acceptance Workflow", () => {
     await screen.findByText("Người tạo phiếu không được tự nghiệm thu");
     expect(screen.getByText("Nghiệm thu phiếu bảo trì kỹ thuật")).toBeTruthy();
     expect(accept).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["manager", "director"] as const)("opens live notifications and routes incident clicks for %s", async role => {
+    vi.mocked(housekeepingTechnicalApi.incidents).mockResolvedValue([{
+      id: 41, reservation_id: null, room_id: "R202", equipment_name: "Điều hòa", compensation: 0,
+      severity: "HIGH", handoff_status: "OPEN", handoff_note: null,
+    }]);
+    render(<ManagerDashboard role={role} onBack={onBack} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Thông báo" }));
+    const dialog = screen.getByRole("dialog", { name: "Thông báo" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Phòng R202: Điều hòa/ }));
+
+    expect(await screen.findByRole("heading", { name: "Sự cố & Khẩn cấp" })).toBeTruthy();
+  });
+
+  it.each(["manager", "director"] as const)("opens operations from the overview detail link for %s", async role => {
+    render(<ManagerDashboard role={role} onBack={onBack} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Xem chi tiết/ }));
+    expect(await screen.findByRole("heading", { name: "Vận hành & Phòng" })).toBeTruthy();
   });
 
   beforeEach(() => {
