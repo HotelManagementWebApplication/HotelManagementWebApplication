@@ -13,7 +13,8 @@ import type { EquipmentIncident, HousekeepingTask, Room as ApiRoom, TechnicalWor
 import type { Invoice as ApiInvoice } from "../../shared/types/frontDesk";
 import type { Expense, Approval as KitchenApproval } from "../../shared/types/kitchenAccounting";
 import { useManagementFinance, type ManagementFinance } from "./managementFinance";
-import { EmployeeProvisionModal } from "./EmployeeProvisionModal";
+import { PersonnelWorkspace, OnboardingReviewDialog } from "../hr/PersonnelWorkspace";
+import { personnelApi, type OnboardingRequest, type OnboardingDecision } from "../../shared/api/personnel";
 import { invoiceTotal } from "../accounting/accountingLogic";
 import { localDateValue } from "../../shared/utils/localDate";
 import "./management.css";
@@ -36,7 +37,7 @@ type ManagerRole = "manager" | "director";
 interface Approval {
   id: string; dept: string; deptColor: string; emoji: string;
   title: string; detail: string[]; time: string; badge: string; badgeColor: string;
-  kind: "service-price" | "refund" | "technical-release" | "expense" | "leave" | "incident";
+  kind: "service-price" | "refund" | "technical-release" | "expense" | "leave" | "incident" | "onboarding";
   approvalBlockedReason?: string;
   rawWorkOrderId?: number;
   rawApproval?: ApiApproval;
@@ -206,9 +207,9 @@ function OverviewScreen({
                         <button onClick={() => handle(a.id,"approved")}
                           style={{ display:"flex",alignItems:"center",gap:4,padding:"5px 12px",borderRadius:7,
                             border:"none",background:"#16A34A",color:"#FFF",fontSize:11,fontWeight:700,cursor:"pointer" }}>
-                          <Check size={11} /> Phê duyệt
+                          <Check size={11} /> {a.kind === "onboarding" ? "Xét hồ sơ" : "Phê duyệt"}
                         </button>
-                        {a.kind !== "technical-release" && a.kind !== "incident" && <button onClick={() => handle(a.id,"rejected")}
+                        {a.kind !== "technical-release" && a.kind !== "incident" && a.kind !== "onboarding" && <button onClick={() => handle(a.id,"rejected")}
                           style={{ display:"flex",alignItems:"center",gap:4,padding:"5px 12px",borderRadius:7,
                             border:"1px solid #E2E8F0",background:"#FFF",color:"#64748B",fontSize:11,fontWeight:600,cursor:"pointer" }}>
                           <X size={11} /> Từ chối
@@ -474,9 +475,9 @@ function ApprovalsScreen({
                   <button onClick={() => handle(a.id,"approved")}
                     style={{ display:"flex",alignItems:"center",gap:5,padding:"8px 16px",borderRadius:8,
                       border:"none",background:"#16A34A",color:"#FFF",fontSize:12,fontWeight:700,cursor:"pointer" }}>
-                    <Check size={13} /> Phê duyệt
+                    <Check size={13} /> {a.kind === "onboarding" ? "Xét hồ sơ" : "Phê duyệt"}
                   </button>
-                  {a.kind !== "technical-release" && a.kind !== "incident" && <button onClick={() => handle(a.id,"rejected")}
+                  {a.kind !== "technical-release" && a.kind !== "incident" && a.kind !== "onboarding" && <button onClick={() => handle(a.id,"rejected")}
                     style={{ display:"flex",alignItems:"center",gap:5,padding:"8px 16px",borderRadius:8,
                       border:"1px solid #E2E8F0",background:"#FFF",color:"#475569",fontSize:12,fontWeight:600,cursor:"pointer" }}>
                     <X size={13} /> Từ chối
@@ -656,17 +657,10 @@ function OperationsScreen({
   );
 }
 
-function StaffOperationsScreen({ employees, tasks, onAdd }: { employees: EmployeeAdmin[]; tasks: HousekeepingTask[]; onAdd: () => void }) {
+function StaffOperationsScreen({ role, tasks, onChanged, search }: { role: ManagerRole; tasks: HousekeepingTask[]; onChanged: () => void; search: string }) {
   return (
-    <div style={{flex:1,overflowY:"auto",padding:"20px 24px",display:"grid",gridTemplateColumns:"1.2fr .8fr",gap:16}}>
-      <div style={{background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,overflow:"hidden"}}>
-        <div style={{padding:"14px 16px",borderBottom:"1px solid #E2E8F0"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><strong>Danh sách nhân sự</strong><button onClick={onAdd} style={{background:"#1D4ED8",color:"white",padding:"8px 12px",borderRadius:8,fontSize:13,fontWeight:700}}>Thêm nhân viên</button></div></div>
-        {employees.map(person=><div key={person.employee_id} style={{display:"grid",gridTemplateColumns:"1fr 130px 100px",gap:10,padding:"12px 16px",borderBottom:"1px solid #F1F5F9",alignItems:"center"}}>
-          <div><p style={{fontSize:12,fontWeight:700}}>{person.full_name}</p><p style={{fontSize:10,color:"#94A3B8"}}>{employeeRoleLabel(person.role)} · {person.employee_id}</p></div>
-          <span style={{fontSize:11,color:"#475569"}}>{{WORKING:"Đang làm việc",ON_LEAVE:"Đang nghỉ",TERMINATED:"Đã nghỉ việc"}[person.employment_status]}</span>
-          <span style={{fontSize:10,fontWeight:700,color:person.enabled?"#16A34A":"#64748B"}}>{person.enabled?"Đang hoạt động":"Đã khóa"}</span>
-        </div>)}
-      </div>
+    <div style={{flex:1,minWidth:0,overflowY:"auto",padding:"20px 24px",display:"flex",flexDirection:"column",gap:20}}>
+      <PersonnelWorkspace mode={role} onChanged={onChanged} search={search} />
       <div style={{background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,overflow:"hidden",alignSelf:"start"}}>
         <div style={{padding:"14px 16px",borderBottom:"1px solid #E2E8F0"}}><strong>Phân công buồng phòng</strong></div>
         {tasks.slice(0,5).map(task=><div key={task.id} style={{padding:"11px 16px",borderBottom:"1px solid #F1F5F9"}}>
@@ -731,7 +725,9 @@ function IncidentsScreen({
 ══════════════════════════════════════════════════════════ */
 export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; onBack: () => void }) {
   const finance = useManagementFinance();
-  const [showEmployeeProvision, setShowEmployeeProvision] = useState(false);
+  const [onboardingRequests, setOnboardingRequests] = useState<OnboardingRequest[]>([]);
+  const [onboardingReview, setOnboardingReview] = useState<{ request: OnboardingRequest; decision: OnboardingDecision } | null>(null);
+  const [personnelError, setPersonnelError] = useState<string | null>(null);
   const [resolveIncident, setResolveIncident] = useState<EquipmentIncident | null>(null);
   const [resolveNote, setResolveNote] = useState("");
   const [resolveSaving, setResolveSaving] = useState(false);
@@ -789,6 +785,8 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
       .finally(() => {
         if (active) setProfileLoading(false);
       });
+
+    personnelApi.requests().then(rows => { if (active) { setOnboardingRequests(rows); setPersonnelError(null); } }).catch(cause => { if (active) setPersonnelError(apiErrorMessage(cause, "Không tải được hàng chờ tiếp nhận nhân viên.")); });
 
     // Load governance approvals
     hrGovernanceApi.approvals("PENDING")
@@ -955,8 +953,15 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
       : !currentManager?.id ? "Không xác minh được tài khoản quản lý; vui lòng tải lại."
       : approval.rawApproval?.requester === currentManager.id ? "Bạn là người gửi yêu cầu nên không thể tự phê duyệt."
       : undefined }));
-    return [...authorized, ...leaveApprovals, ...technicalApprovals, ...incidentApprovals];
-  }, [liveApprovals, leaveApprovals, technicalApprovals, incidentApprovals, currentManager?.id, profileLoading]);
+    const onboarding: Approval[] = onboardingRequests.filter(item => item.status === "PENDING").map(item => ({
+      id: `onboarding-${item.id}`, dept: "Nhân sự", deptColor: "#047857", emoji: "👤",
+      title: `Tiếp nhận nhân viên: ${item.details.full_name}`,
+      detail: [`Vai trò đề xuất: ${employeeRoleLabel(item.proposed_role)}`, item.reason],
+      time: new Date(item.submitted_at || item.created_at).toLocaleString("vi-VN"), badge: "Chờ xét hồ sơ", badgeColor: "#047857", kind: "onboarding",
+      approvalBlockedReason: item.can_review ? undefined : "Bạn không có quyền duyệt hồ sơ này hoặc là người lập đề nghị.",
+    }));
+    return [...onboarding, ...authorized, ...leaveApprovals, ...technicalApprovals, ...incidentApprovals];
+  }, [liveApprovals, leaveApprovals, technicalApprovals, incidentApprovals, onboardingRequests, currentManager?.id, profileLoading]);
 
   const pendingCount = approvalsForRole(role, allApprovals).length;
 
@@ -1014,6 +1019,11 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
   };
 
   const handleApprovalDecision = async (id: string, action: ApprovalDecision) => {
+    if (id.startsWith("onboarding-")) {
+      const request = onboardingRequests.find(item => `onboarding-${item.id}` === id);
+      if (request?.can_review) setOnboardingReview({ request, decision: action === "approved" ? "APPROVE" : "REJECT" });
+      return false;
+    }
     if (id.startsWith("leave-")) {
       const leaveId = Number(id.slice("leave-".length));
       if (!Number.isSafeInteger(leaveId)) return false;
@@ -1321,6 +1331,7 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
             {approvalsForRole(role,allApprovals).map(item=><button key={item.id} onClick={()=>setPage("approvals")} style={{display:"block",background:"white",width:"100%",padding:14,border:"1px solid #E2E8F0",borderRadius:8,marginBottom:8,textAlign:"left"}}>{item.title}</button>)}
             {!pendingCount&&!liveIncidents.some(item=>item.handoff_status!=="RESOLVED")&&<p>Không có yêu cầu hoặc cảnh báo đang chờ xử lý.</p>}
           </div>}
+          {personnelError && <p role="alert" style={{margin:"12px 24px",padding:12,background:"#FFF1F2",color:"#9F1239",borderRadius:8}}>{personnelError} <button onClick={() => setRefreshApprovalsCount(value => value + 1)} style={{textDecoration:"underline"}}>Tải lại</button></p>}
           {page==="overview"   && <OverviewScreen role={role} approvalsData={allApprovals} rooms={liveRooms} invoices={liveInvoices} incidents={liveIncidents} techOrders={liveTechnicalOrders} onDecision={handleApprovalDecision} onNavApprovals={() => setPage("approvals")} onNavOperations={() => setPage("operations")} onNavNotifications={() => setPage("notifications")} finance={finance} />}
           {page==="approvals"  && <ApprovalsScreen role={role} approvalsData={allApprovals} onDecision={handleApprovalDecision} approvedPriceProposals={approvedPriceProposals} activatingPriceId={activatingPriceId} onActivatePrice={handleActivateApprovedPrice} />}
           {page==="reports"    && <ReportsScreen invoices={liveInvoices} rooms={liveRooms} expenses={liveExpenses} finance={finance} />}
@@ -1341,12 +1352,12 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
               setRefreshApprovalsCount(value => value + 1);
             }}
           />}
-          {page==="staff"      && <StaffOperationsScreen employees={liveEmployees} tasks={liveTasks} onAdd={() => setShowEmployeeProvision(true)} />}
+          {page==="staff"      && <StaffOperationsScreen role={role} tasks={liveTasks} search={search} onChanged={() => setRefreshApprovalsCount(value => value + 1)} />}
           {page==="incidents"  && <IncidentsScreen incidents={liveIncidents} onApproveDispatch={approveAndDispatchIncident} workOrders={liveTechnicalOrders} onResolve={item => {setResolveIncident(item); setResolveNote(""); setResolveError(null);}} />}
         </div>
       </div>
 
-      {showEmployeeProvision && <EmployeeProvisionModal role={role} onClose={()=>setShowEmployeeProvision(false)} onCreated={()=>setRefreshApprovalsCount(value=>value+1)} />}
+      {onboardingReview && <OnboardingReviewDialog request={onboardingReview.request} initialDecision={onboardingReview.decision} onClose={() => setOnboardingReview(null)} onChanged={() => setRefreshApprovalsCount(value => value + 1)} />}
       {selectedSearchRoom && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"><div role="dialog" aria-modal="true" aria-labelledby="manager-room-detail" className="w-full max-w-lg rounded-2xl bg-white p-6">
         <h2 id="manager-room-detail" className="text-lg font-bold">Chi tiết phòng {selectedSearchRoom.name}</h2>
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><dt>Loại phòng</dt><dd>{selectedSearchRoom.room_type_name}</dd><dt>Tầng</dt><dd>{selectedSearchRoom.floor}</dd><dt>Giá ngày</dt><dd>{fmtVND(selectedSearchRoom.daily_price)}</dd><dt>Trạng thái</dt><dd>{{available:"Sẵn sàng",occupied:"Có khách",reserved:"Đã giữ phòng",cleaning:"Đang dọn",maintenance:"Bảo trì",out_of_service:"Ngừng sử dụng"}[selectedSearchRoom.status]}</dd></dl>

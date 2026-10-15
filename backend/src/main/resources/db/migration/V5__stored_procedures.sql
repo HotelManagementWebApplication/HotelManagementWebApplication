@@ -1,4 +1,141 @@
 -- V5__stored_procedures.sql
+
+-- =============================================================================
+-- Nhân sự: cập nhật hồ sơ độc lập với tài khoản, tiếp nhận phải qua phê duyệt.
+-- =============================================================================
+CREATE PROCEDURE dbo.uspCapNhatHoSoNhanSu
+    @maNhanVien NVARCHAR(10), @duLieu NVARCHAR(MAX), @phienBan BIGINT,
+    @nguoiThucHien NVARCHAR(10), @thoiDiem DATETIMEOFFSET(6), @khoiTao BIT=0
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @vaiTro NVARCHAR(30),@khoa INT,@banCu BIGINT;
+        SELECT @vaiTro=vaiTro FROM dbo.NhanVien WHERE maNhanVien=@nguoiThucHien AND duocKichHoat=1;
+        IF (@khoiTao=0 AND (@vaiTro IS NULL OR @vaiTro<>N'Nhân sự')) OR
+           (@khoiTao=1 AND (@vaiTro IS NULL OR @vaiTro NOT IN (N'Quản lý',N'Giám đốc')))
+            THROW 53704,N'Không có quyền cập nhật hồ sơ nhân sự',1;
+        EXEC @khoa=sys.sp_getapplock @Resource=N'identity-registration',@LockMode=N'Exclusive',@LockOwner=N'Transaction',@LockTimeout=15000;
+        IF @khoa<0 THROW 53702,N'Hồ sơ đang được cập nhật. Vui lòng thử lại',1;
+        IF NOT EXISTS(SELECT 1 FROM dbo.NhanVien WITH(UPDLOCK,HOLDLOCK) WHERE maNhanVien=@maNhanVien)
+            THROW 53701,N'Không tìm thấy nhân viên',1;
+        SELECT @banCu=phienBan FROM dbo.HoSoNhanSu WITH(UPDLOCK,HOLDLOCK) WHERE maNhanVien=@maNhanVien;
+        IF COALESCE(@banCu,0)<>@phienBan THROW 53702,N'Hồ sơ vừa thay đổi. Hãy tải lại trước khi lưu',1;
+        DECLARE @ten NVARCHAR(100)=JSON_VALUE(@duLieu,'$.full_name'),@dienThoai NVARCHAR(15)=JSON_VALUE(@duLieu,'$.phone'),
+            @email NVARCHAR(150)=JSON_VALUE(@duLieu,'$.email'),@diaChi NVARCHAR(255)=JSON_VALUE(@duLieu,'$.address'),
+            @giayTo NVARCHAR(12)=JSON_VALUE(@duLieu,'$.identity_number'),@ngaySinh DATE=TRY_CONVERT(DATE,JSON_VALUE(@duLieu,'$.birth_date')),
+            @ngayVaoLam DATE=TRY_CONVERT(DATE,JSON_VALUE(@duLieu,'$.hire_date')),
+            @gioiTinh NVARCHAR(20)=CASE JSON_VALUE(@duLieu,'$.gender') WHEN 'MALE' THEN N'Nam' WHEN 'FEMALE' THEN N'Nữ' WHEN 'OTHER' THEN N'Khác' WHEN 'UNDISCLOSED' THEN N'Không cung cấp' END,
+            @hopDong NVARCHAR(20)=CASE JSON_VALUE(@duLieu,'$.contract_type') WHEN 'PROBATION' THEN N'Thử việc' WHEN 'PERMANENT' THEN N'Không thời hạn' WHEN 'FIXED_TERM' THEN N'Có thời hạn' WHEN 'SEASONAL' THEN N'Thời vụ' END;
+        IF LEN(LTRIM(RTRIM(COALESCE(@ten,N''))))<2 OR @dienThoai IS NULL
+            OR (@ngaySinh IS NOT NULL AND @ngaySinh>=CONVERT(DATE,@thoiDiem AT TIME ZONE 'SE Asia Standard Time'))
+            OR (@ngaySinh IS NOT NULL AND @ngayVaoLam IS NOT NULL AND @ngayVaoLam<=@ngaySinh)
+            OR (@khoiTao=1 AND (@email IS NULL OR @giayTo IS NULL OR @ngaySinh IS NULL OR @ngayVaoLam IS NULL OR @gioiTinh IS NULL OR @hopDong IS NULL))
+            THROW 53708,N'Hồ sơ chưa đủ hoặc có thông tin không hợp lệ',1;
+        IF EXISTS(SELECT 1 FROM dbo.NhanVien WITH(UPDLOCK,HOLDLOCK) WHERE soDienThoai=@dienThoai AND maNhanVien<>@maNhanVien)
+            OR EXISTS(SELECT 1 FROM dbo.TaiKhoanKhachHang WITH(UPDLOCK,HOLDLOCK) WHERE soDienThoai=@dienThoai)
+            THROW 53705,N'Số điện thoại đã được sử dụng',1;
+        IF EXISTS(SELECT 1 FROM dbo.HoSoNhanSu WITH(UPDLOCK,HOLDLOCK) WHERE soGiayToTuyThan=@giayTo AND maNhanVien<>@maNhanVien)
+            THROW 53706,N'Giấy tờ đã thuộc hồ sơ nhân viên khác',1;
+        UPDATE dbo.NhanVien SET hoVaTen=@ten,soDienThoai=@dienThoai,email=@email,diaChi=@diaChi WHERE maNhanVien=@maNhanVien;
+        IF @banCu IS NULL
+            INSERT dbo.HoSoNhanSu(maNhanVien,gioiTinh,ngaySinh,soGiayToTuyThan,ngayVaoLam,loaiHopDong,phienBan,nguoiCapNhat,thoiDiemCapNhat)
+            VALUES(@maNhanVien,@gioiTinh,@ngaySinh,@giayTo,@ngayVaoLam,@hopDong,1,@nguoiThucHien,@thoiDiem);
+        ELSE
+            UPDATE dbo.HoSoNhanSu SET gioiTinh=@gioiTinh,ngaySinh=@ngaySinh,soGiayToTuyThan=@giayTo,ngayVaoLam=@ngayVaoLam,
+                loaiHopDong=@hopDong,phienBan=phienBan+1,nguoiCapNhat=@nguoiThucHien,thoiDiemCapNhat=@thoiDiem WHERE maNhanVien=@maNhanVien;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE PROCEDURE dbo.uspKhoaDeNghiNhanVien @maDeNghi UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT * FROM dbo.DeNghiTiepNhanNhanVien WITH(UPDLOCK,HOLDLOCK) WHERE maDeNghi=@maDeNghi;
+END;
+GO
+
+CREATE PROCEDURE dbo.uspLenhDeNghiNhanVien
+    @lenh NVARCHAR(20),@maDeNghi UNIQUEIDENTIFIER,@duLieuHoSo NVARCHAR(MAX),@vaiTroDeXuat NVARCHAR(30),
+    @lyDoQuyetDinh NVARCHAR(500),@phienBan BIGINT,@nguoiThucHien NVARCHAR(10),@maNhanVien NVARCHAR(10),
+    @thoiDiem DATETIMEOFFSET(6),@lyDo NVARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @vaiTroNguoiGui NVARCHAR(30),@nguoiDeNghi NVARCHAR(10),@trangThai NVARCHAR(20),@banCu BIGINT,@vaiTroCu NVARCHAR(30),@duLieuCu NVARCHAR(MAX),@khoa INT;
+        SELECT @vaiTroNguoiGui=vaiTro FROM dbo.NhanVien WHERE maNhanVien=@nguoiThucHien AND duocKichHoat=1;
+        SELECT @nguoiDeNghi=nguoiDeNghi,@trangThai=trangThai,@banCu=phienBan,@vaiTroCu=vaiTroDeXuat,@duLieuCu=duLieuHoSo
+            FROM dbo.DeNghiTiepNhanNhanVien WITH(UPDLOCK,HOLDLOCK) WHERE maDeNghi=@maDeNghi;
+        IF COALESCE(@banCu,0)<>@phienBan THROW 53702,N'Đề nghị vừa thay đổi. Hãy tải lại',1;
+        IF @lenh IN(N'save',N'submit')
+        BEGIN
+            IF @vaiTroNguoiGui IS NULL OR @vaiTroNguoiGui<>N'Nhân sự' OR (@nguoiDeNghi IS NOT NULL AND @nguoiDeNghi<>@nguoiThucHien)
+                THROW 53704,N'Chỉ HR tạo đề nghị mới được sửa và gửi duyệt',1;
+            IF @trangThai IS NOT NULL AND @trangThai NOT IN(N'Bản nháp',N'Cần bổ sung',N'Bị từ chối')
+                THROW 53703,N'Đề nghị đang chờ duyệt hoặc đã được duyệt; không thể sửa',1;
+            IF @lenh=N'save'
+            BEGIN
+                IF @banCu IS NULL
+                    INSERT dbo.DeNghiTiepNhanNhanVien(maDeNghi,duLieuHoSo,vaiTroDeXuat,lyDo,nguoiDeNghi,thoiDiemTao)
+                    VALUES(@maDeNghi,@duLieuHoSo,@vaiTroDeXuat,@lyDo,@nguoiThucHien,@thoiDiem);
+                ELSE
+                    UPDATE dbo.DeNghiTiepNhanNhanVien SET duLieuHoSo=@duLieuHoSo,vaiTroDeXuat=@vaiTroDeXuat,lyDo=@lyDo,
+                        trangThai=N'Bản nháp',nguoiXetDuyet=NULL,lyDoQuyetDinh=NULL,thoiDiemQuyetDinh=NULL,phienBan=phienBan+1 WHERE maDeNghi=@maDeNghi;
+            END
+            ELSE
+            BEGIN
+                IF @banCu IS NULL THROW 53701,N'Phải lưu hồ sơ nháp trước khi gửi duyệt',1;
+                DECLARE @dienThoai NVARCHAR(15)=JSON_VALUE(@duLieuCu,'$.phone'),@giayTo NVARCHAR(12)=JSON_VALUE(@duLieuCu,'$.identity_number');
+                IF @dienThoai IS NULL OR @giayTo IS NULL OR JSON_VALUE(@duLieuCu,'$.email') IS NULL
+                    OR JSON_VALUE(@duLieuCu,'$.gender') IS NULL OR TRY_CONVERT(DATE,JSON_VALUE(@duLieuCu,'$.birth_date')) IS NULL
+                    OR TRY_CONVERT(DATE,JSON_VALUE(@duLieuCu,'$.hire_date')) IS NULL OR JSON_VALUE(@duLieuCu,'$.contract_type') IS NULL
+                    THROW 53708,N'Phải bổ sung đầy đủ hồ sơ trước khi gửi duyệt',1;
+                EXEC @khoa=sys.sp_getapplock @Resource=N'identity-registration',@LockMode=N'Exclusive',@LockOwner=N'Transaction',@LockTimeout=15000;
+                IF @khoa<0 THROW 53702,N'Hồ sơ đang được xử lý. Vui lòng thử lại',1;
+                IF EXISTS(SELECT 1 FROM dbo.NhanVien WHERE soDienThoai=@dienThoai) OR EXISTS(SELECT 1 FROM dbo.TaiKhoanKhachHang WHERE soDienThoai=@dienThoai)
+                    THROW 53705,N'Số điện thoại đã có tài khoản',1;
+                IF EXISTS(SELECT 1 FROM dbo.HoSoNhanSu WHERE soGiayToTuyThan=@giayTo) THROW 53706,N'Giấy tờ đã có hồ sơ nhân viên',1;
+                IF EXISTS(SELECT 1 FROM dbo.DeNghiTiepNhanNhanVien WHERE maDeNghi<>@maDeNghi AND trangThai=N'Chờ duyệt' AND
+                    (JSON_VALUE(duLieuHoSo,'$.phone')=@dienThoai OR JSON_VALUE(duLieuHoSo,'$.identity_number')=@giayTo))
+                    THROW 53703,N'Nhân viên này đã có một đề nghị đang chờ duyệt',1;
+                UPDATE dbo.DeNghiTiepNhanNhanVien SET trangThai=N'Chờ duyệt',thoiDiemGui=@thoiDiem,nguoiXetDuyet=NULL,lyDoQuyetDinh=NULL,
+                    thoiDiemQuyetDinh=NULL,phienBan=phienBan+1 WHERE maDeNghi=@maDeNghi;
+            END;
+        END
+        ELSE IF @lenh IN(N'approve',N'revise',N'reject')
+        BEGIN
+            IF @banCu IS NULL THROW 53701,N'Không tìm thấy đề nghị',1;
+            IF @trangThai<>N'Chờ duyệt' THROW 53703,N'Đề nghị không còn chờ duyệt',1;
+            IF @nguoiDeNghi=@nguoiThucHien THROW 53707,N'Không được tự duyệt đề nghị',1;
+            IF @vaiTroNguoiGui IS NULL OR @vaiTroNguoiGui NOT IN(N'Quản lý',N'Giám đốc') OR
+                (@vaiTroNguoiGui=N'Quản lý' AND @vaiTroCu NOT IN(N'Nhân sự',N'Lễ tân',N'Buồng phòng',N'Kỹ thuật',N'Nhà bếp',N'Kế toán'))
+                THROW 53704,N'Vai trò đề xuất vượt quyền xét duyệt',1;
+            IF LEN(LTRIM(RTRIM(COALESCE(@lyDoQuyetDinh,N''))))=0 THROW 53708,N'Phải ghi lý do xét duyệt',1;
+            IF @lenh=N'approve' AND NOT EXISTS(SELECT 1 FROM dbo.NhanVien WHERE maNhanVien=@maNhanVien AND vaiTro=@vaiTroCu AND soDienThoai=JSON_VALUE(@duLieuCu,'$.phone'))
+                THROW 53708,N'Tài khoản cấp phải khớp hồ sơ đã gửi duyệt',1;
+            UPDATE dbo.DeNghiTiepNhanNhanVien SET trangThai=CASE @lenh WHEN N'approve' THEN N'Đã duyệt' WHEN N'revise' THEN N'Cần bổ sung' ELSE N'Bị từ chối' END,
+                nguoiXetDuyet=@nguoiThucHien,lyDoQuyetDinh=@lyDoQuyetDinh,maNhanVien=CASE WHEN @lenh=N'approve' THEN @maNhanVien END,
+                thoiDiemQuyetDinh=@thoiDiem,phienBan=phienBan+1 WHERE maDeNghi=@maDeNghi;
+        END
+        ELSE THROW 53703,N'Thao tác tiếp nhận không hợp lệ',1;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
 -- Mỗi đối tượng có một định nghĩa cuối cùng trong file sở hữu.
 -- SP ở V5 xử lý lệnh nghiệp vụ; trigger ở V6 bảo vệ tính toàn vẹn dữ liệu.
 -- Cách đọc:

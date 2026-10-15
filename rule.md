@@ -73,6 +73,8 @@
 ## 11. Vai trò, module và phân quyền
 
 - Có module Nhân sự và phân ca. HR quản lý hồ sơ nhân viên và phân ca; HR không xem lương/tài chính và không tự cấp hoặc đổi role.
+- Tiếp nhận nhân viên mới: HR lập hồ sơ nháp và đề xuất vai trò, gửi Quản lý/Giám đốc duyệt. Chỉ khi được duyệt, backend mới tạo mã nhân viên và tài khoản trong cùng transaction. Quản lý/Giám đốc không tạo nhân viên trực tiếp từ giao diện/API cấp tài khoản; Admin giữ quyền cấp tài khoản quản trị theo phạm vi hiện hành.
+- Người lập không tự duyệt. Quản lý chỉ xét các vai trò trong ceiling đã nêu; đề nghị MANAGER, ADMIN hoặc DIRECTOR do DIRECTOR xét. Mọi quyết định phải có lý do và audit. Hồ sơ chờ duyệt không được sửa; hồ sơ bị trả về/từ chối có thể sửa và gửi lại. HR được sửa thông tin hồ sơ sau tiếp nhận, không thay đổi quyền hoặc trạng thái tài khoản.
 - DIRECTOR xem toàn bộ báo cáo, phê duyệt hoàn tiền và thay đổi giá; DIRECTOR được cấp mọi role, kể cả ADMIN, nhưng không tự đổi role.
 - ADMIN quản trị toàn hệ thống nhưng không quản lý DIRECTOR; ADMIN được cấp mọi role trừ DIRECTOR.
 - MANAGER trực tiếp quản lý FRONT_DESK, HOUSEKEEPING, TECHNICAL và KITCHEN; MANAGER được cấp các role cấp dưới gồm HR, FRONT_DESK, HOUSEKEEPING, TECHNICAL, KITCHEN và ACCOUNTING; MANAGER không được cấp ADMIN hoặc DIRECTOR.

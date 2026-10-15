@@ -77,6 +77,8 @@ DELETE FROM BanGiaoTienCa;
 DELETE FROM YeuCauPheDuyet;
 DELETE FROM NhatKyKiemSoat;
 DELETE FROM BanGhiChongTrung;
+DELETE FROM DeNghiTiepNhanNhanVien;
+DELETE FROM HoSoNhanSu;
 DELETE FROM NhanVien;
 
 -- =============================================================================

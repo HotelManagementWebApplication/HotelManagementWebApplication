@@ -10,7 +10,7 @@ Quy tắc bắt buộc nằm trong `AGENTS.md` ở root repository.
 | `V3__functions.sql` | Function |
 | `V4__views.sql` | View/read model |
 | `V5__stored_procedures.sql` | Stored procedure và transaction nghiệp vụ |
-| `V6__triggers.sql` | Mười trigger bảo vệ tài chính, ca làm, governance và đặt dịch vụ |
+| `V6__triggers.sql` | Trigger bảo vệ tài chính, ca làm, governance, đặt dịch vụ và tiếp nhận nhân viên |
 
 Mỗi object chỉ có một định nghĩa cuối cùng trong file sở hữu, có tiêu đề và
 mục lục để tra cứu. Sửa object ngay trong file đó; không thêm migration, SQL

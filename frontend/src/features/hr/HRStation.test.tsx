@@ -5,6 +5,7 @@ import { authApi } from "../../shared/api/auth";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { hrGovernanceApi } from "../../shared/api/hrGovernance";
 import { localDateValue } from "../../shared/utils/localDate";
+import { personnelApi } from "../../shared/api/personnel";
 
 const weekAtOffset = (offset: number) => {
   const monday = new Date();
@@ -38,20 +39,23 @@ describe("HRStation weekly shift schedule", () => {
     await waitFor(() => editing ? expect(update).toHaveBeenCalledWith(8, payload) : expect(assign).toHaveBeenCalledWith({employee_id: "FRONTDESK", ...payload}));
   });
 
-  it("shows the account-provisioning boundary without exposing a fake HR creation form", async () => {
+  it("lets HR prepare an onboarding request without directly provisioning an account", async () => {
     const provision = vi.spyOn(enterpriseApi, "autoProvisionEmployee");
     render(<HRStation onBack={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", {name: /Hồ sơ nhân sự/}));
-    fireEvent.click(screen.getByRole("button", {name: /Hướng dẫn tiếp nhận/}));
+    await waitFor(() => expect(screen.getByRole("button", {name: "Lập đề nghị tiếp nhận"})).toHaveProperty("disabled", false));
+    fireEvent.click(screen.getByRole("button", {name: "Lập đề nghị tiếp nhận"}));
     expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByText(/Quyền cấp tài khoản và vai trò thuộc Ban quản lý và Admin/)).toBeTruthy();
+    expect(screen.getByText(/tài khoản chỉ được tạo sau khi Quản lý hoặc Giám đốc chấp thuận/)).toBeTruthy();
     expect(screen.queryByRole("button", {name: "Lưu hồ sơ"})).toBeNull();
     expect(provision).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", {name: "Đã hiểu"}));
+    fireEvent.click(screen.getByRole("button", {name: "Hủy"}));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(personnelApi, "profiles").mockResolvedValue([]);
+    vi.spyOn(personnelApi, "requests").mockResolvedValue([]);
     vi.spyOn(hrGovernanceApi, "shifts").mockResolvedValue([]);
     vi.spyOn(authApi, "employeeProfile").mockResolvedValue({
       employee_id: "HR01",

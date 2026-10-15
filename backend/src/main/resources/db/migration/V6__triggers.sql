@@ -1,4 +1,23 @@
 -- V6__triggers.sql
+
+-- =============================================================================
+-- Đề nghị nhân viên: bản đang chờ duyệt bất biến; bản đã duyệt giữ nguyên liên kết.
+-- =============================================================================
+CREATE TRIGGER dbo.trgDeNghiNhanVienBaoToanQuyetDinh ON dbo.DeNghiTiepNhanNhanVien
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS(SELECT 1 FROM inserted i JOIN deleted d ON i.maDeNghi=d.maDeNghi WHERE
+        i.nguoiDeNghi<>d.nguoiDeNghi OR i.thoiDiemTao<>d.thoiDiemTao OR
+        (d.trangThai=N'Đã duyệt') OR
+        (d.trangThai=N'Chờ duyệt' AND (i.duLieuHoSo<>d.duLieuHoSo OR i.vaiTroDeXuat<>d.vaiTroDeXuat OR i.lyDo<>d.lyDo)) OR
+        (i.trangThai=N'Đã duyệt' AND d.trangThai<>N'Chờ duyệt') OR
+        i.phienBan<>d.phienBan+1)
+        THROW 53703,N'Không được đổi hồ sơ đang duyệt, quyết định đã duyệt hoặc người lập đề nghị',1;
+END;
+GO
+
 -- Mỗi đối tượng có một định nghĩa cuối cùng trong file sở hữu.
 -- SP ở V5 xử lý lệnh nghiệp vụ; trigger ở V6 bảo vệ tính toàn vẹn dữ liệu.
 -- Cách đọc:
