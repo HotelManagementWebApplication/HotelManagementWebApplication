@@ -38,7 +38,7 @@ public class EmployeeService {
     }
     @Transactional
     public AuthDtos.AutoProvisionResponse provisionAuto(AuthDtos.AutoProvisionRequest request){
-        requireCurrentActorCanManage(request.role());
+        requireCurrentActorCanProvision(request.role());
         String prefix=switch(request.role()){case HOUSEKEEPING->"HK";case KITCHEN,ACCOUNTING->"KT";case TECHNICAL->"TC";case HR->"HR";case MANAGER,DIRECTOR,ADMIN->"QL";default->"NV";};
         String password="MAM#"+UUID.randomUUID().toString().replace("-","").substring(0,8);
         var e=employees.create(prefix,request.fullName(),passwordEncoder.encode(password),request.role(),PhoneNumberNormalizer.normalize(request.phone()),request.address(),request.email().trim(),true,true);
@@ -98,6 +98,7 @@ public class EmployeeService {
     }
     private void requirePassword(String password){if(password==null||password.isBlank()||password.length()<8||password.length()>72)throw new DomainException("PASSWORD_REQUIRED","Phải cung cấp mật khẩu mới");}
     public boolean canManageRole(Authentication auth,EmployeeRole target){var role=roleOf(auth);return role!=null&&role.canManage(target);}
+    public boolean canProvisionRole(Authentication auth,EmployeeRole target){var role=roleOf(auth);return role!=null&&role.canProvision(target);}
     public boolean canResetEmployee(Authentication auth,String id){return employees.find(id).map(e->canManageRole(auth,e.role())).orElse(false);}
     public boolean canManageEmployeeRole(Authentication auth,String id,EmployeeRole role){return employees.find(id).map(e->!isCurrentActor(id)&&canManageRole(auth,e.role())&&canManageRole(auth,role)).orElse(false);}
     @Transactional
@@ -108,6 +109,7 @@ public class EmployeeService {
     private void requireNotSelf(String id,String code){if(isCurrentActor(id))throw new DomainException(code,"Không được tự thay đổi tài khoản của chính mình");}
     private boolean isCurrentActor(String id){var auth=SecurityContextHolder.getContext().getAuthentication();return auth!=null&&auth.isAuthenticated()&&id!=null&&id.equals(auth.getName());}
     private void requireCurrentActorCanManage(EmployeeRole role){if(!canManageRole(SecurityContextHolder.getContext().getAuthentication(),role))throw new DomainException("ACCESS_DENIED","Không được quản lý chức vụ nhân viên này");SecurityActor.currentPrincipal();}
+    private void requireCurrentActorCanProvision(EmployeeRole role){if(!canProvisionRole(SecurityContextHolder.getContext().getAuthentication(),role))throw new DomainException("ACCESS_DENIED","Không được cấp tài khoản cho chức vụ nhân viên này");SecurityActor.currentPrincipal();}
     private EmployeeRole roleOf(Authentication auth){
         if(auth==null||!auth.isAuthenticated())return null;
         return auth.getAuthorities().stream().map(a->a.getAuthority()).filter(a->a.startsWith("ROLE_")).map(a->{try{return EmployeeRole.valueOf(a.substring(5));}catch(IllegalArgumentException error){return null;}}).filter(Objects::nonNull).findFirst().orElse(null);

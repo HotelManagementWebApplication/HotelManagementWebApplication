@@ -723,15 +723,21 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    /** Given HR, When đọc authority hoặc gọi admin/finance, Then không có quyền và mọi mutation bị 403. */
-    void hrCannotProvisionOrResetAndHasNoFinancialPermissions() throws Exception {
+    /** Given HR, When cấp tài khoản role nghiệp vụ, Then thành công nhưng vẫn không quản lý role/tài khoản. */
+    void hrCanProvisionNonManagementRolesButCannotManageAccountsOrElevatedRoles() throws Exception {
         UserDetails hr = userDetailsService.loadUserByUsername("hr");
         assertThat(hr.getAuthorities()).extracting(a -> a.getAuthority())
                 .containsExactlyInAnyOrder("ROLE_HR", "PERMISSION_EMPLOYEE_READ",
-                        "PERMISSION_SHIFT_READ", "PERMISSION_SHIFT_WRITE");
+                        "PERMISSION_EMPLOYEE_PROVISION", "PERMISSION_SHIFT_READ", "PERMISSION_SHIFT_WRITE");
 
         String hrToken = bearer(login("hr", "hr-password").get("access_token").asText());
         provision(hrToken, "hr-created", EmployeeRole.STAFF, "0900000019")
+                .andExpect(status().isCreated());
+        provision(hrToken, "hr-manager", EmployeeRole.MANAGER, "0900000020")
+                .andExpect(status().isForbidden());
+        provision(hrToken, "hr-admin", EmployeeRole.ADMIN, "0900000021")
+                .andExpect(status().isForbidden());
+        provision(hrToken, "hr-director", EmployeeRole.DIRECTOR, "0900000022")
                 .andExpect(status().isForbidden());
         reset(hrToken, "staff")
                 .andExpect(status().isForbidden());

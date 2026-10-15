@@ -26,8 +26,9 @@ class RolePermissionTest {
                 .doesNotContain(Permission.RESERVATION_WRITE, Permission.PAYMENT_WRITE,
                         Permission.FINANCE_WRITE);
         assertThat(EmployeeRole.HR.permissions())
-                .containsExactlyInAnyOrder(Permission.EMPLOYEE_READ, Permission.SHIFT_READ, Permission.SHIFT_WRITE)
-                .doesNotContain(Permission.EMPLOYEE_PROVISION, Permission.EMPLOYEE_PASSWORD_RESET,
+                .containsExactlyInAnyOrder(Permission.EMPLOYEE_READ, Permission.EMPLOYEE_PROVISION,
+                        Permission.SHIFT_READ, Permission.SHIFT_WRITE)
+                .doesNotContain(Permission.EMPLOYEE_PASSWORD_RESET,
                         Permission.BILLING_READ, Permission.BILLING_WRITE, Permission.PAYMENT_WRITE,
                         Permission.FINANCE_READ, Permission.FINANCE_WRITE);
     }
@@ -43,5 +44,10 @@ class RolePermissionTest {
         assertThat(EmployeeRole.MANAGER.canManage(EmployeeRole.ADMIN)).isFalse();
         assertThat(EmployeeRole.MANAGER.canManage(EmployeeRole.DIRECTOR)).isFalse();
         assertThat(EmployeeRole.HR.canManage(EmployeeRole.STAFF)).isFalse();
+        assertThat(EmployeeRole.HR.canProvision(EmployeeRole.STAFF)).isTrue();
+        assertThat(EmployeeRole.HR.canProvision(EmployeeRole.ACCOUNTING)).isTrue();
+        assertThat(EmployeeRole.HR.canProvision(EmployeeRole.MANAGER)).isFalse();
+        assertThat(EmployeeRole.HR.canProvision(EmployeeRole.ADMIN)).isFalse();
+        assertThat(EmployeeRole.HR.canProvision(EmployeeRole.DIRECTOR)).isFalse();
     }
 }

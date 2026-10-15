@@ -131,6 +131,7 @@ assignee/manager giới hạn mutation task/work order.
 | `GET /api/auth/customers/me` | Không body | `CUSTOMER`; chỉ customer hiện tại |
 | `POST /api/auth/customers/password` | Body `password` | `CUSTOMER`; 204 |
 | `POST /api/auth/employees` | Body `employee_id`, `full_name`, `password`, `role`, `phone`, `address` | `EMPLOYEE_PROVISION` và role ceiling; 201 |
+| `POST /api/auth/employees/auto-provision` | Body `full_name`, `role`, `phone`, `email`, `address` tùy chọn | Manager/Admin/Director theo role ceiling; HR chỉ tạo FRONT_DESK, ACCOUNTING, HOUSEKEEPING, TECHNICAL, KITCHEN, HR hoặc STAFF; 201, mật khẩu tạm buộc đổi lần đăng nhập đầu |
 | `POST /api/auth/employees/{employeeId}/password` | Body `password` | `EMPLOYEE_PASSWORD_RESET` và target scope; 204 |
 | `GET /api/auth/employees` | Query `includeInactive` (default `false`) | `EMPLOYEE_READ`; list không password |
 | `GET /api/auth/employees/{employeeId}` | Không body | `EMPLOYEE_READ` |
@@ -143,6 +144,8 @@ assignee/manager giới hạn mutation task/work order.
 
 `employee_id` trong login là mã nhân viên. `GET /api/auth/me` không nhận role hay
 permissions từ client.
+HR chỉ có `EMPLOYEE_PROVISION` cho luồng tạo tài khoản mới; quyền này không cho
+HR đổi role, trạng thái, việc làm, mật khẩu hoặc phiên đăng nhập của tài khoản hiện có.
 
 ### Public/customer
 

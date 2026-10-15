@@ -124,6 +124,7 @@ class DepartmentAuthorizationMatrixTest {
         when(mock23.list(any(), any())).thenReturn(List.of());
         when(mock24.canResetEmployee(any(), anyString())).thenReturn(true);
         when(mock24.canManageRole(any(), any())).thenReturn(true);
+        when(mock24.canProvisionRole(any(), any())).thenReturn(true);
         when(mock24.canManageEmployeeRole(any(), anyString(), any())).thenReturn(true);
         when(mock24.list(anyBoolean())).thenReturn(List.of());
         when(mock24.provisionAuto(any())).thenReturn(new com.hospitality.mis.dto.auth.AuthDtos.AutoProvisionResponse(
@@ -276,7 +277,7 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("GET", "/api/auth/customers/me", "CUSTOMER", "{}"),
             new Endpoint("PUT", "/api/auth/customers/me", "CUSTOMER", "{\"full_name\":\"Test\",\"identity_number\":\"123456789012\"}"),
             new Endpoint("POST", "/api/auth/customers/password", "CUSTOMER", "{\"password\":\"valid-password\"}"),
-            new Endpoint("POST", "/api/auth/employees/auto-provision", "ADMIN,DIRECTOR,MANAGER", "{\"role\":\"STAFF\",\"full_name\":\"Test\",\"phone\":\"0900000000\",\"email\":\"test@hotel.com\"}"),
+            new Endpoint("POST", "/api/auth/employees/auto-provision", "ADMIN,DIRECTOR,MANAGER,HR", "{\"role\":\"STAFF\",\"full_name\":\"Test\",\"phone\":\"0900000000\",\"email\":\"test@hotel.com\"}"),
             new Endpoint("POST", "/api/customer/reservations", "CUSTOMER", "{\"rental_type\":\"PACKAGE\",\"rooms\":[{\"room_id\":\"101\",\"expected_check_in\":\"2026-10-01T12:00:00\",\"expected_check_out\":\"2026-10-02T12:00:00\"}],\"idempotency_key\":\"customer-key\",\"payment_method\":\"VNPAY\"}"),
             new Endpoint("GET", "/api/customer/reservations", "CUSTOMER", "{}"),
             new Endpoint("GET", "/api/customer/reservations/1", "CUSTOMER", "{}"),

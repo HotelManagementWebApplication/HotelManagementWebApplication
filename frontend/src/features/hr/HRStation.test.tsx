@@ -38,17 +38,29 @@ describe("HRStation weekly shift schedule", () => {
     await waitFor(() => editing ? expect(update).toHaveBeenCalledWith(8, payload) : expect(assign).toHaveBeenCalledWith({employee_id: "FRONTDESK", ...payload}));
   });
 
-  it("shows the account-provisioning boundary without exposing a fake HR creation form", async () => {
-    const provision = vi.spyOn(enterpriseApi, "autoProvisionEmployee");
+  it("lets HR create an employee account with a non-management role", async () => {
+    const provision = vi.spyOn(enterpriseApi, "autoProvisionEmployee").mockResolvedValue({
+      employee_id: "FD002", full_name: "Nguyễn Thị Mai", role: "FRONT_DESK", phone: "0901234567",
+      email: "mai@hotel.com", temporary_password: "temp-password", must_change_password: true,
+    });
     render(<HRStation onBack={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", {name: /Hồ sơ nhân sự/}));
     fireEvent.click(screen.getByRole("button", {name: /Tiếp nhận nhân viên mới/}));
-    expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByText(/HR không có quyền cấp tài khoản/)).toBeTruthy();
-    expect(screen.queryByRole("button", {name: "Lưu hồ sơ"})).toBeNull();
-    expect(provision).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", {name: "Đã hiểu"}));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const dialog = screen.getByRole("dialog");
+    const roleSelect = within(dialog).getByLabelText("Vai trò hệ thống *");
+    expect(within(roleSelect).queryByRole("option", {name: "Quản lý"})).toBeNull();
+    expect(within(roleSelect).queryByRole("option", {name: "Quản trị hệ thống"})).toBeNull();
+    expect(within(roleSelect).queryByRole("option", {name: "Giám đốc"})).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText("Họ và tên nhân viên *"), {target: {value: "Nguyễn Thị Mai"}});
+    fireEvent.change(within(dialog).getByLabelText("Email / tên đăng nhập *"), {target: {value: "mai@hotel.com"}});
+    fireEvent.change(within(dialog).getByLabelText("Số điện thoại *"), {target: {value: "0901234567"}});
+    fireEvent.change(roleSelect, {target: {value: "FRONT_DESK"}});
+    fireEvent.click(within(dialog).getByRole("button", {name: "Tạo tài khoản"}));
+    await waitFor(() => expect(provision).toHaveBeenCalledWith({
+      full_name: "Nguyễn Thị Mai", role: "FRONT_DESK", phone: "0901234567", email: "mai@hotel.com",
+    }));
+    expect(await screen.findByText("FD002")).toBeTruthy();
+    expect(screen.getByText("temp-password")).toBeTruthy();
   });
   beforeEach(() => {
     vi.restoreAllMocks();

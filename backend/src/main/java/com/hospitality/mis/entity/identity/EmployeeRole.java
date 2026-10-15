@@ -34,8 +34,8 @@ public enum EmployeeRole {
             RESTAURANT_ORDER_READ, RESTAURANT_ORDER_WRITE),
     /** Nhân viên thông thường chỉ xem phòng và đặt phòng. */
     STAFF(ROOM_READ, RESERVATION_READ),
-    /** Nhân sự chỉ đọc dữ liệu nhân viên. */
-    HR(EMPLOYEE_READ, SHIFT_READ, SHIFT_WRITE);
+    /** Nhân sự có thể tiếp nhận nhân viên nhưng không quản trị tài khoản hiện có. */
+    HR(EMPLOYEE_READ, EMPLOYEE_PROVISION, SHIFT_READ, SHIFT_WRITE);
 
     /** Tập quyền bất biến được suy ra khi enum khởi tạo. */
     private final Set<Permission> permissions;
@@ -62,5 +62,17 @@ public enum EmployeeRole {
             };
             default -> false;
         };
+    }
+
+    /** HR chỉ cấp tài khoản cho vai trò nghiệp vụ; quyền quản lý role hiện có không thay đổi. */
+    public boolean canProvision(EmployeeRole targetRole) {
+        if (targetRole == null) return false;
+        if (this == HR) {
+            return switch (targetRole) {
+                case FRONT_DESK, ACCOUNTING, HOUSEKEEPING, TECHNICAL, KITCHEN, HR, STAFF -> true;
+                default -> false;
+            };
+        }
+        return canManage(targetRole);
     }
 }

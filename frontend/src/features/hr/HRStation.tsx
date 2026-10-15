@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, useMemo } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { hrGovernanceApi } from "../../shared/api/hrGovernance";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { authApi } from "../../shared/api/auth";
@@ -61,6 +61,9 @@ import {
 ══════════════════════════════════════════════════════════ */
 type TabType = "overview" | "schedule" | "staff" | "attendance" | "leaves";
 const WEEKDAY_LABELS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+const HR_PROVISIONABLE_ROLES = ["FRONT_DESK", "ACCOUNTING", "HOUSEKEEPING", "TECHNICAL", "KITCHEN", "HR", "STAFF"] as const;
+type HrProvisionableRole = (typeof HR_PROVISIONABLE_ROLES)[number];
+type ProvisionedEmployee = Awaited<ReturnType<typeof enterpriseApi.autoProvisionEmployee>>;
 
 type ShiftType = "morning" | "afternoon" | "night" | "off";
 
@@ -201,10 +204,12 @@ export default function HRStation({ onBack }: Props) {
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeProfile | null>(null);
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
+  const [newEmployeeForm, setNewEmployeeForm] = useState({ fullName: "", email: "", phone: "", address: "", role: "STAFF" as HrProvisionableRole });
+  const [isCreatingEmployee, setIsCreatingEmployee] = useState(false);
+  const [createdEmployee, setCreatedEmployee] = useState<ProvisionedEmployee | null>(null);
+  const [employeeRefreshKey, setEmployeeRefreshKey] = useState(0);
   const [staffFilterDept, setStaffFilterDept] = useState("all");
   const [staffFilterStatus, setStaffFilterStatus] = useState("all");
-
-  // New employee form state
 
   // ── Tab 4 (Chấm công) states ──
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -344,7 +349,38 @@ export default function HRStation({ onBack }: Props) {
       .catch(err => console.warn("Backend HR profile unavailable:", err));
 
     return () => { active = false; };
-  }, [attendanceDate, today, weekDates]);
+  }, [attendanceDate, employeeRefreshKey, today, weekDates]);
+
+  const openAddEmployeeModal = () => {
+    setCreatedEmployee(null);
+    setNewEmployeeForm({ fullName: "", email: "", phone: "", address: "", role: "STAFF" });
+    setIsAddEmployeeModalOpen(true);
+  };
+
+  const closeAddEmployeeModal = () => {
+    setIsAddEmployeeModalOpen(false);
+    setCreatedEmployee(null);
+  };
+
+  const handleCreateEmployee = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsCreatingEmployee(true);
+    try {
+      const created = await enterpriseApi.autoProvisionEmployee({
+        full_name: newEmployeeForm.fullName.trim(),
+        role: newEmployeeForm.role,
+        phone: newEmployeeForm.phone.trim(),
+        email: newEmployeeForm.email.trim(),
+        ...(newEmployeeForm.address.trim() ? { address: newEmployeeForm.address.trim() } : {}),
+      });
+      setCreatedEmployee(created);
+      setEmployeeRefreshKey(key => key + 1);
+    } catch (error) {
+      showToast(apiErrorMessage(error, "Không thể tạo tài khoản nhân viên. Vui lòng kiểm tra thông tin và thử lại."));
+    } finally {
+      setIsCreatingEmployee(false);
+    }
+  };
 
   const todayLabel = useMemo(() => {
     return today.toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" });
@@ -1419,7 +1455,7 @@ export default function HRStation({ onBack }: Props) {
           <h3 className="font-serif font-bold text-gray-900 text-sm mb-3">Tác vụ nhanh</h3>
           <div className="space-y-2">
             <button
-              onClick={() => setIsAddEmployeeModalOpen(true)}
+              onClick={openAddEmployeeModal}
               className="w-full flex items-center justify-between p-2.5 rounded-xl bg-gray-50 hover:bg-emerald-50 text-gray-700 hover:text-emerald-800 text-xs font-medium transition-colors cursor-pointer border border-gray-100 hover:border-emerald-200"
             >
               <div className="flex items-center gap-2">
@@ -1530,7 +1566,7 @@ export default function HRStation({ onBack }: Props) {
           </button>
 
           <button
-            onClick={() => setIsAddEmployeeModalOpen(true)}
+            onClick={openAddEmployeeModal}
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer shadow-xs"
           >
             <Plus className="w-4 h-4" />
@@ -2046,13 +2082,66 @@ export default function HRStation({ onBack }: Props) {
     </div>
   );
 
-  // Employee accounts are created only by roles with EMPLOYEE_PROVISION.
+  // HR may provision non-management roles; the backend independently enforces this role ceiling.
   const AddEmployeeModal = isAddEmployeeModalOpen && (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div role="dialog" aria-modal="true" aria-labelledby="employee-access-title" className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl">
-        <h3 id="employee-access-title" className="font-serif font-bold text-gray-900">Tiếp nhận nhân viên mới</h3>
-        <p className="mt-3 text-sm leading-6 text-gray-600">HR không có quyền cấp tài khoản hoặc chọn role. Vui lòng đề nghị MANAGER, ADMIN hoặc DIRECTOR cấp tài khoản theo phạm vi quyền. Nhân viên đã được cấp tài khoản sẽ xuất hiện trong danh sách hồ sơ để HR quản lý lịch, chấm công và nghỉ phép.</p>
-        <button type="button" onClick={() => setIsAddEmployeeModalOpen(false)} className="mt-5 px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm">Đã hiểu</button>
+      <div role="dialog" aria-modal="true" aria-labelledby="employee-access-title" className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 id="employee-access-title" className="font-serif font-bold text-gray-900">Tiếp nhận nhân viên mới</h3>
+            <p className="mt-1 text-xs text-gray-500">HR có thể tạo nhân viên các bộ phận; role quản trị vẫn do cấp quản lý cấp.</p>
+          </div>
+          <button type="button" aria-label="Đóng" onClick={closeAddEmployeeModal} className="text-gray-400 hover:text-gray-700 cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        {createdEmployee ? (
+          <div className="mt-5 space-y-3 text-sm">
+            <p className="font-semibold text-emerald-800">Đã tạo tài khoản nhân viên.</p>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-lg bg-gray-50 p-4">
+              <dt className="text-gray-500">Mã nhân viên</dt><dd className="font-semibold text-gray-900">{createdEmployee.employee_id}</dd>
+              <dt className="text-gray-500">Họ tên</dt><dd className="font-semibold text-gray-900">{createdEmployee.full_name}</dd>
+              <dt className="text-gray-500">Vai trò</dt><dd className="font-semibold text-gray-900">{employeeRoleLabel(createdEmployee.role)}</dd>
+              <dt className="text-gray-500">Mật khẩu tạm</dt><dd className="font-mono font-semibold text-gray-900 break-all">{createdEmployee.temporary_password}</dd>
+            </dl>
+            <p className="text-xs leading-5 text-gray-500">Gửi mật khẩu tạm cho nhân viên qua kênh an toàn. Hệ thống yêu cầu đổi mật khẩu ở lần đăng nhập đầu tiên.</p>
+            <div className="flex justify-end pt-2">
+              <button type="button" onClick={closeAddEmployeeModal} className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold">Hoàn tất</button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleCreateEmployee} className="mt-5 space-y-3.5 text-sm">
+            <div>
+              <label htmlFor="hr-new-employee-name" className="block text-gray-700 font-semibold mb-1">Họ và tên nhân viên *</label>
+              <input id="hr-new-employee-name" required autoComplete="name" value={newEmployeeForm.fullName} onChange={event => setNewEmployeeForm({ ...newEmployeeForm, fullName: event.target.value })} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-600" />
+            </div>
+            <div>
+              <label htmlFor="hr-new-employee-email" className="block text-gray-700 font-semibold mb-1">Email / tên đăng nhập *</label>
+              <input id="hr-new-employee-email" type="email" required autoComplete="email" value={newEmployeeForm.email} onChange={event => setNewEmployeeForm({ ...newEmployeeForm, email: event.target.value })} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-600" />
+            </div>
+            <div>
+              <label htmlFor="hr-new-employee-phone" className="block text-gray-700 font-semibold mb-1">Số điện thoại *</label>
+              <input id="hr-new-employee-phone" type="tel" required autoComplete="tel" value={newEmployeeForm.phone} onChange={event => setNewEmployeeForm({ ...newEmployeeForm, phone: event.target.value })} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-600" />
+            </div>
+            <div>
+              <label htmlFor="hr-new-employee-role" className="block text-gray-700 font-semibold mb-1">Vai trò hệ thống *</label>
+              <select id="hr-new-employee-role" required value={newEmployeeForm.role} onChange={event => setNewEmployeeForm({ ...newEmployeeForm, role: event.target.value as HrProvisionableRole })} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-600 cursor-pointer">
+                {HR_PROVISIONABLE_ROLES.map(role => <option key={role} value={role}>{employeeRoleLabel(role)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="hr-new-employee-address" className="block text-gray-700 font-semibold mb-1">Địa chỉ</label>
+              <input id="hr-new-employee-address" autoComplete="street-address" value={newEmployeeForm.address} onChange={event => setNewEmployeeForm({ ...newEmployeeForm, address: event.target.value })} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-600" />
+            </div>
+            <p className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-xs leading-5 text-emerald-900">Hệ thống tự sinh mã và mật khẩu tạm. Nhân viên phải đổi mật khẩu ở lần đăng nhập đầu tiên.</p>
+            <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
+              <button type="button" onClick={closeAddEmployeeModal} className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm">Hủy</button>
+              <button type="submit" disabled={isCreatingEmployee} className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white text-sm font-semibold">
+                {isCreatingEmployee ? "Đang tạo..." : "Tạo tài khoản"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
