@@ -44,7 +44,10 @@ SMTP, JWT hoặc cấu hình chứa bí mật vào các file demo này.
 
 Truy cập http://127.0.0.1:5173. Tài khoản demo dùng mật khẩu `hotel123`:
 
-- `KITCHEN`: Kho, Dịch vụ, nhập/xuất/điều chỉnh tồn, đề xuất giá.
+- `KITCHEN`: Kho, Dịch vụ, nhập/xuất/hao hụt, đề xuất giá và điều phối mọi nhóm dịch vụ.
+- Trong Dịch vụ, bấm **Cấu hình** để khai báo công suất và chính sách tiêu hao của
+  dữ liệu thực tế. Sân/phòng giữ chỗ theo lịch, không bị trừ tồn khi xác nhận dùng.
+  Không nạp cấu hình demo lên database dev; xem `docs/service-stock-policy.md`.
 - `ACCOUNTING`: thanh toán, đối soát, hóa đơn, bàn giao tiền mặt và popup mệnh giá.
 - `MANAGER`, `DIRECTOR`: bước phê duyệt có phân quyền tương ứng.
 - `HOUSEKEEP`: mục **Trả hàng về Kho** để gửi yêu cầu trả hàng.

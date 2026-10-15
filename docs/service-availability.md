@@ -38,9 +38,22 @@ cho cả hàng nội bộ. Script mẫu chỉ bổ sung giá các đồ dùng c�
 giá khác đã được nhập. Hàng nội bộ vẫn không công khai cho khách hàng.
 
 Lịch hiển thị phản ánh dữ liệu đặt hiện có, không giữ chỗ khi người dùng xem.
-Thay đổi này không sửa luồng tính tiền hoặc quy tắc chốt booking dịch vụ hiện có.
+Khi gửi đặt dịch vụ, backend kiểm tra lại công suất trong transaction trước khi
+lưu CONFIRMED; việc chỉ xem lịch không giữ chỗ. Hai yêu cầu cùng chỗ cuối được
+tuần tự hóa để chỉ một yêu cầu thành công. Luồng tính tiền khi USED giữ nguyên.
 Khi không tải được lịch hoặc thiếu cấu hình, giao diện hiển thị rõ trạng thái,
 không dùng số tồn để giả định sân/phòng còn trống.
+
+Điều phối dùng `GET /api/operations/restaurant/service-bookings?date=YYYY-MM-DD`
+và `POST /api/operations/restaurant/service-bookings/{id}/use`, cùng quyền điều phối
+hiện có. Danh sách bao gồm mọi nhóm dịch vụ; lọc nhóm và tìm phòng/booking trên
+giao diện. Ba trạng thái hiển thị là Đã đặt, Đã sử dụng và Đã hủy.
+Xem [sơ đồ luồng](kho-dich-vu-sequence.md) cho trình tự kiểm tra và ghi nhận.
+
+Tài nguyên và hàng tiêu hao dùng chính sách riêng, lưu trong database. Trong tab
+Dịch vụ, nút Cấu hình nhập công suất thực tế và bật/tắt trừ tồn khi sử dụng.
+Xem [quy tắc dữ liệu và hướng dẫn tích hợp](service-stock-policy.md). Báo cáo dịch
+vụ lấy lượt đã dùng, không lấy phiếu xuất kho để đếm số lần dùng sân/phòng.
 
 `seed_service_schedule_bookings.sql` tạo 5 lượt mẫu cho database riêng của Lê Huy,
 không chạy trên database chung. Ngày nạp mẫu, chọn 10:00–11:00 để thấy một sân

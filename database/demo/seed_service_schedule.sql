@@ -3,8 +3,8 @@
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
-INSERT dbo.CauHinhLichDichVu(maDichVu,congSuat,donViKhaDung,soPhutMoiLuot,cachTinh)
-SELECT s.id,s.capacity,s.unit,s.minutes,s.mode
+INSERT dbo.CauHinhLichDichVu(maDichVu,congSuat,donViKhaDung,soPhutMoiLuot,cachTinh,truTonKhiSuDung)
+SELECT s.id,s.capacity,s.unit,s.minutes,s.mode,CASE WHEN s.id IN (N'BREAKFAST',N'MAMREST',N'DECOR',N'MINIBAR') THEN 1 ELSE 0 END
 FROM (VALUES
     (N'BADMINTON',2,N'sân',60,N'Theo thời lượng'),
     (N'TENNIS',2,N'sân',60,N'Theo thời lượng'),
