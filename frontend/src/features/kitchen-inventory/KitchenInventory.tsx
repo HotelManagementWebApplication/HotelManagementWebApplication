@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
+import ConsumptionReports from "./ConsumptionReports";
 import StockReturnsPanel from "../stock-returns/StockReturnsPanel";
 import ProposalDialog from "./ProposalDialog";
 import StockNotifications, { type StockActivity } from "./StockNotifications";
@@ -1291,178 +1292,6 @@ function PricingScreen({
 /* ══════════════════════════════════════════════════════════
    REPORTS SCREEN
 ══════════════════════════════════════════════════════════ */
-function ReportsScreen({ items, transactions }: { items: InventoryItem[]; transactions: Transaction[] }) {
-  const [selectedDate, setSelectedDate] = useState(() => localDateValue());
-  const issueTransactions = transactions.filter(transaction => transaction.movementType === "ISSUE");
-  const selectedDayTransactions = issueTransactions.filter(transaction => localDateValue(new Date(transaction.occurredAt)) === selectedDate);
-  const selectedDayStart = new Date(`${selectedDate}T00:00:00`);
-  const weekStart = new Date(selectedDayStart);
-  weekStart.setDate(weekStart.getDate() - 6);
-  const exported = selectedDayTransactions;
-  const itemBySku = new Map(items.map(item => [item.sku, item]));
-  const categoryTotals = new Map<string, number>();
-  exported.forEach(transaction => {
-    const sku = transaction.item.match(/\(([^)]+)\)$/)?.[1] ?? transaction.item;
-    const category = itemBySku.get(sku)?.category ?? "Khác";
-    categoryTotals.set(category, (categoryTotals.get(category) ?? 0) + transaction.amount);
-  });
-  const totalConsumption = exported.reduce((sum, transaction) => sum + transaction.amount, 0);
-  const catConsumption = [...categoryTotals.entries()].map(([cat, val]) => ({
-    cat, val, pct: totalConsumption > 0 ? Math.round((val / totalConsumption) * 100) : 0,
-  }));
-  const itemTotals = new Map<string, { name: string; sku: string; qty: number; revenue: number }>();
-  exported.forEach(transaction => {
-    const sku = transaction.item.match(/\(([^)]+)\)$/)?.[1] ?? transaction.item;
-    const item = itemBySku.get(sku);
-    const current = itemTotals.get(sku) ?? { name: item?.name ?? transaction.item, sku, qty: 0, revenue: 0 };
-    itemTotals.set(sku, { ...current, qty: current.qty + Math.abs(transaction.qty), revenue: current.revenue + transaction.amount });
-  });
-  const topItems = [...itemTotals.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-  const trendData = Array.from({ length:7 }, (_, index) => {
-    const date = new Date(weekStart);
-    date.setDate(weekStart.getDate() + index);
-    const dateKey = localDateValue(date);
-    return {
-      day: date.toLocaleDateString("vi-VN", { day:"2-digit", month:"2-digit" }),
-      value: issueTransactions.filter(transaction => localDateValue(new Date(transaction.occurredAt)) === dateKey)
-        .reduce((sum, transaction) => sum + transaction.amount, 0),
-    };
-  });
-  const maxTrend = Math.max(...trendData.map(item => item.value), 1);
-  const average7Days = trendData.reduce((sum, day) => sum + day.value, 0) / 7;
-
-  const downloadReport = () => {
-    const cells = (value: string | number) => {
-      const safe = String(value).replace(/^[=+@-]/, "'$&").replaceAll('"', '""');
-      return `"${safe}"`;
-    };
-    const rows = [
-      ["Ngày", "Mặt hàng", "Mã dịch vụ", "Loại biến động", "Số lượng", "Giá trị tham chiếu", "Nhân viên", "Lý do"],
-      ...transactions.filter(transaction => localDateValue(new Date(transaction.occurredAt)) === selectedDate).map(transaction => [
-        selectedDate, transaction.item.replace(/ \(([^)]+)\)$/, ""), transaction.item.match(/\(([^)]+)\)$/)?.[1] ?? "",
-        transaction.movementType, transaction.qty, transaction.amount, transaction.staff, transaction.note ?? "",
-      ]),
-    ];
-    const csv = `\uFEFF${rows.map(row => row.map(cells).join(",")).join("\r\n")}`;
-    const url = URL.createObjectURL(new Blob([csv], { type:"text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `bao-cao-ton-kho-${selectedDate}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  return (
-    <div style={{ flex:1,overflowY:"auto",padding:"20px 24px",background:"#F8FAFC" }}>
-      <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16 }}>
-        <div>
-          <h2 style={{ fontSize:18,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Báo cáo tiêu thụ</h2>
-          <p style={{ fontSize:12,color:"#94A3B8" }}>Phân tích xu hướng tiêu thụ theo danh mục và mặt hàng</p>
-        </div>
-        <div style={{ display:"flex",gap:8 }}>
-          <label style={{ display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,
-            border:"1px solid #E2E8F0",background:"#FFF",cursor:"pointer",fontSize:12,color:"#475569" }}>
-            <Calendar size={12} style={{ color:"#94A3B8" }} />
-            <input aria-label="Ngày báo cáo" type="date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} style={{ border:0,background:"transparent",fontSize:12,color:"#475569" }} />
-          </label>
-          <button onClick={downloadReport} style={{ height:34,padding:"0 14px",borderRadius:8,border:"1px solid #E2E8F0",
-            background:"#FFF",color:"#475569",fontSize:12,cursor:"pointer",
-            display:"flex",alignItems:"center",gap:5 }}>
-            <Download size={12} /> Xuất báo cáo
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16 }}>
-        <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"18px 20px" }}>
-          <p style={{ fontSize:13,fontWeight:700,color:"#0F172A",marginBottom:14 }}>Tiêu thụ theo danh mục · {selectedDate}</p>
-          <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-            {catConsumption.map(c => {
-              const cfg = CAT_COLORS[c.cat] ?? { bg:"#F8FAFC",text:"#475569" };
-              return (
-                <div key={c.cat}>
-                  <div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}>
-                    <span style={{ fontSize:12,color:"#334155",fontWeight:500 }}>{CATEGORY_LABEL[c.cat] ?? c.cat}</span>
-                    <div style={{ display:"flex",gap:8 }}>
-                      <span style={{ fontSize:12,color:"#64748B" }}>{c.pct}%</span>
-                      <span style={{ fontSize:12,fontWeight:600,color:"#0F172A" }}>{fmtVNDFull(c.val)}</span>
-                    </div>
-                  </div>
-                  <div style={{ height:8,background:"#F1F5F9",borderRadius:99,overflow:"hidden" }}>
-                    <div style={{ height:"100%",width:`${c.pct}%`,borderRadius:99,background:cfg.text }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ marginTop:14,paddingTop:14,borderTop:"1px solid #F1F5F9",
-            display:"flex",justifyContent:"space-between" }}>
-            <span style={{ fontSize:12,color:"#64748B" }}>Tổng giá trị tham chiếu</span>
-            <span style={{ fontSize:13,fontWeight:800,color:"#0F172A",fontFamily:"'JetBrains Mono',monospace" }}>
-              {fmtVNDFull(totalConsumption)}
-            </span>
-          </div>
-        </div>
-
-        <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"18px 20px" }}>
-          <p style={{ fontSize:13,fontWeight:700,color:"#0F172A",marginBottom:14 }}>Xu hướng 7 ngày đến ngày đã chọn</p>
-          <div style={{ display:"flex",alignItems:"flex-end",gap:8,height:120 }}>
-            {trendData.map((d, index) => (
-              <div key={d.day} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4 }}>
-                <div style={{ width:"100%",borderRadius:"4px 4px 0 0",
-                  background:index === trendData.length - 1?"#0F172A":"#E2E8F0",
-                  height:`${Math.round((d.value / maxTrend) * 100)}%`,minHeight:4 }} />
-                <span style={{ fontSize:10,color:index === trendData.length - 1?"#0F172A":"#94A3B8",
-                  fontWeight:index === trendData.length - 1?700:400 }}>{d.day}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop:14,paddingTop:14,borderTop:"1px solid #F1F5F9",
-            display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-            <span style={{ fontSize:12,color:"#64748B" }}>Trung bình / ngày</span>
-            <span style={{ fontSize:13,fontWeight:700,color:"#64748B" }}>{fmtVNDFull(average7Days)}</span>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflowX:"auto",overflowY:"hidden" }}>
-        <div style={{ padding:"14px 18px",borderBottom:"1px solid #F1F5F9",
-          display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-          <p style={{ fontSize:13,fontWeight:700,color:"#0F172A" }}>Top mặt hàng xuất kho · {selectedDate}</p>
-          <TrendingUp size={15} style={{ color:"#16A34A" }} />
-        </div>
-        <table style={{ width:"100%",minWidth:620,borderCollapse:"collapse" }}>
-          <thead>
-            <tr style={{ background:"#F8FAFC" }}>
-              {["#","Mặt hàng","SKU","Số lượng","Giá trị tham chiếu"].map(h => (
-                <th key={h} style={{ padding:"9px 14px",fontSize:11,fontWeight:700,color:"#64748B",
-                  textAlign:"left",letterSpacing:"0.04em",textTransform:"uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {topItems.map((item, i) => {
-              return (
-                <tr key={item.sku} style={{ borderTop:"1px solid #F1F5F9",background:i%2===0?"#FFF":"#FAFAFA" }}>
-                  <td style={{ padding:"10px 14px",fontSize:13,fontWeight:700,color:"#94A3B8" }}>#{i+1}</td>
-                  <td style={{ padding:"10px 14px",fontSize:13,fontWeight:600,color:"#0F172A" }}>{item.name}</td>
-                  <td style={{ padding:"10px 14px",fontSize:11,color:"#94A3B8",fontFamily:"'JetBrains Mono',monospace" }}>{item.sku}</td>
-                  <td style={{ padding:"10px 14px",fontSize:12,fontWeight:600,color:"#0F172A" }}>{item.qty}</td>
-                  <td style={{ padding:"10px 14px",fontSize:12,fontWeight:700,color:"#0F172A" }}>{fmtVNDFull(item.revenue)}</td>
-                </tr>
-              );
-            })}
-            {topItems.length === 0 && <tr><td colSpan={5} style={{padding:28,textAlign:"center",fontSize:12,color:"#64748B"}}>Không có phiếu xuất sử dụng trong ngày đã chọn.</td></tr>}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════
-   MAIN COMPONENT
-══════════════════════════════════════════════════════════ */
 function RestaurantScreen({ bookings, date, loading, error, busyId, searchQuery, onDateChange, onRefresh, onMarkUsed }: {
   bookings: RestaurantBooking[];
   date: string;
@@ -1929,7 +1758,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
               userProfile={userProfile}
             />
           )}
-          {page === "reports"      && <ReportsScreen items={liveItems} transactions={liveTransactions} />}
+          {page === "reports"      && <ConsumptionReports items={liveItems.map(item=>({...item,isStock:isStockItem(item),categoryLabel:CATEGORY_LABEL[item.category]??item.category,unit:UNIT_LABEL[item.unit]??item.unit}))} transactions={liveTransactions} />}
         </div>
       </div>
       {movementDialog && <InventoryMovementModal items={catalogItems} initialServiceId={movementDialog.serviceId} initialType={movementDialog.type} initialReason={movementDialog.reason} onClose={() => setMovementDialog(null)} onSubmit={handleInventoryMovement} />}
