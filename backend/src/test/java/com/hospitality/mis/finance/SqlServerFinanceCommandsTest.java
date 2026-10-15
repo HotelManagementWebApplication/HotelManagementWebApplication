@@ -28,6 +28,7 @@ class SqlServerFinanceCommandsTest {
     long invoice;
     @BeforeEach void seed(){
         cleanup();
+        jdbc.update("INSERT NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) VALUES(N'FIN-next',N'Next cashier',N'unused',N'Kế toán',N'0999000101'),(N'FIN-owner',N'Next owner',N'unused',N'Lễ tân',N'0999000102')");
         long guest=jdbc.queryForObject("INSERT KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) OUTPUT INSERTED.maKhachLuuTru VALUES(N'Finance cutover',N'0909090782',N'FIN-GUEST')",Long.class);
         long reservation=jdbc.queryForObject("INSERT PhieuDatPhong(maKhachLuuTru) OUTPUT INSERTED.maPhieuDatPhong VALUES(?)",Long.class,guest);
         invoice=jdbc.queryForObject("INSERT HoaDon(maPhieuDatPhong) OUTPUT INSERTED.maHoaDon VALUES(?)",Long.class,reservation);
@@ -45,6 +46,7 @@ class SqlServerFinanceCommandsTest {
         jdbc.update("DELETE HoaDon WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE maKhachLuuTru IN(SELECT maKhachLuuTru FROM KhachLuuTru WHERE soDienThoai=N'0909090782'))");
         jdbc.update("DELETE PhieuDatPhong WHERE maKhachLuuTru IN(SELECT maKhachLuuTru FROM KhachLuuTru WHERE soDienThoai=N'0909090782')");
         jdbc.update("DELETE KhachLuuTru WHERE soDienThoai=N'0909090782'");SecurityContextHolder.clearContext();
+        jdbc.update("DELETE NhanVien WHERE maNhanVien IN(N'FIN-next',N'FIN-owner')");
     }
     @Test void handoverUsesNetUnhandedCashAndPostsCreditVarianceAndOrderedDenominations(){
         var request=new FinanceDtos.CashHandoverRequest("SHIFT-2",ACTOR,"FIN-next",money("940000"),"counted",List.of(new FinanceDtos.DenominationLine(money("500000"),1),new FinanceDtos.DenominationLine(money("220000"),2)));
@@ -62,6 +64,26 @@ class SqlServerFinanceCommandsTest {
         assertThat(next.expectedAmount()).isEqualByComparingTo("0");assertThat(next.shiftCode()).isEqualTo("AFTERNOON");
         assertThat(service.ledger("CASH_VARIANCE",null,null,0,20).items()).isEmpty();
     }
+    @Test void cashCustodyFlowsThroughRecipientExpensesAndSupplierSettlement(){
+        service.handover(new FinanceDtos.CashHandoverRequest("MORNING",ACTOR,"FIN-next",money("940000"),"short by 10000"),ACTOR,"FIN-custody-1");
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("FIN-next","n/a","ROLE_ACCOUNTING"));
+        assertThat(service.cashBalance().expectedAmount()).isEqualByComparingTo("940000");
+        service.recordExpense(new FinanceDtos.ExpenseRequest("cash supplies","supplies",money("40000"),com.hospitality.mis.entity.billing.PaymentMethod.CASH),"FIN-next","FIN-cash-expense");
+        service.recordExpense(new FinanceDtos.ExpenseRequest("bank supplies","supplies",money("40000"),com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),"FIN-next","FIN-bank-expense");
+        var supplier=service.recordDebt(new FinanceDtos.PartnerDebtRequest("Supplier","FIN-custody-debt",money("100000")),"FIN-next","FIN-custody-debt");
+        service.settleDebt(supplier.id(),new FinanceDtos.DebtSettlementRequest(money("100000"),"paid",com.hospitality.mis.entity.billing.PaymentMethod.CASH),"FIN-next","FIN-cash-settle");
+        assertThat(service.cashBalance().expectedAmount()).isEqualByComparingTo("800000");
+        var handed=service.handover(new FinanceDtos.CashHandoverRequest("AFTERNOON","FIN-next","FIN-owner",money("800000"),null),"FIN-next","FIN-custody-2");
+        assertThat(handed.expectedAmount()).isEqualByComparingTo("800000");assertThat(handed.variance()).isZero();
+        assertThat(service.cashBalance().expectedAmount()).isZero();
+        code(()->service.handover(new FinanceDtos.CashHandoverRequest("AFTERNOON","FIN-next","FIN-owner",BigDecimal.ZERO,null),"FIN-next","FIN-custody-duplicate"),"HANDOVER_ALREADY_RECORDED");
+    }
+    @Test void recipientAndChangedCashCountCannotBypassGuards(){
+        code(()->service.handover(new FinanceDtos.CashHandoverRequest("MORNING",ACTOR,"unknown",money("950000"),null),ACTOR,"FIN-bad-recipient"),"INVALID_HANDOVER_RECIPIENT");
+        var request=new FinanceDtos.CashHandoverRequest("MORNING",ACTOR,"FIN-next",money("950000"),null,List.of(new FinanceDtos.DenominationLine(money("950000"),1)));
+        service.handover(request,ACTOR,"FIN-count-key");
+        code(()->service.handover(new FinanceDtos.CashHandoverRequest("MORNING",ACTOR,"FIN-next",money("950000"),null,List.of(new FinanceDtos.DenominationLine(money("475000"),2))),ACTOR,"FIN-count-key"),"IDEMPOTENCY_KEY_CONFLICT");
+    }
     @Test void denominationFailureAndActorMismatchDoNotPersistHandoverOrClaim(){
         code(()->service.handover(new FinanceDtos.CashHandoverRequest("SHIFT-2",ACTOR,"FIN-next",money("100"),null,List.of(new FinanceDtos.DenominationLine(money("50"),1))),ACTOR,"FIN-bad-total"),"DENOMINATION_TOTAL_MISMATCH");
         code(()->service.handover(new FinanceDtos.CashHandoverRequest("SHIFT-2",ACTOR,"FIN-next",money("0"),null,Arrays.asList((FinanceDtos.DenominationLine)null)),ACTOR,"FIN-bad-line"),"INVALID_DENOMINATION");
@@ -69,48 +91,48 @@ class SqlServerFinanceCommandsTest {
         assertThat(service.listHandovers()).isEmpty();assertThat(count("BanGhiChongTrung","nguoiThucHien")).isZero();
     }
     @Test void expenseAppendsOneLedgerAndAuditAndDurableReplay(){
-        var request=new FinanceDtos.ExpenseRequest("FIN-category","description",money("125.50"));
+        var request=new FinanceDtos.ExpenseRequest("FIN-category","description",money("125.50"),com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER);
         var first=service.recordExpense(request,ACTOR,"FIN-expense");
         assertThat(service.recordExpense(request,ACTOR,"FIN-expense")).isEqualTo(first);
         assertThat(service.listExpenses()).containsExactly(first);
         assertThat(service.ledger("EXPENSE",null,null,0,20).items()).singleElement().satisfies(row->{assertThat(row.sourceId()).isEqualTo(first.id().toString());assertThat(row.direction()).isEqualTo("DEBIT");assertThat(row.amount()).isEqualByComparingTo("125.50");});
-        code(()->service.recordExpense(new FinanceDtos.ExpenseRequest("FIN-category","description",money("126")),ACTOR,"FIN-expense"),"IDEMPOTENCY_KEY_CONFLICT");
+        code(()->service.recordExpense(new FinanceDtos.ExpenseRequest("FIN-category","description",money("126"),com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-expense"),"IDEMPOTENCY_KEY_CONFLICT");
         assertThat(count("NhatKyKiemSoat","nguoiThucHien")).isEqualTo(1);
     }
     @Test void expenseStorageFailureRollsBackAllWritesIncludingDurableClaim(){
-        assertThatThrownBy(()->service.recordExpense(new FinanceDtos.ExpenseRequest("FIN-category","x".repeat(256),money("10")),ACTOR,"FIN-long")).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(()->service.recordExpense(new FinanceDtos.ExpenseRequest("FIN-category","x".repeat(256),money("10"),com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-long")).isInstanceOf(org.springframework.dao.DataAccessException.class);
         assertThat(service.listExpenses()).isEmpty();assertThat(count("ButToanTaiChinh","maNguoiThucHien")).isZero();assertThat(count("BanGhiChongTrung","nguoiThucHien")).isZero();
     }
     @Test void debtSettlementPostsHistoryAndLedgerWithOneAtomicBalance(){
         var debt=debt();
-        assertThat(service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("250"),"bank"),ACTOR,"FIN-settle1").status()).isEqualTo(PartnerDebt.DebtStatus.PARTIALLY_SETTLED);
-        var paid=service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("750"),"bank"),ACTOR,"FIN-settle2");
+        assertThat(service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("250"),"bank",com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-settle1").status()).isEqualTo(PartnerDebt.DebtStatus.PARTIALLY_SETTLED);
+        var paid=service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("750"),"bank",com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-settle2");
         assertThat(paid.settledAmount()).isEqualByComparingTo("1000");assertThat(paid.status()).isEqualTo(PartnerDebt.DebtStatus.SETTLED);
         assertThat(service.debtSettlementHistory(debt.id())).extracting(FinanceDtos.DebtSettlementResponse::amount).usingComparatorForType(BigDecimal::compareTo,BigDecimal.class).containsExactly(money("250"),money("750"));
         assertThat(service.ledger("PARTNER_DEBT_SETTLEMENT",null,null,0,20).items()).hasSize(2).allMatch(row->row.finalized()&&row.direction().equals("DEBIT"));
-        code(()->service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("1"),"bank"),ACTOR,"FIN-again"),"INVALID_DEBT_STATE");
+        code(()->service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("1"),"bank",com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-again"),"INVALID_DEBT_STATE");
         code(()->service.recordDebt(new FinanceDtos.PartnerDebtRequest("supplier","FIN-ref",money("50")),ACTOR,"FIN-duplicate"),"PARTNER_DEBT_EXISTS");
     }
     @Test void oversizedMissingAndVoidedSettlementFailWithoutPartialHistory(){
-        var debt=debt();code(()->service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("1001"),null),ACTOR,"FIN-over"),"INVALID_DEBT_SETTLEMENT");
-        code(()->service.settleDebt(Long.MAX_VALUE,new FinanceDtos.DebtSettlementRequest(money("1"),null),ACTOR,"FIN-missing"),"PARTNER_DEBT_NOT_FOUND");
+        var debt=debt();code(()->service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("1001"),null,com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-over"),"INVALID_DEBT_SETTLEMENT");
+        code(()->service.settleDebt(Long.MAX_VALUE,new FinanceDtos.DebtSettlementRequest(money("1"),null,com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-missing"),"PARTNER_DEBT_NOT_FOUND");
         jdbc.update("UPDATE CongNoDoiTac SET trangThai=N'Đã hủy' WHERE maCongNoDoiTac=?",debt.id());
-        code(()->service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("1"),null),ACTOR,"FIN-void"),"INVALID_DEBT_STATE");
+        code(()->service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("1"),null,com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-void"),"INVALID_DEBT_STATE");
         assertThat(service.debtSettlementHistory(debt.id())).isEmpty();
     }
     @Test void outerRollbackRemovesDebtExpenseHistoryLedgerAuditAndClaims(){
         var debt=debt();int ledgerBefore=count("ButToanTaiChinh","maNguoiThucHien");
-        new TransactionTemplate(manager).executeWithoutResult(tx->{service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("100"),"bank"),ACTOR,"FIN-rollback");service.recordExpense(new FinanceDtos.ExpenseRequest("category","expense",money("10")),ACTOR,"FIN-rollback-expense");tx.setRollbackOnly();});
+        new TransactionTemplate(manager).executeWithoutResult(tx->{service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("100"),"bank",com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-rollback");service.recordExpense(new FinanceDtos.ExpenseRequest("category","expense",money("10"),com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-rollback-expense");tx.setRollbackOnly();});
         assertThat(service.debtSettlementHistory(debt.id())).isEmpty();assertThat(service.listDebts()).singleElement().satisfies(row->assertThat(row.settledAmount()).isEqualByComparingTo("0"));
         assertThat(service.listExpenses()).isEmpty();assertThat(count("ButToanTaiChinh","maNguoiThucHien")).isEqualTo(ledgerBefore);
     }
     @Test void databaseFiltersPagingAndReconciliationKeepFinancialSigns(){
-        service.recordExpense(new FinanceDtos.ExpenseRequest("FIN-category","expense",money("10")),ACTOR,"FIN-page-expense");debt();
+        service.recordExpense(new FinanceDtos.ExpenseRequest("FIN-category","expense",money("10"),com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-page-expense");debt();
         var day=LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
         new TransactionTemplate(manager).executeWithoutResult(tx->ledger.record("REVENUE_RECOGNIZED","TEST","FIN-revenue",FinancialLedgerEntry.Direction.CREDIT,money("500"),ACTOR,null,null));
         assertThat(service.pageExpenses("FIN-category",Expense.ExpenseStatus.RECORDED,day,day,0,1).totalElements()).isEqualTo(1);
         assertThat(service.pageDebts("SUPP",PartnerDebt.DebtStatus.OPEN,day,day,0,1).totalElements()).isEqualTo(1);
-        var reconciliation=service.reconcile(day,day);
+        var reconciliation=service.reconcile(day.minusDays(1),day);
         assertThat(reconciliation.netTotal()).isEqualByComparingTo("950000");assertThat(reconciliation.outstandingPartnerDebt()).isEqualByComparingTo("1000");assertThat(reconciliation.recognizedRevenue()).isEqualByComparingTo("500");
         code(()->service.reconcile(day.plusDays(1),day),"INVALID_DATE_RANGE");
     }
@@ -121,11 +143,11 @@ class SqlServerFinanceCommandsTest {
         assertThat(jdbc.queryForObject("SELECT maNguoiThucHien FROM ButToanTaiChinh WHERE maNguon=N'FIN-SYSTEM'",String.class)).isEqualTo("SYSTEM");
     }
     @Test void concurrentSettlementCannotExceedTheOutstandingBalance()throws Exception{
-        var debt=debt();var results=concurrent(index->{try{service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("700"),null),ACTOR,"FIN-race-"+index);return "SUCCESS";}catch(DomainException error){return error.getCode();}});
+        var debt=debt();var results=concurrent(index->{try{service.settleDebt(debt.id(),new FinanceDtos.DebtSettlementRequest(money("700"),null,com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-race-"+index);return "SUCCESS";}catch(DomainException error){return error.getCode();}});
         assertThat(results).containsExactlyInAnyOrder("SUCCESS","INVALID_DEBT_SETTLEMENT");assertThat(service.debtSettlementHistory(debt.id())).hasSize(1);
     }
     @Test void concurrentHandoversDoNotCountTheSameCashTwice()throws Exception{
-        concurrent(index->service.handover(new FinanceDtos.CashHandoverRequest("SHIFT-"+index,ACTOR,"FIN-next",BigDecimal.ZERO,null),ACTOR,"FIN-hand-race-"+index).id().toString());
+        concurrent(index->service.handover(new FinanceDtos.CashHandoverRequest("SHIFT-"+index,ACTOR,"FIN-next",BigDecimal.ZERO,"race reconciliation"),ACTOR,"FIN-hand-race-"+index).id().toString());
         assertThat(service.listHandovers()).hasSize(2);
         assertThat(service.listHandovers().stream().map(FinanceDtos.CashHandoverResponse::expectedAmount).reduce(BigDecimal.ZERO,BigDecimal::add)).isEqualByComparingTo("950000");
     }

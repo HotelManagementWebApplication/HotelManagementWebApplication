@@ -140,7 +140,7 @@ public final class VietnameseCodeConverters {
                 Map.entry("MANAGER", "Quản lý"), Map.entry("FRONT_DESK", "Lễ tân"),
                 Map.entry("ACCOUNTING", "Kế toán"), Map.entry("HOUSEKEEPING", "Buồng phòng"),
                 Map.entry("TECHNICAL", "Kỹ thuật"), Map.entry("KITCHEN", "Nhà bếp"),
-                Map.entry("STAFF", "Nhân viên"), Map.entry("HR", "Nhân sự"))); }
+                Map.entry("HR", "Nhân sự"))); }
         @Override public String convertToDatabaseColumn(String value) { return mapping.convertToDatabaseColumn(value); }
         @Override public String convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
     }
@@ -153,6 +153,7 @@ public final class VietnameseCodeConverters {
                 "laundry", "Giặt ủi",
                 "other", "Khác",
                 "recreation", "Giải trí",
+                "room-amenity", "Vật dụng phòng",
                 "spa", "Spa",
                 "transport", "Đưa đón"));
         @Override public String convertToDatabaseColumn(String value) { return mapping.convertToDatabaseColumn(value); }
@@ -166,12 +167,17 @@ public final class VietnameseCodeConverters {
      * không cam kết trả lại đúng bí danh mà người gọi đã gửi.
      */
     @Converter public static final class ServiceUnitConverter implements AttributeConverter<String, String> {
-        private static final Map<String, String> API_ALIASES = Map.of(
-                "BOTTLE", "chai", "CHAI", "chai", "UNIT", "đơn vị",
-                "TIME", "lần", "LẦN", "lần", "set", "bộ", "SET", "bộ");
+        private static final Map<String, String> API_ALIASES = Map.ofEntries(
+                Map.entry("BOTTLE", "chai"), Map.entry("CHAI", "chai"),
+                Map.entry("UNIT", "đơn vị"), Map.entry("TIME", "lần"),
+                Map.entry("LẦN", "lần"), Map.entry("set", "bộ"),
+                Map.entry("SET", "bộ"), Map.entry("PCS", "cái"),
+                Map.entry("piece", "cái"), Map.entry("Pack", "gói"),
+                Map.entry("PACK", "gói"), Map.entry("Roll", "cuộn"),
+                Map.entry("ROLL", "cuộn"));
         private static final java.util.Set<String> DATABASE_VALUES = java.util.Set.of(
                 "bộ", "lần", "suất", "món", "đêm", "lượt", "chuyến", "khách",
-                "khách/ngày", "giờ", "ngày", "chai", "đơn vị");
+                "khách/ngày", "giờ", "ngày", "chai", "đơn vị", "cái", "gói", "cuộn", "tuýp");
 
         @Override public String convertToDatabaseColumn(String value) {
             if (value == null) return null;

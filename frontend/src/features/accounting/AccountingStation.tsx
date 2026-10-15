@@ -1,22 +1,25 @@
 import { useEffect, useState } from "react";
-import CashDenominationDialog from "./CashDenominationDialog";
-import { kitchenAccountingApi, newKitchenIdempotencyKey } from "../../shared/api/kitchenAccounting";
+import { kitchenAccountingApi } from "../../shared/api/kitchenAccounting";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { authApi } from "../../shared/api/auth";
 import { apiErrorMessage, ApiError } from "../../shared/api/client";
 import { EmployeeProfileDropdown } from "../../shared/components/EmployeeProfileDropdown";
 import type { OtaReconciliation, VatInvoice } from "../../shared/types/enterprise";
-import type { CashHandover, CashDenomination, LedgerPayment, PaymentMethod, PaymentPage, Reconciliation, PartnerDebt } from "../../shared/types/kitchenAccounting";
+import type { CashHandover, LedgerPayment, PaymentMethod, PaymentPage, Reconciliation, PartnerDebt } from "../../shared/types/kitchenAccounting";
 import { employeeRoleLabel } from "../../shared/types/api";
 import type { EmployeeProfileDto } from "../../shared/types/api";
-import { localDateValue } from "../../shared/utils/localDate";
+import { formatDateVi } from "../../shared/utils/localDate";
+import { businessDateValue } from "./accountingLogic";
+import CashHandoverPanel from "./CashHandoverPanel";
+import OtaReconciliationScreen from "./OtaReconciliationScreen";
+import FinanceOperations from "./FinanceOperations";
+import InvoiceOperations from "./InvoiceOperations";
+import { compactActionStyle } from "./accountingUi";
 import { formatVnd, formatVndNumber } from "../../shared/utils/money";
 import {
-  LayoutDashboard, ConciergeBell, CalendarDays, Sparkles, UtensilsCrossed,
-  Wrench, FileText, BarChart2, Users, Settings,
-  Search, Bell, ChevronDown, Download, Printer,
+  CalendarDays, BarChart2, Search, ChevronDown, Download, Printer,
   DollarSign, CreditCard, Building2, RefreshCcw, AlertCircle,
-  CheckCircle2, ArrowUpRight, ChevronLeft, ChevronRight, LogOut, Sun, Moon,
+  ArrowUpRight, ChevronLeft, ChevronRight,
 } from "lucide-react";
 
 
@@ -24,15 +27,12 @@ import {
    TYPES
 ══════════════════════════════════════════════════════════ */
 type MainTab = "handover" | "ledger" | "ota" | "vat" | "debt";
-type LedgerTab = "all" | "cash" | "card" | "vietqr" | "momo" | "other";
-type PayStatus = "paid" | "pending" | "refunded" | "failed" | "cancelled";
-type OtaChannel = "agoda" | "booking" | "expedia" | "airbnb" | "direct";
-
+type LedgerTab = "all" | "cash" | "card" | "vietqr";
+type PayStatus = "paid" | "refunded" | "failed" | "voided";
 interface PaymentLedgerEntry {
   id: string;
   invoiceId: string;
   reservationId: number | "—";
-  guest: string;
   description: string;
   amount: number;
   method: string;
@@ -40,19 +40,6 @@ interface PaymentLedgerEntry {
   time: string;
   status: PayStatus;
   ledgerTab: LedgerTab[];
-}
-interface OtaRow {
-  channel: OtaChannel; bookings: number; revenue: number;
-  commission: number; net: number; status: "reconciled"|"pending"|"dispute";
-  reservationIds?: number[];
-}
-interface CashRow {
-  denom: string;
-  opening: number;
-  received: number;
-  paidOut: number;
-  expected: number;
-  actual: number;
 }
 interface VatRow {
   invoice: string;
@@ -78,14 +65,6 @@ interface VatRow {
 const fmtMoney = formatVnd;
 const fmtVND = formatVndNumber;
 
-const SIDEBAR_NAV: { id:MainTab; label:string; Icon:React.ElementType }[] = [
-  { id:"handover", label:"Tổng quan & Bàn giao ca", Icon:LayoutDashboard },
-  { id:"ledger",   label:"Sổ thanh toán",            Icon:CreditCard },
-  { id:"vat",      label:"Hóa đơn & Biên lai",       Icon:FileText },
-  { id:"ota",      label:"Đối soát kênh bán",        Icon:RefreshCcw },
-  { id:"debt",     label:"Công nợ đối tác",          Icon:Building2 },
-];
-
 const METHOD_CFG: Record<string,{bg:string;text:string;label:string}> = {
   visa:    { bg:"#DBEAFE",text:"#1D4ED8",label:"VISA" },
   card:    { bg:"#FFE4E6",text:"#BE123C",label:"Thẻ" },
@@ -95,244 +74,7 @@ const METHOD_CFG: Record<string,{bg:string;text:string;label:string}> = {
   other:   { bg:"#F1F5F9",text:"#475569",label:"Khác" },
 };
 
-const OTA_CFG: Record<OtaChannel,{label:string;color:string;bg:string;emoji:string}> = {
-  agoda:   { label:"Agoda",       color:"#D97706",bg:"#FEF3C7",emoji:"🔴" },
-  booking: { label:"Booking.com", color:"#0369A1",bg:"#F0F9FF",emoji:"🔵" },
-  expedia: { label:"Expedia",     color:"#1D4ED8",bg:"#DBEAFE",emoji:"✈️" },
-  airbnb:  { label:"Airbnb",      color:"#DC2626",bg:"#FFE4E6",emoji:"🏠" },
-  direct:  { label:"Trực tiếp",      color:"#166534",bg:"#DCFCE7",emoji:"🏨" },
-};
-
-/* ══════════════════════════════════════════════════════════
-   CASH HANDOVER TABLE
-══════════════════════════════════════════════════════════ */
-function CashHandoverPanel({
-  cashRows = [],
-  handoverDate,
-  fromStaff,
-  toStaff,
-  onSubmit,
-  submitting = false,
-}: {
-  cashRows?: CashRow[];
-  handoverDate?: string;
-  fromStaff?: string;
-  toStaff?: string;
-  onSubmit?: (payload: { actualAmount: number; toActor: string; denominations: CashDenomination[] }) => Promise<void>;
-  submitting?: boolean;
-}) {
-  const [confirmed, setConfirmed] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
-  const [actualAmount, setActualAmount] = useState("");
-  const [nextActor, setNextActor] = useState("");
-  const [denominations, setDenominations] = useState<CashDenomination[]>([]);
-  const [denominationDialogOpen, setDenominationDialogOpen] = useState(false);
-  const totalExpected = cashRows.reduce((s,r) => s + r.expected, 0);
-  const totalActual   = cashRows.reduce((s,r) => s + r.actual, 0);
-  const variance      = totalActual - totalExpected;
-
-  const submitHandover = async () => {
-    if (!onSubmit) return;
-    const amount = Number(actualAmount.replace(/,/g, "").trim());
-    if (!Number.isFinite(amount) || amount < 0) {
-      window.alert("Vui lòng nhập số tiền bàn giao hợp lệ.");
-      return;
-    }
-    if (!nextActor.trim()) {
-      window.alert("Vui lòng nhập mã nhân viên nhận ca.");
-      return;
-    }
-    if (denominations.length > 0) {
-      const denominationTotal = denominations.reduce((sum, line) => sum + line.denomination * line.quantity, 0);
-      if (denominationTotal !== amount) {
-        window.alert("Tổng chi tiết mệnh giá phải bằng số tiền bàn giao.");
-        return;
-      }
-    }
-    try {
-      await onSubmit({ actualAmount: amount, toActor: nextActor.trim(), denominations });
-      setConfirmed(true);
-      setFormOpen(false);
-    } catch (error) {
-      window.alert("Không thể ghi nhận bàn giao. Vui lòng thử lại.");
-    }
-  };
-
-  return (
-    <div style={{ flex:"0 0 50%",minWidth:0,display:"flex",flexDirection:"column",
-      background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden" }}>
-      {/* Header */}
-      <div style={{ padding:"16px 18px",borderBottom:"1px solid #E2E8F0",
-        display:"flex",alignItems:"flex-start",justifyContent:"space-between" }}>
-        <div>
-          <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Bàn giao két tiền theo ca</p>
-          <p style={{ fontSize:11,color:"#94A3B8" }}>Đối soát số dư giữa các ca làm việc</p>
-        </div>
-        <button style={{ display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,
-          border:"1px solid #E2E8F0",background:"#F8FAFC",color:"#334155",fontSize:11,
-          fontWeight:600,cursor:"pointer",whiteSpace:"nowrap" }}>
-          <Printer size={12} /> In biên bản bàn giao
-        </button>
-      </div>
-
-      {/* Shift timeline */}
-      <div style={{ padding:"14px 18px",borderBottom:"1px solid #F1F5F9",
-        display:"flex",alignItems:"center",gap:12 }}>
-        {/* Morning shift */}
-        <div style={{ flex:1,background:"#FFF7ED",borderRadius:10,padding:"10px 12px",
-          display:"flex",alignItems:"center",gap:8 }}>
-          <div style={{ width:34,height:34,borderRadius:99,background:"#FEF9C3",
-            display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
-            <Sun size={16} style={{ color:"#F59E0B" }} />
-          </div>
-          <div>
-            <p style={{ fontSize:11,fontWeight:700,color:"#0F172A" }}>Ca trước</p>
-            <p style={{ fontSize:11,color:"#64748B" }}>{fromStaff || "Nhân viên ca trước"}</p>
-            <p style={{ fontSize:10,color:"#94A3B8" }}>06:00 – 14:00</p>
-          </div>
-        </div>
-        {/* Arrow */}
-        <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
-          <div style={{ fontSize:16,color:"#94A3B8" }}>→</div>
-          <div style={{ background:"#F8FAFC",borderRadius:6,border:"1px solid #E2E8F0",
-            padding:"3px 8px",textAlign:"center" }}>
-            <p style={{ fontSize:10,fontWeight:700,color:"#0F172A" }}>Bàn giao</p>
-            <p style={{ fontSize:9,color:"#94A3B8" }}>{handoverDate || new Date().toLocaleDateString("vi-VN")}</p>
-            <p style={{ fontSize:10,fontWeight:700,color:"#0F172A" }}>14:00</p>
-          </div>
-          <div style={{ fontSize:16,color:"#94A3B8" }}>→</div>
-        </div>
-        {/* Evening shift */}
-        <div style={{ flex:1,background:"#EFF6FF",borderRadius:10,padding:"10px 12px",
-          display:"flex",alignItems:"center",gap:8 }}>
-          <div style={{ width:34,height:34,borderRadius:99,background:"#DBEAFE",
-            display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
-            <Moon size={16} style={{ color:"#2563EB" }} />
-          </div>
-          <div>
-            <p style={{ fontSize:11,fontWeight:700,color:"#0F172A" }}>Ca nhận</p>
-            <p style={{ fontSize:11,color:"#64748B" }}>{toStaff || "Nhân viên nhận ca"}</p>
-            <p style={{ fontSize:10,color:"#94A3B8" }}>14:00 – 22:00</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div style={{ flex:1,overflowY:"auto" }}>
-        <table style={{ width:"100%",borderCollapse:"collapse" }}>
-          <thead>
-            <tr style={{ background:"#F8FAFC" }}>
-              {["Mệnh giá","Đầu ca","Thu vào","Chi ra","Dự kiến","Thực đếm","Chênh lệch"].map(h => (
-                <th key={h} style={{ padding:"8px 12px",fontSize:10,fontWeight:700,color:"#64748B",
-                  textAlign:h==="Denomination"?"left":"right",letterSpacing:"0.04em",
-                  textTransform:"uppercase",whiteSpace:"nowrap",borderBottom:"1px solid #E2E8F0" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {cashRows.length === 0 && (
-              <tr>
-                <td colSpan={7} style={{ padding:"28px 12px",textAlign:"center",fontSize:12,color:"#94A3B8" }}>
-                  Chưa có dữ liệu bàn giao két.
-                </td>
-              </tr>
-            )}
-            {cashRows.map((r,i) => {
-              const v = r.actual - r.expected;
-              return (
-                <tr key={r.denom} style={{ borderBottom:"1px solid #F8FAFC",background:i%2===0?"#FFF":"#FAFAFA" }}>
-                  <td style={{ padding:"7px 12px",fontSize:12,fontWeight:600,color:"#0F172A",
-                    fontFamily:"'JetBrains Mono',monospace" }}>{r.denom}</td>
-                  {[r.opening,r.received,r.paidOut].map((val,j) => (
-                    <td key={j} style={{ padding:"7px 12px",fontSize:12,color:"#475569",textAlign:"right" }}>{val}</td>
-                  ))}
-                  {[r.expected,r.actual].map((val,j) => (
-                    <td key={j} style={{ padding:"7px 12px",fontSize:12,fontWeight:600,color:"#0F172A",
-                      textAlign:"right",fontFamily:"'JetBrains Mono',monospace" }}>{fmtVND(val)}</td>
-                  ))}
-                  <td style={{ padding:"7px 12px",textAlign:"right" }}>
-                    <span style={{ fontSize:12,fontWeight:700,
-                      color:v===0?"#16A34A":v>0?"#2563EB":"#DC2626" }}>
-                      {v === 0 ? "0" : v > 0 ? `+${fmtVND(v)}` : fmtVND(v)}
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-            {/* Total row */}
-            <tr style={{ background:"#F8FAFC",borderTop:"2px solid #E2E8F0" }}>
-              <td style={{ padding:"9px 12px",fontSize:12,fontWeight:800,color:"#0F172A" }}>Tổng</td>
-              <td style={{ padding:"9px 12px",textAlign:"right",fontSize:12,color:"#94A3B8" }}>-</td>
-              <td style={{ padding:"9px 12px",textAlign:"right",fontSize:12,color:"#94A3B8" }}>-</td>
-              <td style={{ padding:"9px 12px",textAlign:"right",fontSize:12,color:"#94A3B8" }}>-</td>
-              <td style={{ padding:"9px 12px",fontSize:12,fontWeight:800,color:"#0F172A",textAlign:"right",
-                fontFamily:"'JetBrains Mono',monospace" }}>{fmtVND(totalExpected)}</td>
-              <td style={{ padding:"9px 12px",fontSize:12,fontWeight:800,color:"#0F172A",textAlign:"right",
-                fontFamily:"'JetBrains Mono',monospace" }}>{fmtVND(totalActual)}</td>
-              <td style={{ padding:"9px 12px",textAlign:"right" }}>
-                <span style={{ fontSize:13,fontWeight:800,color:variance===0?"#16A34A":variance>0?"#2563EB":"#DC2626" }}>{variance === 0 ? "0" : `${variance > 0 ? "+" : ""}${fmtVND(variance)}`}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Footer */}
-      <div style={{ padding:"12px 18px",borderTop:"1px solid #E2E8F0",
-        display:"flex",alignItems:"center",gap:12 }}>
-        <div style={{ flex:1,display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
-          borderRadius:8,background:variance===0?"#DCFCE7":"#FEF3C7",border:`1px solid ${variance===0?"#86EFAC":"#FCD34D"}` }}>
-          <CheckCircle2 size={16} style={{ color:variance===0?"#16A34A":"#D97706",flexShrink:0 }} />
-          <div>
-            <p style={{ fontSize:12,fontWeight:700,color:variance===0?"#166534":"#92400E" }}>{variance===0?"Bàn giao cân bằng":"Cần đối soát chênh lệch"}</p>
-            <p style={{ fontSize:11,color:variance===0?"#15803D":"#B45309" }}>Chênh lệch: {fmtVND(variance)}{variance===0?" (không sai lệch)":""}</p>
-          </div>
-        </div>
-        <button onClick={() => { setActualAmount(String(totalActual)); setFormOpen(open => !open); setConfirmed(false); }}
-          style={{ padding:"9px 18px",borderRadius:8,border:"none",cursor:"pointer",
-            background:confirmed?"#15803D":"#16A34A",color:"#FFF",fontSize:12,fontWeight:700,
-            display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap" }}>
-          <CheckCircle2 size={13} />
-          {confirmed ? "Đã ghi nhận ✓" : formOpen ? "Đóng biểu mẫu" : "Ghi nhận bàn giao"}
-        </button>
-      </div>
-      {formOpen && (
-        <div style={{ padding:"12px 18px",borderTop:"1px solid #E2E8F0",background:"#F8FAFC" }}>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
-            <label style={{ fontSize:11,color:"#475569" }}>Số tiền thực tế
-              <input value={actualAmount} onChange={event => setActualAmount(event.target.value)} inputMode="decimal" style={{ display:"block",width:"100%",height:32,marginTop:4,padding:"0 8px",border:"1px solid #CBD5E1",borderRadius:7,boxSizing:"border-box" }} />
-            </label>
-            <label style={{ fontSize:11,color:"#475569" }}>Mã nhân viên nhận ca
-              <input value={nextActor} onChange={event => setNextActor(event.target.value)} placeholder="Ví dụ: FRONTDESK" style={{ display:"block",width:"100%",height:32,marginTop:4,padding:"0 8px",border:"1px solid #CBD5E1",borderRadius:7,boxSizing:"border-box" }} />
-            </label>
-          </div>
-          <div style={{ display:"block",fontSize:11,color:"#475569",marginTop:9 }}>
-            <span id="cash-denomination-label">Chi tiết mệnh giá</span>
-            <button type="button" aria-labelledby="cash-denomination-label" aria-haspopup="dialog" onClick={() => setDenominationDialogOpen(true)}
-              style={{ display:"block",width:"100%",minHeight:32,marginTop:4,padding:"7px 8px",border:"1px solid #CBD5E1",borderRadius:7,boxSizing:"border-box",background:"#FFF",textAlign:"left",cursor:"pointer",color:denominations.length?"#334155":"#94A3B8" }}>
-              {denominations.length ? denominations.map(line => `${fmtVND(line.denomination)} đ × ${line.quantity}`).join("; ") : "Nhấn để kiểm đếm mệnh giá tiền mặt"}
-            </button>
-          </div>
-          {denominationDialogOpen && <CashDenominationDialog value={denominations}
-            onClose={() => setDenominationDialogOpen(false)}
-            onConfirm={lines => {
-              setDenominations(lines);
-              setActualAmount(String(lines.reduce((sum, line) => sum + line.denomination * line.quantity, 0)));
-              setDenominationDialogOpen(false);
-            }} />}
-          <button type="button" onClick={() => void submitHandover()} disabled={submitting} style={{ marginTop:10,height:32,padding:"0 14px",border:0,borderRadius:7,background:"#0F172A",color:"#FFF",fontSize:11,fontWeight:700,opacity:submitting?0.6:1 }}>
-            {submitting ? "Đang lưu bàn giao…" : "Lưu bàn giao"}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════
-   INVOICE & PAYMENT LEDGER PANEL
-══════════════════════════════════════════════════════════ */
-function LedgerPanel({ fillHeight = false }: { fillHeight?: boolean }) {
+function LedgerPanel({ fillHeight = false, date = businessDateValue(), search = "", refresh = 0 }: { fillHeight?: boolean; date?: string; search?: string; refresh?: number }) {
   const [lTab, setLTab] = useState<LedgerTab>("all");
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
@@ -343,9 +85,10 @@ function LedgerPanel({ fillHeight = false }: { fillHeight?: boolean }) {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const PER_PAGE = 10;
-  const currentDateLabel = new Date().toLocaleDateString("vi-VN");
-  const today = localDateValue();
-  const methods: Record<Exclude<LedgerTab, "all">, PaymentMethod> = { cash:"CASH", card:"CARD", vietqr:"BANK_TRANSFER", momo:"MOMO", other:"OTHER" };
+  const currentDateLabel = formatDateVi(date);
+  const today = date;
+  useEffect(()=>{setSearchQuery(search);setPage(1);},[search,date]);
+  const methods: Record<Exclude<LedgerTab, "all">, PaymentMethod> = { cash:"CASH", card:"CARD", vietqr:"BANK_TRANSFER" };
   const method = lTab === "all" ? undefined : methods[lTab];
 
   useEffect(() => {
@@ -363,23 +106,21 @@ function LedgerPanel({ fillHeight = false }: { fillHeight?: boolean }) {
       .catch(cause => { if (active) setError(apiErrorMessage(cause,"Không thể tải giao dịch thanh toán.")); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [page, method, searchQuery, today, reload]);
+  }, [page, method, searchQuery, today, reload, refresh]);
 
   const toLedgerRow = (payment: LedgerPayment): PaymentLedgerEntry => {
       const methodType: LedgerTab = payment.method === "CASH" ? "cash"
         : payment.method === "CARD" ? "card"
         : payment.method === "BANK_TRANSFER" ? "vietqr"
-        : payment.method === "MOMO" ? "momo" : "other";
+        : "vietqr";
       const status: PayStatus = payment.status === "COMPLETED"
         ? payment.type === "REFUND" ? "refunded" : "paid"
-        : payment.status === "PENDING" ? "pending"
-        : payment.status === "CANCELLED" ? "cancelled" : "failed";
+        : payment.status === "VOIDED" ? "voided" : "failed";
       const occurredAt = new Date(payment.occurred_at);
       return {
         id: `PAY-${payment.id}`,
         invoiceId: `INV-${payment.invoice_id}`,
         reservationId: payment.reservation_id,
-        guest: `Đặt phòng #${payment.reservation_id}`,
         description: payment.type === "REFUND" ? "Hoàn tiền" : payment.service_total > 0 ? "Phòng & dịch vụ" : "Tiền phòng",
         amount: payment.amount,
         method: payment.method,
@@ -400,16 +141,13 @@ function LedgerPanel({ fillHeight = false }: { fillHeight?: boolean }) {
     { id:"cash",    label:"Tiền mặt",       count:methodCounts.CASH ?? 0 },
     { id:"card",    label:"Thẻ",            count:methodCounts.CARD ?? 0 },
     { id:"vietqr",  label:"Chuyển khoản",  count:methodCounts.BANK_TRANSFER ?? 0 },
-    { id:"momo",    label:"Ví MoMo",       count:methodCounts.MOMO ?? 0 },
-    { id:"other",   label:"Khác",          count:methodCounts.OTHER ?? 0 },
   ];
 
   const STATUS_CFG: Record<PayStatus,{label:string;bg:string;text:string;dot:string}> = {
     paid:     { label:"Đã thanh toán",     bg:"#DCFCE7",text:"#166534",dot:"#16A34A" },
-    pending:  { label:"Chờ thanh toán",  bg:"#DBEAFE",text:"#1D4ED8",dot:"#3B82F6" },
     refunded: { label:"Đã hoàn tiền", bg:"#FEF9C3",text:"#92400E",dot:"#F59E0B" },
     failed:   { label:"Thất bại", bg:"#FFE4E6",text:"#BE123C",dot:"#E11D48" },
-    cancelled:{ label:"Đã hủy", bg:"#F1F5F9",text:"#64748B",dot:"#94A3B8" },
+    voided:   { label:"Đã hủy", bg:"#F1F5F9",text:"#64748B",dot:"#94A3B8" },
   };
 
   const exportRows = async () => {
@@ -442,7 +180,7 @@ function LedgerPanel({ fillHeight = false }: { fillHeight?: boolean }) {
     const url = URL.createObjectURL(new Blob([`\uFEFF${rows.join("\r\n")}`], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `payments-${localDateValue()}.csv`;
+    link.download = `payments-${businessDateValue()}.csv`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (cause) { setExportError(apiErrorMessage(cause,"Không thể xuất giao dịch CSV.")); }
@@ -487,7 +225,7 @@ function LedgerPanel({ fillHeight = false }: { fillHeight?: boolean }) {
             background:"#F8FAFC",fontSize:11,outline:"none",cursor:"pointer",appearance:"none" }}>
             <option value="all">Tất cả phương thức</option>
             <option value="cash">Tiền mặt</option><option value="card">Thẻ</option>
-            <option value="vietqr">Chuyển khoản</option><option value="momo">Ví MoMo</option><option value="other">Khác</option>
+            <option value="vietqr">Chuyển khoản</option>
           </select>
           <ChevronDown size={10} style={{ position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
         </div>
@@ -511,7 +249,7 @@ function LedgerPanel({ fillHeight = false }: { fillHeight?: boolean }) {
         })}
       </div>
 
-      {error && <div role="alert" style={{padding:"12px 18px",color:"#B91C1C"}}>{error} <button onClick={()=>setReload(value=>value+1)}>Tải lại giao dịch</button></div>}
+      {error && <div role="alert" style={{padding:"12px 18px",color:"#B91C1C"}}>{error} <button type="button" style={compactActionStyle} onClick={()=>setReload(value=>value+1)}>Tải lại giao dịch</button></div>}
       {exportError && <div role="alert" style={{padding:"12px 18px",color:"#B91C1C"}}>{exportError}</div>}
       {/* Table */}
       <div style={{ flex:1,overflowY:"auto" }}>
@@ -598,126 +336,15 @@ function LedgerPanel({ fillHeight = false }: { fillHeight?: boolean }) {
 /* ══════════════════════════════════════════════════════════
    OTA RECONCILIATION SCREEN
 ══════════════════════════════════════════════════════════ */
-function OtaScreen({ otaData = [], onReconcile }: { otaData?: OtaRow[]; onReconcile?: (row: OtaRow) => void }) {
-  const STATUS_CFG = {
-    reconciled: { label:"Đã đối soát",bg:"#DCFCE7",text:"#166534",dot:"#16A34A" },
-    pending:    { label:"Đang chờ",   bg:"#FEF9C3",text:"#92400E",dot:"#F59E0B" },
-    dispute:    { label:"Cần xử lý",   bg:"#FFE4E6",text:"#BE123C",dot:"#EF4444" },
-  };
-  const totalRevenue    = otaData.reduce((s,r) => s+r.revenue, 0);
-  const totalCommission = otaData.reduce((s,r) => s+r.commission, 0);
-  const totalNet        = otaData.reduce((s,r) => s+r.net, 0);
-
-  return (
-    <div style={{ padding:"20px 22px",flex:1,overflowY:"auto" }}>
-      <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16 }}>
-        <div>
-          <h2 style={{ fontSize:18,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Đối soát kênh bán</h2>
-          <p style={{ fontSize:12,color:"#94A3B8" }}>Đối soát doanh thu từ các kênh đặt phòng theo thời gian thực</p>
-        </div>
-        <button style={{ display:"flex",alignItems:"center",gap:5,padding:"7px 14px",borderRadius:8,
-          border:"1px solid #E2E8F0",background:"#FFF",color:"#334155",fontSize:12,fontWeight:600,cursor:"pointer" }}>
-          <Download size={12} /> Xuất báo cáo
-        </button>
-      </div>
-
-      {/* Summary cards */}
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16 }}>
-        {[
-          { label:"Tổng doanh thu kênh",  val:fmtMoney(totalRevenue),    color:"#0F172A" },
-          { label:"Tổng hoa hồng",   val:fmtMoney(totalCommission), color:"#DC2626" },
-          { label:"Doanh thu ròng",        val:fmtMoney(totalNet),        color:"#16A34A" },
-        ].map(c => (
-          <div key={c.label} style={{ background:"#FFF",borderRadius:10,border:"1px solid #E2E8F0",padding:"14px 18px" }}>
-            <p style={{ fontSize:11,color:"#64748B",marginBottom:6 }}>{c.label}</p>
-            <p style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:800,color:c.color }}>{c.val}</p>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden" }}>
-        <table style={{ width:"100%",borderCollapse:"collapse" }}>
-          <thead>
-            <tr style={{ background:"#F8FAFC" }}>
-              {["Kênh bán","Đặt phòng","Doanh thu gộp","Hoa hồng","Doanh thu ròng","Trạng thái","Thao tác"].map(h => (
-                <th key={h} style={{ padding:"10px 14px",fontSize:11,fontWeight:700,color:"#64748B",
-                  textAlign:"left",letterSpacing:"0.04em",textTransform:"uppercase",whiteSpace:"nowrap" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {otaData.length === 0 && (
-              <tr>
-                <td colSpan={7} style={{ padding:"32px 14px",textAlign:"center",fontSize:12,color:"#94A3B8" }}>
-                  Chưa có dữ liệu kênh OTA/nguồn đặt phòng để đối soát.
-                </td>
-              </tr>
-            )}
-            {otaData.map((row,i) => {
-              const cfg = OTA_CFG[row.channel];
-              const stc = STATUS_CFG[row.status];
-              const commPct = ((row.commission/row.revenue)*100).toFixed(0);
-              return (
-                <tr key={row.channel} style={{ borderTop:"1px solid #F1F5F9",background:i%2===0?"#FFF":"#FAFAFA" }}>
-                  <td style={{ padding:"11px 14px" }}>
-                    <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-                      <div style={{ width:32,height:32,borderRadius:8,background:cfg.bg,
-                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:16 }}>{cfg.emoji}</div>
-                      <span style={{ fontSize:13,fontWeight:600,color:"#0F172A" }}>{cfg.label}</span>
-                    </div>
-                  </td>
-                  <td style={{ padding:"11px 14px",fontSize:13,fontWeight:700,color:"#0F172A" }}>{row.bookings}</td>
-                  <td style={{ padding:"11px 14px",fontSize:12,fontWeight:600,color:"#0F172A",
-                    fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(row.revenue)}</td>
-                  <td style={{ padding:"11px 14px" }}>
-                    <p style={{ fontSize:12,fontWeight:600,color:"#DC2626",fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(row.commission)}</p>
-                    <p style={{ fontSize:10,color:"#94A3B8" }}>{commPct}% rate</p>
-                  </td>
-                  <td style={{ padding:"11px 14px",fontSize:12,fontWeight:700,color:"#16A34A",
-                    fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(row.net)}</td>
-                  <td style={{ padding:"11px 14px" }}>
-                    <div style={{ display:"flex",alignItems:"center",gap:5 }}>
-                      <span style={{ width:7,height:7,borderRadius:99,background:stc.dot,flexShrink:0 }} />
-                      <span style={{ fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:99,
-                        background:stc.bg,color:stc.text }}>{stc.label}</span>
-                    </div>
-                  </td>
-                  <td style={{ padding:"11px 14px" }}>
-                    <button onClick={() => onReconcile?.(row)} style={{ fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:6,
-                      border:"1px solid #E2E8F0",background:"#FFF",color:"#334155",cursor:"pointer" }}>
-                      {row.status==="dispute" ? "Xử lý" : "Đối soát"}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {/* Total */}
-            <tr style={{ background:"#F8FAFC",borderTop:"2px solid #E2E8F0" }}>
-              <td style={{ padding:"11px 14px",fontSize:13,fontWeight:800,color:"#0F172A" }}>Tổng</td>
-              <td style={{ padding:"11px 14px",fontSize:13,fontWeight:700,color:"#0F172A" }}>{otaData.reduce((s,r)=>s+r.bookings,0)}</td>
-              <td style={{ padding:"11px 14px",fontSize:13,fontWeight:800,color:"#0F172A",fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(totalRevenue)}</td>
-              <td style={{ padding:"11px 14px",fontSize:13,fontWeight:800,color:"#DC2626",fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(totalCommission)}</td>
-              <td style={{ padding:"11px 14px",fontSize:13,fontWeight:800,color:"#16A34A",fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(totalNet)}</td>
-              <td colSpan={2} />
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════
-   INVOICES & VAT SCREEN
-══════════════════════════════════════════════════════════ */
-function VatScreen({ vatData = [], onExportXml, onExportAllXml }: {
+function VatScreen({ vatData = [], onExportXml, onExportAllXml, date }: {
   vatData?: VatRow[];
+  date: string;
   onExportXml?: (id: number) => void;
   onExportAllXml?: (ids: number[]) => void;
 }) {
   const [selectedInvoice, setSelectedInvoice] = useState<VatRow | null>(null);
-  const totalVat = vatData.reduce((s,r) => s+r.vat, 0);
-  const currentDateLabel = new Date().toLocaleDateString("vi-VN");
+  const totalVat = vatData.filter(row=>row.status==="issued").reduce((s,r) => s+r.vat, 0);
+  const currentDateLabel = formatDateVi(date);
   return (
     <div style={{ padding:"20px 22px",flex:1,overflowY:"auto" }}>
       <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16 }}>
@@ -731,9 +358,9 @@ function VatScreen({ vatData = [], onExportXml, onExportAllXml }: {
             display:"flex",alignItems:"center",gap:5 }}>
             <Printer size={12} /> In tất cả
           </button>
-          <button disabled={!vatData.some(row => row.vatId)} onClick={() => onExportAllXml?.(vatData.flatMap(row => row.vatId ? [row.vatId] : []))} style={{ padding:"7px 14px",borderRadius:8,
+          <button disabled={!vatData.some(row => row.vatId && row.status==="issued")} onClick={() => onExportAllXml?.(vatData.flatMap(row => row.vatId && row.status==="issued" ? [row.vatId] : []))} style={{ padding:"7px 14px",borderRadius:8,
             background:"#0F172A",color:"#FFF",fontSize:12,fontWeight:600,cursor:"pointer",
-            display:"flex",alignItems:"center",gap:5,opacity:vatData.some(row => row.vatId) ? 1 : 0.5 }}>
+            display:"flex",alignItems:"center",gap:5,opacity:vatData.some(row => row.vatId && row.status==="issued") ? 1 : 0.5 }}>
             <Download size={12} /> Xuất XML
           </button>
         </div>
@@ -744,7 +371,7 @@ function VatScreen({ vatData = [], onExportXml, onExportAllXml }: {
         {[
           { label:"Tổng hóa đơn đã phát hành",val:String(vatData.filter(r=>r.status==="issued").length),unit:"hóa đơn" },
           { label:"Hóa đơn chờ phát hành",     val:String(vatData.filter(r=>r.status==="pending").length), unit:"hóa đơn" },
-          { label:"Tổng VAT đã thu",  val:`${Math.round(totalVat).toLocaleString("vi-VN")} ₫`,unit:"Theo số liệu đã ghi nhận" },
+          { label:"VAT trên hóa đơn đã phát hành",val:fmtMoney(totalVat),unit:"Phát hành hóa đơn không đồng nghĩa đã thu tiền" },
         ].map(c => (
           <div key={c.label} style={{ background:"#FFF",borderRadius:10,border:"1px solid #E2E8F0",padding:"14px 18px" }}>
             <p style={{ fontSize:11,color:"#64748B",marginBottom:4 }}>{c.label}</p>
@@ -790,14 +417,14 @@ function VatScreen({ vatData = [], onExportXml, onExportAllXml }: {
                   <span style={{ fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:99,
                     background:row.status==="issued"?"#DCFCE7":"#FEF9C3",
                     color:row.status==="issued"?"#166534":"#92400E" }}>
-                    {row.status==="issued"?"✓ Đã phát hành":"⏳ Đang chờ"}
+                    {row.status==="issued"?"✓ Đã phát hành":row.status==="cancelled"?"Đã hủy":"⏳ Bản nháp"}
                   </span>
                 </td>
                 <td style={{ padding:"11px 14px" }}>
                   <div style={{ display:"flex",gap:5 }}>
                     <button onClick={() => setSelectedInvoice(row)} aria-label={`Xem hóa đơn VAT ${row.invoice}`} style={{ fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:6,
                       border:"1px solid #E2E8F0",background:"#FFF",color:"#334155",cursor:"pointer" }}>Xem</button>
-                    <button onClick={() => row.vatId && onExportXml?.(row.vatId)} style={{ fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:6,
+                    <button disabled={row.status!=="issued"} onClick={() => row.vatId && onExportXml?.(row.vatId)} style={{ fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:6,
                       border:"1px solid #E2E8F0",background:"#FFF",color:"#334155",cursor:"pointer" }}>XML</button>
                   </div>
                 </td>
@@ -841,79 +468,40 @@ function VatScreen({ vatData = [], onExportXml, onExportAllXml }: {
   );
 }
 
-function DebtScreen({ debts, onSettled }: { debts: PartnerDebt[]; onSettled: (debt: PartnerDebt) => Promise<void> }) {
-  const [settled, setSettled] = useState<string[]>([]);
-  return (
-    <div style={{flex:1,overflowY:"auto",padding:"18px 22px"}}>
-      <div style={{background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,overflow:"hidden"}}>
-        <div style={{padding:"14px 16px",borderBottom:"1px solid #E2E8F0"}}>
-          <p style={{fontSize:14,fontWeight:700}}>Công nợ phải thu đối tác</p>
-          <p style={{fontSize:11,color:"#64748B",marginTop:2}}>Ghi nhận và đối soát tài chính; không thay đổi đặt phòng hoặc trạng thái phòng.</p>
-        </div>
-        {debts.map(row=>{
-          const key = String(row.id);
-          const done=settled.includes(key) || row.status === "SETTLED";
-          return <div key={row.id} style={{display:"grid",gridTemplateColumns:"110px 1.4fr 1fr 150px 150px",gap:12,alignItems:"center",padding:"13px 16px",borderBottom:"1px solid #F1F5F9"}}>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#2563EB"}}>{row.reference_code}</span>
-            <div><p style={{fontSize:12,fontWeight:700}}>{row.partner_name}</p><p style={{fontSize:10,color:"#94A3B8"}}>{new Date(row.recorded_at).toLocaleDateString("vi-VN")}</p></div>
-            <strong style={{fontSize:12}}>{(row.amount-row.settled_amount).toLocaleString("vi-VN")} ₫</strong>
-            <span style={{fontSize:11,color:"#64748B"}}>{row.status}</span>
-            <button disabled={done} onClick={()=>void onSettled(row).then(()=>setSettled(ids=>[...ids,key]))} style={{height:32,borderRadius:8,border:"none",background:done?"#DCFCE7":"#0F172A",color:done?"#166534":"#FFF",fontSize:11,fontWeight:700,cursor:done?"default":"pointer"}}>{done?"Đã tất toán":"Ghi nhận tất toán"}</button>
-          </div>;
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════
-   MAIN COMPONENT
-══════════════════════════════════════════════════════════ */
 export default function AccountingStation({ onBack }: { onBack: () => void }) {
   const [mainTab, setMainTab] = useState<MainTab>("handover");
   const [financeSummary, setFinanceSummary] = useState<Reconciliation | null>(null);
   const [summaryError, setSummaryError] = useState("");
   const [liveDebts, setLiveDebts] = useState<PartnerDebt[]>([]);
   const [liveCashHandovers, setLiveCashHandovers] = useState<CashHandover[]>([]);
-  const [cashHandoverSubmitting, setCashHandoverSubmitting] = useState(false);
+  const [selectedDate,setSelectedDate]=useState(businessDateValue());
+  const [refresh,setRefresh]=useState(0);
+  const [globalSearch,setGlobalSearch]=useState("");
+  const [refundCount,setRefundCount]=useState<number|null>(null);
+  const [dataError,setDataError]=useState("");
+  const [dataLoading,setDataLoading]=useState(true);
+  const refreshData=()=>setRefresh(value=>value+1);
   const [liveOta, setLiveOta] = useState<OtaReconciliation[]>([]);
   const [liveVat, setLiveVat] = useState<VatInvoice[]>([]);
   const [userProfile, setUserProfile] = useState<EmployeeProfileDto | null>(null);
   const [topProfileOpen, setTopProfileOpen] = useState(false);
-  const [sidebarProfileOpen, setSidebarProfileOpen] = useState(false);
 
   useEffect(() => {
-    let active = true;
+    let active = true;setDataLoading(true);setSummaryError("");setDataError("");setFinanceSummary(null);setRefundCount(null);
+    const load=<T,>(promise:Promise<T>,set:(value:T)=>void,label:string)=>promise.then(value=>{if(active)set(value);}).catch(cause=>{if(active)setDataError(previous=>[previous,apiErrorMessage(cause,label)].filter(Boolean).join(" · "));});
+    Promise.allSettled([
+      kitchenAccountingApi.reconciliation({from:selectedDate,to:selectedDate}).then(value=>{if(active)setFinanceSummary(value);}).catch(cause=>{if(active)setSummaryError(apiErrorMessage(cause,"Không thể tải tổng hợp tài chính."));}),
+      load(kitchenAccountingApi.partnerDebts(),setLiveDebts,"Không thể tải công nợ."),
+      load(kitchenAccountingApi.cashHandovers(),setLiveCashHandovers,"Không thể tải lịch sử bàn giao."),
+      load(enterpriseApi.ota(),setLiveOta,"Không thể tải đối soát OTA."),
+      load(enterpriseApi.vatInvoices(),setLiveVat,"Không thể tải hóa đơn VAT."),
+      load(authApi.employeeProfile(),setUserProfile,"Không thể tải nhân viên."),
+      load(kitchenAccountingApi.refundRequests(),rows=>setRefundCount(rows.filter(row=>row.status==="PENDING").length),"Không thể tải yêu cầu hoàn tiền."),
+    ]).finally(()=>{if(active)setDataLoading(false);});
+    return()=>{active=false;};
+  },[selectedDate,refresh]);
 
-    kitchenAccountingApi.reconciliation({ from:localDateValue(), to:localDateValue() })
-      .then(summary => { if (active) setFinanceSummary(summary); })
-      .catch(cause => { if (active) setSummaryError(apiErrorMessage(cause,"Không thể tải tổng hợp tài chính.")); });
-
-    kitchenAccountingApi.partnerDebts()
-      .then(rows => { if (active) setLiveDebts(rows); })
-      .catch(err => { console.warn("Backend partner debts unavailable:", err); if (active) setLiveDebts([]); });
-    kitchenAccountingApi.cashHandovers()
-      .then(rows => { if (active) setLiveCashHandovers(rows); })
-      .catch(err => { console.warn("Backend cash handover data unavailable:", err); if (active) setLiveCashHandovers([]); });
-    Promise.all([enterpriseApi.ota(), enterpriseApi.vatInvoices()])
-      .then(([ota, vat]) => { if (active) { setLiveOta(ota); setLiveVat(vat); } })
-      .catch(err => { console.warn("Backend OTA/VAT data unavailable:", err); if (active) { setLiveOta([]); setLiveVat([]); } });
-    authApi.employeeProfile()
-      .then(profile => { if (active) setUserProfile(profile); })
-      .catch(err => console.warn("Backend accounting profile unavailable:", err));
-    return () => { active = false; };
-  }, []);
-
-  const liveOtaData: OtaRow[] = Object.values(liveOta.reduce<Record<string, OtaRow>>((acc, row) => {
-    const channel = (row.booking_source || "direct").toLowerCase() as OtaChannel;
-    const key = ["agoda", "booking", "expedia", "airbnb", "direct"].includes(channel) ? channel : "direct";
-    const current = acc[key] ?? { channel: key, bookings: 0, revenue: 0, commission: 0, net: 0, status: "reconciled", reservationIds: [] };
-    current.reservationIds?.push(row.reservation_id);
-    current.bookings += 1; current.revenue += Number(row.gross_revenue || 0); current.commission += Number(row.commission || 0); current.net += Number(row.net_revenue || 0);
-    if (row.status === "DISPUTED") current.status = "dispute"; else if (row.status === "PENDING") current.status = current.status === "reconciled" ? "pending" : current.status;
-    acc[key] = current; return acc;
-  }, {}));
-  const liveVatData: VatRow[] = liveVat.map(row => ({
+  const liveVatData: VatRow[] = liveVat.filter(row=>row.issued_at.slice(0,10)===selectedDate).map(row => ({
     vatId: row.id,
     invoice: row.vat_invoice_number,
     guest: row.customer_name,
@@ -922,7 +510,7 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
     vat: row.tax_amount,
     totalAmount: row.total_amount,
     vatRate: `${row.tax_rate}%`,
-    status: row.status === "ISSUED" ? "issued" : "pending",
+    status: row.status === "ISSUED" ? "issued" : row.status === "CANCELLED" ? "cancelled" : "pending",
     customerType: row.customer_type,
     taxCode: row.tax_code,
     companyName: row.company_name,
@@ -930,12 +518,6 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
     issuedAt: row.issued_at,
     createdBy: row.created_by,
   }));
-  const reconcileOta = async (row: OtaRow) => {
-    const reservationId = row.reservationIds?.[0];
-    if (!reservationId) return;
-    try { await enterpriseApi.updateOtaStatus(reservationId, "MATCHED"); setLiveOta(items => items.map(item => item.reservation_id === reservationId ? { ...item, status: "MATCHED" } : item)); }
-    catch (error) { window.alert("Không thể đối soát OTA. Vui lòng thử lại."); }
-  };
   const exportVatXml = async (id: number) => {
     try { const xml = await enterpriseApi.vatXml(id); const blob = new Blob([xml], { type: "application/xml;charset=utf-8" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `vat-${id}.xml`; link.click(); URL.revokeObjectURL(url); }
     catch (error) { window.alert("Không thể xuất XML VAT. Vui lòng thử lại."); }
@@ -949,47 +531,23 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
       const url = URL.createObjectURL(new Blob([xml], { type: "application/xml;charset=utf-8" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = `vat-invoices-${localDateValue()}.xml`;
+      link.download = `vat-invoices-${businessDateValue()}.xml`;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
       window.alert("Không thể xuất danh sách XML VAT. Vui lòng thử lại.");
     }
   };
-  const submitCashHandover = async (payload: { actualAmount: number; toActor: string; denominations: CashDenomination[] }) => {
-    if (!userProfile?.employee_id) throw new Error("Không xác định được nhân viên đang đăng nhập.");
-    setCashHandoverSubmitting(true);
-    try {
-      const saved = await kitchenAccountingApi.recordCashHandover({
-        shift_code: `ACCOUNTING-${localDateValue()}`,
-        from_actor: userProfile.employee_id,
-        to_actor: payload.toActor,
-        actual_amount: payload.actualAmount,
-        note: "Ghi nhận từ giao diện kế toán",
-        denominations: payload.denominations,
-      }, newKitchenIdempotencyKey());
-      setLiveCashHandovers(rows => [saved, ...rows]);
-    } finally {
-      setCashHandoverSubmitting(false);
-    }
-  };
   const summaryMoney = (value: number | undefined) => value === undefined ? "—" : fmtMoney(value);
   const financeKpis = [
-    { label:"Thu/hoàn ròng hôm nay", Icon:DollarSign, iconBg:"#DCFCE7",iconColor:"#16A34A",val:summaryMoney(financeSummary?.net_total),sub:financeSummary ? `${financeSummary.completed_transactions} giao dịch hoàn tất` : "Đang tải tổng hợp", subUp:false },
-    { label:"Tiền mặt nhận ròng hôm nay", Icon:DollarSign, iconBg:"#DBEAFE",iconColor:"#2563EB",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CASH ?? 0 : undefined), sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
-    { label:"Thanh toán thẻ ròng hôm nay", Icon:CreditCard, iconBg:"#EDE9FE",iconColor:"#5B21B6",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CARD ?? 0 : undefined),sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
-    { label:"Chuyển khoản chờ đối soát",Icon:Building2, iconBg:"#FEF9C3",iconColor:"#92400E",val:summaryMoney(financeSummary?.pending_bank_transfers), sub:"Theo hóa đơn đang chờ", subUp:false },
-    { label:"Hoàn tiền chờ Giám đốc",  Icon:RefreshCcw,  iconBg:"#FFE4E8",iconColor:"#DC2626",val:"0",          sub:"Chưa có dữ liệu hoàn tiền",       subUp:false },
+    { label:"Thu/hoàn ròng ngày chọn", Icon:DollarSign, iconBg:"#DCFCE7",iconColor:"#16A34A",val:summaryMoney(financeSummary?.net_total),sub:financeSummary ? `${financeSummary.completed_transactions} giao dịch hoàn tất` : "Đang tải tổng hợp", subUp:false },
+    { label:"Tiền mặt thu/hoàn ròng ngày chọn", Icon:DollarSign, iconBg:"#DBEAFE",iconColor:"#2563EB",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CASH ?? 0 : undefined), sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
+    { label:"Thanh toán thẻ ròng ngày chọn", Icon:CreditCard, iconBg:"#EDE9FE",iconColor:"#5B21B6",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CARD ?? 0 : undefined),sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
+    { label:"Doanh thu đã ghi nhận ngày chọn",Icon:BarChart2,iconBg:"#DCFCE7",iconColor:"#15803D",val:summaryMoney(financeSummary?.recognized_revenue),sub:"Theo bút toán doanh thu đã chốt",subUp:false },
+    { label:"Còn phải thu — chuyển khoản",Icon:Building2, iconBg:"#FEF9C3",iconColor:"#92400E",val:summaryMoney(financeSummary?.outstanding_bank_transfer_balances), sub:"Số dư còn phải thu trên hóa đơn chuyển khoản", subUp:false },
+    { label:"Hoàn tiền chờ Giám đốc",  Icon:RefreshCcw,  iconBg:"#FFE4E8",iconColor:"#DC2626",val:refundCount===null?"—":String(refundCount), sub:"Yêu cầu do tôi gửi đang chờ duyệt",subUp:false },
   ];
-  const todayLabel = new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" });
-  const liveCashRows = liveCashHandovers.map(handOver => ({
-    denom: `${handOver.shift_code} · ${handOver.from_actor} → ${handOver.to_actor}`,
-    opening: 0,
-    received: 0,
-    paidOut: 0,
-    expected: handOver.expected_amount,
-    actual: handOver.actual_amount,
-  }));
+  const todayLabel = formatDateVi(selectedDate);
 
   const MAIN_TABS: { id:MainTab; label:string }[] = [
     { id:"handover", label:"Bàn giao ca & Két tiền" },
@@ -1000,71 +558,8 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
   ];
 
   return (
-    <div style={{ display:"flex",height:"100vh",overflow:"hidden",
+    <div style={{ display:"flex",flexDirection:"column",height:"100vh",overflow:"hidden",
       background:"#F8FAFC",fontFamily:"'Inter',system-ui,sans-serif" }}>
-
-      {/* SIDEBAR */}
-      <aside style={{ width:190,background:"#FFF",borderRight:"1px solid #E2E8F0",
-        display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden" }}>
-        <div style={{ padding:"14px 14px 12px",borderBottom:"1px solid #E2E8F0" }}>
-          <div style={{ display:"flex",alignItems:"center",gap:9 }}>
-            <img
-              src="/hotel_logo.png"
-              alt="MaM Hotel Logo"
-              style={{ width:36,height:"auto",objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 6px rgba(184,148,74,0.35))" }}
-            />
-            <div>
-              <p style={{ fontSize:13,fontWeight:700,color:"#0F172A",lineHeight:1.1,fontFamily:"'Cormorant Garamond',Georgia,serif",letterSpacing:"0.05em" }}>MaM Hotel</p>
-              <p style={{ fontSize:9,color:"#2563EB",letterSpacing:"0.08em",textTransform:"uppercase",marginTop:2,fontWeight:600 }}>KẾ TOÁN &amp; TÀI CHÍNH</p>
-            </div>
-          </div>
-        </div>
-        <nav style={{ flex:1,padding:"8px 8px",overflowY:"auto" }}>
-          {SIDEBAR_NAV.map(n => {
-            const active = mainTab === n.id;
-            return <button key={n.id} onClick={() => setMainTab(n.id)}
-              style={{ width:"100%",display:"flex",alignItems:"center",gap:9,
-                padding:"8px 10px",borderRadius:8,cursor:"pointer",marginBottom:1,
-                background:active?"#0F172A":"transparent",
-                color:active?"#FFF":"#475569",fontWeight:active?600:400,fontSize:12,
-                textAlign:"left",transition:"all .1s" }}>
-              <n.Icon size={14} style={{ color:active?"#FFF":"#94A3B8",flexShrink:0 }} strokeWidth={active?2:1.5} />
-              {n.label}
-            </button>;
-          })}
-        </nav>
-        {/* Profile */}
-        <div style={{ padding:"10px 14px",borderTop:"1px solid #F1F5F9",position:"relative" }}>
-          <div
-            onClick={()=>setSidebarProfileOpen(p=>!p)}
-            style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8,cursor:"pointer" }}
-            title="Hồ sơ nhân viên"
-          >
-            <div style={{ width:30,height:30,borderRadius:99,flexShrink:0,
-              background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",
-              display:"flex",alignItems:"center",justifyContent:"center",
-              fontSize:12,fontWeight:800,color:"#FFF" }}>
-              {userProfile?.full_name ? userProfile.full_name.slice(0, 2).toUpperCase() : "KT"}
-            </div>
-            <div>
-              <p style={{ fontSize:11,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || "Kế toán Khách sạn"}</p>
-              <p style={{ fontSize:10,color:"#94A3B8" }}>{userProfile?.role ? employeeRoleLabel(userProfile.role) : "Phòng Kế toán - Tài chính"}</p>
-            </div>
-          </div>
-          <button onClick={onBack}
-            style={{ display:"flex",alignItems:"center",gap:5,color:"#94A3B8",cursor:"pointer",fontSize:11,background:"transparent",border:"none",padding:0 }}>
-            <LogOut size={11} /> Đăng xuất
-          </button>
-          <EmployeeProfileDropdown
-            isOpen={sidebarProfileOpen}
-            onClose={()=>setSidebarProfileOpen(false)}
-            onLogout={onBack}
-            align="bottom-left"
-            currentRoleLabel={userProfile?.role ? employeeRoleLabel(userProfile.role) : "Kế toán & Tài chính"}
-            departmentName="Bộ phận Kế toán"
-          />
-        </div>
-      </aside>
 
       {/* MAIN */}
       <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0 }}>
@@ -1074,18 +569,14 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
           display:"flex",alignItems:"center",gap:12,padding:"0 22px",flexShrink:0 }}>
           <div style={{ position:"relative",flex:1,maxWidth:560 }}>
             <Search size={13} style={{ position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
-              <input placeholder="Tìm hóa đơn, tên khách, số phòng hoặc mã giao dịch..."
+              <input value={globalSearch} onChange={event=>{setGlobalSearch(event.target.value);setMainTab(mainTab==="vat"?"vat":"ledger");}} placeholder={mainTab==="vat"?"Tìm hóa đơn theo mã đặt phòng...":"Tra giao dịch: PAY, INV hoặc mã đặt phòng..."}
               style={{ width:"100%",height:34,paddingLeft:32,paddingRight:42,borderRadius:8,
                 border:"1px solid #E2E8F0",background:"#F8FAFC",fontSize:12,outline:"none",boxSizing:"border-box" }} />
-            <span style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
-              fontSize:10,color:"#CBD5E1",fontFamily:"'JetBrains Mono',monospace",
-              background:"#F1F5F9",padding:"1px 5px",borderRadius:4,border:"1px solid #E2E8F0" }}>⌘ K</span>
           </div>
           <div style={{ flex:1 }} />
-          <button style={{ width:34,height:34,borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0",
+          <button aria-label="Tải lại dữ liệu kế toán" disabled={dataLoading} onClick={refreshData} style={{ width:34,height:34,borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0",
             display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative" }}>
-            <Bell size={14} style={{ color:"#475569" }} />
-            <span style={{ position:"absolute",top:6,right:6,width:7,height:7,borderRadius:99,background:"#EF4444" }} />
+            <RefreshCcw size={14} style={{ color:"#475569" }} />
           </button>
           <div style={{ position:"relative" }}>
             <div
@@ -1097,11 +588,11 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
                 background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:11,fontWeight:700,color:"#FFF" }}>
-                {userProfile?.full_name ? userProfile.full_name.slice(0, 2).toUpperCase() : "KT"}
+                {userProfile?.full_name ? userProfile.full_name.slice(0, 2).toUpperCase() : dataLoading ? "…" : "?"}
               </div>
               <div>
-                <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || "Nhân viên kế toán"}</p>
-                <p style={{ fontSize:10,color:"#94A3B8" }}>{userProfile?.role ? employeeRoleLabel(userProfile.role) : "Bộ phận Kế toán"}</p>
+                <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || (dataLoading ? "Đang tải hồ sơ…" : "Không có hồ sơ")}</p>
+                <p style={{ fontSize:10,color:"#94A3B8" }}>{userProfile?.role ? employeeRoleLabel(userProfile.role) : dataLoading ? "Đang tải…" : "—"}</p>
               </div>
               <ChevronDown size={12} style={{ color:"#94A3B8" }} />
             </div>
@@ -1110,7 +601,7 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
               onClose={()=>setTopProfileOpen(false)}
               onLogout={onBack}
               align="top-right"
-            currentRoleLabel={userProfile?.role ? employeeRoleLabel(userProfile.role) : "Kế toán & Tài chính"}
+            currentRoleLabel={userProfile?.role ? employeeRoleLabel(userProfile.role) : dataLoading ? "Đang tải…" : "—"}
               departmentName="Bộ phận Kế toán"
             />
           </div>
@@ -1129,16 +620,17 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
               <div style={{ display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:9,
                 border:"1px solid #E2E8F0",background:"#FFF",cursor:"pointer" }}>
                 <CalendarDays size={13} style={{ color:"#64748B" }} />
-                <span style={{ fontSize:13,color:"#334155",fontWeight:500 }}>{todayLabel}</span>
-                <ChevronDown size={12} style={{ color:"#94A3B8" }} />
+                <input aria-label="Ngày đối soát" type="date" value={selectedDate} onChange={event=>{if(event.target.value)setSelectedDate(event.target.value);}} style={{fontSize:13,border:0,background:"transparent"}}/>
               </div>
             </div>
 
             {summaryError && <p role="alert" style={{color:"#B91C1C",fontSize:12,marginBottom:10}}>{summaryError}</p>}
+            {dataError && <p role="alert" style={{color:"#B91C1C",fontSize:12,marginBottom:10}}>{dataError} <button type="button" style={compactActionStyle} onClick={refreshData}>Tải lại dữ liệu</button></p>}
+            {dataLoading && <p role="status" style={{fontSize:11,color:"#64748B"}}>Đang cập nhật dữ liệu kế toán…</p>}
             {/* KPI CARDS */}
-            <div style={{ display:"flex",gap:12,marginBottom:14,overflowX:"auto" }}>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,250px),1fr))",gap:12,marginBottom:14 }}>
               {financeKpis.map(k => (
-                <div key={k.label} style={{ flex:"1 0 160px",background:"#FFF",borderRadius:10,border:"1px solid #E2E8F0",
+                <div key={k.label} style={{ minWidth:0,background:"#FFF",borderRadius:10,border:"1px solid #E2E8F0",
                   padding:"13px 16px",display:"flex",alignItems:"center",gap:12,
                   boxShadow:"0 1px 3px rgba(0,0,0,.04)" }}>
                   <div style={{ width:40,height:40,borderRadius:10,background:k.iconBg,flexShrink:0,
@@ -1151,7 +643,7 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
                       color:k.label==="Hoàn tiền chờ Giám đốc"?"#DC2626":"#0F172A",lineHeight:1,marginBottom:2 }}>{k.val}</p>
                     <div style={{ display:"flex",alignItems:"center",gap:3 }}>
                       {k.subUp && <ArrowUpRight size={10} style={{ color:"#16A34A" }} />}
-                      <span style={{ fontSize:10,color:k.subUp?"#16A34A":"#94A3B8",fontWeight:k.subUp?600:400,whiteSpace:"nowrap" }}>{k.sub}</span>
+                      <span style={{ fontSize:10,color:k.subUp?"#16A34A":"#94A3B8",fontWeight:k.subUp?600:400,overflow:"hidden",textOverflow:"ellipsis" }}>{k.sub}</span>
                     </div>
                   </div>
                 </div>
@@ -1159,7 +651,7 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
             </div>
 
             {/* Main tabs */}
-            <div style={{ display:"flex",gap:0 }}>
+            <div style={{ display:"flex",gap:0,flexWrap:"wrap" }}>
               {MAIN_TABS.map(t => {
                 const act = mainTab === t.id;
                 return (
@@ -1177,25 +669,22 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
 
           {/* CONTENT */}
           {mainTab === "handover" && (
-            <div style={{ flex:1,display:"flex",gap:14,padding:"14px 22px",overflow:"hidden" }}>
-              <CashHandoverPanel cashRows={liveCashRows} handoverDate={todayLabel} fromStaff={userProfile?.employee_id} toStaff={userProfile?.full_name} onSubmit={submitCashHandover} submitting={cashHandoverSubmitting} />
-              <LedgerPanel />
+            <div style={{ flex:1,display:"flex",flexWrap:"wrap",gap:14,padding:"14px 22px",overflow:"auto" }}>
+              <CashHandoverPanel handovers={liveCashHandovers} date={selectedDate} actor={userProfile?.employee_id} onSaved={refreshData} />
+              <LedgerPanel date={selectedDate} search={globalSearch} refresh={refresh} />
             </div>
           )}
           {mainTab === "ledger" && (
             <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",padding:"14px 22px" }}>
               <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden",flex:1,display:"flex",flexDirection:"column" }}>
-                <LedgerPanel fillHeight />
+                <LedgerPanel fillHeight date={selectedDate} search={globalSearch} refresh={refresh} />
               </div>
             </div>
           )}
-          {mainTab === "ota"  && <OtaScreen otaData={liveOtaData} onReconcile={reconcileOta} />}
-          {mainTab === "vat"  && <VatScreen vatData={liveVatData} onExportXml={exportVatXml} onExportAllXml={exportAllVatXml} />}
-          {mainTab === "debt" && <DebtScreen debts={liveDebts} onSettled={async debt => {
-            const remaining = debt.amount - debt.settled_amount;
-            const updated = await kitchenAccountingApi.settlePartnerDebt(debt.id, { amount: remaining, note: "Tất toán từ giao diện kế toán" }, newKitchenIdempotencyKey());
-            setLiveDebts(rows => rows.map(row => row.id === updated.id ? updated : row));
-          }} />}
+          {mainTab === "ota" && <OtaReconciliationScreen rows={liveOta} onUpdated={updated=>{setLiveOta(rows=>rows.map(row=>row.reservation_id===updated.reservation_id?updated:row));}} />}
+          {mainTab === "vat" && <div style={{flex:1,overflowY:"auto"}}><InvoiceOperations vatInvoices={liveVat} onChanged={refreshData} onVatCreated={row=>setLiveVat(rows=>[row,...rows])} refresh={refresh} search={globalSearch}/><VatScreen vatData={liveVatData} date={selectedDate} onExportXml={exportVatXml} onExportAllXml={exportAllVatXml}/></div>}
+          {mainTab === "debt" && <FinanceOperations debts={liveDebts} date={selectedDate} onChanged={refreshData}/>}
+
         </div>
       </div>
     </div>

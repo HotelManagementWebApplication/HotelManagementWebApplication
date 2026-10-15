@@ -101,12 +101,12 @@ class OrchestratorTest(unittest.TestCase):
 
     def test_room_type_question_groups_catalog_by_main_tier_without_unsolicited_prices(self) -> None:
         backend = _FakeBackend(public_rooms=[
-            {"room_name": "501", "room_type_id": "RT001", "room_type_code": "STD", "room_type_name": "Standard (STD) · Đơn", "daily_price": 1_200_000},
-            {"room_name": "502", "room_type_id": "RT002", "room_type_code": "STD", "room_type_name": "Standard (STD) · Đôi", "daily_price": 1_450_000},
-            {"room_name": "503", "room_type_id": "RT003", "room_type_code": "SUP", "room_type_name": "Superior (SUP) · Đơn", "daily_price": 1_800_000},
-            {"room_name": "903", "room_type_id": "RT005", "room_type_code": "DLX", "room_type_name": "Deluxe (DLX) · King", "daily_price": 2_600_000},
-            {"room_name": "1104", "room_type_id": "RT007", "room_type_code": "SUT", "room_type_name": "Suite (SUT) · Residence", "daily_price": 4_500_000},
-            {"room_name": "1704", "room_type_id": "RT009", "room_type_code": "VIP", "room_type_name": "Biệt thự Hoàng gia · Nguyên căn", "daily_price": 9_500_000},
+            {"room_name": "501", "room_type_id": "RT001", "room_type_code": "STD", "room_type_name": "Phòng Classic Queen", "marketing_name": "Phòng Classic", "daily_price": 1_200_000},
+            {"room_name": "502", "room_type_id": "RT002", "room_type_code": "STD", "room_type_name": "Phòng Classic Twin", "marketing_name": "Phòng Classic", "daily_price": 1_450_000},
+            {"room_name": "503", "room_type_id": "RT003", "room_type_code": "SUP", "room_type_name": "Phòng Superior King", "marketing_name": "Phòng Superior", "daily_price": 1_800_000},
+            {"room_name": "903", "room_type_id": "RT005", "room_type_code": "DLX", "room_type_name": "Phòng Deluxe King", "marketing_name": "Phòng Deluxe", "daily_price": 2_600_000},
+            {"room_name": "1104", "room_type_id": "RT007", "room_type_code": "SUT", "room_type_name": "Suite Hoàng Gia Residence", "marketing_name": "Suite Hoàng Gia", "daily_price": 4_500_000},
+            {"room_name": "1704", "room_type_id": "RT009", "room_type_code": "VIP", "room_type_name": "Penthouse Tổng Thống", "marketing_name": "Penthouse Tổng Thống", "daily_price": 9_500_000},
         ])
 
         response = asyncio.run(
@@ -115,10 +115,10 @@ class OrchestratorTest(unittest.TestCase):
 
         self.assertEqual("live_data", response.mode)
         self.assertIn("5 hạng phòng chính", response.answer)
-        self.assertIn("Standard (STD)", response.answer)
-        self.assertIn("Superior (SUP)", response.answer)
-        self.assertIn("Deluxe (DLX)", response.answer)
-        self.assertIn("Suite (SUT)", response.answer)
+        self.assertIn("Phòng Classic (STD)", response.answer)
+        self.assertIn("Phòng Superior (SUP)", response.answer)
+        self.assertIn("Phòng Deluxe (DLX)", response.answer)
+        self.assertIn("Suite Hoàng Gia (SUT)", response.answer)
         self.assertIn("VIP", response.answer)
         self.assertNotIn("VND", response.answer)
         self.assertNotIn("phòng còn trống", response.answer)
@@ -157,7 +157,7 @@ class OrchestratorTest(unittest.TestCase):
             availability_rooms=[
                 {
                     "room_name": f"Deluxe {index}",
-                    "room_type_name": "Deluxe (DLX) · King",
+                    "room_type_name": "Phòng Deluxe King", "marketing_name": "Phòng Deluxe",
                     "room_type_id": "RT005",
                     "room_type_code": "DLX",
                     "daily_price": 2_600_000,
@@ -201,6 +201,23 @@ class OrchestratorTest(unittest.TestCase):
         self.assertIn("ngày giờ nhận và trả", response.answer)
         self.assertEqual([], backend.availability_calls)
         self.assertEqual([], backend.public_rooms_calls)
+
+    def test_current_hotel_room_names_filter_availability(self) -> None:
+        for name, room_type_id in (
+            ("Classic", "RT001"),
+            ("Suite Hoàng Gia", "RT007"),
+            ("Penthouse Tổng Thống", "RT009"),
+        ):
+            with self.subTest(name=name):
+                backend = _FakeBackend()
+                response = asyncio.run(
+                    CustomerChatService(_FailingRetriever(), backend).answer(
+                        f"Giá phòng {name} từ 10/10/2026 đến 12/10/2026 là bao nhiêu?"
+                    )
+                )
+                self.assertEqual("live_data", response.mode)
+                self.assertEqual(room_type_id, backend.availability_calls[0][2])
+                self.assertIn(name, response.answer)
 
     def test_iso_date_range_keeps_standard_checkin_checkout_times(self) -> None:
         backend = _FakeBackend()

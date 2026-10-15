@@ -14,6 +14,10 @@ public class Expense {
     @Column(name = "moTa", nullable = false, length = 255) private String description;
     /** Giá trị tiền tệ của khoản chi. */
     @Column(name = "soTien", nullable = false, precision = 14, scale = 2) private BigDecimal amount;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.PaymentMethodConverter.class)
+    @Column(name = "phuongThucThanhToan", length = 30) private com.hospitality.mis.entity.billing.PaymentMethod method;
+    public com.hospitality.mis.entity.billing.PaymentMethod getMethod(){return method;}
+    public void setMethod(com.hospitality.mis.entity.billing.PaymentMethod value){method=value;}
     @Column(name = "nguoiChiTra", nullable = false, length = 50) private String paidBy;
     @Column(name = "thoiDiemChiTra", nullable = false) private LocalDateTime paidAt;
     /** Vòng đời phê duyệt/hủy của khoản chi. */

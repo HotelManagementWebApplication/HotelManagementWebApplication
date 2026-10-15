@@ -10,6 +10,7 @@ describe("staff account navigation", () => {
 
   it("routes only by the authenticated backend role and rejects an unknown role", () => {
     expect(resolveEmployeeDestination("DIRECTOR")).toEqual({ role: "director", view: "manager" });
+    expect(() => resolveEmployeeDestination("STAFF")).toThrow("Không xác định được vai trò nhân viên");
     expect(() => resolveEmployeeDestination("UNKNOWN")).toThrow("Không xác định được vai trò nhân viên");
   });
 });

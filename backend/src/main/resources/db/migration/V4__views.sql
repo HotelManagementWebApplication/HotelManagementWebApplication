@@ -1,8 +1,8 @@
 -- V4__views.sql
--- Demo baseline: one final definition per object.
--- Edit this owning file; do not create additional migrations.
--- Contents:
---   vwChuyenPhong
+-- Mỗi đối tượng có một định nghĩa cuối cùng; sửa trực tiếp trong file sở hữu.
+-- Giữ nguyên tên, thứ tự tham số và các cột kết quả để bên gọi tiếp tục sử dụng.
+-- View cung cấp dữ liệu đọc; quyền truy cập được kiểm tra tại backend.
+-- Mục lục:
 --   vwPhongCongKhai
 --   vwDichVuCongKhai
 --   vwDatPhongChiTiet
@@ -63,16 +63,37 @@
 --   vwBienLai
 --   vwSoDuTienCoc
 --   vwYeuCauThanhToanVnpay
+--   vwChuyenPhong
 
 -- =============================================================================
 -- vwPhongCongKhai
 -- =============================================================================
-CREATE VIEW dbo.vwPhongCongKhai AS
-SELECT p.maPhong,p.ten AS tenPhong,p.tang,p.moTa,p.trangThai,l.maLoaiPhong,l.ten AS tenLoaiPhong,
-       l.moTa AS moTaLoaiPhong,l.giaTheoNgay,l.giaTheoGio,l.dienTich,l.huongNhin,l.loaiGiuong,l.maHangPhong,
-       l.soKhachToiDa,l.duongDanAnhBia,l.khauHieuQuangBa,l.tenQuangBa,l.moTaQuangBa
-FROM dbo.Phong p JOIN dbo.LoaiPhong l ON l.maLoaiPhong=p.maLoaiPhong
-WHERE l.trangThaiDanhMuc=N'Đang hoạt động';
+CREATE VIEW dbo.vwPhongCongKhai
+AS
+SELECT
+    phong.maPhong,
+    phong.ten AS tenPhong,
+    phong.tang,
+    phong.moTa,
+    phong.trangThai,
+    loaiPhong.maLoaiPhong,
+    loaiPhong.ten AS tenLoaiPhong,
+    loaiPhong.moTa AS moTaLoaiPhong,
+    loaiPhong.giaTheoNgay,
+    loaiPhong.giaTheoGio,
+    loaiPhong.dienTich,
+    loaiPhong.huongNhin,
+    loaiPhong.loaiGiuong,
+    loaiPhong.maHangPhong,
+    loaiPhong.soKhachToiDa,
+    loaiPhong.duongDanAnhBia,
+    loaiPhong.khauHieuQuangBa,
+    loaiPhong.tenQuangBa,
+    loaiPhong.moTaQuangBa
+FROM dbo.Phong phong
+JOIN dbo.LoaiPhong loaiPhong
+    ON loaiPhong.maLoaiPhong = phong.maLoaiPhong
+WHERE loaiPhong.trangThaiDanhMuc = N'Đang hoạt động';
 GO
 
 -- =============================================================================
@@ -80,13 +101,22 @@ GO
 -- =============================================================================
 CREATE VIEW dbo.vwDichVuCongKhai
 AS
-SELECT maDichVu, ten, gia, donViTinh, danhMuc, moTa, duongDanAnh
+SELECT
+    maDichVu,
+    ten,
+    gia,
+    donViTinh,
+    danhMuc,
+    moTa,
+    duongDanAnh
 FROM dbo.DichVu
 WHERE dangHoatDong = 1;
 GO
 
 -- =============================================================================
 -- vwDatPhongChiTiet
+-- Mỗi dòng là một phòng trong booking, kèm hồ sơ khách và tiền phòng dự kiến.
+-- Tiền dự kiến dùng giá loại phòng hiện tại; thuê giờ áp dụng tối thiểu 3 giờ.
 -- =============================================================================
 CREATE VIEW dbo.vwDatPhongChiTiet
 AS
@@ -104,60 +134,144 @@ SELECT
     phieu.trangThaiThanhToanCoc,
     phieu.thoiDiemNhanPhongThucTe,
     phieu.thoiDiemTraPhongThucTe,
-    phieu.lyDoHuy,phieu.ketQuaHuy,phieu.soPhutGiaHan,phieu.khoaChongTrung,
-    phieu.maThanhToanDatCoc,phieu.thoiDiemHetHanThanhToanCoc,phieu.phuongThucBaoDam,
-    phieu.loaiThayDoiDangCho,phieu.thoiDiemNhanPhongTruocThayDoi,phieu.thoiDiemTraPhongTruocThayDoi,
-    phieu.tienDatCocTruocThayDoi,phieu.tienDatCocBoSung,phieu.emailXacNhan,
-    phieu.nguonDatPhong,phieu.doanhThuGopOta,phieu.hoaHongOta,phieu.trangThaiDoiSoatOta,phieu.phienBan,
+    phieu.lyDoHuy,
+    phieu.ketQuaHuy,
+    phieu.soPhutGiaHan,
+    phieu.khoaChongTrung,
+    phieu.maThanhToanDatCoc,
+    phieu.thoiDiemHetHanThanhToanCoc,
+    phieu.phuongThucBaoDam,
+    phieu.loaiThayDoiDangCho,
+    phieu.thoiDiemNhanPhongTruocThayDoi,
+    phieu.thoiDiemTraPhongTruocThayDoi,
+    phieu.tienDatCocTruocThayDoi,
+    phieu.tienDatCocBoSung,
+    phieu.emailXacNhan,
+    phieu.nguonDatPhong,
+    phieu.doanhThuGopOta,
+    phieu.hoaHongOta,
+    phieu.trangThaiDoiSoatOta,
+    phieu.phienBan,
     chiTiet.maPhong,
     chiTiet.thoiDiemNhanPhong,
     chiTiet.thoiDiemTraPhong,
     chiTiet.thoiDiemTraPhongBanDau,
     chiTiet.trangThai AS trangThaiPhongTrongDatPhong,
     chiTiet.soLuongKhach,
-    phong.ten AS tenPhong,loai.ten AS tenLoaiPhong,loai.giaTheoNgay,loai.giaTheoGio,
-    dbo.fnTinhTongTienPhong(loai.giaTheoNgay,loai.giaTheoGio,chiTiet.thoiDiemNhanPhong,chiTiet.thoiDiemTraPhong,
-     CASE WHEN phieu.hinhThucThue=N'Theo giờ' THEN 1 ELSE 0 END,3) AS tongTienPhongDuKien
+    phong.ten AS tenPhong,
+    loai.ten AS tenLoaiPhong,
+    loai.giaTheoNgay,
+    loai.giaTheoGio,
+    dbo.fnTinhTongTienPhong(
+        loai.giaTheoNgay,
+        loai.giaTheoGio,
+        chiTiet.thoiDiemNhanPhong,
+        chiTiet.thoiDiemTraPhong,
+        CASE WHEN phieu.hinhThucThue = N'Theo giờ' THEN 1 ELSE 0 END,
+        3
+    ) AS tongTienPhongDuKien
 FROM dbo.PhieuDatPhong AS phieu
-INNER JOIN dbo.KhachLuuTru AS khach ON khach.maKhachLuuTru = phieu.maKhachLuuTru
-INNER JOIN dbo.ChiTietDatPhong AS chiTiet ON chiTiet.maPhieuDatPhong = phieu.maPhieuDatPhong
-JOIN dbo.Phong AS phong ON phong.maPhong=chiTiet.maPhong
-JOIN dbo.LoaiPhong AS loai ON loai.maLoaiPhong=phong.maLoaiPhong;
+INNER JOIN dbo.KhachLuuTru AS khach
+    ON khach.maKhachLuuTru = phieu.maKhachLuuTru
+INNER JOIN dbo.ChiTietDatPhong AS chiTiet
+    ON chiTiet.maPhieuDatPhong = phieu.maPhieuDatPhong
+JOIN dbo.Phong AS phong
+    ON phong.maPhong = chiTiet.maPhong
+JOIN dbo.LoaiPhong AS loai
+    ON loai.maLoaiPhong = phong.maLoaiPhong;
 GO
 
 -- =============================================================================
--- Reservation service usage and financial-document links for timeline aggregation.
+-- vwSuDungDichVuDatPhong
+-- Dịch vụ đã ghi nhận của booking, kèm tên dịch vụ để dựng dòng thời gian.
 -- =============================================================================
-CREATE VIEW dbo.vwSuDungDichVuDatPhong AS
-SELECT suDung.maPhieuDatPhong,suDung.maDichVu,dichVu.ten,suDung.ngaySuDung,suDung.soLuong,suDung.donGia
-FROM dbo.SuDungDichVu AS suDung JOIN dbo.DichVu AS dichVu ON dichVu.maDichVu=suDung.maDichVu;
+CREATE VIEW dbo.vwSuDungDichVuDatPhong
+AS
+SELECT
+    suDung.maPhieuDatPhong,
+    suDung.maDichVu,
+    dichVu.ten,
+    suDung.ngaySuDung,
+    suDung.soLuong,
+    suDung.donGia
+FROM dbo.SuDungDichVu AS suDung
+JOIN dbo.DichVu AS dichVu
+    ON dichVu.maDichVu = suDung.maDichVu;
 GO
-CREATE VIEW dbo.vwTaiLieuTaiChinhDatPhong AS
-SELECT hoaDon.maPhieuDatPhong,N'INVOICE' AS loaiDoiTuong,hoaDon.maHoaDon AS maDoiTuong FROM dbo.HoaDon AS hoaDon
+
+-- =============================================================================
+-- vwTaiLieuTaiChinhDatPhong
+-- Liên kết booking với hóa đơn, giao dịch và biên lai để dựng dòng thời gian.
+-- UNION ALL giữ từng liên kết; loaiDoiTuong cho biết cách đọc maDoiTuong.
+-- =============================================================================
+CREATE VIEW dbo.vwTaiLieuTaiChinhDatPhong
+AS
+SELECT
+    hoaDon.maPhieuDatPhong,
+    N'INVOICE' AS loaiDoiTuong,
+    hoaDon.maHoaDon AS maDoiTuong
+FROM dbo.HoaDon AS hoaDon
 UNION ALL
-SELECT hoaDon.maPhieuDatPhong,N'PAYMENT_TRANSACTION',giaoDich.maGiaoDichThanhToan
-FROM dbo.HoaDon AS hoaDon JOIN dbo.GiaoDichThanhToan AS giaoDich ON giaoDich.maHoaDon=hoaDon.maHoaDon
+SELECT
+    hoaDon.maPhieuDatPhong,
+    N'PAYMENT_TRANSACTION',
+    giaoDich.maGiaoDichThanhToan
+FROM dbo.HoaDon AS hoaDon
+JOIN dbo.GiaoDichThanhToan AS giaoDich
+    ON giaoDich.maHoaDon = hoaDon.maHoaDon
 UNION ALL
-SELECT hoaDon.maPhieuDatPhong,N'RECEIPT',bienLai.maBienLai
-FROM dbo.HoaDon AS hoaDon JOIN dbo.BienLai AS bienLai ON bienLai.maHoaDon=hoaDon.maHoaDon;
+SELECT
+    hoaDon.maPhieuDatPhong,
+    N'RECEIPT',
+    bienLai.maBienLai
+FROM dbo.HoaDon AS hoaDon
+JOIN dbo.BienLai AS bienLai
+    ON bienLai.maHoaDon = hoaDon.maHoaDon;
 GO
 
 -- =============================================================================
 -- vwDashboardLeTan
+-- Gộp thời gian nhận/trả và hóa đơn theo booking để hiển thị dashboard lễ tân.
+-- thoiDiemNhanPhongDangGiu chỉ xét chi tiết còn ở trạng thái Đã giữ phòng.
 -- =============================================================================
-CREATE VIEW dbo.vwDashboardLeTan AS
-SELECT p.maPhieuDatPhong,p.trangThai,p.trangThaiThanhToanCoc,p.tienDatCoc,k.maKhachLuuTru,k.hoVaTen,k.soDienThoai,
-       MIN(c.thoiDiemNhanPhong) AS thoiDiemNhanPhong,MAX(c.thoiDiemTraPhong) AS thoiDiemTraPhong,
-       MIN(CASE WHEN c.trangThai=N'Đã giữ phòng' THEN c.thoiDiemNhanPhong END) AS thoiDiemNhanPhongDangGiu,
-       h.maHoaDon,COALESCE(h.soTienPhaiTra,0) AS soTienPhaiTra
-FROM dbo.PhieuDatPhong p JOIN dbo.KhachLuuTru k ON k.maKhachLuuTru=p.maKhachLuuTru
-LEFT JOIN dbo.ChiTietDatPhong c ON c.maPhieuDatPhong=p.maPhieuDatPhong
-LEFT JOIN dbo.HoaDon h ON h.maPhieuDatPhong=p.maPhieuDatPhong
-GROUP BY p.maPhieuDatPhong,p.trangThai,p.trangThaiThanhToanCoc,p.tienDatCoc,k.maKhachLuuTru,k.hoVaTen,k.soDienThoai,h.maHoaDon,h.soTienPhaiTra;
+CREATE VIEW dbo.vwDashboardLeTan
+AS
+SELECT
+    phieu.maPhieuDatPhong,
+    phieu.trangThai,
+    phieu.trangThaiThanhToanCoc,
+    phieu.tienDatCoc,
+    khach.maKhachLuuTru,
+    khach.hoVaTen,
+    khach.soDienThoai,
+    MIN(chiTiet.thoiDiemNhanPhong) AS thoiDiemNhanPhong,
+    MAX(chiTiet.thoiDiemTraPhong) AS thoiDiemTraPhong,
+    MIN(CASE
+        WHEN chiTiet.trangThai = N'Đã giữ phòng' THEN chiTiet.thoiDiemNhanPhong
+    END) AS thoiDiemNhanPhongDangGiu,
+    hoaDon.maHoaDon,
+    COALESCE(hoaDon.soTienPhaiTra, 0) AS soTienPhaiTra
+FROM dbo.PhieuDatPhong phieu
+JOIN dbo.KhachLuuTru khach
+    ON khach.maKhachLuuTru = phieu.maKhachLuuTru
+LEFT JOIN dbo.ChiTietDatPhong chiTiet
+    ON chiTiet.maPhieuDatPhong = phieu.maPhieuDatPhong
+LEFT JOIN dbo.HoaDon hoaDon
+    ON hoaDon.maPhieuDatPhong = phieu.maPhieuDatPhong
+GROUP BY phieu.maPhieuDatPhong,
+    phieu.trangThai,
+    phieu.trangThaiThanhToanCoc,
+    phieu.tienDatCoc,
+    khach.maKhachLuuTru,
+    khach.hoVaTen,
+    khach.soDienThoai,
+    hoaDon.maHoaDon,
+    hoaDon.soTienPhaiTra;
 GO
 
 -- =============================================================================
 -- vwHoaDonChiTiet
+-- Chi tiết hóa đơn kèm số dư cọc và số còn phải thu được tính từ giao dịch.
 -- =============================================================================
 CREATE VIEW dbo.vwHoaDonChiTiet
 AS
@@ -179,7 +293,8 @@ SELECT
     phieu.maNhanVien,
     phieu.maTaiKhoanKhachHang
 FROM dbo.HoaDon AS hoaDon
-JOIN dbo.PhieuDatPhong AS phieu ON phieu.maPhieuDatPhong=hoaDon.maPhieuDatPhong;
+JOIN dbo.PhieuDatPhong AS phieu
+    ON phieu.maPhieuDatPhong = hoaDon.maPhieuDatPhong;
 GO
 
 -- =============================================================================
@@ -187,9 +302,19 @@ GO
 -- =============================================================================
 CREATE VIEW dbo.vwTonKhoHienTai
 AS
-SELECT maMatHang, ten, danhMuc, donViTinh, soLuongHienTai, nguongAnToan,
-       maDichVu, dangHoatDong,
-       CAST(CASE WHEN soLuongHienTai <= nguongAnToan THEN 1 ELSE 0 END AS BIT) AS duoiNguongAnToan
+SELECT
+    maMatHang,
+    ten,
+    danhMuc,
+    donViTinh,
+    soLuongHienTai,
+    nguongAnToan,
+    maDichVu,
+    dangHoatDong,
+    CAST(CASE
+        WHEN soLuongHienTai <= nguongAnToan THEN 1
+        ELSE 0
+    END AS BIT) AS duoiNguongAnToan
 FROM dbo.MatHangTonKho;
 GO
 
@@ -198,42 +323,92 @@ GO
 -- =============================================================================
 CREATE VIEW dbo.vwCongViecBuongPhong
 AS
-SELECT nhiemVu.maNhiemVuBuongPhong, nhiemVu.maPhong, nhiemVu.nguoiDuocPhanCong,
-       nhiemVu.trangThai, nhiemVu.daHoanThanhChecklist, nhiemVu.coSuCoChan,
-       nhiemVu.ghiChu, nhiemVu.nguoiPhanCong, nhiemVu.thoiDiemCapNhat,
-       phong.tang, phong.ten AS tenPhong
+SELECT
+    nhiemVu.maNhiemVuBuongPhong,
+    nhiemVu.maPhong,
+    nhiemVu.nguoiDuocPhanCong,
+    nhiemVu.trangThai,
+    nhiemVu.daHoanThanhChecklist,
+    nhiemVu.coSuCoChan,
+    nhiemVu.ghiChu,
+    nhiemVu.nguoiPhanCong,
+    nhiemVu.thoiDiemCapNhat,
+    phong.tang,
+    phong.ten AS tenPhong
 FROM dbo.NhiemVuBuongPhong AS nhiemVu
-INNER JOIN dbo.Phong AS phong ON phong.maPhong = nhiemVu.maPhong;
+INNER JOIN dbo.Phong AS phong
+    ON phong.maPhong = nhiemVu.maPhong;
 GO
 
 -- =============================================================================
 -- vwCongViecKyThuat
 -- =============================================================================
-CREATE VIEW dbo.vwCongViecKyThuat AS
-SELECT maPhieuCongViecKyThuat,maPhong,maThietBiPhong,nguoiDuocPhanCong,doUuTien,thoiHanSla,
- vatTuSuDung,ghiChuKetQua,ghiChuNghiemThu,nguoiNghiemThu,thoiDiemNghiemThu,trangThai,nguoiTao,thoiDiemTao,thoiDiemCapNhat
+CREATE VIEW dbo.vwCongViecKyThuat
+AS
+SELECT
+    maPhieuCongViecKyThuat,
+    maPhong,
+    maThietBiPhong,
+    nguoiDuocPhanCong,
+    doUuTien,
+    thoiHanSla,
+    vatTuSuDung,
+    ghiChuKetQua,
+    ghiChuNghiemThu,
+    nguoiNghiemThu,
+    thoiDiemNghiemThu,
+    trangThai,
+    nguoiTao,
+    thoiDiemTao,
+    thoiDiemCapNhat
 FROM dbo.PhieuCongViecKyThuat;
 GO
 
 -- =============================================================================
 -- vwLichLamViecNhanVien
 -- =============================================================================
-CREATE VIEW dbo.vwLichLamViecNhanVien AS
-SELECT ca.maCaLamViecNhanVien,ca.maNhanVien,nv.hoVaTen,nv.vaiTro,ca.ngayLamCa,ca.maCa,
-       ca.thoiDiemBatDau,ca.thoiDiemKetThuc,ca.trangThai,ca.nguoiTao,
-       nv.duocKichHoat,nv.trangThaiLamViec,nv.ngayBatDauNghi,nv.ngayKetThucNghi
-FROM dbo.CaLamViecNhanVien ca JOIN dbo.NhanVien nv ON nv.maNhanVien=ca.maNhanVien;
+CREATE VIEW dbo.vwLichLamViecNhanVien
+AS
+SELECT
+    ca.maCaLamViecNhanVien,
+    ca.maNhanVien,
+    nhanVien.hoVaTen,
+    nhanVien.vaiTro,
+    ca.ngayLamCa,
+    ca.maCa,
+    ca.thoiDiemBatDau,
+    ca.thoiDiemKetThuc,
+    ca.trangThai,
+    ca.nguoiTao,
+    nhanVien.duocKichHoat,
+    nhanVien.trangThaiLamViec,
+    nhanVien.ngayBatDauNghi,
+    nhanVien.ngayKetThucNghi
+FROM dbo.CaLamViecNhanVien ca
+JOIN dbo.NhanVien nhanVien
+    ON nhanVien.maNhanVien = ca.maNhanVien;
 GO
 
 -- =============================================================================
 -- vwDoanhThuTheoNgay
+-- Cộng bút toán đã chốt theo ngày: ghi có tăng, ghi nợ giảm doanh thu ròng.
 -- =============================================================================
 CREATE VIEW dbo.vwDoanhThuTheoNgay
 AS
-SELECT CAST(thoiDiemPhatSinh AS DATE) AS ngay,
-       SUM(CASE WHEN chieuButToan = N'Ghi có' THEN soTien ELSE 0 END) AS tongGhiCo,
-       SUM(CASE WHEN chieuButToan = N'Ghi nợ' THEN soTien ELSE 0 END) AS tongGhiNo,
-       SUM(CASE WHEN chieuButToan = N'Ghi có' THEN soTien ELSE -soTien END) AS doanhThuRong
+SELECT
+    CAST(thoiDiemPhatSinh AS DATE) AS ngay,
+    SUM(CASE
+        WHEN chieuButToan = N'Ghi có' THEN soTien
+        ELSE 0
+    END) AS tongGhiCo,
+    SUM(CASE
+        WHEN chieuButToan = N'Ghi nợ' THEN soTien
+        ELSE 0
+    END) AS tongGhiNo,
+    SUM(CASE
+        WHEN chieuButToan = N'Ghi có' THEN soTien
+        ELSE - soTien
+    END) AS doanhThuRong
 FROM dbo.ButToanTaiChinh
 WHERE daChotSo = 1
 GROUP BY CAST(thoiDiemPhatSinh AS DATE);
@@ -242,338 +417,913 @@ GO
 -- =============================================================================
 -- vwDatDichVuKhachSan
 -- =============================================================================
-CREATE VIEW dbo.vwDatDichVuKhachSan AS
-SELECT b.maDatDichVuKhachSan,b.maPhieuDatPhong,b.maPhong,b.maDichVu,
-       COALESCE(s.ten,b.maDichVu) AS tenDichVu,s.danhMuc,
-       b.thoiDiemDuKien,b.soLuong,b.soLuongMienPhi,b.donGia,b.buoiAn,b.trangThai,b.ghiChu,
-       b.khoaYeuCau,b.maBamYeuCau,b.nguoiTao
-FROM dbo.DatDichVuKhachSan b LEFT JOIN dbo.DichVu s ON s.maDichVu=b.maDichVu;
+CREATE VIEW dbo.vwDatDichVuKhachSan
+AS
+SELECT
+    datDichVu.maDatDichVuKhachSan,
+    datDichVu.maPhieuDatPhong,
+    datDichVu.maPhong,
+    datDichVu.maDichVu,
+    COALESCE(dichVu.ten, datDichVu.maDichVu) AS tenDichVu,
+    dichVu.danhMuc,
+    datDichVu.thoiDiemDuKien,
+    datDichVu.soLuong,
+    datDichVu.soLuongMienPhi,
+    datDichVu.donGia,
+    datDichVu.buoiAn,
+    datDichVu.trangThai,
+    datDichVu.ghiChu,
+    datDichVu.khoaYeuCau,
+    datDichVu.maBamYeuCau,
+    datDichVu.nguoiTao
+FROM dbo.DatDichVuKhachSan datDichVu
+LEFT JOIN dbo.DichVu dichVu
+    ON dichVu.maDichVu = datDichVu.maDichVu;
 GO
 
 -- =============================================================================
 -- vwChuSoHuuDatPhong
 -- =============================================================================
-CREATE VIEW dbo.vwChuSoHuuDatPhong AS
-SELECT maPhieuDatPhong,maTaiKhoanKhachHang,trangThai FROM dbo.PhieuDatPhong;
+CREATE VIEW dbo.vwChuSoHuuDatPhong
+AS
+SELECT
+    maPhieuDatPhong,
+    maTaiKhoanKhachHang,
+    trangThai
+FROM dbo.PhieuDatPhong;
 GO
 
 -- =============================================================================
 -- vwTienNghiCongKhai
 -- =============================================================================
-CREATE VIEW dbo.vwTienNghiCongKhai AS
-SELECT l.maLoaiPhong,a.maTienNghi,a.ten FROM dbo.LoaiPhongTienNghi l
-JOIN dbo.TienNghi a ON a.maTienNghi=l.maTienNghi
-JOIN dbo.LoaiPhong t ON t.maLoaiPhong=l.maLoaiPhong
-WHERE a.dangHoatDong=1 AND t.trangThaiDanhMuc=N'Đang hoạt động';
+CREATE VIEW dbo.vwTienNghiCongKhai
+AS
+SELECT
+    lienKet.maLoaiPhong,
+    tienNghi.maTienNghi,
+    tienNghi.ten
+FROM dbo.LoaiPhongTienNghi lienKet
+JOIN dbo.TienNghi tienNghi
+    ON tienNghi.maTienNghi = lienKet.maTienNghi
+JOIN dbo.LoaiPhong loaiPhong
+    ON loaiPhong.maLoaiPhong = lienKet.maLoaiPhong
+WHERE tienNghi.dangHoatDong = 1
+    AND loaiPhong.trangThaiDanhMuc = N'Đang hoạt động';
 GO
 
 -- =============================================================================
 -- vwAnhPhongCongKhai
 -- =============================================================================
-CREATE VIEW dbo.vwAnhPhongCongKhai AS
-SELECT a.maPhong,a.maHinhAnhPhong,a.duongDanTuongDoi,a.thuTuHienThi
-FROM dbo.HinhAnhPhong a JOIN dbo.vwPhongCongKhai p ON p.maPhong=a.maPhong WHERE a.dangHoatDong=1;
+CREATE VIEW dbo.vwAnhPhongCongKhai
+AS
+SELECT
+    anh.maPhong,
+    anh.maHinhAnhPhong,
+    anh.duongDanTuongDoi,
+    anh.thuTuHienThi
+FROM dbo.HinhAnhPhong anh
+JOIN dbo.vwPhongCongKhai phong
+    ON phong.maPhong = anh.maPhong
+WHERE anh.dangHoatDong = 1;
 GO
 
 -- =============================================================================
 -- vwAnhLoaiPhongCongKhai
 -- =============================================================================
-CREATE VIEW dbo.vwAnhLoaiPhongCongKhai AS
-SELECT a.maLoaiPhong,a.maHinhAnhLoaiPhong,a.duongDanAnh,a.thuTuHienThi
-FROM dbo.HinhAnhLoaiPhong a JOIN dbo.LoaiPhong l ON l.maLoaiPhong=a.maLoaiPhong WHERE l.trangThaiDanhMuc=N'Đang hoạt động';
+CREATE VIEW dbo.vwAnhLoaiPhongCongKhai
+AS
+SELECT
+    anh.maLoaiPhong,
+    anh.maHinhAnhLoaiPhong,
+    anh.duongDanAnh,
+    anh.thuTuHienThi
+FROM dbo.HinhAnhLoaiPhong anh
+JOIN dbo.LoaiPhong loaiPhong
+    ON loaiPhong.maLoaiPhong = anh.maLoaiPhong
+WHERE loaiPhong.trangThaiDanhMuc = N'Đang hoạt động';
 GO
 
 -- =============================================================================
 -- vwDoiSoatOta
+-- Booking từ OTA, doanh thu gộp, hoa hồng và doanh thu ròng không âm.
+-- Nếu chưa có doanh thu gộp OTA thì dùng tổng sau giảm giá, trước cọc và các lần thanh toán.
 -- =============================================================================
-CREATE VIEW dbo.vwDoiSoatOta AS
-SELECT r.maPhieuDatPhong,g.hoVaTen,COALESCE(MIN(rr.maPhong),N'') AS maPhong,r.nguonDatPhong,
-       CASE WHEN r.doanhThuGopOta>0 THEN r.doanhThuGopOta ELSE COALESCE(i.soTienPhaiTra,0) END AS doanhThuGop,
-       r.hoaHongOta,
-       GREATEST(CASE WHEN r.doanhThuGopOta>0 THEN r.doanhThuGopOta ELSE COALESCE(i.soTienPhaiTra,0) END-r.hoaHongOta,0) AS doanhThuRong,
-       r.trangThaiDoiSoatOta,r.thoiDiemDat
-FROM dbo.PhieuDatPhong r JOIN dbo.KhachLuuTru g ON g.maKhachLuuTru=r.maKhachLuuTru
-LEFT JOIN dbo.ChiTietDatPhong rr ON rr.maPhieuDatPhong=r.maPhieuDatPhong
-LEFT JOIN dbo.HoaDon i ON i.maPhieuDatPhong=r.maPhieuDatPhong
-WHERE r.nguonDatPhong<>N'Trực tiếp'
-GROUP BY r.maPhieuDatPhong,g.hoVaTen,r.nguonDatPhong,r.doanhThuGopOta,r.hoaHongOta,r.trangThaiDoiSoatOta,r.thoiDiemDat,i.soTienPhaiTra;
+CREATE VIEW dbo.vwDoiSoatOta
+AS
+SELECT
+    phieu.maPhieuDatPhong,
+    khach.hoVaTen,
+    COALESCE(MIN(chiTiet.maPhong), N'') AS maPhong,
+    phieu.nguonDatPhong,
+    CASE
+        WHEN phieu.doanhThuGopOta > 0 THEN phieu.doanhThuGopOta
+        ELSE GREATEST(ROUND(COALESCE(hoaDon.tongTienPhong + hoaDon.tongTienDichVu + hoaDon.tienPhuThu
+            + hoaDon.tienBoiThuong + hoaDon.phiGiaHan + hoaDon.tongTienDieuChinh - hoaDon.tienGiamGia,0)/1000.0,0)*1000,0)
+    END AS doanhThuGop,
+    phieu.hoaHongOta,
+    GREATEST(CASE
+        WHEN phieu.doanhThuGopOta > 0 THEN phieu.doanhThuGopOta
+        ELSE GREATEST(ROUND(COALESCE(hoaDon.tongTienPhong + hoaDon.tongTienDichVu + hoaDon.tienPhuThu
+            + hoaDon.tienBoiThuong + hoaDon.phiGiaHan + hoaDon.tongTienDieuChinh - hoaDon.tienGiamGia,0)/1000.0,0)*1000,0)
+    END - phieu.hoaHongOta, 0) AS doanhThuRong,
+    phieu.trangThaiDoiSoatOta,
+    phieu.thoiDiemDat
+FROM dbo.PhieuDatPhong phieu
+JOIN dbo.KhachLuuTru khach
+    ON khach.maKhachLuuTru = phieu.maKhachLuuTru
+LEFT JOIN dbo.ChiTietDatPhong chiTiet
+    ON chiTiet.maPhieuDatPhong = phieu.maPhieuDatPhong
+LEFT JOIN dbo.HoaDon hoaDon
+    ON hoaDon.maPhieuDatPhong = phieu.maPhieuDatPhong
+WHERE phieu.nguonDatPhong <> N'Trực tiếp'
+GROUP BY phieu.maPhieuDatPhong,
+    khach.hoVaTen,
+    phieu.nguonDatPhong,
+    phieu.doanhThuGopOta,
+    phieu.hoaHongOta,
+    phieu.trangThaiDoiSoatOta,
+    phieu.thoiDiemDat,
+    hoaDon.tongTienPhong,hoaDon.tongTienDichVu,hoaDon.tienPhuThu,hoaDon.tienBoiThuong,
+    hoaDon.phiGiaHan,hoaDon.tongTienDieuChinh,hoaDon.tienGiamGia;
 GO
 
 -- =============================================================================
 -- vwHoaDonGiaTriGiaTang
 -- =============================================================================
-CREATE VIEW dbo.vwHoaDonGiaTriGiaTang AS
-SELECT maHoaDonGiaTriGiaTang,maHoaDon,soHoaDonGiaTriGiaTang,thueSuat,soTienChiuThue,loaiKhachHang,
-       tenKhachHang,maSoThue,tenCongTy,diaChiCongTy,trangThai,trangThaiXml,thoiDiemPhatHanh,nguoiTao
+CREATE VIEW dbo.vwHoaDonGiaTriGiaTang
+AS
+SELECT
+    maHoaDonGiaTriGiaTang,
+    maHoaDon,
+    soHoaDonGiaTriGiaTang,
+    thueSuat,
+    soTienChiuThue,
+    loaiKhachHang,
+    tenKhachHang,
+    maSoThue,
+    tenCongTy,
+    diaChiCongTy,
+    trangThai,
+    trangThaiXml,
+    thoiDiemPhatHanh,
+    nguoiTao
 FROM dbo.HoaDonGiaTriGiaTang;
 GO
 
 -- =============================================================================
 -- vwChamCong
 -- =============================================================================
-CREATE VIEW dbo.vwChamCong AS
-SELECT maChamCong,maNhanVien,ngayLamViec,thoiDiemVaoCa,thoiDiemRaCa,trangThai,nguonDuLieu,maSuKienThietBi,ghiChu FROM dbo.ChamCong;
+CREATE VIEW dbo.vwChamCong
+AS
+SELECT
+    maChamCong,
+    maNhanVien,
+    ngayLamViec,
+    thoiDiemVaoCa,
+    thoiDiemRaCa,
+    trangThai,
+    nguonDuLieu,
+    maSuKienThietBi,
+    ghiChu
+FROM dbo.ChamCong;
 GO
 
 -- =============================================================================
 -- vwDonNghiPhep
 -- =============================================================================
-CREATE VIEW dbo.vwDonNghiPhep AS
-SELECT maDonNghiPhep,maNhanVien,loaiNghiPhep,ngayBatDau,ngayKetThuc,lyDo,maNhanVienDoiCa,trangThai,nguoiYeuCau,nguoiPheDuyet,thoiDiemQuyetDinh,thoiDiemTao FROM dbo.DonNghiPhep;
+CREATE VIEW dbo.vwDonNghiPhep
+AS
+SELECT
+    maDonNghiPhep,
+    maNhanVien,
+    loaiNghiPhep,
+    ngayBatDau,
+    ngayKetThuc,
+    lyDo,
+    maNhanVienDoiCa,
+    trangThai,
+    nguoiYeuCau,
+    nguoiPheDuyet,
+    thoiDiemQuyetDinh,
+    thoiDiemTao
+FROM dbo.DonNghiPhep;
 GO
 
 -- =============================================================================
 -- vwTaiSanKyThuat
 -- =============================================================================
-CREATE VIEW dbo.vwTaiSanKyThuat AS
-SELECT maTaiSanKyThuat,ten,danhMuc,loaiViTri,maPhong,tang,viTri,thuongHieuMau,ngayLapDat,ngayBaoTriTiepTheo,trangThai,giaTriBanDau,ghiChu,dangHoatDong FROM dbo.TaiSanKyThuat;
+CREATE VIEW dbo.vwTaiSanKyThuat
+AS
+SELECT
+    maTaiSanKyThuat,
+    ten,
+    danhMuc,
+    loaiViTri,
+    maPhong,
+    tang,
+    viTri,
+    thuongHieuMau,
+    ngayLapDat,
+    ngayBaoTriTiepTheo,
+    trangThai,
+    giaTriBanDau,
+    ghiChu,
+    dangHoatDong
+FROM dbo.TaiSanKyThuat;
 GO
 
 -- =============================================================================
 -- vwPhongNoiBo
 -- =============================================================================
-CREATE VIEW dbo.vwPhongNoiBo AS
-SELECT p.maPhong,p.ten,p.trangThai,p.maLoaiPhong,l.ten AS tenLoaiPhong,p.tang,l.giaTheoNgay,l.loaiGiuong,p.moTa,p.phienBan
-FROM dbo.Phong p JOIN dbo.LoaiPhong l ON l.maLoaiPhong=p.maLoaiPhong;
+CREATE VIEW dbo.vwPhongNoiBo
+AS
+SELECT
+    phong.maPhong,
+    phong.ten,
+    phong.trangThai,
+    phong.maLoaiPhong,
+    loaiPhong.ten AS tenLoaiPhong,
+    phong.tang,
+    loaiPhong.giaTheoNgay,
+    loaiPhong.loaiGiuong,
+    phong.moTa,
+    phong.phienBan
+FROM dbo.Phong phong
+JOIN dbo.LoaiPhong loaiPhong
+    ON loaiPhong.maLoaiPhong = phong.maLoaiPhong;
 GO
 
 -- =============================================================================
 -- vwSuCoLeTan
 -- =============================================================================
-CREATE VIEW dbo.vwSuCoLeTan AS
-SELECT maSuCoThietBi,maPhieuDatPhong,maPhong,tienBoiThuong FROM dbo.SuCoThietBi;
+CREATE VIEW dbo.vwSuCoLeTan
+AS
+SELECT
+    maSuCoThietBi,
+    maPhieuDatPhong,
+    maPhong,
+    tienBoiThuong
+FROM dbo.SuCoThietBi;
 GO
 
 -- =============================================================================
 -- vwGiaoDichDoiSoat
 -- =============================================================================
-CREATE VIEW dbo.vwGiaoDichDoiSoat AS
-SELECT maGiaoDichThanhToan,maHoaDon,phuongThuc,loai,soTien,thoiDiemPhatSinh,maNguoiThucHien
-FROM dbo.GiaoDichThanhToan WHERE trangThai=N'Đã hoàn tất';
+CREATE VIEW dbo.vwGiaoDichDoiSoat
+AS
+SELECT
+    maGiaoDichThanhToan,
+    maHoaDon,
+    phuongThuc,
+    loai,
+    soTien,
+    thoiDiemPhatSinh,
+    maNguoiThucHien
+FROM dbo.GiaoDichThanhToan
+WHERE trangThai = N'Đã hoàn tất';
 GO
 
 -- =============================================================================
 -- vwHinhAnhPhongNoiBo
 -- =============================================================================
-CREATE VIEW dbo.vwHinhAnhPhongNoiBo AS
-SELECT maHinhAnhPhong,maPhong,duongDanTuongDoi,thuTuHienThi,laAnhBia,loaiNoiDung,kichThuocByte,dangHoatDong FROM dbo.HinhAnhPhong;
+CREATE VIEW dbo.vwHinhAnhPhongNoiBo
+AS
+SELECT
+    maHinhAnhPhong,
+    maPhong,
+    duongDanTuongDoi,
+    thuTuHienThi,
+    laAnhBia,
+    loaiNoiDung,
+    kichThuocByte,
+    dangHoatDong
+FROM dbo.HinhAnhPhong;
 GO
 
 -- =============================================================================
 -- vwTienNghiNoiBo
 -- =============================================================================
-CREATE VIEW dbo.vwTienNghiNoiBo AS
-SELECT maTienNghi,ten,dangHoatDong FROM dbo.TienNghi;
+CREATE VIEW dbo.vwTienNghiNoiBo
+AS
+SELECT
+    maTienNghi,
+    ten,
+    dangHoatDong
+FROM dbo.TienNghi;
 GO
 
 -- =============================================================================
 -- vwTienNghiTheoLoaiPhong
 -- =============================================================================
-CREATE VIEW dbo.vwTienNghiTheoLoaiPhong AS
-SELECT l.maLoaiPhong,t.maTienNghi,t.ten,t.dangHoatDong FROM dbo.LoaiPhongTienNghi l JOIN dbo.TienNghi t ON t.maTienNghi=l.maTienNghi;
+CREATE VIEW dbo.vwTienNghiTheoLoaiPhong
+AS
+SELECT
+    lienKet.maLoaiPhong,
+    tienNghi.maTienNghi,
+    tienNghi.ten,
+    tienNghi.dangHoatDong
+FROM dbo.LoaiPhongTienNghi lienKet
+JOIN dbo.TienNghi tienNghi
+    ON tienNghi.maTienNghi = lienKet.maTienNghi;
 GO
 
 -- =============================================================================
 -- vwBienDongKhoDichVu
 -- =============================================================================
-CREATE VIEW dbo.vwBienDongKhoDichVu AS
-SELECT maBienDongKhoDichVu,maDichVu,loai,soLuong,maNguoiThucHien,thoiDiemPhatSinh,lyDo FROM dbo.BienDongKhoDichVu;
+CREATE VIEW dbo.vwBienDongKhoDichVu
+AS
+SELECT
+    maBienDongKhoDichVu,
+    maDichVu,
+    loai,
+    soLuong,
+    maNguoiThucHien,
+    thoiDiemPhatSinh,
+    lyDo
+FROM dbo.BienDongKhoDichVu;
 GO
 
 -- =============================================================================
 -- vwTonKhoDichVu
 -- =============================================================================
-CREATE VIEW dbo.vwTonKhoDichVu AS
-SELECT maDichVu,soLuongTonKho,nguongAnToan,dangHoatDong FROM dbo.DichVu;
+CREATE VIEW dbo.vwTonKhoDichVu
+AS
+SELECT
+    maDichVu,
+    soLuongTonKho,
+    nguongAnToan,
+    dangHoatDong
+FROM dbo.DichVu;
 GO
 
 -- =============================================================================
 -- vwThietBiPhong
 -- =============================================================================
-CREATE VIEW dbo.vwThietBiPhong AS
-SELECT maThietBiPhong,maPhong,ten,giaTriBanDau,ngayMua,soLuong,dangHoatDong FROM dbo.ThietBiPhong;
+CREATE VIEW dbo.vwThietBiPhong
+AS
+SELECT
+    maThietBiPhong,
+    maPhong,
+    ten,
+    giaTriBanDau,
+    ngayMua,
+    soLuong,
+    dangHoatDong
+FROM dbo.ThietBiPhong;
 GO
 
 -- =============================================================================
 -- vwPhieuBaoTri
 -- =============================================================================
-CREATE VIEW dbo.vwPhieuBaoTri AS
-SELECT maPhieuBaoTri,maPhong,loaiBaoTri,ngayDuKien,trangThai,moTa FROM dbo.PhieuBaoTri;
+CREATE VIEW dbo.vwPhieuBaoTri
+AS
+SELECT
+    maPhieuBaoTri,
+    maPhong,
+    loaiBaoTri,
+    ngayDuKien,
+    trangThai,
+    moTa
+FROM dbo.PhieuBaoTri;
 GO
 
 -- =============================================================================
 -- vwPhamViNhiemVuBuongPhong
 -- =============================================================================
-CREATE VIEW dbo.vwPhamViNhiemVuBuongPhong AS
-SELECT maNhiemVuBuongPhong,nguoiDuocPhanCong,trangThai FROM dbo.NhiemVuBuongPhong;
+CREATE VIEW dbo.vwPhamViNhiemVuBuongPhong
+AS
+SELECT
+    maNhiemVuBuongPhong,
+    nguoiDuocPhanCong,
+    trangThai
+FROM dbo.NhiemVuBuongPhong;
 GO
 
 -- =============================================================================
 -- vwMauChecklistBuongPhong
 -- =============================================================================
-CREATE VIEW dbo.vwMauChecklistBuongPhong AS
-SELECT maMauChecklist,ten,dangHoatDong FROM dbo.MauChecklistBuongPhong;
+CREATE VIEW dbo.vwMauChecklistBuongPhong
+AS
+SELECT
+    maMauChecklist,
+    ten,
+    dangHoatDong
+FROM dbo.MauChecklistBuongPhong;
 GO
 
 -- =============================================================================
 -- vwKetQuaChecklistBuongPhong
 -- =============================================================================
-CREATE VIEW dbo.vwKetQuaChecklistBuongPhong AS
-SELECT maKetQuaChecklist,maNhiemVuBuongPhong,hangMuc,datYeuCau,ghiChu,nguoiHoanThanh,thoiDiemHoanThanh FROM dbo.KetQuaChecklistBuongPhong;
+CREATE VIEW dbo.vwKetQuaChecklistBuongPhong
+AS
+SELECT
+    maKetQuaChecklist,
+    maNhiemVuBuongPhong,
+    hangMuc,
+    datYeuCau,
+    ghiChu,
+    nguoiHoanThanh,
+    thoiDiemHoanThanh
+FROM dbo.KetQuaChecklistBuongPhong;
 GO
 
 -- =============================================================================
 -- vwKiemTraBuongPhong
 -- =============================================================================
-CREATE VIEW dbo.vwKiemTraBuongPhong AS
-SELECT maKiemTraBuongPhong,maNhiemVuBuongPhong,loaiKiemTra,hangMuc,soLuong,tinhTrangHangMuc,ghiChu,nguoiHoanThanh,thoiDiemHoanThanh FROM dbo.KiemTraBuongPhong;
+CREATE VIEW dbo.vwKiemTraBuongPhong
+AS
+SELECT
+    maKiemTraBuongPhong,
+    maNhiemVuBuongPhong,
+    loaiKiemTra,
+    hangMuc,
+    soLuong,
+    tinhTrangHangMuc,
+    ghiChu,
+    nguoiHoanThanh,
+    thoiDiemHoanThanh
+FROM dbo.KiemTraBuongPhong;
 GO
 
 -- =============================================================================
 -- vwThongBao
 -- =============================================================================
-CREATE VIEW dbo.vwThongBao AS
-SELECT maThongBao,chuDe,vaiTroNguoiNhan,noiDung,trangThai,khoaChongLap,thoiDiemCoTheGui,thoiDiemTao,thoiDiemGui FROM dbo.HangDoiThongBao;
+CREATE VIEW dbo.vwThongBao
+AS
+SELECT
+    maThongBao,
+    chuDe,
+    vaiTroNguoiNhan,
+    noiDung,
+    trangThai,
+    khoaChongLap,
+    thoiDiemCoTheGui,
+    thoiDiemTao,
+    thoiDiemGui
+FROM dbo.HangDoiThongBao;
 GO
 
 -- =============================================================================
--- vwSuCoThietBi: explicit incident projection, including unoccupied-room reports.
+-- vwSuCoThietBi
 -- =============================================================================
-CREATE VIEW dbo.vwSuCoThietBi AS
-SELECT maSuCoThietBi,maPhieuDatPhong,maPhong,tenThietBi,tienBoiThuong,mucDoNghiemTrong,trangThaiBanGiao,ghiChuBanGiao FROM dbo.SuCoThietBi;
+CREATE VIEW dbo.vwSuCoThietBi
+AS
+SELECT
+    maSuCoThietBi,
+    maPhieuDatPhong,
+    maPhong,
+    tenThietBi,
+    tienBoiThuong,
+    mucDoNghiemTrong,
+    trangThaiBanGiao,
+    ghiChuBanGiao
+FROM dbo.SuCoThietBi;
 GO
 
 -- =============================================================================
--- vwNhatKyKiemSoat: immutable audit read projection.
+-- vwNhatKyKiemSoat
 -- =============================================================================
-CREATE VIEW dbo.vwNhatKyKiemSoat AS
-SELECT maNhatKyKiemSoat,nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,
- duLieuTruoc,duLieuSau,lyDo,khoaLienKet,thoiDiemTao FROM dbo.NhatKyKiemSoat;
+CREATE VIEW dbo.vwNhatKyKiemSoat
+AS
+SELECT
+    maNhatKyKiemSoat,
+    nguoiThucHien,
+    hanhDong,
+    loaiDoiTuong,
+    maDoiTuong,
+    duLieuTruoc,
+    duLieuSau,
+    lyDo,
+    khoaLienKet,
+    thoiDiemTao
+FROM dbo.NhatKyKiemSoat;
 GO
 
 -- =============================================================================
--- vwYeuCauPheDuyet: public fields only; mutation fingerprint remains command-private.
+-- vwYeuCauPheDuyet
+-- Các trường dùng để đọc yêu cầu phê duyệt; mã băm nội dung thay đổi chỉ dùng ở lệnh.
 -- =============================================================================
-CREATE VIEW dbo.vwYeuCauPheDuyet AS
-SELECT maYeuCauPheDuyet,nguoiYeuCau,hanhDong,maDoiTuong,duLieuThayDoi,soTien,lyDo,mucDoRuiRo,
- trangThai,nguoiPheDuyet,thoiDiemQuyetDinh,thoiDiemHetHan,thoiDiemSuDung,thoiDiemYeuCau,khoaLienKet
+CREATE VIEW dbo.vwYeuCauPheDuyet
+AS
+SELECT
+    maYeuCauPheDuyet,
+    nguoiYeuCau,
+    hanhDong,
+    maDoiTuong,
+    duLieuThayDoi,
+    soTien,
+    lyDo,
+    mucDoRuiRo,
+    trangThai,
+    nguoiPheDuyet,
+    thoiDiemQuyetDinh,
+    thoiDiemHetHan,
+    thoiDiemSuDung,
+    thoiDiemYeuCau,
+    khoaLienKet
 FROM dbo.YeuCauPheDuyet;
 GO
 
 -- =============================================================================
--- Finance read models: explicit fields, append-only ledger and ordered cash lines.
+-- vwBanGiaoTienCa
+-- Bàn giao tiền ca; chênh lệch = số thực tế - số dự kiến.
 -- =============================================================================
-CREATE VIEW dbo.vwBanGiaoTienCa AS
-SELECT maBanGiaoTienCa,maCa,nguoiBanGiao,nguoiNhanBanGiao,soTienDuKien,soTienThucTe,
- soTienThucTe-soTienDuKien AS chenhLech,thoiDiemBanGiao,ghiChu FROM dbo.BanGiaoTienCa;
-GO
-CREATE VIEW dbo.vwChiTietTienBanGiao AS
-SELECT maChiTietTienBanGiao,maBanGiaoTienCa,menhGia,soLuong FROM dbo.ChiTietTienBanGiao;
-GO
-CREATE VIEW dbo.vwKhoanChi AS
-SELECT maKhoanChi,danhMuc,moTa,soTien,nguoiChiTra,thoiDiemChiTra,trangThai FROM dbo.KhoanChi;
-GO
-CREATE VIEW dbo.vwCongNoDoiTac AS
-SELECT maCongNoDoiTac,tenDoiTac,maThamChieu,soTien,soTienDaThanhToan,trangThai,thoiDiemGhiNhan FROM dbo.CongNoDoiTac;
-GO
-CREATE VIEW dbo.vwThanhToanCongNoDoiTac AS
-SELECT maThanhToanCongNo,maCongNoDoiTac,soTien,nguoiThanhToan,thoiDiemThanhToan,ghiChu FROM dbo.ThanhToanCongNoDoiTac;
-GO
-CREATE VIEW dbo.vwButToanTaiChinh AS
-SELECT maButToanTaiChinh,loaiButToan,loaiNguon,maNguon,chieuButToan,soTien,maNguoiThucHien,thoiDiemPhatSinh,ghiChu,daChotSo FROM dbo.ButToanTaiChinh;
+CREATE VIEW dbo.vwBanGiaoTienCa
+AS
+SELECT
+    maBanGiaoTienCa,
+    maCa,
+    nguoiBanGiao,
+    nguoiNhanBanGiao,
+    soTienDuKien,
+    soTienThucTe,
+    soTienThucTe - soTienDuKien AS chenhLech,
+    thoiDiemBanGiao,
+    ghiChu
+FROM dbo.BanGiaoTienCa;
 GO
 
 -- =============================================================================
--- Identity projections: credentials stay inside database access, never API serialization.
+-- vwChiTietTienBanGiao
 -- =============================================================================
-CREATE VIEW dbo.vwNhanVien AS
-SELECT maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai,diaChi,email,phaiDoiMatKhau,
- duocKichHoat,taiKhoanKhongBiKhoa,soLanDangNhapThatBai,thoiDiemDangNhapGanNhat,
- thoiDiemDangNhapThatBaiGanNhat,trangThaiLamViec,ngayBatDauNghi,ngayKetThucNghi FROM dbo.NhanVien;
-GO
-CREATE VIEW dbo.vwSuKienDangNhapNhanVien AS
-SELECT maSuKienDangNhap,maNhanVien,thoiDiemPhatSinh,ketQua FROM dbo.SuKienDangNhapNhanVien;
-GO
-CREATE VIEW dbo.vwMaLamMoiDangNhap AS
-SELECT maMaLamMoiDangNhap,maNhanVien,maTaiKhoanKhachHang,maBamToken,maNhomPhien,
- thoiDiemPhatHanh,thoiDiemHetHan,thoiDiemThuHoi,maBamThayThe FROM dbo.MaLamMoiDangNhap;
+CREATE VIEW dbo.vwChiTietTienBanGiao
+AS
+SELECT
+    maChiTietTienBanGiao,
+    maBanGiaoTienCa,
+    menhGia,
+    soLuong
+FROM dbo.ChiTietTienBanGiao;
 GO
 
 -- =============================================================================
--- Customer and guest projections: credentials are private to authentication DAO.
+-- vwKhoanChi
 -- =============================================================================
-CREATE VIEW dbo.vwTaiKhoanKhachHang AS
-SELECT a.maTaiKhoanKhachHang,a.maKhachLuuTru,a.soDienThoai,a.matKhau,a.duocKichHoat,a.taiKhoanKhongBiKhoa,g.email
-FROM dbo.TaiKhoanKhachHang a JOIN dbo.KhachLuuTru g ON g.maKhachLuuTru=a.maKhachLuuTru;
-GO
-CREATE VIEW dbo.vwKhachLuuTru AS
-SELECT maKhachLuuTru,hoVaTen,namSinh,soGiayToTuyThan,soDienThoai,email,diaChi,hangThanhVien,tongChiTieu,soLanHuyMuon,soLanTraPhongMuon,biChanDatPhong,soLanLuuTruHoanThanh,phienBan FROM dbo.KhachLuuTru;
-GO
-CREATE VIEW dbo.vwLichSuHangThanhVien AS
-SELECT maLichSuHangThanhVien,maKhachLuuTru,hangCu,hangMoi,lyDo,thoiDiemThayDoi FROM dbo.LichSuHangThanhVien;
+CREATE VIEW dbo.vwKhoanChi
+AS
+SELECT
+    maKhoanChi,
+    danhMuc,
+    moTa,
+    soTien,
+    nguoiChiTra,
+    thoiDiemChiTra,
+    trangThai,phuongThucThanhToan
+FROM dbo.KhoanChi;
 GO
 
 -- =============================================================================
--- Room-type catalog and approved-price history projections.
+-- vwCongNoDoiTac
 -- =============================================================================
-CREATE VIEW dbo.vwLoaiPhongNoiBo AS
-SELECT maLoaiPhong,ten,giaTheoNgay,moTa,dienTich,huongNhin,giaTheoGio,loaiGiuong,trangThaiDanhMuc,
- nguoiCapNhatDanhMuc,nguoiDuyetDanhMuc,thoiDiemCapNhatDanhMuc,thoiDiemDuyetDanhMuc,maLoaiPhongGoc,maLoaiPhongThayThe,
- maHangPhong,soKhachToiDa,duongDanAnhBia,khauHieuQuangBa,tenQuangBa,moTaQuangBa FROM dbo.LoaiPhong;
-GO
-CREATE VIEW dbo.vwLichSuGiaLoaiPhong AS
-SELECT maLichSuGiaLoaiPhong,maLoaiPhong,giaTheoNgay,nguoiThayDoi,maYeuCauPheDuyet,thoiDiemHieuLuc FROM dbo.LichSuGiaLoaiPhong;
+CREATE VIEW dbo.vwCongNoDoiTac
+AS
+SELECT
+    maCongNoDoiTac,
+    tenDoiTac,
+    maThamChieu,
+    soTien,
+    soTienDaThanhToan,
+    trangThai,
+    thoiDiemGhiNhan
+FROM dbo.CongNoDoiTac;
 GO
 
 -- =============================================================================
--- Internal service catalog and approved-price history (explicit read models).
+-- vwThanhToanCongNoDoiTac
 -- =============================================================================
-CREATE VIEW dbo.vwDichVuNoiBo AS
-SELECT maDichVu,ten,gia,donViTinh,danhMuc,moTa,duongDanAnh,soLuongTonKho,nguongAnToan,dangHoatDong FROM dbo.DichVu;
-GO
-CREATE VIEW dbo.vwLichSuGiaDichVu AS
-SELECT maLichSuGiaDichVu,maDichVu,gia,nguoiThayDoi,maYeuCauPheDuyet,thoiDiemHieuLuc FROM dbo.LichSuGiaDichVu;
+CREATE VIEW dbo.vwThanhToanCongNoDoiTac
+AS
+SELECT
+    maThanhToanCongNo,
+    maCongNoDoiTac,
+    soTien,
+    nguoiThanhToan,
+    thoiDiemThanhToan,
+    ghiChu,phuongThucThanhToan
+FROM dbo.ThanhToanCongNoDoiTac;
 GO
 
 -- =============================================================================
--- Payment and receipt ledgers: immutable read models.
+-- vwButToanTaiChinh
 -- =============================================================================
-CREATE VIEW dbo.vwGiaoDichThanhToan AS
-SELECT maGiaoDichThanhToan,maHoaDon,soTien,phuongThuc,loai,trangThai,maThamChieu,
- thoiDiemPhatSinh,maNguoiThucHien,khoaChongTrung,maSuKienBenNgoai FROM dbo.GiaoDichThanhToan;
-GO
-CREATE VIEW dbo.vwBienLai AS
-SELECT maBienLai,soBienLai,maHoaDon,soTien,phuongThuc,thoiDiemPhatHanh,nguoiPhatHanh FROM dbo.BienLai;
+CREATE VIEW dbo.vwButToanTaiChinh
+AS
+SELECT
+    maButToanTaiChinh,
+    loaiButToan,
+    loaiNguon,
+    maNguon,
+    chieuButToan,
+    soTien,
+    maNguoiThucHien,
+    thoiDiemPhatSinh,
+    ghiChu,
+    daChotSo
+FROM dbo.ButToanTaiChinh;
 GO
 
--- Net refundable deposits, with refunds bound to their original tender.
-CREATE VIEW dbo.vwSoDuTienCoc AS
-SELECT p.maHoaDon,p.maGiaoDichThanhToan,p.phuongThuc,p.thoiDiemPhatSinh,
- p.soTien-COALESCE((SELECT SUM(r.soTien) FROM dbo.GiaoDichThanhToan r
-  WHERE r.maHoaDon=p.maHoaDon AND r.loai=N'Hoàn tiền' AND r.trangThai=N'Đã hoàn tất'
-   AND r.maThamChieu LIKE N'REFUND_OF:'+CONVERT(NVARCHAR(30),p.maGiaoDichThanhToan)+N':%'),0) AS soDu
-FROM dbo.GiaoDichThanhToan p WHERE p.loai=N'Thanh toán' AND p.trangThai=N'Đã hoàn tất'
- AND(p.maThamChieu LIKE N'DEPOSIT:%' OR p.maSuKienBenNgoai IS NOT NULL OR p.maNguoiThucHien=N'PAYMENT_GATEWAY');
+-- =============================================================================
+-- vwNhanVien
+-- Hồ sơ nhân viên dùng nội bộ, gồm dữ liệu xác thực.
+-- DAO xác thực sử dụng matKhau; không đưa trường này vào phản hồi API.
+-- =============================================================================
+CREATE VIEW dbo.vwNhanVien
+AS
+SELECT
+    maNhanVien,
+    hoVaTen,
+    matKhau,
+    vaiTro,
+    soDienThoai,
+    diaChi,
+    email,
+    phaiDoiMatKhau,
+    duocKichHoat,
+    taiKhoanKhongBiKhoa,
+    soLanDangNhapThatBai,
+    thoiDiemDangNhapGanNhat,
+    thoiDiemDangNhapThatBaiGanNhat,
+    trangThaiLamViec,
+    ngayBatDauNghi,
+    ngayKetThucNghi
+FROM dbo.NhanVien;
+GO
+
+-- =============================================================================
+-- vwSuKienDangNhapNhanVien
+-- =============================================================================
+CREATE VIEW dbo.vwSuKienDangNhapNhanVien
+AS
+SELECT
+    maSuKienDangNhap,
+    maNhanVien,
+    thoiDiemPhatSinh,
+    ketQua
+FROM dbo.SuKienDangNhapNhanVien;
+GO
+
+-- =============================================================================
+-- vwMaLamMoiDangNhap
+-- Dữ liệu refresh token đã băm và vòng đời phiên, dùng nội bộ cho xác thực.
+-- =============================================================================
+CREATE VIEW dbo.vwMaLamMoiDangNhap
+AS
+SELECT
+    maMaLamMoiDangNhap,
+    maNhanVien,
+    maTaiKhoanKhachHang,
+    maBamToken,
+    maNhomPhien,
+    thoiDiemPhatHanh,
+    thoiDiemHetHan,
+    thoiDiemThuHoi,
+    maBamThayThe
+FROM dbo.MaLamMoiDangNhap;
+GO
+
+-- =============================================================================
+-- vwTaiKhoanKhachHang
+-- Tài khoản khách gắn hồ sơ lưu trú, dùng nội bộ cho xác thực.
+-- DAO xác thực sử dụng matKhau; không đưa trường này vào phản hồi API.
+-- =============================================================================
+CREATE VIEW dbo.vwTaiKhoanKhachHang
+AS
+SELECT
+    taiKhoan.maTaiKhoanKhachHang,
+    taiKhoan.maKhachLuuTru,
+    taiKhoan.soDienThoai,
+    taiKhoan.matKhau,
+    taiKhoan.duocKichHoat,
+    taiKhoan.taiKhoanKhongBiKhoa,
+    khach.email
+FROM dbo.TaiKhoanKhachHang taiKhoan
+JOIN dbo.KhachLuuTru khach
+    ON khach.maKhachLuuTru = taiKhoan.maKhachLuuTru;
+GO
+
+-- =============================================================================
+-- vwKhachLuuTru
+-- =============================================================================
+CREATE VIEW dbo.vwKhachLuuTru
+AS
+SELECT
+    maKhachLuuTru,
+    hoVaTen,
+    namSinh,
+    soGiayToTuyThan,
+    soDienThoai,
+    email,
+    diaChi,
+    hangThanhVien,
+    tongChiTieu,
+    soLanHuyMuon,
+    soLanTraPhongMuon,
+    biChanDatPhong,
+    soLanLuuTruHoanThanh,
+    phienBan
+FROM dbo.KhachLuuTru;
+GO
+
+-- =============================================================================
+-- vwLichSuHangThanhVien
+-- =============================================================================
+CREATE VIEW dbo.vwLichSuHangThanhVien
+AS
+SELECT
+    maLichSuHangThanhVien,
+    maKhachLuuTru,
+    hangCu,
+    hangMoi,
+    lyDo,
+    thoiDiemThayDoi
+FROM dbo.LichSuHangThanhVien;
+GO
+
+-- =============================================================================
+-- vwLoaiPhongNoiBo
+-- =============================================================================
+CREATE VIEW dbo.vwLoaiPhongNoiBo
+AS
+SELECT
+    maLoaiPhong,
+    ten,
+    giaTheoNgay,
+    moTa,
+    dienTich,
+    huongNhin,
+    giaTheoGio,
+    loaiGiuong,
+    trangThaiDanhMuc,
+    nguoiCapNhatDanhMuc,
+    nguoiDuyetDanhMuc,
+    thoiDiemCapNhatDanhMuc,
+    thoiDiemDuyetDanhMuc,
+    maLoaiPhongGoc,
+    maLoaiPhongThayThe,
+    maHangPhong,
+    soKhachToiDa,
+    duongDanAnhBia,
+    khauHieuQuangBa,
+    tenQuangBa,
+    moTaQuangBa
+FROM dbo.LoaiPhong;
+GO
+
+-- =============================================================================
+-- vwLichSuGiaLoaiPhong
+-- =============================================================================
+CREATE VIEW dbo.vwLichSuGiaLoaiPhong
+AS
+SELECT
+    maLichSuGiaLoaiPhong,
+    maLoaiPhong,
+    giaTheoNgay,
+    nguoiThayDoi,
+    maYeuCauPheDuyet,
+    thoiDiemHieuLuc
+FROM dbo.LichSuGiaLoaiPhong;
+GO
+
+-- =============================================================================
+-- vwDichVuNoiBo
+-- =============================================================================
+CREATE VIEW dbo.vwDichVuNoiBo
+AS
+SELECT
+    maDichVu,
+    ten,
+    gia,
+    donViTinh,
+    danhMuc,
+    moTa,
+    duongDanAnh,
+    soLuongTonKho,
+    nguongAnToan,
+    dangHoatDong
+FROM dbo.DichVu;
+GO
+
+-- =============================================================================
+-- vwLichSuGiaDichVu
+-- =============================================================================
+CREATE VIEW dbo.vwLichSuGiaDichVu
+AS
+SELECT
+    maLichSuGiaDichVu,
+    maDichVu,
+    gia,
+    nguoiThayDoi,
+    maYeuCauPheDuyet,
+    thoiDiemHieuLuc
+FROM dbo.LichSuGiaDichVu;
+GO
+
+-- =============================================================================
+-- vwGiaoDichThanhToan
+-- =============================================================================
+CREATE VIEW dbo.vwGiaoDichThanhToan
+AS
+SELECT
+    maGiaoDichThanhToan,
+    maHoaDon,
+    soTien,
+    phuongThuc,
+    loai,
+    trangThai,
+    maThamChieu,
+    thoiDiemPhatSinh,
+    maNguoiThucHien,
+    khoaChongTrung,
+    maSuKienBenNgoai
+FROM dbo.GiaoDichThanhToan;
+GO
+
+-- =============================================================================
+-- vwBienLai
+-- =============================================================================
+CREATE VIEW dbo.vwBienLai
+AS
+SELECT
+    maBienLai,
+    soBienLai,
+    maHoaDon,
+    soTien,
+    phuongThuc,
+    thoiDiemPhatHanh,
+    nguoiPhatHanh
+FROM dbo.BienLai;
+GO
+
+-- =============================================================================
+-- vwSoDuTienCoc
+-- Mỗi dòng là một giao dịch cọc hoàn tất và số dư sau các khoản hoàn của nó.
+-- REFUND_OF:<mã giao dịch>:... gắn hoàn tiền với đúng lần thu cọc và phương thức gốc.
+-- Cọc được nhận diện qua DEPOSIT:..., mã sự kiện ngoài hoặc người thực hiện PAYMENT_GATEWAY.
+-- =============================================================================
+CREATE VIEW dbo.vwSoDuTienCoc
+AS
+SELECT
+    tienCoc.maHoaDon,
+    tienCoc.maGiaoDichThanhToan,
+    tienCoc.phuongThuc,
+    tienCoc.thoiDiemPhatSinh,
+    tienCoc.soTien - COALESCE((
+        SELECT
+            SUM(hoanTien.soTien)
+        FROM dbo.GiaoDichThanhToan hoanTien
+        WHERE hoanTien.maHoaDon = tienCoc.maHoaDon
+            AND hoanTien.loai = N'Hoàn tiền'
+            AND hoanTien.trangThai = N'Đã hoàn tất'
+            AND hoanTien.maThamChieu LIKE N'REFUND_OF:' + CONVERT(NVARCHAR(30), tienCoc.maGiaoDichThanhToan) + N':%'
+    ), 0) AS soDu
+FROM dbo.GiaoDichThanhToan tienCoc
+WHERE tienCoc.loai = N'Thanh toán'
+    AND tienCoc.trangThai = N'Đã hoàn tất'
+    AND (
+        tienCoc.maThamChieu LIKE N'DEPOSIT:%'
+        OR tienCoc.maSuKienBenNgoai IS NOT NULL
+        OR tienCoc.maNguoiThucHien = N'PAYMENT_GATEWAY'
+    );
 GO
 
 -- =============================================================================
 -- vwYeuCauThanhToanVnpay
--- Customer-owned VNPay attempts and their immutable checkout/status projection.
+-- Các lần yêu cầu thanh toán VNPay kèm tài khoản sở hữu booking và kết quả xử lý.
 -- =============================================================================
-CREATE VIEW dbo.vwYeuCauThanhToanVnpay AS
-SELECT yeuCau.maYeuCauThanhToanVnpay,yeuCau.maPhieuDatPhong,phieu.maTaiKhoanKhachHang,
- yeuCau.maThamChieuMerchant,yeuCau.soTien,yeuCau.trangThai,yeuCau.thoiDiemTao,
- yeuCau.thoiDiemHetHan,yeuCau.thoiDiemHoanTat,yeuCau.maGiaoDichVnpay,
- yeuCau.maNganHang,yeuCau.loaiThe,yeuCau.maPhanHoi,yeuCau.phienBan
+CREATE VIEW dbo.vwYeuCauThanhToanVnpay
+AS
+SELECT
+    yeuCau.maYeuCauThanhToanVnpay,
+    yeuCau.maPhieuDatPhong,
+    phieu.maTaiKhoanKhachHang,
+    yeuCau.maThamChieuMerchant,
+    yeuCau.soTien,
+    yeuCau.trangThai,
+    yeuCau.thoiDiemTao,
+    yeuCau.thoiDiemHetHan,
+    yeuCau.thoiDiemHoanTat,
+    yeuCau.maGiaoDichVnpay,
+    yeuCau.maNganHang,
+    yeuCau.loaiThe,
+    yeuCau.maPhanHoi,
+    yeuCau.phienBan
 FROM dbo.YeuCauThanhToanVnpay AS yeuCau
-JOIN dbo.PhieuDatPhong AS phieu ON phieu.maPhieuDatPhong=yeuCau.maPhieuDatPhong;
+JOIN dbo.PhieuDatPhong AS phieu
+    ON phieu.maPhieuDatPhong = yeuCau.maPhieuDatPhong;
 GO
 
 -- =============================================================================
 -- vwChuyenPhong
--- Committed transfer result projection; authorization stays in the backend.
+-- Kết quả chuyển phòng đã ghi nhận; backend kiểm tra quyền truy cập.
 -- =============================================================================
-CREATE VIEW dbo.vwChuyenPhong AS
-SELECT maChuyenPhong,maPhieuDatPhong,maPhongCu,maPhongMoi,thoiDiemChuyenPhong,lyDo
+CREATE VIEW dbo.vwChuyenPhong
+AS
+SELECT
+    maChuyenPhong,
+    maPhieuDatPhong,
+    maPhongCu,
+    maPhongMoi,
+    thoiDiemChuyenPhong,
+    lyDo
 FROM dbo.ChuyenPhong;
 GO

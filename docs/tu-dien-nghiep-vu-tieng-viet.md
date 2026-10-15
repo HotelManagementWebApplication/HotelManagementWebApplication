@@ -184,11 +184,11 @@ khách trả phòng và bộ phận buồng phòng hoàn tất checklist.
 
 | Mã | Tên tiếng Việt | Định hướng sử dụng |
 |---|---|---|
-| `STD` | Standard – Tiêu chuẩn | Khoảng 15–25 m²; phòng đơn tối đa 2 người, phòng đôi tối đa 4 người. |
-| `SUP` | Superior – Cao cấp hơn | Khoảng 25–35 m²; nội thất và tầm nhìn tốt hơn Standard. |
+| `STD` | Phòng Classic | Khoảng 15–25 m²; phòng đơn tối đa 2 người, phòng đôi tối đa 4 người. |
+| `SUP` | Phòng Superior | Khoảng 25–35 m²; nội thất và tầm nhìn nâng cấp hơn Classic. |
 | `DLX` | Deluxe – Cao cấp | Diện tích rộng, tầng cao, hướng nhìn đẹp, thiết bị cao cấp. |
-| `SUT` | Suite | Diện tích lớn, khu vực riêng, tiện nghi cao cấp, thường ở tầng cao. |
-| `VIP` | Phòng VIP nguyên căn | Có phòng khách riêng, ban công và dịch vụ đặc biệt. |
+| `SUT` | Suite Hoàng Gia | Diện tích lớn, khu vực riêng, tiện nghi cao cấp, thường ở tầng cao. |
+| `VIP` | Penthouse Tổng Thống | Không gian riêng tư trên tầng cao với phòng khách và khu ngủ sang trọng. |
 
 Không có phòng nào được cấu hình vượt quá sức chứa thực tế. Theo yêu cầu dự
 án, hạng phòng lớn nhất được thiết kế tối đa 8 người/phòng.
@@ -207,7 +207,6 @@ Không có phòng nào được cấu hình vượt quá sức chứa thực t�
 | `HOUSEKEEPING` | Buồng phòng | Dọn phòng, checklist, đồ vải và sự cố trong phòng. |
 | `TECHNICAL` | Kỹ thuật | Bảo trì phòng, thiết bị và tài sản kỹ thuật của tòa nhà. |
 | `KITCHEN` | Bếp / vận hành dịch vụ | Dịch vụ ăn uống và tồn kho liên quan. |
-| `STAFF` | Nhân viên nghiệp vụ | Quyền xem giới hạn theo nhiệm vụ được cấp. |
 | `CUSTOMER` | Khách hàng | Chỉ dùng cổng customer và chỉ xem dữ liệu của chính mình. |
 
 `CUSTOMER` là loại tài khoản khách hàng, không phải chức vụ nhân viên.

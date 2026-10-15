@@ -70,7 +70,7 @@ giữ `code` và `details`, không gom 400/401/403/409/422/429 thành một thô
 
 Controller kiểm tra capability `Permission` từ role trong JWT. Các role canonical
 là `ADMIN`, `DIRECTOR`, `MANAGER`, `FRONT_DESK`, `HOUSEKEEPING`, `TECHNICAL`,
-`KITCHEN`, `ACCOUNTING`, `HR`, `STAFF`.
+`KITCHEN`, `ACCOUNTING`, `HR`.
 
 - `ADMIN`, `DIRECTOR`, `MANAGER` được khởi tạo với toàn bộ `Permission`; riêng
   `ADMIN` và `DIRECTOR` bị loại `RESERVATION_CREATE`, `RESERVATION_WRITE`,
@@ -87,7 +87,7 @@ là `ADMIN`, `DIRECTOR`, `MANAGER`, `FRONT_DESK`, `HOUSEKEEPING`, `TECHNICAL`,
 - `TECHNICAL`: room/catalog/admin, equipment, reservation read, maintenance,
   technical work order read/write/release, incident handoff, notification read.
 - `KITCHEN`: service read/write, inventory read/write, service-price request.
-- `HR`: employee read, shift read/write. `STAFF`: room read, reservation read.
+- `HR`: employee read, shift read/write.
 
 Các capability kiểm tra thêm vai trò/phạm vi: approver phải khác requester;
 refund approval chỉ `DIRECTOR`; activation room/service cần role được phép;

@@ -127,7 +127,7 @@ class DepartmentAuthorizationMatrixTest {
         when(mock24.canManageEmployeeRole(any(), anyString(), any())).thenReturn(true);
         when(mock24.list(anyBoolean())).thenReturn(List.of());
         when(mock24.provisionAuto(any())).thenReturn(new com.hospitality.mis.dto.auth.AuthDtos.AutoProvisionResponse(
-            "EMP", "Test", com.hospitality.mis.entity.identity.EmployeeRole.STAFF,
+            "EMP", "Test", com.hospitality.mis.entity.identity.EmployeeRole.FRONT_DESK,
             "0900000000", "test@hotel.com", "temp123", true));
         when(mock25.poll(any())).thenReturn(List.of());
         when(mock26.list()).thenReturn(List.of());
@@ -152,7 +152,7 @@ class DepartmentAuthorizationMatrixTest {
     }
     /** Danh sách endpoint bảo vệ, là nguồn dữ liệu cho cả matrix và coverage check. */
     static List<Endpoint> endpoints() { return List.of(
-            new Endpoint("POST", "/api/auth/employees", "ADMIN,DIRECTOR,MANAGER", "{\"employee_id\":\"new\",\"full_name\":\"New\",\"password\":\"valid-password\",\"role\":\"STAFF\",\"phone\":\"0900000000\"}"),
+            new Endpoint("POST", "/api/auth/employees", "ADMIN,DIRECTOR,MANAGER", "{\"employee_id\":\"new\",\"full_name\":\"New\",\"password\":\"valid-password\",\"role\":\"FRONT_DESK\",\"phone\":\"0900000000\"}"),
             new Endpoint("GET", "/api/auth/employees", "ADMIN,DIRECTOR,MANAGER,HR,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/auth/employees/emp", "ADMIN,DIRECTOR,MANAGER,HR,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/auth/employees/emp/sessions", "ADMIN,DIRECTOR,MANAGER,HR,ACCOUNTING", "{}"),
@@ -166,14 +166,14 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("GET", "/api/guests/1", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK", "{}"),
             new Endpoint("GET", "/api/guests/1/membership-history", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK", "{}"),
             new Endpoint("POST", "/api/guests", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK", "{\"full_name\":\"Guest\",\"identity_number\":\"123456789012\",\"phone\":\"0900000000\"}"),
-            new Endpoint("GET", "/api/rooms", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
+            new Endpoint("GET", "/api/rooms", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("GET", "/api/rooms/admin", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{}"),
             new Endpoint("POST", "/api/rooms/admin", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"id\":\"101\",\"name\":\"101\",\"room_type_id\":\"STD\"}"),
             new Endpoint("PUT", "/api/rooms/admin/101", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"id\":\"101\",\"name\":\"101\",\"room_type_id\":\"STD\"}"),
-            new Endpoint("GET", "/api/rooms/availability?from=2026-10-01T12:00:00&to=2026-10-02T12:00:00", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
+            new Endpoint("GET", "/api/rooms/availability?from=2026-10-01T12:00:00&to=2026-10-02T12:00:00", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("PATCH", "/api/rooms/101/status?status=available", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("GET", "/api/rooms/101/equipment", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
-            new Endpoint("GET", "/api/rooms/101/media", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
+            new Endpoint("GET", "/api/rooms/101/media", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("POST", "/api/rooms/101/equipment", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"room_id\":\"101\",\"name\":\"TV\",\"original_value\":100,\"purchased_on\":\"2026-01-01\",\"quantity\":1}"),
             new Endpoint("PUT", "/api/rooms/101/equipment/1", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"name\":\"TV\",\"original_value\":100,\"purchased_on\":\"2026-01-01\",\"quantity\":1,\"active\":true}"),
             new Endpoint("POST", "/api/rooms/101/images", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", ""),
@@ -184,8 +184,8 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/room-types", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"id\":\"STD\",\"name\":\"Standard\",\"daily_price\":100000}"),
             new Endpoint("PUT", "/api/room-types/STD", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"id\":\"STD\",\"name\":\"Standard\",\"daily_price\":100000}"),
             new Endpoint("POST", "/api/room-types/STD/revision", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"id\":\"STD-V2\",\"name\":\"Standard v2\",\"daily_price\":110000}"),
-            new Endpoint("GET", "/api/room-types/STD", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
-            new Endpoint("GET", "/api/room-types/STD/price-history", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
+            new Endpoint("GET", "/api/room-types/STD", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
+            new Endpoint("GET", "/api/room-types/STD/price-history", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("GET", "/api/front-desk/dashboard", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK", "{}"),
             new Endpoint("GET", "/api/operations/housekeeping/tasks", "ADMIN,DIRECTOR,MANAGER,HOUSEKEEPING", "{}"),
             new Endpoint("POST", "/api/operations/housekeeping/tasks", "ADMIN,DIRECTOR,MANAGER", "{\"room_id\":\"101\"}"),
@@ -209,14 +209,14 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/room-types/STD/submit", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{}"),
             new Endpoint("POST", "/api/room-types/STD/activate", "ADMIN,DIRECTOR,MANAGER", "{}"),
             new Endpoint("PUT", "/api/room-types/STD/amenities", "ADMIN,DIRECTOR,MANAGER,TECHNICAL", "{\"amenity_ids\":[]}"),
-            new Endpoint("GET", "/api/reservations", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
-            new Endpoint("GET", "/api/reservations/1", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
+            new Endpoint("GET", "/api/reservations", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
+            new Endpoint("GET", "/api/reservations/1", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("GET", "/api/reservations/1/service-bookings", "MANAGER,FRONT_DESK", "{}"),
             new Endpoint("POST", "/api/reservations/1/service-bookings/1/use", "MANAGER,FRONT_DESK", "{}"),
             new Endpoint("POST", "/api/reservations", "MANAGER,FRONT_DESK", "{\"guest_id\":1,\"employee_id\":\"actor\",\"deposit\":0,\"rental_type\":\"PACKAGE\",\"rooms\":[{\"room_id\":\"101\",\"expected_check_in\":\"2026-10-01T12:00:00\",\"expected_check_out\":\"2026-10-02T12:00:00\"}]}"),
             new Endpoint("POST", "/api/reservations/1/check-in", "MANAGER,FRONT_DESK", "{}"),
             new Endpoint("POST", "/api/reservations/1/confirm", "MANAGER,FRONT_DESK", "{}"),
-            new Endpoint("GET", "/api/reservations/1/timeline", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,TECHNICAL,STAFF", "{}"),
+            new Endpoint("GET", "/api/reservations/1/timeline", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("POST", "/api/reservations/1/check-out", "MANAGER,FRONT_DESK", "{}"),
             new Endpoint("POST", "/api/reservations/1/cancel", "MANAGER,FRONT_DESK", "{\"reason\":\"Cancelled\"}"),
             new Endpoint("POST", "/api/reservations/1/no-show", "MANAGER,FRONT_DESK", "{}"),
@@ -271,12 +271,12 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("GET", "/api/governance/audit", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/governance/notifications/outbox", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("POST", "/api/governance/notifications/outbox/1/delivered", "ADMIN,DIRECTOR,MANAGER", "{}"),
-            new Endpoint("GET", "/api/auth/me", "ADMIN,DIRECTOR,MANAGER,HR,FRONT_DESK,ACCOUNTING,HOUSEKEEPING,TECHNICAL,KITCHEN,STAFF", "{}"),
-            new Endpoint("POST", "/api/auth/me/password", "ADMIN,DIRECTOR,MANAGER,HR,FRONT_DESK,ACCOUNTING,HOUSEKEEPING,TECHNICAL,KITCHEN,STAFF,CUSTOMER,UNKNOWN", "{\"password\":\"valid-password\"}"),
+            new Endpoint("GET", "/api/auth/me", "ADMIN,DIRECTOR,MANAGER,HR,FRONT_DESK,ACCOUNTING,HOUSEKEEPING,TECHNICAL,KITCHEN", "{}"),
+            new Endpoint("POST", "/api/auth/me/password", "ADMIN,DIRECTOR,MANAGER,HR,FRONT_DESK,ACCOUNTING,HOUSEKEEPING,TECHNICAL,KITCHEN,CUSTOMER,UNKNOWN", "{\"password\":\"valid-password\"}"),
             new Endpoint("GET", "/api/auth/customers/me", "CUSTOMER", "{}"),
             new Endpoint("PUT", "/api/auth/customers/me", "CUSTOMER", "{\"full_name\":\"Test\",\"identity_number\":\"123456789012\"}"),
             new Endpoint("POST", "/api/auth/customers/password", "CUSTOMER", "{\"password\":\"valid-password\"}"),
-            new Endpoint("POST", "/api/auth/employees/auto-provision", "ADMIN,DIRECTOR,MANAGER", "{\"role\":\"STAFF\",\"full_name\":\"Test\",\"phone\":\"0900000000\",\"email\":\"test@hotel.com\"}"),
+            new Endpoint("POST", "/api/auth/employees/auto-provision", "ADMIN,DIRECTOR,MANAGER", "{\"role\":\"FRONT_DESK\",\"full_name\":\"Test\",\"phone\":\"0900000000\",\"email\":\"test@hotel.com\"}"),
             new Endpoint("POST", "/api/customer/reservations", "CUSTOMER", "{\"rental_type\":\"PACKAGE\",\"rooms\":[{\"room_id\":\"101\",\"expected_check_in\":\"2026-10-01T12:00:00\",\"expected_check_out\":\"2026-10-02T12:00:00\"}],\"idempotency_key\":\"customer-key\",\"payment_method\":\"VNPAY\"}"),
             new Endpoint("GET", "/api/customer/reservations", "CUSTOMER", "{}"),
             new Endpoint("GET", "/api/customer/reservations/1", "CUSTOMER", "{}"),
@@ -288,13 +288,13 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/customer/service-bookings", "CUSTOMER", "{\"reservation_id\":1,\"room_id\":\"101\",\"service_id\":\"S1\",\"scheduled_at\":\"2026-10-01T12:00:00\",\"quantity\":1}"),
             new Endpoint("GET", "/api/customer/service-bookings?reservation_id=1", "CUSTOMER", "{}"),
             new Endpoint("POST", "/api/customer/service-bookings/1/cancel", "CUSTOMER", "{}"),
-            new Endpoint("POST", "/api/auth/logout", "ADMIN,DIRECTOR,MANAGER,HR,FRONT_DESK,ACCOUNTING,HOUSEKEEPING,TECHNICAL,KITCHEN,STAFF,CUSTOMER,UNKNOWN", "{}")
+            new Endpoint("POST", "/api/auth/logout", "ADMIN,DIRECTOR,MANAGER,HR,FRONT_DESK,ACCOUNTING,HOUSEKEEPING,TECHNICAL,KITCHEN,CUSTOMER,UNKNOWN", "{}")
     ); }
     /** Sinh role case, gồm UNKNOWN để bảo vệ default deny. */
     static Stream<Arguments> matrix() {
         return endpoints().stream().flatMap(endpoint -> Stream.of(
             "ADMIN", "DIRECTOR", "MANAGER", "HR", "FRONT_DESK", "ACCOUNTING", "HOUSEKEEPING",
-            "TECHNICAL", "KITCHEN", "STAFF", "CUSTOMER", "UNKNOWN", "ANONYMOUS")
+            "TECHNICAL", "KITCHEN", "CUSTOMER", "UNKNOWN", "ANONYMOUS")
             .map(role -> Arguments.of(endpoint, role)));
     }
 

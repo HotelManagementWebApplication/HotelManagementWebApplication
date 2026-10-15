@@ -79,14 +79,14 @@ class SqlServerPaymentReportingTest {
             .andExpect(status().isOk()).andExpect(jsonPath("$.page").value(14)).andExpect(jsonPath("$.total_elements").value(150))
             .andExpect(jsonPath("$.total_pages").value(15)).andExpect(jsonPath("$.method_counts.CASH").value(75))
             .andExpect(jsonPath("$.items[9].invoice_id").value(firstInvoice)).andExpect(jsonPath("$.items[9].reservation_id").isNumber());
-        mvc.perform(get("/api/finance/payments").with(jwt().jwt(j->j.subject("STAFF").claim("principal_type","EMPLOYEE").claim("principal_id","STAFF")).authorities(new SimpleGrantedAuthority("ROLE_STAFF"))))
+        mvc.perform(get("/api/finance/payments").with(jwt().jwt(j->j.subject("HOUSEKEEPING").claim("principal_type","EMPLOYEE").claim("principal_id","HOUSEKEEPING")).authorities(new SimpleGrantedAuthority("ROLE_HOUSEKEEPING"))))
             .andExpect(status().isForbidden());
     }
-    @Test void pendingBankTransfersAggregateAllInvoices(){
-        var before=reporting.pendingBankTransfers();
+    @Test void outstandingBankTransferBalancesAggregateAllInvoices(){
+        var before=reporting.outstandingBankTransferBalances();
         long booking=jdbc.queryForObject("INSERT PhieuDatPhong(maKhachLuuTru) OUTPUT INSERTED.maPhieuDatPhong VALUES(?)",Long.class,guest);
         jdbc.update("INSERT HoaDon(maPhieuDatPhong,tongTienPhong,phuongThucThanhToan,trangThai) VALUES(?,600000,N'Chuyển khoản ngân hàng',N'Chưa thanh toán')",booking);
-        assertThat(reporting.pendingBankTransfers().subtract(before)).isEqualByComparingTo("600000");
+        assertThat(reporting.outstandingBankTransferBalances().subtract(before)).isEqualByComparingTo("600000");
     }
     private void payment(int amount,String method,String type,String status,String actor,LocalDateTime at){jdbc.update("INSERT GiaoDichThanhToan(maHoaDon,soTien,phuongThuc,loai,trangThai,maNguoiThucHien,thoiDiemPhatSinh) VALUES(?,?,?,?,?,?,?)",invoice,amount,method,type,status,actor,at);}
 }

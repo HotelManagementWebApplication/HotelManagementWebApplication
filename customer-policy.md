@@ -243,12 +243,11 @@ Mức bồi thường thiết bị bị hư hỏng được tính theo tuổi th
   màn hình LED 4K và hệ thống âm thanh. Khách vui lòng liên hệ khách sạn để xác
   nhận tình trạng và giá hiện hành trước khi đặt.
 
-## 11. Thông tin MaM Hotel & Resort
+## 11. Thông tin MaM Hotel
 
 ### Nhận diện và khu vực
 
-- Tên sử dụng với khách hàng là **MaM Hotel** hoặc **MaM Hotel &
-  Luxury Retreat**.
+- Tên sử dụng với khách hàng là **MaM Hotel**, với định vị **Luxury Hotel & Spa**.
 - Khách sạn được giới thiệu tại **Vũng Tàu, Việt Nam**.
 - Địa chỉ: **Số 1 VVN, Vũng Tàu, Việt Nam**.
 - Khách lưu trú được đỗ xe miễn phí tại tầng hầm B1 trong thời gian booking còn
@@ -280,8 +279,8 @@ Mức bồi thường thiết bị bị hư hỏng được tính theo tuổi th
 ### Kênh liên hệ
 
 - Hotline: **1900 6789**.
-- Email: **retreat@mamresort.vn**.
-- Website: **www.mamresort.vn**.
+- Email: **mam@hotel.com**.
+- Website liên hệ sẽ được công bố sau khi khách sạn xác nhận địa chỉ chính thức.
 - Lễ tân là đầu mối hỗ trợ khách đang lưu trú, nhận hành lý, sự cố phòng, hỗ
   trợ y tế ban đầu và các yêu cầu chưa có chức năng tự phục vụ trên website.
 - Chatbot không nhận số thẻ thanh toán, mật khẩu, mã OTP hoặc ảnh đầy đủ hai
@@ -299,15 +298,15 @@ tại từ API và không dùng giá hoặc tình trạng phòng ghi nhớ từ 
 
 ### Cách hiểu các nhóm phòng
 
-- **Standard (STD)** hướng đến nhu cầu lưu trú gọn gàng và các tiện nghi thiết
+- **Classic (STD)** mang đến không gian thanh lịch và tiện nghi thiết
   yếu. Hệ thống có thể có biến thể một giường hoặc hai giường.
-- **Superior (SUP)** có không gian và trang bị nâng cấp hơn Standard; biến thể
+- **Superior (SUP)** có không gian và trang bị nâng cấp hơn Classic; biến thể
   cụ thể có thể khác về giường, diện tích và sức chứa.
 - **Deluxe (DLX)** hướng đến không gian rộng và trải nghiệm cao cấp hơn; bản
   Family phù hợp nhóm đông hơn nhưng vẫn phải tuân theo sức chứa API công bố.
-- **Suite (SUT)** có khu vực sinh hoạt riêng và nhiều tiện nghi hơn. Không được
+- **Suite Hoàng Gia (SUT)** có khu vực sinh hoạt riêng và nhiều tiện nghi hơn. Không được
   mặc định mọi Suite đều có cùng hướng nhìn hoặc cùng loại giường.
-- **VIP/biệt thự nguyên căn** ưu tiên không gian riêng tư và tiện nghi cao cấp.
+- **Penthouse Tổng Thống (VIP)** ưu tiên không gian riêng tư trên tầng cao và tiện nghi cao cấp.
   Tên gọi VIP của phòng không đồng nghĩa khách tự động có hạng thành viên VIP.
 
 Đây là hướng dẫn để hiểu nhóm phòng, không phải cam kết về một phòng cụ thể.

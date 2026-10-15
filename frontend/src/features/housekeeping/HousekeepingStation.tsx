@@ -46,7 +46,7 @@ export interface Incident {
   reportedBy: string; reportedAt: string; assignedTo?: string;
 }
 
-export type LinenRow = { id:string; item:string; unit:string; stock:number; min:number; max:number; category:string };
+export type LinenRow = { id:string; item:string; unit:string; stock:number; min:number; category:string };
 
 const roomTypeLabel = (type: string) => ({
   Standard: "Tiêu chuẩn", Deluxe: "Cao cấp", Suite: "Suite", "VIP Suite": "Suite VIP",
@@ -204,6 +204,7 @@ function RoomModal({
   const [room, setRoom] = useState(initRoom);
   const done   = room.checklist.filter(c => c.done).length;
   const total  = room.checklist.length;
+  const canComplete = total > 0 && done === total;
   const stCfg  = STATUS_CFG[room.status] ?? STATUS_CFG["to-clean"];
 
   const toggleCheck = (id: string) =>
@@ -397,12 +398,12 @@ function RoomModal({
 
           {/* Only show "Hoàn tất vệ sinh" when room is in-progress */}
           {room.status === "in-progress" && (
-            <button disabled={done !== total} title={done !== total ? `Cần hoàn thành checklist (${done}/${total})` : undefined} onClick={() => { onComplete?.(room); onClose(); }}
+            <button disabled={!canComplete} title={!canComplete ? `Cần hoàn thành checklist (${done}/${total})` : undefined} onClick={() => { onComplete?.(room); onClose(); }}
               style={{ flex:2,padding:"12px",borderRadius:9,
                 background:"#16A34A",color:"#FFF",fontSize:13,fontWeight:700,cursor:"pointer",
                 display:"flex",alignItems:"center",justifyContent:"center",gap:8,
                 boxShadow:"0 2px 8px rgba(22,163,74,.3)" }}>
-              <CheckCircle2 size={16} /> {done !== total ? `Cần hoàn thành checklist (${done}/${total})` : "Hoàn tất vệ sinh & Bàn giao"}
+              <CheckCircle2 size={16} /> {!canComplete ? `Cần hoàn thành checklist (${done}/${total})` : "Hoàn tất vệ sinh & Bàn giao"}
             </button>
           )}
 
@@ -1285,11 +1286,12 @@ function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (ite
 
   const filtered = category === "all" ? stock : stock.filter(s => s.category.toLowerCase() === category.toLowerCase());
 
-  const stockPct = (item: LinenRow) => Math.round((item.stock / item.max) * 100);
+  const stockPct = (item: LinenRow) => item.min > 0
+    ? Math.min(100, Math.round((item.stock / item.min) * 100))
+    : item.stock > 0 ? 100 : 0;
   const stockStatus = (item: LinenRow) => {
-    const pct = stockPct(item);
-    if (item.stock <= item.min) return { color:"#DC2626", label:"Hết", bg:"#FFE4E6" };
-    if (pct < 40) return { color:"#D97706", label:"Thấp", bg:"#FEF3C7" };
+    if (item.stock === 0) return { color:"#DC2626", label:"Hết", bg:"#FFE4E6" };
+    if (item.stock <= item.min) return { color:"#D97706", label:"Sắp hết", bg:"#FEF3C7" };
     return { color:"#16A34A", label:"Đạt", bg:"#DCFCE7" };
   };
   const lowStock = stock.filter(s => s.stock <= s.min);
@@ -1394,7 +1396,7 @@ function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (ite
                 <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:8 }}>
                   <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:800,
                     color:stat.color,lineHeight:1 }}>{item.stock}</span>
-                  <span style={{ fontSize:12,color:"#94A3B8" }}>/ {item.max} {item.unit}</span>
+                  <span style={{ fontSize:12,color:"#94A3B8" }}>{item.unit} trong kho</span>
                 </div>
                 <div style={{ height:6,background:"#E2E8F0",borderRadius:99,overflow:"hidden",marginBottom:10 }}>
                   <div style={{ height:"100%",background:stat.color,
@@ -1506,18 +1508,20 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
               ? "inspecting"
               : "ready";
 
-          const checklist: CheckItem[] =
-            checklistResults.length > 0
-              ? checklistResults.map(result => ({
-                  id: String(result.id),
-                  label: result.item,
-                  done: result.passed,
-                }))
-              : (templates || []).map(tmpl => ({
-                  id: String(tmpl.id),
-                  label: tmpl.name,
-                  done: false,
-                }));
+          // Templates own the current checklist. Results are an append-only history;
+          // retain the latest result for each active item and show missing items undone.
+          const latestResults = new Map<string, (typeof checklistResults)[number]>();
+          for (const result of checklistResults) {
+            const previous = latestResults.get(result.item);
+            if (!previous || result.id > previous.id) latestResults.set(result.item, result);
+          }
+          const checklist: CheckItem[] = (templates || [])
+            .filter(tmpl => tmpl.active)
+            .map(tmpl => ({
+              id: String(tmpl.id),
+              label: tmpl.name,
+              done: latestResults.get(tmpl.name)?.passed ?? false,
+            }));
 
           const minibar: MinibarItem[] = inspections
             .filter(inspection => inspection.inspection_type === "MINIBAR")
@@ -1576,8 +1580,9 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
           unit: item.unit,
           stock: item.current_quantity,
           min: item.safety_threshold,
-          max: Math.max(item.safety_threshold * 2, item.current_quantity, 1),
-          category: (item.category || "linen").toLowerCase(),
+          category: (item.category || "").toLowerCase().includes("khăn") ? "towels"
+            : (item.category || "").toLowerCase().includes("đồ dùng") ? "amenities"
+            : (item.category || "").toLowerCase().includes("minibar") ? "minibar" : "linen",
         }))
       );
     } catch (err: any) {
@@ -1612,7 +1617,7 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
 
   const handleCompleteRoom = async (room: HKRoom) => {
     if (!room.taskId) return;
-    if (room.checklist.some(item => !item.done)) {
+    if (room.checklist.length === 0 || room.checklist.some(item => !item.done)) {
       alert("Cần hoàn thành toàn bộ checklist trước khi bàn giao vệ sinh.");
       return;
     }

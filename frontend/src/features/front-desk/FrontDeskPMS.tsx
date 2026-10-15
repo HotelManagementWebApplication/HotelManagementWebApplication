@@ -27,6 +27,7 @@ type NavPage     = "overview" | "rooms" | "guests" | "shift";
 interface FolioItem { label: string; amount: number; }
 interface Room {
   id: string; number: string; floor: number;
+  operationalStatus: string;
   type: string; beds: string;
   occStatus: OccStatus; cleanStatus: CleanStatus;
   guestName?: string; guestPhone?: string; checkIn?: string; checkOut?: string;
@@ -1054,8 +1055,8 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
 function KpiBar({ rooms, arrivals, departures }: { rooms: Room[]; arrivals: number; departures: number }) {
   const occupied = rooms.filter(room=>room.occStatus==="occupied"||room.occStatus==="dnd").length;
   const reserved = rooms.filter(room=>room.occStatus==="reserved").length;
-  const clean = rooms.filter(room=>room.cleanStatus==="clean").length;
-  const dirty = rooms.filter(room=>room.cleanStatus==="dirty").length;
+  const ready = rooms.filter(room=>room.operationalStatus==="available").length;
+  const cleaning = rooms.filter(room=>room.operationalStatus==="cleaning").length;
   const occupancy = rooms.length ? Math.round(occupied * 100 / rooms.length) : 0;
   return (
     <div style={{ background:"#FFF",borderBottom:"1px solid #E2E8F0",
@@ -1064,7 +1065,7 @@ function KpiBar({ rooms, arrivals, departures }: { rooms: Room[]; arrivals: numb
         { label:"Khách đến", val:String(arrivals),sub:"Booking đến hôm nay",trend:"",iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:Users },
         { label:"Khách trả phòng",val:String(departures),sub:"Booking trả hôm nay",trend:"",iconBg:"#DBEAFE",iconColor:"#3B82F6",Icon:ArrowUpRight },
         { label:"Công suất", val:`${occupancy}%`,sub:`${occupied} / ${rooms.length} phòng có khách`,trend:"",iconBg:"#EDE9FE",iconColor:"#7C3AED",Icon:BedDouble },
-        { label:"Phòng sẵn sàng",val:`Sẵn sàng: ${clean}`,sub:`Đã giữ: ${reserved} · Cần dọn: ${dirty}`,trend:"",iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:CheckCircle2 },
+        { label:"Phòng sẵn sàng",val:`Sẵn sàng: ${ready}`,sub:`Đã giữ: ${reserved} · Đang dọn: ${cleaning}`,trend:"",iconBg:"#DCFCE7",iconColor:"#16A34A",Icon:CheckCircle2 },
       ].map((k,i,arr) => (
         <div key={k.label} style={{ flex:1,padding:"16px 0",display:"flex",alignItems:"center",gap:14,
           borderRight:i<arr.length-1?"1px solid #F1F5F9":"none",
@@ -2502,7 +2503,7 @@ export default function FrontDeskPMS({ onBack }: { onBack: () => void }) {
         const occupied = status === "OCCUPIED" || stay?.status === "CHECKED_IN";
         const isReserved = status === "RESERVED" || stay?.status === "CONFIRMED" || stay?.status === "DEPOSIT_PAID";
         return {
-          id: raw.room_id, number: raw.name, floor: raw.floor,
+          id: raw.room_id, number: raw.name, floor: raw.floor, operationalStatus: raw.status,
           type: raw.room_type_name || raw.room_type_id, beds: raw.bed_type || "Đang cập nhật",
           occStatus: ["OUT_OF_SERVICE","MAINTENANCE","BLOCKED"].includes(status) ? "ood" : occupied ? "occupied" : isReserved ? "reserved" : "vacant",
           cleanStatus: status === "CLEANING" ? "cleaning" : ["DIRTY","NEEDS_CLEANING"].includes(status) ? "dirty" : "clean",

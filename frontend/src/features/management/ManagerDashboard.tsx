@@ -11,12 +11,17 @@ import type { Approval as ApiApproval, EmployeeAdmin } from "../../shared/types/
 import type { LeaveRequest } from "../../shared/types/enterprise";
 import type { EquipmentIncident, HousekeepingTask, Room as ApiRoom, TechnicalWorkOrder } from "../../shared/types/housekeepingTechnical";
 import type { Invoice as ApiInvoice } from "../../shared/types/frontDesk";
-import type { Expense } from "../../shared/types/kitchenAccounting";
+import type { Expense, Approval as KitchenApproval } from "../../shared/types/kitchenAccounting";
+import { useManagementFinance, type ManagementFinance } from "./managementFinance";
+import { EmployeeProvisionModal } from "./EmployeeProvisionModal";
+import { invoiceTotal } from "../accounting/accountingLogic";
+import { localDateValue } from "../../shared/utils/localDate";
+import "./management.css";
 import { formatVnd } from "../../shared/utils/money";
 import { employeeRoleLabel } from "../../shared/types/api";
 import {
   Home, Zap, LayoutGrid, Users, AlertTriangle, BarChart2,
-  Search, Bell, ChevronDown, ArrowRight, Sun,
+  Search, Bell, ChevronDown, ArrowRight, Sun, CalendarDays,
   Check, X, TrendingUp, ArrowUpRight, LogOut,
   ConciergeBell, Sparkles, UtensilsCrossed, Wrench,
 } from "lucide-react";
@@ -24,43 +29,29 @@ import {
 /* ══════════════════════════════════════════════════════════
    TYPES & DATA
 ══════════════════════════════════════════════════════════ */
-type NavPage = "overview" | "approvals" | "operations" | "staff" | "incidents" | "reports";
+type NavPage = "overview" | "approvals" | "operations" | "staff" | "incidents" | "reports" | "notifications";
 type ApprovalStatus = "pending" | "approved" | "rejected";
 type ManagerRole = "manager" | "director";
 
 interface Approval {
   id: string; dept: string; deptColor: string; emoji: string;
   title: string; detail: string[]; time: string; badge: string; badgeColor: string;
-  kind: "service-price" | "refund" | "technical-release" | "expense" | "leave";
+  kind: "service-price" | "refund" | "technical-release" | "expense" | "leave" | "incident";
+  approvalBlockedReason?: string;
   rawWorkOrderId?: number;
+  rawApproval?: ApiApproval;
 }
-
-const NOTIFICATIONS: never[] = [];
-
-/* bar chart data */
-const BAR_DATA: { day: string; rev: number; occ: number }[] = [];
-const MAX_REV = 200;
-
-/* donut data */
-const DONUT: { label: string; pct: number; color: string }[] = [];
 
 /* ══════════════════════════════════════════════════════════
    HELPERS
 ══════════════════════════════════════════════════════════ */
 const fmtVND = formatVnd;
+const incidentStatusLabel = (status: EquipmentIncident["handoff_status"]) => ({OPEN:"Chờ tiếp nhận",ACKNOWLEDGED:"Đang xử lý",RESOLVED:"Đã xử lý"}[status]);
+const approvalActionLabels: Record<string, string> = {SERVICE_PRICE_CHANGE:"Thay đổi giá dịch vụ",PAYMENT_REFUND:"Hoàn tiền",BILLING_ADJUSTMENT:"Điều chỉnh hóa đơn",ROOM_TYPE_ACTIVATE:"Phê duyệt loại phòng"};
+const approvalActionLabel = (action: string) => approvalActionLabels[action] ?? action;
 const roomTypeLabel = (type: string) => ({
   Standard:"Tiêu chuẩn", Deluxe:"Cao cấp", Suite:"Suite", "VIP Suite":"Suite VIP",
 }[type] ?? type);
-
-function donutPath(pct: number, prev: number, r: number) {
-  const cx = 60, cy = 60;
-  const startA = (prev / 100) * 2 * Math.PI - Math.PI / 2;
-  const endA   = ((prev + pct) / 100) * 2 * Math.PI - Math.PI / 2;
-  const x1 = cx + r * Math.cos(startA), y1 = cy + r * Math.sin(startA);
-  const x2 = cx + r * Math.cos(endA),   y2 = cy + r * Math.sin(endA);
-  const large = pct > 50 ? 1 : 0;
-  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
-}
 
 /* ══════════════════════════════════════════════════════════
    SIDEBAR NAV
@@ -84,6 +75,9 @@ type ApprovalDecision = Exclude<ApprovalStatus, "pending">;
 
 function OverviewScreen({
   onNavApprovals,
+  onNavOperations,
+  onNavNotifications,
+  finance,
   role,
   approvalsData = [],
   rooms = [],
@@ -93,6 +87,9 @@ function OverviewScreen({
   onDecision
 }: {
   onNavApprovals: () => void;
+  onNavOperations: () => void;
+  onNavNotifications: () => void;
+  finance: ManagementFinance;
   role: ManagerRole;
   approvalsData?: Approval[];
   rooms?: ApiRoom[];
@@ -103,21 +100,15 @@ function OverviewScreen({
 }) {
   const [approvals, setApprovals] = useState<Record<string,ApprovalStatus>>({});
   const visibleApprovals = approvalsForRole(role, approvalsData);
-  const occupiedRooms = rooms.filter(room => room.status === "occupied" || room.status === "reserved").length;
+  const occupiedRooms = rooms.filter(room => room.status === "occupied").length;
   const occupancy = rooms.length ? Math.round((occupiedRooms / rooms.length) * 100) : 0;
-  const paidInvoices = invoices.filter(invoice => invoice.status === "DA_THANH_TOAN");
-  const revenue = paidInvoices.reduce((sum, invoice) => sum + (invoice.payable || invoice.room_total + invoice.service_total), 0);
-  const adr = paidInvoices.length ? Math.round(revenue / paidInvoices.length) : 0;
-  const revpar = rooms.length ? Math.round(revenue / rooms.length) : 0;
-  const barData = [...new Set(invoices.map(invoice => invoice.issued_at.slice(0, 10)))].slice(-7).map((day, index, days) => ({
-    day: new Date(`${day}T00:00:00`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
-    rev: invoices.filter(invoice => invoice.issued_at.startsWith(day)).reduce((sum, invoice) => sum + (invoice.payable || invoice.room_total + invoice.service_total), 0) / 1_000_000,
-    occ: rooms.length ? Math.round((occupiedRooms / rooms.length) * 100) : 0,
-    today: index === days.length - 1,
-  }));
-  const maxRev = Math.max(...barData.map(item => item.rev), 1);
+  const paidInvoices = invoices.filter(invoice => invoice.status === "DA_THANH_TOAN" && invoice.issued_at.startsWith(finance.today));
+  const revenue = finance.daily?.recognized_revenue;
+  const averageInvoice = paidInvoices.length ? Math.round(paidInvoices.reduce((sum, invoice) => sum + invoiceTotal(invoice), 0) / paidInvoices.length) : 0;
+  const barData = finance.days;
+  const maxRev = Math.max(...barData.map(item => Math.abs(item.rev)), 1);
   const liveNotifications = [
-    ...incidents.map(item => ({ id: `incident-${item.id}`, icon: "🔴", msg: `Phòng ${item.room_id}: ${item.equipment_name}`, time: item.handoff_status })),
+    ...incidents.filter(item => item.handoff_status !== "RESOLVED").map(item => ({ id: `incident-${item.id}`, icon: "🔴", msg: `Phòng ${item.room_id}: ${item.equipment_name}`, time: incidentStatusLabel(item.handoff_status) })),
     ...visibleApprovals.map(item => ({ id: `approval-${item.id}`, icon: "🔧", msg: item.title, time: item.badge })),
   ];
 
@@ -132,12 +123,12 @@ function OverviewScreen({
     <div style={{ flex:1,overflowY:"auto",padding:"20px 24px" }}>
 
       {/* KPI CARDS */}
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20 }}>
+      <div className="management-kpis" style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20 }}>
         {[
-          { label:"Công suất phòng (Occupancy)",  val:`${occupancy}%`,    sub:`${occupiedRooms} / ${rooms.length} phòng`, note:"Theo trạng thái phòng hiện tại", up:false,  color:"#3B82F6", prog:occupancy },
-          { label:"Giá bán bình quân (ADR)",      val:fmtVND(adr),sub:null,            note:"Theo hóa đơn đã thanh toán",  up:false,  color:"#10B981", prog:null },
-          { label:"Doanh thu trên mỗi phòng (RevPAR)",val:fmtVND(revpar),sub:null,        note:"Theo dữ liệu hóa đơn hiện có", up:false,  color:"#8B5CF6", prog:null },
-          { label:"Doanh thu dự kiến hôm nay",    val:fmtVND(revenue),sub:null,          note:"Theo hóa đơn đã thanh toán", up:false,  color:"#F59E0B", prog:null },
+          { label:"Công suất phòng hiện tại", val:`${occupancy}%`, sub:`${occupiedRooms} / ${rooms.length} phòng có khách`, note:"Không gồm phòng giữ chỗ", color:"#3B82F6", prog:occupancy },
+          { label:"Thu/hoàn ròng hôm nay", val:finance.daily ? fmtVND(finance.daily.net_total) : "—", sub:null, note:"Theo giao dịch hoàn tất", color:"#10B981", prog:null },
+          { label:"Giá trị hóa đơn bình quân hôm nay", val:fmtVND(averageInvoice), sub:`${paidInvoices.length} hóa đơn đã thanh toán`, note:"Theo ngày lập hóa đơn, sau giảm giá", color:"#8B5CF6", prog:null },
+          { label:"Doanh thu đã ghi nhận hôm nay", val:revenue == null ? "—" : fmtVND(revenue), sub:null, note:"Theo bút toán đã chốt", color:"#F59E0B", prog:null },
         ].map(k => (
           <div key={k.label} style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",
             padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,.04)" }}>
@@ -150,15 +141,7 @@ function OverviewScreen({
                 <div style={{ height:"100%",width:`${k.prog}%`,borderRadius:99,background:k.color }} />
               </div>
             )}
-            {k.prog === null && (
-              /* mini sparkline placeholder */
-              <svg width="80" height="24" style={{ display:"block",marginBottom:4 }}>
-                <polyline points="0,18 16,14 32,15 48,10 64,8 80,4"
-                  fill="none" stroke={k.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
             <div style={{ display:"flex",alignItems:"center",gap:3 }}>
-              <ArrowUpRight size={11} style={{ color:"#16A34A" }} />
               <span style={{ fontSize:11,fontWeight:600,color:"#16A34A" }}>{k.note}</span>
             </div>
           </div>
@@ -166,7 +149,7 @@ function OverviewScreen({
       </div>
 
       {/* Middle row */}
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16 }}>
+      <div className="management-pair" style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16 }}>
 
         {/* APPROVAL HUB */}
         <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden" }}>
@@ -214,18 +197,22 @@ function OverviewScreen({
                       ))}
                     </div>
                     {/* Actions */}
-                    {!st ? (
+                    {a.approvalBlockedReason && !st ? (
+                      <p role="note" style={{ maxWidth:150,flexShrink:0,fontSize:10,lineHeight:1.4,textAlign:"right",color:"#B45309" }}>
+                        {a.approvalBlockedReason}
+                      </p>
+                    ) : !st ? (
                       <div style={{ display:"flex",flexDirection:"column",gap:5,flexShrink:0 }}>
                         <button onClick={() => handle(a.id,"approved")}
                           style={{ display:"flex",alignItems:"center",gap:4,padding:"5px 12px",borderRadius:7,
                             border:"none",background:"#16A34A",color:"#FFF",fontSize:11,fontWeight:700,cursor:"pointer" }}>
                           <Check size={11} /> Phê duyệt
                         </button>
-                        <button onClick={() => handle(a.id,"rejected")}
+                        {a.kind !== "technical-release" && a.kind !== "incident" && <button onClick={() => handle(a.id,"rejected")}
                           style={{ display:"flex",alignItems:"center",gap:4,padding:"5px 12px",borderRadius:7,
                             border:"1px solid #E2E8F0",background:"#FFF",color:"#64748B",fontSize:11,fontWeight:600,cursor:"pointer" }}>
                           <X size={11} /> Từ chối
-                        </button>
+                        </button>}
                       </div>
                     ) : (
                       <span style={{ fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:99,flexShrink:0,
@@ -246,7 +233,7 @@ function OverviewScreen({
           <div style={{ padding:"14px 18px",borderBottom:"1px solid #F1F5F9",
             display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <p style={{ fontSize:14,fontWeight:700,color:"#0F172A" }}>Tình hình vận hành các bộ phận</p>
-            <button style={{ fontSize:11,fontWeight:600,color:"#2563EB",cursor:"pointer",
+            <button onClick={onNavOperations} style={{ fontSize:11,fontWeight:600,color:"#2563EB",cursor:"pointer",
               display:"flex",alignItems:"center",gap:3 }}>Xem chi tiết <ArrowRight size={12} /></button>
           </div>
           <div style={{ padding:"12px 18px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
@@ -280,10 +267,10 @@ function OverviewScreen({
                 },
                 {
                   emoji:"🍳",label:"Bếp / Minibar",Icon:UtensilsCrossed,
-                  status:"Hoạt động bình thường",statusOk:true,
+                  status:"Theo dõi đề xuất giá",statusOk:!visibleApprovals.some(item => item.kind === "service-price"),
                   stats:[
                     { val:"Theo dõi",label:"Kho đồ uống & Thực phẩm" },
-                    { val:"0",label:"Đề xuất điều chỉnh giá" },
+                    { val:String(visibleApprovals.filter(item => item.kind === "service-price").length),label:"Đề xuất giá chờ duyệt" },
                   ],
                 },
                 {
@@ -326,120 +313,35 @@ function OverviewScreen({
       </div>
 
       {/* BOTTOM ROW */}
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 240px 240px",gap:16 }}>
+      <div className="management-bottom" style={{ display:"grid",gridTemplateColumns:"1fr 240px 240px",gap:16 }}>
 
-        {/* BAR CHART */}
-        <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"16px 20px" }}>
-          <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
-            <p style={{ fontSize:13,fontWeight:700,color:"#0F172A" }}>Biểu đồ doanh thu 7 ngày qua</p>
-            <div style={{ display:"flex",gap:12 }}>
-              <div style={{ display:"flex",alignItems:"center",gap:5 }}>
-                <div style={{ width:12,height:12,borderRadius:3,background:"#3B82F6" }} />
-                <span style={{ fontSize:11,color:"#64748B" }}>Doanh thu (VND)</span>
-              </div>
-              <div style={{ display:"flex",alignItems:"center",gap:5 }}>
-                <div style={{ width:12,height:3,borderRadius:99,background:"#6366F1" }} />
-                <span style={{ fontSize:11,color:"#64748B" }}>Công suất phòng (%)</span>
-              </div>
-            </div>
-          </div>
-          <div style={{ position:"relative",height:160 }}>
-            {/* Y-axis labels */}
-            <div style={{ position:"absolute",left:0,top:0,bottom:24,width:40,
-              display:"flex",flexDirection:"column",justifyContent:"space-between" }}>
-              {["200M","150M","100M","50M","0"].map(l => (
-                <span key={l} style={{ fontSize:9,color:"#94A3B8",textAlign:"right",display:"block" }}>{l}</span>
-              ))}
-            </div>
-            {/* Right Y-axis */}
-            <div style={{ position:"absolute",right:0,top:0,bottom:24,width:36,
-              display:"flex",flexDirection:"column",justifyContent:"space-between" }}>
-              {["100%","75%","50%","25%","0%"].map(l => (
-                <span key={l} style={{ fontSize:9,color:"#94A3B8",textAlign:"left",display:"block" }}>{l}</span>
-              ))}
-            </div>
-            {/* SVG Chart */}
-            <svg width="100%" height="136" style={{ position:"absolute",left:44,top:0,right:40,width:"calc(100% - 84px)" }}
-              viewBox="0 0 420 136" preserveAspectRatio="none">
-              {/* Grid lines */}
-              {[0,34,68,102,136].map(y => (
-                <line key={y} x1="0" y1={y} x2="420" y2={y} stroke="#F1F5F9" strokeWidth="1" />
-              ))}
-              {/* Bars */}
-              {barData.map((d, i) => {
-                const barW = 42, gap = 18;
-                const x = i * (barW + gap) + 4;
-                const h = (d.rev / maxRev) * 128;
-                const y = 128 - h;
-                return (
-                  <rect key={i} x={x} y={y} width={barW} height={h}
-                    fill={d.today?"#3B82F6":"#BFDBFE"} rx="3" />
-                );
-              })}
-              {/* Occupancy line */}
-              <polyline
-                points={barData.map((d,i) => {
-                  const barW=42,gap=18,x=i*(barW+gap)+4+barW/2;
-                  const y = 128 - (d.occ/100)*128;
-                  return `${x},${y}`;
-                }).join(" ")}
-                fill="none" stroke="#6366F1" strokeWidth="2"
-                strokeDasharray="4 2" strokeLinecap="round" strokeLinejoin="round" />
-              {barData.map((d,i) => {
-                const barW=42,gap=18,x=i*(barW+gap)+4+barW/2;
-                const y=128-(d.occ/100)*128;
-                return <circle key={i} cx={x} cy={y} r="3" fill="#6366F1" />;
-              })}
-            </svg>
-            {/* X-axis labels */}
-            <div style={{ position:"absolute",bottom:0,left:44,right:40,
-              display:"flex",justifyContent:"space-around" }}>
-              {barData.map(d => (
-                <span key={d.day} style={{ fontSize:9,color:"#94A3B8",textAlign:"center" }}>{d.day}</span>
-              ))}
-            </div>
-          </div>
+        <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",padding:18 }}>
+          <p style={{fontSize:14,fontWeight:700,marginBottom:16}}>Doanh thu đã ghi nhận 7 ngày qua</p>
+          {finance.error ? <p role="alert" style={{color:"#B91C1C",fontSize:13}}>{finance.error} <button onClick={finance.reload}>Tải lại</button></p> : !finance.daily ? <p role="status">Đang tải số liệu…</p> : <div style={{display:"flex",gap:8,height:180,alignItems:"flex-end"}}>
+            {barData.map(day => <div key={day.date} style={{flex:1,minWidth:0,textAlign:"center"}} title={`${day.date}: ${fmtVND(day.rev)}`}>
+              <span style={{fontSize:10,color:"#475569",display:"block",marginBottom:4}}>{fmtVND(day.rev)}</span>
+              <div style={{height:Math.max(2,Math.abs(day.rev)/maxRev*125),background:day.rev<0?"#EF4444":day.today?"#2563EB":"#BFDBFE",borderRadius:4}} />
+              <span style={{display:"block",fontSize:11,color:"#64748B",marginTop:8}}>{day.day}</span>
+            </div>)}
+          </div>}
+          <p style={{fontSize:11,color:"#64748B",marginTop:12}}>Bút toán đã chốt; khoản điều chỉnh giảm hiển thị màu đỏ.</p>
         </div>
-
-        {/* DONUT CHART */}
-        <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"14px 16px" }}>
-          <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Cơ cấu nguồn khách đặt phòng</p>
-          <div style={{ position:"relative",margin:"8px auto 8px",width:120,height:120 }}>
-            <svg viewBox="0 0 120 120" width="120" height="120">
-              {(() => {
-                let prev = 0;
-                return DONUT.map(d => {
-                  const path = donutPath(d.pct, prev, 48);
-                  prev += d.pct;
-                  return <path key={d.label} d={path} fill={d.color} stroke="#FFF" strokeWidth="1.5" />;
-                });
-              })()}
-              <circle cx="60" cy="60" r="30" fill="#FFF" />
-              <text x="60" y="56" textAnchor="middle" fontSize="9" fill="#64748B">Tổng đặt phòng</text>
-              <text x="60" y="68" textAnchor="middle" fontSize="14" fontWeight="800" fill="#0F172A">240</text>
-            </svg>
-          </div>
-          <div style={{ display:"flex",flexDirection:"column",gap:5 }}>
-            {DONUT.map(d => (
-              <div key={d.label} style={{ display:"flex",alignItems:"center",gap:6 }}>
-                <span style={{ width:8,height:8,borderRadius:2,flexShrink:0,background:d.color }} />
-                <span style={{ fontSize:10,color:"#334155",flex:1,lineHeight:1.3 }}>{d.label}</span>
-                <span style={{ fontSize:11,fontWeight:700,color:"#0F172A",fontFamily:"'JetBrains Mono',monospace" }}>{d.pct}%</span>
-              </div>
-            ))}
-          </div>
+        <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",padding:16 }}>
+          <p style={{fontSize:13,fontWeight:700,marginBottom:14}}>Thu và hoàn hôm nay</p>
+          <p style={{fontSize:12,color:"#64748B"}}>Tổng thu</p><p style={{fontSize:18,fontWeight:700,marginBottom:14}}>{finance.daily ? fmtVND(finance.daily.total_payments) : "—"}</p>
+          <p style={{fontSize:12,color:"#64748B"}}>Tổng hoàn</p><p style={{fontSize:18,fontWeight:700}}>{finance.daily ? fmtVND(finance.daily.total_refunds) : "—"}</p>
+          <p style={{fontSize:11,color:"#64748B",marginTop:14}}>Theo thời điểm giao dịch, độc lập với ngày lập hóa đơn.</p>
         </div>
-
         {/* NOTIFICATIONS */}
         <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden" }}>
           <div style={{ padding:"12px 14px",borderBottom:"1px solid #F1F5F9",
             display:"flex",alignItems:"center",justifyContent:"space-between" }}>
             <p style={{ fontSize:12,fontWeight:700,color:"#0F172A" }}>Thông báo &amp; Cảnh báo</p>
-            <button style={{ fontSize:10,fontWeight:600,color:"#2563EB",cursor:"pointer",
+            <button onClick={onNavNotifications} style={{ fontSize:10,fontWeight:600,color:"#2563EB",cursor:"pointer",
               display:"flex",alignItems:"center",gap:2 }}>Xem tất cả <ArrowRight size={10} /></button>
           </div>
           <div>
-            {liveNotifications.map((n,i) => (
+            {liveNotifications.slice(0,5).map((n,i) => (
               <div key={n.id} style={{ padding:"10px 14px",borderBottom:i<liveNotifications.length-1?"1px solid #F8FAFC":"none",
                 display:"flex",alignItems:"flex-start",gap:8 }}>
                 <span style={{ fontSize:16,flexShrink:0 }}>{n.icon}</span>
@@ -460,7 +362,21 @@ function OverviewScreen({
 /* ══════════════════════════════════════════════════════════
    APPROVALS SCREEN (full)
 ══════════════════════════════════════════════════════════ */
-function ApprovalsScreen({ role, approvalsData = [], onDecision }: { role: ManagerRole; approvalsData?: Approval[]; onDecision?: (id: string, action: ApprovalDecision) => Promise<boolean> }) {
+function ApprovalsScreen({
+  role,
+  approvalsData = [],
+  onDecision,
+  approvedPriceProposals = [],
+  activatingPriceId = null,
+  onActivatePrice,
+}: {
+  role: ManagerRole;
+  approvalsData?: Approval[];
+  onDecision?: (id: string, action: ApprovalDecision) => Promise<boolean>;
+  approvedPriceProposals?: KitchenApproval[];
+  activatingPriceId?: number | null;
+  onActivatePrice?: (approval: KitchenApproval) => Promise<void>;
+}) {
   const [approvals, setApprovals] = useState<Record<string,ApprovalStatus>>({});
   const handle = async (id: string, action: ApprovalDecision) => {
     if (onDecision && !(await onDecision(id, action))) return;
@@ -475,6 +391,55 @@ function ApprovalsScreen({ role, approvalsData = [], onDecision }: { role: Manag
         <h2 style={{ fontSize:20,fontWeight:800,color:"#0F172A",marginBottom:2 }}>Trung tâm Phê duyệt</h2>
         <p style={{ fontSize:12,color:"#94A3B8" }}>Tất cả các yêu cầu cần phê duyệt từ các bộ phận</p>
       </div>
+
+      {approvedPriceProposals.length > 0 && (
+        <div style={{ marginBottom:18,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:12,padding:"14px 18px" }}>
+          <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
+            <span style={{ fontSize:14,fontWeight:800,color:"#1E40AF" }}>Đề xuất đổi giá dịch vụ đã duyệt chờ kích hoạt ({approvedPriceProposals.length})</span>
+          </div>
+          <p style={{ margin:"0 0 10px",fontSize:12,color:"#1D4ED8" }}>
+            Các đề xuất này đã được Ban Quản lý phê duyệt. Quản lý cần bấm &quot;Áp dụng giá ngay&quot; để bảng giá dịch vụ chính thức cập nhật vào hệ thống.
+          </p>
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {approvedPriceProposals.map(pr => {
+              let priceVal = pr.amount ? Number(pr.amount) : 0;
+              if (!priceVal) {
+                try {
+                  const p = JSON.parse(pr.payload);
+                  priceVal = Number(typeof p === "number" ? p : (p as { price?: unknown }).price);
+                } catch {
+                  priceVal = Number(pr.payload);
+                }
+              }
+              const isActivating = activatingPriceId === pr.id;
+              return (
+                <div key={pr.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"10px 14px",background:"#FFF",borderRadius:8,border:"1px solid #DBEAFE" }}>
+                  <div>
+                    <p style={{ margin:0,fontSize:13,fontWeight:700,color:"#0F172A" }}>
+                      {pr.target_id} · Giá đề xuất: <span style={{ color:"#16A34A" }}>{priceVal ? formatVnd(priceVal) : "—"}</span>
+                    </p>
+                    <p style={{ margin:"2px 0 0",fontSize:11,color:"#64748B" }}>
+                      Người gửi: <strong>{pr.requester}</strong> · Lý do: {pr.reason || "Thay đổi giá dịch vụ"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onActivatePrice?.(pr)}
+                    disabled={isActivating}
+                    style={{
+                      display:"flex",alignItems:"center",gap:5,padding:"7px 14px",borderRadius:7,
+                      border:"none",background:isActivating ? "#94A3B8" : "#2563EB",
+                      color:"#FFF",fontSize:12,fontWeight:700,cursor:isActivating ? "wait" : "pointer"
+                    }}
+                  >
+                    <Zap size={13} /> {isActivating ? "Đang áp dụng..." : "Áp dụng giá ngay"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
         {visible.length === 0 ? (
           <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"36px 20px",textAlign:"center",color:"#94A3B8",fontSize:13 }}>
@@ -500,18 +465,22 @@ function ApprovalsScreen({ role, approvalsData = [], onDecision }: { role: Manag
                 <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",marginBottom:4 }}>{a.title}</p>
                 {a.detail.map((d,i) => <p key={i} style={{ fontSize:12,color:"#64748B",lineHeight:1.5 }}>{d}</p>)}
               </div>
-              {!st ? (
+              {a.approvalBlockedReason && !st ? (
+                <p role="note" style={{ maxWidth:220,flexShrink:0,alignSelf:"center",fontSize:12,lineHeight:1.5,color:"#B45309" }}>
+                  {a.approvalBlockedReason}
+                </p>
+              ) : !st ? (
                 <div style={{ display:"flex",gap:8,flexShrink:0,alignItems:"center" }}>
                   <button onClick={() => handle(a.id,"approved")}
                     style={{ display:"flex",alignItems:"center",gap:5,padding:"8px 16px",borderRadius:8,
                       border:"none",background:"#16A34A",color:"#FFF",fontSize:12,fontWeight:700,cursor:"pointer" }}>
                     <Check size={13} /> Phê duyệt
                   </button>
-                  <button onClick={() => handle(a.id,"rejected")}
+                  {a.kind !== "technical-release" && a.kind !== "incident" && <button onClick={() => handle(a.id,"rejected")}
                     style={{ display:"flex",alignItems:"center",gap:5,padding:"8px 16px",borderRadius:8,
                       border:"1px solid #E2E8F0",background:"#FFF",color:"#475569",fontSize:12,fontWeight:600,cursor:"pointer" }}>
                     <X size={13} /> Từ chối
-                  </button>
+                  </button>}
                 </div>
               ) : (
                 <span style={{ fontSize:12,fontWeight:700,padding:"6px 14px",borderRadius:99,flexShrink:0,
@@ -531,87 +500,42 @@ function ApprovalsScreen({ role, approvalsData = [], onDecision }: { role: Manag
 /* ══════════════════════════════════════════════════════════
    REPORTS SCREEN
 ══════════════════════════════════════════════════════════ */
-function ReportsScreen({ invoices = [], rooms = [], expenses = [] }: { invoices?: ApiInvoice[]; rooms?: ApiRoom[]; expenses?: Expense[] }) {
-  const paidInvoices = invoices.filter(invoice => invoice.status === "DA_THANH_TOAN");
-  const revenue = paidInvoices.reduce((sum, invoice) => sum + (invoice.payable || invoice.room_total + invoice.service_total), 0);
+function ReportsScreen({ invoices = [], rooms = [], expenses = [], finance }: { invoices?: ApiInvoice[]; rooms?: ApiRoom[]; expenses?: Expense[]; finance: ManagementFinance }) {
+  const month = finance.today.slice(0, 7);
+  const paid = invoices.filter(invoice => invoice.status === "DA_THANH_TOAN" && invoice.issued_at.startsWith(month));
+  const costs = expenses.filter(expense => expense.paid_at.startsWith(month) && expense.status !== "VOIDED");
   const occupied = rooms.filter(room => room.status === "occupied").length;
-  const kpis = [
-    { label:"Tổng doanh thu đang ghi nhận", val:fmtVND(revenue), up:"—", color:"#16A34A" },
-    { label:"Công suất phòng hiện tại", val:`${rooms.length ? Math.round((occupied / rooms.length) * 100) : 0}%`, up:"—", color:"#2563EB" },
-    { label:"Hóa đơn đã thanh toán", val:`${paidInvoices.length} hóa đơn`, up:"—", color:"#7C3AED" },
-    { label:"Chi phí vận hành", val:fmtVND(expenses.reduce((sum, expense) => sum + expense.amount, 0)), up:`${expenses.length} khoản ghi nhận`, color:"#F59E0B" },
-  ];
-  const departmentRows = [{ dept:"Phòng & dịch vụ", rev:fmtVND(revenue), pct:revenue > 0 ? "100%" : "0%", growth:"—", ok:true }];
-  return (
-    <div style={{ flex:1,overflowY:"auto",padding:"20px 24px" }}>
-      <div style={{ marginBottom:16 }}>
-        <h2 style={{ fontSize:20,fontWeight:800,color:"#0F172A",marginBottom:2 }}>Báo cáo điều hành</h2>
-        <p style={{ fontSize:12,color:"#94A3B8" }}>{`Tổng hợp hiệu quả kinh doanh – Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`}</p>
-      </div>
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20 }}>
-        {kpis.map(k => (
-          <div key={k.label} style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"16px 18px" }}>
-            <p style={{ fontSize:11,color:"#64748B",marginBottom:6 }}>{k.label}</p>
-            <p style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:800,color:"#0F172A",marginBottom:4 }}>{k.val}</p>
-            <div style={{ display:"flex",alignItems:"center",gap:4 }}>
-              <TrendingUp size={11} style={{ color:k.color }} />
-              <span style={{ fontSize:11,fontWeight:700,color:k.color }}>{k.up} vs tháng 8</span>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden" }}>
-        <div style={{ padding:"14px 18px",borderBottom:"1px solid #F1F5F9" }}>
-          <p style={{ fontSize:13,fontWeight:700,color:"#0F172A" }}>{`Doanh thu theo bộ phận – Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`}</p>
-        </div>
-        <table style={{ width:"100%",borderCollapse:"collapse" }}>
-          <thead>
-            <tr style={{ background:"#F8FAFC" }}>
-              {["Bộ phận","Doanh thu","% Tổng","Tăng trưởng","Trạng thái"].map(h => (
-                <th key={h} style={{ padding:"10px 16px",fontSize:11,fontWeight:700,color:"#64748B",
-                  textAlign:"left",letterSpacing:"0.04em",textTransform:"uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {departmentRows.map((r,i) => (
-              <tr key={r.dept} style={{ borderTop:"1px solid #F1F5F9",background:i%2===0?"#FFF":"#FAFAFA" }}>
-                <td style={{ padding:"11px 16px",fontSize:13,fontWeight:600,color:"#0F172A" }}>{r.dept}</td>
-                <td style={{ padding:"11px 16px",fontSize:12,fontWeight:700,color:"#0F172A",fontFamily:"'JetBrains Mono',monospace" }}>{r.rev}</td>
-                <td style={{ padding:"11px 16px" }}>
-                  <div style={{ display:"flex",alignItems:"center",gap:6 }}>
-                    <div style={{ flex:1,maxWidth:80,height:6,background:"#E2E8F0",borderRadius:99,overflow:"hidden" }}>
-                      <div style={{ height:"100%",width:r.pct,background:"#3B82F6",borderRadius:99 }} />
-                    </div>
-                    <span style={{ fontSize:12,color:"#475569" }}>{r.pct}</span>
-                  </div>
-                </td>
-                <td style={{ padding:"11px 16px" }}>
-                  <span style={{ fontSize:12,fontWeight:700,color:r.ok?"#16A34A":"#DC2626" }}>{r.growth}</span>
-                </td>
-                <td style={{ padding:"11px 16px" }}>
-                  <span style={{ fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:99,
-                    background:r.ok?"#DCFCE7":"#FFE4E6",color:r.ok?"#166534":"#BE123C" }}>
-                    {r.ok?"▲ Tăng trưởng":"▼ Giảm"}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+  return <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+    {finance.error && <p role="alert" style={{color:"#B91C1C",marginBottom:16}}>{finance.error} <button onClick={finance.reload}>Tải lại</button></p>}
+    <p style={{fontSize:13,color:"#64748B",marginBottom:16}}>Số liệu từ ngày 01/{month.slice(5)}/{month.slice(0,4)} đến {finance.today}. Công suất phản ánh trạng thái hiện tại.</p>
+    <div className="management-kpis" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20}}>
+      {[
+        {label:"Doanh thu đã ghi nhận trong tháng",value:finance.monthly ? fmtVND(finance.monthly.recognized_revenue) : "—",note:"Bút toán doanh thu đã chốt"},
+        {label:"Thu/hoàn ròng trong tháng",value:finance.monthly ? fmtVND(finance.monthly.net_total) : "—",note:"Giao dịch hoàn tất trong kỳ"},
+        {label:"Công suất phòng hiện tại",value:`${rooms.length ? Math.round(occupied/rooms.length*100) : 0}%`,note:`${occupied}/${rooms.length} phòng có khách`},
+        {label:"Chi phí đã ghi nhận trong tháng",value:fmtVND(costs.reduce((sum,row)=>sum+row.amount,0)),note:`${costs.length} khoản chi trong kỳ`},
+      ].map(item=><div key={item.label} style={{background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,padding:16}}><p style={{fontSize:12,color:"#64748B"}}>{item.label}</p><p style={{fontSize:22,fontWeight:800,margin:"8px 0"}}>{item.value}</p><p style={{fontSize:12,color:"#64748B"}}>{item.note}</p></div>)}
     </div>
-  );
+    <div style={{background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,padding:18,overflowX:"auto"}}>
+      <h2 style={{fontSize:16,fontWeight:700}}>Hóa đơn đã thanh toán lập trong tháng ({paid.length})</h2>
+      <p style={{fontSize:12,color:"#64748B",margin:"6px 0 14px"}}>Giá trị hóa đơn sau giảm giá gồm tiền cọc đã nhận. Số này được đối chiếu riêng với bút toán doanh thu và dòng tiền.</p>
+      <table style={{width:"100%",minWidth:480,borderCollapse:"collapse",fontSize:13}}><thead><tr>{["Hóa đơn","Đặt phòng","Ngày lập","Giá trị sau giảm giá"].map(title=><th key={title} style={{textAlign:"left",padding:10,background:"#F8FAFC"}}>{title}</th>)}</tr></thead>
+        <tbody>{paid.map(invoice=><tr key={invoice.id}><td style={{padding:10}}>INV-{invoice.id}</td><td>#{invoice.reservation_id}</td><td>{invoice.issued_at.slice(0,10)}</td><td>{fmtVND(invoiceTotal(invoice))}</td></tr>)}{paid.length===0&&<tr><td colSpan={4} style={{padding:24,textAlign:"center",color:"#64748B"}}>Chưa có hóa đơn đã thanh toán lập trong tháng này.</td></tr>}</tbody>
+      </table>
+    </div>
+  </div>;
 }
 
 function OperationsScreen({
-  rooms, tasks, employees, workOrders, onNavigateApprovals, onTaskCreated, onTaskReady,
+  rooms, tasks, employees, workOrders, incidents, onNavigateApprovals, onNavigateIncidents, onTaskCreated, onTaskReady,
 }: {
   rooms: ApiRoom[];
   tasks: HousekeepingTask[];
   employees: EmployeeAdmin[];
   workOrders: TechnicalWorkOrder[];
+  incidents: EquipmentIncident[];
   onNavigateApprovals: () => void;
+  onNavigateIncidents: () => void;
   onTaskCreated: (task: HousekeepingTask) => void;
   onTaskReady: (task: HousekeepingTask) => void;
 }) {
@@ -658,9 +582,10 @@ function OperationsScreen({
     }
   };
 
+
   return (
     <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(150px,1fr))",gap:12,marginBottom:16}}>
+      <div className="management-kpis" style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(150px,1fr))",gap:12,marginBottom:16}}>
         {[
           ["Phòng đang ở", rooms.filter(r=>r.status==="occupied").length, "#2563EB"],
           ["Sẵn sàng bán", rooms.filter(r=>r.status==="available").length, "#16A34A"],
@@ -685,20 +610,26 @@ function OperationsScreen({
           const waitingAcceptance = roomRepairs.some(order => order.status === "WAITING_ACCEPTANCE");
           const repairsAccepted = roomRepairs.some(order => order.status === "COMPLETED")
             && roomRepairs.every(order => order.status === "COMPLETED" || order.status === "ROOM_RELEASED");
-          const canMarkReady = room.status === "cleaning" && task?.status === "CLEANED"
-            && task.checklist_complete && !task.blocking_incident;
+          const blocked = Boolean(task?.blocking_incident) || incidents.some(incident => incident.room_id === room.id
+            && ["HIGH", "CRITICAL"].includes(incident.severity) && incident.handoff_status !== "RESOLVED");
+          const canMarkReady = task?.status === "CLEANED" && task.checklist_complete && !blocked
+            && (room.status === "cleaning" || repairsAccepted);
+          const releaseOrder = task?.status === "READY" && !blocked && repairsAccepted
+            ? roomRepairs.find(order => order.status === "COMPLETED") : undefined;
           const canAssignCleaning = room.status === "maintenance" && !task && repairsAccepted;
           let statusText = room.status === "cleaning" ? "Chờ checklist buồng phòng" : "Chờ hoàn tất sửa chữa";
           if (waitingAcceptance) statusText = "Chờ quản lý nghiệm thu kỹ thuật";
           else if (room.status === "maintenance" && task?.checklist_complete) statusText = "Checklist xong · chờ kỹ thuật mở phòng";
           else if (canAssignCleaning) statusText = "Sửa chữa đã nghiệm thu · cần checklist buồng phòng";
           else if (task?.status === "IN_PROGRESS" || task?.status === "NEEDS_CLEANING") statusText = "Buồng phòng đang xử lý checklist";
+          if (blocked) statusText = "Sự cố nghiêm trọng chưa được xác nhận xử lý";
+          else if (releaseOrder) statusText = "Checklist và sửa chữa đã nghiệm thu · chờ kỹ thuật mở phòng";
 
-          return <div key={room.id} style={{display:"grid",gridTemplateColumns:"80px 1.2fr 1.5fr minmax(180px,1fr)",gap:12,alignItems:"center",padding:"12px 16px",borderBottom:"1px solid #F1F5F9"}}>
+          return <div className="management-operation-row" key={room.id} style={{display:"grid",gridTemplateColumns:"80px 1.2fr 1.5fr minmax(180px,1fr)",gap:12,alignItems:"center",padding:"12px 16px",borderBottom:"1px solid #F1F5F9"}}>
             <strong style={{fontSize:15}}>P.{room.name}</strong>
             <span style={{fontSize:12,color:"#475569"}}>{roomTypeLabel(room.room_type_name)} · Tầng {room.floor}</span>
             <span style={{fontSize:11,fontWeight:600,color:room.status==="maintenance"?"#DC2626":"#D97706"}}>{statusText}</span>
-            {canMarkReady ? (
+            {blocked ? <button onClick={onNavigateIncidents} style={{height:34,borderRadius:8,border:"1px solid #FECDD3",background:"#FFF1F2",color:"#9F1239",fontSize:12,fontWeight:700}}>Xử lý sự cố</button> : releaseOrder ? <span style={{fontSize:12,color:"#166534"}}>Kỹ thuật thực hiện bước mở phòng</span> : canMarkReady ? (
               <button disabled={savingRoom === room.id} onClick={() => void updateRoomTask(task)} style={{height:34,borderRadius:8,border:"none",background:"#0F172A",color:"#FFF",fontSize:11,fontWeight:700,cursor:"pointer"}}>
                 {savingRoom === room.id ? "Đang lưu…" : "Xác nhận checklist & sẵn sàng"}
               </button>
@@ -725,14 +656,14 @@ function OperationsScreen({
   );
 }
 
-function StaffOperationsScreen({ employees, tasks }: { employees: EmployeeAdmin[]; tasks: HousekeepingTask[] }) {
+function StaffOperationsScreen({ employees, tasks, onAdd }: { employees: EmployeeAdmin[]; tasks: HousekeepingTask[]; onAdd: () => void }) {
   return (
     <div style={{flex:1,overflowY:"auto",padding:"20px 24px",display:"grid",gridTemplateColumns:"1.2fr .8fr",gap:16}}>
       <div style={{background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,overflow:"hidden"}}>
-        <div style={{padding:"14px 16px",borderBottom:"1px solid #E2E8F0"}}><strong>Nhân sự trong ca</strong></div>
+        <div style={{padding:"14px 16px",borderBottom:"1px solid #E2E8F0"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><strong>Danh sách nhân sự</strong><button onClick={onAdd} style={{background:"#1D4ED8",color:"white",padding:"8px 12px",borderRadius:8,fontSize:13,fontWeight:700}}>Thêm nhân viên</button></div></div>
         {employees.map(person=><div key={person.employee_id} style={{display:"grid",gridTemplateColumns:"1fr 130px 100px",gap:10,padding:"12px 16px",borderBottom:"1px solid #F1F5F9",alignItems:"center"}}>
           <div><p style={{fontSize:12,fontWeight:700}}>{person.full_name}</p><p style={{fontSize:10,color:"#94A3B8"}}>{employeeRoleLabel(person.role)} · {person.employee_id}</p></div>
-          <span style={{fontSize:11,color:"#475569"}}>{person.employment_status}</span>
+          <span style={{fontSize:11,color:"#475569"}}>{{WORKING:"Đang làm việc",ON_LEAVE:"Đang nghỉ",TERMINATED:"Đã nghỉ việc"}[person.employment_status]}</span>
           <span style={{fontSize:10,fontWeight:700,color:person.enabled?"#16A34A":"#64748B"}}>{person.enabled?"Đang hoạt động":"Đã khóa"}</span>
         </div>)}
       </div>
@@ -747,14 +678,28 @@ function StaffOperationsScreen({ employees, tasks }: { employees: EmployeeAdmin[
   );
 }
 
-function IncidentsScreen({ incidents }: { incidents: EquipmentIncident[] }) {
+function IncidentsScreen({
+  incidents,
+  onApproveDispatch,
+  onResolve,
+  workOrders,
+}: {
+  incidents: EquipmentIncident[];
+  onApproveDispatch?: (item: EquipmentIncident) => Promise<boolean | void>;
+  onResolve: (item: EquipmentIncident) => void;
+  workOrders: TechnicalWorkOrder[];
+}) {
   const [acknowledged, setAcknowledged] = useState<string[]>([]);
   const [saving, setSaving] = useState<string[]>([]);
   const acknowledge = async (item: EquipmentIncident) => {
     const key = String(item.id);
     setSaving(ids => [...ids, key]);
     try {
-      await housekeepingTechnicalApi.handoffIncident(item.id, { status: "ACKNOWLEDGED", note: "Đã tiếp nhận từ màn hình Ban điều hành." });
+      if (onApproveDispatch) {
+        if (await onApproveDispatch(item) === false) return;
+      } else {
+        await housekeepingTechnicalApi.handoffIncident(item.id, { status: "ACKNOWLEDGED", note: "Đã tiếp nhận từ màn hình Ban điều hành." });
+      }
       setAcknowledged(ids => [...ids, key]);
     } catch (error) {
       console.warn("Unable to acknowledge incident:", error);
@@ -769,8 +714,11 @@ function IncidentsScreen({ incidents }: { incidents: EquipmentIncident[] }) {
           const key=String(item.id); const done=acknowledged.includes(key) || item.handoff_status !== "OPEN";
           return <div key={item.id} style={{background:"#FFF",border:`1px solid ${item.severity==="CRITICAL"||item.severity==="HIGH"?"#FECDD3":"#FDE68A"}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
             <AlertTriangle size={18} style={{color:item.severity==="CRITICAL"||item.severity==="HIGH"?"#DC2626":"#D97706"}}/>
-            <div style={{flex:1}}><p style={{fontSize:13,fontWeight:700}}>{item.equipment_name} · Phòng {item.room_id}</p><p style={{fontSize:11,color:"#94A3B8",marginTop:2}}>{item.handoff_note || item.handoff_status}</p></div>
-            <button disabled={done || saving.includes(key)} onClick={()=>void acknowledge(item)} style={{padding:"7px 12px",borderRadius:8,border:"1px solid #E2E8F0",background:done?"#DCFCE7":"#FFF",color:done?"#166534":"#334155",fontSize:11,fontWeight:700,cursor:done?"default":"pointer"}}>{done?"Đã tiếp nhận":saving.includes(key)?"Đang lưu...":"Xác nhận tiếp nhận"}</button>
+            <div style={{flex:1}}><p style={{fontSize:13,fontWeight:700}}>{item.equipment_name} · Phòng {item.room_id}</p><p style={{fontSize:11,color:"#94A3B8",marginTop:2}}>{item.handoff_note || incidentStatusLabel(item.handoff_status)}</p></div>
+            <button disabled={done || saving.includes(key)} onClick={()=>void acknowledge(item)} style={{padding:"7px 14px",borderRadius:8,border:"1px solid #E2E8F0",background:done?"#DCFCE7":item.severity==="CRITICAL"||item.severity==="HIGH"?"#DC2626":"#2563EB",color:done?"#166534":"#FFF",fontSize:11,fontWeight:700,cursor:done?"default":"pointer"}}>
+              {item.handoff_status === "RESOLVED" ? "Đã xử lý" : done ? "Đã tiếp nhận" : saving.includes(key) ? "Đang xử lý..." : "Duyệt & Giao kỹ thuật"}
+            </button>
+            {item.handoff_status === "ACKNOWLEDGED" && <button onClick={() => onResolve(item)} disabled={workOrders.some(order => order.room_id === item.room_id && !["COMPLETED", "ROOM_RELEASED"].includes(order.status))} style={{padding:"8px 12px",borderRadius:8,border:"1px solid #BBF7D0",color:"#166534",fontSize:12,fontWeight:700}} title="Xác nhận sau khi phiếu sửa chữa trong phòng đã nghiệm thu">Xác nhận đã xử lý</button>}
           </div>;
         })}
       </div>
@@ -782,6 +730,15 @@ function IncidentsScreen({ incidents }: { incidents: EquipmentIncident[] }) {
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════ */
 export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; onBack: () => void }) {
+  const finance = useManagementFinance();
+  const [showEmployeeProvision, setShowEmployeeProvision] = useState(false);
+  const [resolveIncident, setResolveIncident] = useState<EquipmentIncident | null>(null);
+  const [resolveNote, setResolveNote] = useState("");
+  const [resolveSaving, setResolveSaving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [operationsError, setOperationsError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [selectedSearchRoom, setSelectedSearchRoom] = useState<ApiRoom | null>(null);
   const [page, setPage] = useState<NavPage>("overview");
   const [liveApprovals, setLiveApprovals] = useState<Approval[]>([]);
   const [liveLeaveRequests, setLiveLeaveRequests] = useState<LeaveRequest[]>([]);
@@ -801,6 +758,9 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
   const [acceptNoteInput, setAcceptNoteInput] = useState("");
   const [acceptModalError, setAcceptModalError] = useState<string | null>(null);
   const [isAccepting, setIsAccepting] = useState(false);
+  const [approvedPriceProposals, setApprovedPriceProposals] = useState<KitchenApproval[]>([]);
+  const [activatingPriceId, setActivatingPriceId] = useState<number | null>(null);
+  const [refreshApprovalsCount, setRefreshApprovalsCount] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -842,14 +802,26 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
             detail = Object.entries(payload).slice(0, 2).map(([key, item]) => `${key}: ${String(item)}`);
           } catch { /* reason remains the visible fallback */ }
           return {
-            id: String(approval.id), dept: approval.action, deptColor: "#3B82F6", emoji: "✓",
-            title: approval.action, detail: detail.length > 0 ? detail : [approval.reason],
-            time: approval.requested_at, badge: approval.risk, badgeColor: approval.risk === "HIGH" ? "#DC2626" : "#F59E0B",
+            id: String(approval.id), dept: "Đề xuất nghiệp vụ", deptColor: "#3B82F6", emoji: "✓",
+            title: approvalActionLabel(approval.action), detail: detail.length > 0 ? detail : [approval.reason],
+            time: approval.requested_at, badge: {HIGH:"Rủi ro cao",MEDIUM:"Trung bình",LOW:"Thấp"}[approval.risk] ?? approval.risk, badgeColor: approval.risk === "HIGH" ? "#DC2626" : "#F59E0B",
             kind: approval.action === "SERVICE_PRICE_CHANGE" ? "service-price" : approval.action.toLowerCase().includes("refund") ? "refund" : approval.action.toLowerCase().includes("technical") ? "technical-release" : "expense",
+            rawApproval: approval,
           };
         }));
       })
       .catch(err => { console.warn("Backend approval queue unavailable:", err); if (active) setLiveApprovals([]); });
+
+    kitchenAccountingApi.approvals("APPROVED")
+      .then(value => {
+        if (!active) return;
+        const source = Array.isArray(value) ? value : value.items;
+        const unconsumed = source.filter((a: KitchenApproval) =>
+          (a.action === "SERVICE_PRICE_CHANGE" || a.action === "Thay đổi giá dịch vụ") && !a.consumed_at
+        );
+        setApprovedPriceProposals(unconsumed);
+      })
+      .catch(() => { if (active) setApprovedPriceProposals([]); });
 
     enterpriseApi.leaves("PENDING")
       .then(rows => { if (active) setLiveLeaveRequests(rows); })
@@ -861,7 +833,15 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
       hrGovernanceApi.employees(true),
       housekeepingTechnicalApi.tasks(),
       housekeepingTechnicalApi.incidents(),
-      frontDeskApi.invoices({ page: 0, size: 100 }),
+      (async () => {
+        const items: ApiInvoice[] = [];
+        for (let page = 0; ; page++) {
+          const result = await frontDeskApi.invoices({ page, size: 100 });
+          if (!Array.isArray(result.items) || !Number.isSafeInteger(result.total_pages)) throw new Error("Phản hồi danh sách hóa đơn không hợp lệ.");
+          items.push(...result.items);
+          if (page + 1 >= result.total_pages) return items;
+        }
+      })(),
       housekeepingTechnicalApi.workOrders(),
     ])
       .then(([rooms, employees, tasks, incidents, invoices, workOrders]) => {
@@ -870,12 +850,14 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
         setLiveEmployees(employees);
         setLiveTasks(tasks);
         setLiveIncidents(incidents);
-        setLiveInvoices(invoices.items);
+        setLiveInvoices(invoices);
+        setOperationsError(null);
         setLiveTechnicalOrders(workOrders);
       })
       .catch(err => {
         console.warn("Backend manager operations snapshot unavailable:", err);
         if (active) {
+          setOperationsError(apiErrorMessage(err, "Không thể tải dữ liệu vận hành."));
           setLiveRooms([]);
           setLiveEmployees([]);
           setLiveTasks([]);
@@ -890,13 +872,23 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
       .catch(err => { console.warn("Backend manager expenses unavailable:", err); if (active) setLiveExpenses([]); });
 
     return () => { active = false; };
-  }, [role]);
+  }, [role, refreshApprovalsCount]);
 
   // Combine live WAITING_ACCEPTANCE technical work orders into approvals
   const technicalApprovals: Approval[] = useMemo(() => {
     return liveTechnicalOrders
       .filter(order => order.status === "WAITING_ACCEPTANCE")
-      .map(order => ({
+      .map(order => {
+        const approvalBlockedReason = profileLoading
+          ? "Đang xác minh tài khoản quản lý."
+          : !currentManager?.id
+            ? "Không xác minh được tài khoản quản lý; vui lòng tải lại trang."
+            : order.created_by === currentManager.id
+              ? "Bạn là người tạo phiếu này nên không thể tự nghiệm thu."
+              : order.assignee === currentManager.id
+                ? "Bạn là người được giao phiếu nên không thể tự nghiệm thu."
+                : undefined;
+        return {
         id: `tech-${order.id}`,
         dept: "Kỹ thuật & Bảo trì",
         deptColor: "#EA580C",
@@ -911,9 +903,11 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
         badge: order.priority === "CRITICAL" ? "Khẩn cấp" : order.priority === "HIGH" ? "Ưu tiên cao" : "Nghiệm thu",
         badgeColor: order.priority === "CRITICAL" ? "#DC2626" : "#EA580C",
         kind: "technical-release",
+        approvalBlockedReason,
         rawWorkOrderId: order.id,
-      }));
-  }, [liveTechnicalOrders]);
+      };
+      });
+  }, [liveTechnicalOrders, currentManager?.id, profileLoading]);
 
   const leaveApprovals: Approval[] = useMemo(() => liveLeaveRequests.map(request => {
     const employee = liveEmployees.find(item => item.employee_id === request.employee_id);
@@ -934,11 +928,90 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
     };
   }), [liveLeaveRequests, liveEmployees]);
 
+  const incidentApprovals: Approval[] = useMemo(() => {
+    return liveIncidents
+      .filter(inc => inc.handoff_status === "OPEN")
+      .map(inc => ({
+        id: `incident-${inc.id}`,
+        dept: "Buồng phòng & Sự cố",
+        deptColor: "#DC2626",
+        emoji: "🚨",
+        title: `Sự cố phòng ${inc.room_id}: ${inc.equipment_name}`,
+        detail: [
+          `Hạng mục / Thiết bị: ${inc.equipment_name} · Phòng ${inc.room_id}`,
+          `Mô tả sự cố: ${inc.handoff_note || "Buồng phòng báo sự cố cần kỹ thuật xử lý"}`,
+          `Mức độ nghiêm trọng: ${inc.severity === "CRITICAL" ? "Nghiêm trọng (Khẩn cấp)" : inc.severity === "HIGH" ? "Cao" : inc.severity === "MEDIUM" ? "Trung bình" : "Thấp"}`,
+        ],
+        time: "Chờ duyệt",
+        badge: inc.severity === "CRITICAL" ? "Khẩn cấp" : inc.severity === "HIGH" ? "Ưu tiên cao" : "Sự cố phòng",
+        badgeColor: inc.severity === "CRITICAL" || inc.severity === "HIGH" ? "#DC2626" : "#EA580C",
+        kind: "incident",
+      }));
+  }, [liveIncidents]);
+
   const allApprovals = useMemo(() => {
-    return [...liveApprovals, ...leaveApprovals, ...technicalApprovals];
-  }, [liveApprovals, leaveApprovals, technicalApprovals]);
+    const authorized = liveApprovals.map(approval => ({ ...approval, approvalBlockedReason: profileLoading
+      ? "Đang xác minh tài khoản quản lý."
+      : !currentManager?.id ? "Không xác minh được tài khoản quản lý; vui lòng tải lại."
+      : approval.rawApproval?.requester === currentManager.id ? "Bạn là người gửi yêu cầu nên không thể tự phê duyệt."
+      : undefined }));
+    return [...authorized, ...leaveApprovals, ...technicalApprovals, ...incidentApprovals];
+  }, [liveApprovals, leaveApprovals, technicalApprovals, incidentApprovals, currentManager?.id, profileLoading]);
 
   const pendingCount = approvalsForRole(role, allApprovals).length;
+
+  const approveAndDispatchIncident = async (incident: EquipmentIncident) => {
+    try {
+      // 2. Map priority
+      const backendPriority =
+        incident.severity === "CRITICAL" ? "CRITICAL" :
+        incident.severity === "HIGH" ? "HIGH" :
+        incident.severity === "MEDIUM" ? "MEDIUM" : "LOW";
+
+      // 3. Find matching equipment if any
+      let equipmentId: number | undefined;
+      try {
+        const equips = await housekeepingTechnicalApi.equipment(incident.room_id);
+        const match = (equips || []).find(e =>
+          e.name.toLowerCase().includes(incident.equipment_name.toLowerCase()) ||
+          incident.equipment_name.toLowerCase().includes(e.name.toLowerCase())
+        );
+        if (match) equipmentId = Number(match.id);
+      } catch {
+        // proceed without equipmentId
+      }
+
+      // 4. Create technical work order
+      const marker = `[Sự cố #${incident.id}]`;
+      const existingOrders = await housekeepingTechnicalApi.workOrders({ roomId: incident.room_id });
+      const existingOrder = existingOrders.find(order => order.materials?.startsWith(marker));
+      const technicalStaff = liveEmployees.filter(employee => employee.role === "TECHNICAL" && employee.enabled && employee.employment_status === "WORKING");
+      const newOrder = existingOrder ?? await housekeepingTechnicalApi.createWorkOrder({
+        room_id: incident.room_id,
+        equipment_id: equipmentId,
+        priority: backendPriority,
+        assignee: technicalStaff.length === 1 ? technicalStaff[0].employee_id : undefined,
+        materials: `${marker} ${incident.equipment_name}`,
+      }, { idempotencyKey: `MGMT-INCIDENT-${incident.id}-ORDER` });
+      setLiveTechnicalOrders(prev => [newOrder, ...prev.filter(order => order.id !== newOrder.id)]);
+      const updatedIncident = await housekeepingTechnicalApi.handoffIncident(incident.id, {
+        status: "ACKNOWLEDGED", note: `Đã giao phiếu kỹ thuật #${newOrder.id}`,
+      }, { idempotencyKey: `MGMT-INCIDENT-${incident.id}-DISPATCH` });
+
+      // 5. Update local state
+
+      setLiveIncidents(prev => prev.map(inc =>
+        inc.id === incident.id
+          ? updatedIncident
+          : inc
+      ));
+      return true;
+    } catch (err) {
+      console.error("Unable to dispatch incident to technical work order:", err);
+      setOperationsError(apiErrorMessage(err, "Không thể duyệt và giao việc kỹ thuật. Vui lòng thử lại."));
+      return false;
+    }
+  };
 
   const handleApprovalDecision = async (id: string, action: ApprovalDecision) => {
     if (id.startsWith("leave-")) {
@@ -951,14 +1024,26 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
         return true;
       } catch (err) {
         console.warn("Unable to persist leave approval decision:", err);
+        setOperationsError(apiErrorMessage(err, "Không thể lưu quyết định nghỉ phép."));
         return false;
       }
+    }
+    if (id.startsWith("incident-")) {
+      const incidentId = Number(id.replace("incident-", ""));
+      const targetIncident = liveIncidents.find(i => i.id === incidentId);
+      if (action === "approved" && targetIncident) {
+        return await approveAndDispatchIncident(targetIncident);
+      }
+      return false;
     }
     if (id.startsWith("tech-")) {
       const orderId = Number(id.replace("tech-", ""));
       const targetOrder = liveTechnicalOrders.find(o => o.id === orderId);
       if (action === "approved") {
-        if (targetOrder) {
+        const cannotAccept = !currentManager?.id || !targetOrder
+          || targetOrder.created_by === currentManager.id
+          || targetOrder.assignee === currentManager.id;
+        if (!cannotAccept && targetOrder) {
           setAcceptModalOrder(targetOrder);
           setAcceptNoteInput("");
           setAcceptModalError(null);
@@ -973,13 +1058,68 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
     const numericId = Number(id);
     if (!Number.isInteger(numericId)) return true;
     try {
-      if (action === "approved") await hrGovernanceApi.approve(numericId);
-      else await hrGovernanceApi.reject(numericId);
+      if (action === "approved") {
+        await hrGovernanceApi.approve(numericId);
+        const target = liveApprovals.find(item => item.id === id);
+        if (target?.kind === "service-price" && target.rawApproval?.target_id) {
+          const raw = target.rawApproval;
+          let newPrice = raw.amount ? Number(raw.amount) : 0;
+          if (!newPrice || Number.isNaN(newPrice)) {
+            try {
+              const parsed = JSON.parse(raw.payload);
+              newPrice = Number(typeof parsed === "number" ? parsed : (parsed as { price?: unknown }).price);
+            } catch {
+              newPrice = Number(raw.payload);
+            }
+          }
+          if (newPrice > 0) {
+            try {
+              await kitchenAccountingApi.activatePrice(raw.target_id, {
+                price: newPrice,
+                reason: raw.reason || "Quản lý duyệt và áp dụng giá",
+              }, `act-mgr-${raw.id}-${Date.now()}`);
+            } catch (err) {
+              console.warn("Unable to auto-activate service price upon approval:", err);
+            }
+          }
+        }
+      } else {
+        await hrGovernanceApi.reject(numericId);
+      }
       setLiveApprovals(previous => previous.filter(item => item.id !== id));
+      setRefreshApprovalsCount(c => c + 1);
+      finance.reload();
       return true;
     } catch (err) {
       console.warn("Unable to persist manager approval decision:", err);
+      setOperationsError(apiErrorMessage(err, "Không thể lưu quyết định phê duyệt."));
       return false;
+    }
+  };
+
+  const handleActivateApprovedPrice = async (approval: KitchenApproval) => {
+    setActivatingPriceId(approval.id);
+    try {
+      let newPrice = approval.amount ? Number(approval.amount) : 0;
+      if (!newPrice || Number.isNaN(newPrice)) {
+        try {
+          const parsed = JSON.parse(approval.payload);
+          newPrice = Number(typeof parsed === "number" ? parsed : (parsed as { price?: unknown }).price);
+        } catch {
+          newPrice = Number(approval.payload);
+        }
+      }
+      if (!Number.isFinite(newPrice) || newPrice <= 0) throw new Error("Giá dịch vụ không hợp lệ");
+      await kitchenAccountingApi.activatePrice(approval.target_id, {
+        price: newPrice,
+        reason: approval.reason || "Quản lý kích hoạt giá đã duyệt",
+      }, `act-mgr-${approval.id}-${Date.now()}`);
+      setApprovedPriceProposals(prev => prev.filter(p => p.id !== approval.id));
+      window.alert(`Đã áp dụng thành công giá mới (${formatVnd(newPrice)}) cho dịch vụ ${approval.target_id}!`);
+    } catch (err) {
+      window.alert(apiErrorMessage(err, "Không thể kích hoạt giá dịch vụ."));
+    } finally {
+      setActivatingPriceId(null);
     }
   };
 
@@ -1010,7 +1150,7 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
   const managerInitials = profileLoading ? "..." : profileError ? (role === "director" ? "GĐ" : "QL") : currentManager?.initials || (role === "director" ? "GĐ" : "QL");
 
   return (
-    <div style={{ display:"flex",height:"100vh",overflow:"hidden",
+    <div className="management-station" style={{ display:"flex",height:"100vh",overflow:"hidden",
       background:"#F8FAFC",fontFamily:"'Inter',system-ui,sans-serif" }}>
 
       {/* SIDEBAR */}
@@ -1093,12 +1233,14 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
           display:"flex",alignItems:"center",gap:12,padding:"0 24px",flexShrink:0 }}>
           <div style={{ position:"relative",flex:1,maxWidth:520 }}>
             <Search size={13} style={{ position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
-            <input placeholder="Tìm kiếm phòng, đặt phòng, khách, phiếu công việc..."
+            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm phòng hoặc nhân viên..."
               style={{ width:"100%",height:34,paddingLeft:32,paddingRight:42,borderRadius:8,
                 border:"1px solid #E2E8F0",background:"#F8FAFC",fontSize:12,outline:"none",boxSizing:"border-box" }} />
-            <span style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
-              fontSize:10,color:"#CBD5E1",fontFamily:"'JetBrains Mono',monospace",
-              background:"#F1F5F9",padding:"1px 5px",borderRadius:4,border:"1px solid #E2E8F0" }}>⌘ K</span>
+            {search.trim() && <div style={{position:"absolute",left:0,right:0,top:38,zIndex:50,background:"white",border:"1px solid #CBD5E1",borderRadius:8,padding:8,maxHeight:280,overflowY:"auto",boxShadow:"0 10px 20px #0F172A18"}}>
+              {[...liveRooms.filter(room => `${room.id} ${room.name}`.toLowerCase().includes(search.toLowerCase())).slice(0,6).map(room => ({key:`room-${room.id}`,label:`Phòng ${room.name} · ${room.room_type_name}`,page:"operations" as NavPage})),
+              ...liveEmployees.filter(employee => `${employee.employee_id} ${employee.full_name}`.toLowerCase().includes(search.toLowerCase())).slice(0,6).map(employee=>({key:employee.employee_id,label:employee.full_name,page:"staff" as NavPage}))].map(result=><button key={result.key} onClick={()=>{const room=liveRooms.find(item=>result.key===`room-${item.id}`); if(room)setSelectedSearchRoom(room);else setPage(result.page);setSearch("");}} style={{display:"block",width:"100%",textAlign:"left",padding:10,fontSize:13}}>{result.label}</button>)}
+              {!liveRooms.some(room => `${room.id} ${room.name}`.toLowerCase().includes(search.toLowerCase())) && !liveEmployees.some(employee => `${employee.employee_id} ${employee.full_name}`.toLowerCase().includes(search.toLowerCase())) && <p style={{padding:10,fontSize:13}}>Không tìm thấy kết quả.</p>}
+            </div>}
           </div>
 
           {/* Date */}
@@ -1111,18 +1253,8 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
 
           <div style={{ flex:1 }} />
 
-          {/* Weather */}
-          <div style={{ display:"flex",alignItems:"center",gap:6,padding:"4px 10px",borderRadius:8,
-            background:"#FFF7ED",border:"1px solid #FED7AA" }}>
-            <Sun size={14} style={{ color:"#F59E0B" }} />
-            <div>
-              <p style={{ fontSize:11,fontWeight:700,color:"#92400E",lineHeight:1 }}>32°C</p>
-              <p style={{ fontSize:9,color:"#94A3B8" }}>TP. Hồ Chí Minh</p>
-            </div>
-          </div>
-
           {/* Bell */}
-          <button style={{ width:34,height:34,borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0",
+          <button aria-label="Thông báo và cảnh báo" onClick={() => setPage("notifications")} style={{ width:34,height:34,borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0",
             display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative" }}>
             <Bell size={14} style={{ color:"#475569" }} />
             {pendingCount > 0 && <span style={{ position:"absolute",top:5,right:5,width:8,height:8,borderRadius:99,background:"#EF4444",
@@ -1166,12 +1298,14 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
             {page==="staff"      && "Nhân sự & Phân ca"}
             {page==="incidents"  && "Sự cố & Khẩn cấp"}
             {page==="reports"    && "Báo cáo điều hành"}
+            {page==="notifications" && "Thông báo & Cảnh báo"}
           </h1>
           <p style={{ fontSize:13,color:"#64748B" }}>
             {page==="overview"  && `Chào mừng trở lại, ${role === "director" ? "Giám đốc" : "Quản lý"}! Đây là tình hình hoạt động của khách sạn hôm nay.`}
-            {page==="approvals" && "Các yêu cầu phê duyệt từ tất cả bộ phận – hôm nay."}
+            {page==="approvals" && "Các yêu cầu đang chờ phê duyệt từ tất cả bộ phận."}
             {page==="operations"&& "Tình trạng phòng và vận hành theo thời gian thực."}
-            {page==="staff"     && "Quản lý nhân viên, lịch phân ca và hiệu suất."}
+            {page==="staff"     && "Danh sách nhân viên và phân công buồng phòng."}
+            {page==="notifications" && "Các yêu cầu đang chờ và sự cố chưa xử lý."}
             {page==="incidents" && "Theo dõi sự cố và cảnh báo khẩn cấp."}
             {page==="reports"   && `Báo cáo tổng hợp kinh doanh tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}.`}
           </p>
@@ -1179,32 +1313,51 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
 
         {/* CONTENT */}
         <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}>
-          {page==="overview"   && <OverviewScreen role={role} approvalsData={allApprovals} rooms={liveRooms} invoices={liveInvoices} incidents={liveIncidents} techOrders={liveTechnicalOrders} onDecision={handleApprovalDecision} onNavApprovals={() => setPage("approvals")} />}
-          {page==="approvals"  && <ApprovalsScreen role={role} approvalsData={allApprovals} onDecision={handleApprovalDecision} />}
-          {page==="reports"    && <ReportsScreen invoices={liveInvoices} rooms={liveRooms} expenses={liveExpenses} />}
+          {operationsError && <p role="alert" style={{padding:12,color:"#B91C1C",background:"#FEF2F2"}}>{operationsError} <button onClick={()=>setRefreshApprovalsCount(value=>value+1)}>Tải lại</button></p>}
+          {page==="notifications" && <div style={{padding:24,overflowY:"auto"}}>
+            <h2 style={{fontWeight:700,marginBottom:12}}>Sự cố chưa xử lý</h2>
+            {liveIncidents.filter(item=>item.handoff_status!=="RESOLVED").map(item=><button key={item.id} onClick={()=>setPage("incidents")} style={{display:"block",background:"white",width:"100%",padding:14,border:"1px solid #E2E8F0",borderRadius:8,marginBottom:8,textAlign:"left"}}>Phòng {item.room_id}: {item.equipment_name} · {item.handoff_status==="OPEN"?"Chờ tiếp nhận":"Đang xử lý"}</button>)}
+            <h2 style={{fontWeight:700,margin:"20px 0 12px"}}>Yêu cầu chờ phê duyệt</h2>
+            {approvalsForRole(role,allApprovals).map(item=><button key={item.id} onClick={()=>setPage("approvals")} style={{display:"block",background:"white",width:"100%",padding:14,border:"1px solid #E2E8F0",borderRadius:8,marginBottom:8,textAlign:"left"}}>{item.title}</button>)}
+            {!pendingCount&&!liveIncidents.some(item=>item.handoff_status!=="RESOLVED")&&<p>Không có yêu cầu hoặc cảnh báo đang chờ xử lý.</p>}
+          </div>}
+          {page==="overview"   && <OverviewScreen role={role} approvalsData={allApprovals} rooms={liveRooms} invoices={liveInvoices} incidents={liveIncidents} techOrders={liveTechnicalOrders} onDecision={handleApprovalDecision} onNavApprovals={() => setPage("approvals")} onNavOperations={() => setPage("operations")} onNavNotifications={() => setPage("notifications")} finance={finance} />}
+          {page==="approvals"  && <ApprovalsScreen role={role} approvalsData={allApprovals} onDecision={handleApprovalDecision} approvedPriceProposals={approvedPriceProposals} activatingPriceId={activatingPriceId} onActivatePrice={handleActivateApprovedPrice} />}
+          {page==="reports"    && <ReportsScreen invoices={liveInvoices} rooms={liveRooms} expenses={liveExpenses} finance={finance} />}
           {page==="operations" && <OperationsScreen
             rooms={liveRooms}
             tasks={liveTasks}
             employees={liveEmployees}
             workOrders={liveTechnicalOrders}
+            incidents={liveIncidents}
             onNavigateApprovals={() => setPage("approvals")}
+            onNavigateIncidents={() => setPage("incidents")}
             onTaskCreated={task => {
               setLiveTasks(previous => [task, ...previous.filter(item => item.id !== task.id)]);
-              setLiveRooms(previous => previous.map(room => room.id === task.room_id ? { ...room, status: "cleaning" } : room));
+              setRefreshApprovalsCount(value => value + 1);
             }}
             onTaskReady={task => {
               setLiveTasks(previous => previous.map(item => item.id === task.id ? task : item));
-              const repairPendingRelease = liveTechnicalOrders.some(order => order.room_id === task.room_id && order.status === "COMPLETED");
-              setLiveRooms(previous => previous.map(room => room.id === task.room_id
-                ? { ...room, status: repairPendingRelease ? "maintenance" : "available" }
-                : room));
+              setRefreshApprovalsCount(value => value + 1);
             }}
           />}
-          {page==="staff"      && <StaffOperationsScreen employees={liveEmployees} tasks={liveTasks} />}
-          {page==="incidents"  && <IncidentsScreen incidents={liveIncidents} />}
+          {page==="staff"      && <StaffOperationsScreen employees={liveEmployees} tasks={liveTasks} onAdd={() => setShowEmployeeProvision(true)} />}
+          {page==="incidents"  && <IncidentsScreen incidents={liveIncidents} onApproveDispatch={approveAndDispatchIncident} workOrders={liveTechnicalOrders} onResolve={item => {setResolveIncident(item); setResolveNote(""); setResolveError(null);}} />}
         </div>
       </div>
 
+      {showEmployeeProvision && <EmployeeProvisionModal role={role} onClose={()=>setShowEmployeeProvision(false)} onCreated={()=>setRefreshApprovalsCount(value=>value+1)} />}
+      {selectedSearchRoom && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"><div role="dialog" aria-modal="true" aria-labelledby="manager-room-detail" className="w-full max-w-lg rounded-2xl bg-white p-6">
+        <h2 id="manager-room-detail" className="text-lg font-bold">Chi tiết phòng {selectedSearchRoom.name}</h2>
+        <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><dt>Loại phòng</dt><dd>{selectedSearchRoom.room_type_name}</dd><dt>Tầng</dt><dd>{selectedSearchRoom.floor}</dd><dt>Giá ngày</dt><dd>{fmtVND(selectedSearchRoom.daily_price)}</dd><dt>Trạng thái</dt><dd>{{available:"Sẵn sàng",occupied:"Có khách",reserved:"Đã giữ phòng",cleaning:"Đang dọn",maintenance:"Bảo trì",out_of_service:"Ngừng sử dụng"}[selectedSearchRoom.status]}</dd></dl>
+        <p className="mt-4 text-sm text-slate-600">Sự cố chưa xử lý: {liveIncidents.filter(item=>item.room_id===selectedSearchRoom.id&&item.handoff_status!=="RESOLVED").length}. Phiếu kỹ thuật chưa hoàn tất: {liveTechnicalOrders.filter(item=>item.room_id===selectedSearchRoom.id&&!["COMPLETED","ROOM_RELEASED"].includes(item.status)).length}.</p>
+        <button onClick={()=>setSelectedSearchRoom(null)} className="mt-5 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold">Đóng</button>
+      </div></div>}
+      {resolveIncident && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"><form role="dialog" aria-modal="true" aria-labelledby="resolve-incident-title" className="w-full max-w-lg rounded-2xl bg-white p-6" onSubmit={async event=>{
+        event.preventDefault(); if(resolveSaving)return; setResolveSaving(true);setResolveError(null);
+        try {await housekeepingTechnicalApi.handoffIncident(resolveIncident.id,{status:"RESOLVED",note:resolveNote.trim()});setResolveIncident(null);setRefreshApprovalsCount(value=>value+1);}
+        catch(error){setResolveError(apiErrorMessage(error,"Không thể xác nhận sự cố đã xử lý."));}finally{setResolveSaving(false);}
+      }}><h2 id="resolve-incident-title" className="text-lg font-bold">Xác nhận sự cố đã xử lý</h2><p className="my-3 text-sm text-slate-600">Phòng {resolveIncident.room_id}: {resolveIncident.equipment_name}. Phòng chỉ được mở sau khi hoàn tất checklist và quy trình nghiệm thu.</p><label className="block text-sm">Kết quả xử lý *<textarea required minLength={10} value={resolveNote} onChange={event=>setResolveNote(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-3" /></label>{resolveError&&<p role="alert" className="mt-3 text-sm text-red-700">{resolveError}</p>}<div className="mt-5 flex justify-end gap-2"><button type="button" disabled={resolveSaving} onClick={()=>setResolveIncident(null)} className="rounded-lg border px-4 py-2">Hủy</button><button disabled={resolveSaving} className="rounded-lg bg-green-700 px-4 py-2 text-white">{resolveSaving?"Đang lưu…":"Xác nhận đã xử lý"}</button></div></form></div>}
       {/* MODAL: NGHIỆM THU PHIẾU KỸ THUẬT */}
       {acceptModalOrder && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
@@ -1262,20 +1415,5 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
         </div>
       )}
     </div>
-  );
-}
-
-/* Calendar icon (used in header date) */
-function CalendarDays({ size, style }: { size: number; style?: React.CSSProperties }) {
-  return <CalendarDaysIcon size={size} style={style} />;
-}
-function CalendarDaysIcon({ size, style }: { size: number; style?: React.CSSProperties }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={style}>
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
   );
 }

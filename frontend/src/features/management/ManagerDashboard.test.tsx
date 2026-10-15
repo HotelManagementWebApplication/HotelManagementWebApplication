@@ -6,21 +6,28 @@ import { hrGovernanceApi } from "../../shared/api/hrGovernance";
 import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
 import { frontDeskApi } from "../../shared/api/frontDesk";
 import { kitchenAccountingApi } from "../../shared/api/kitchenAccounting";
-import { ApiError } from "../../shared/api/client";
+import { enterpriseApi } from "../../shared/api/enterprise";
 
 describe("ManagerDashboard Interface and Acceptance Workflow", () => {
   const onBack = vi.fn();
 
-  it("keeps the acceptance modal open with the actual separation-of-duties reason", async () => {
-    vi.mocked(housekeepingTechnicalApi.workOrders).mockResolvedValue([{id:77,room_id:"R202",status:"WAITING_ACCEPTANCE",created_by:"EMP_MGR",materials:"Sửa điều hòa",result_note:"Đã sửa xong"}] as any);
-    const accept=vi.spyOn(housekeepingTechnicalApi,"accept").mockRejectedValue(new ApiError(422,{code:"SOD_VIOLATION",message:"Người tạo phiếu không được tự nghiệm thu"}));
+  it.each([
+    ["người tạo", "EMP_MGR", "TEC01", "Bạn là người tạo phiếu này nên không thể tự nghiệm thu."],
+    ["người được giao", "TEC01", "EMP_MGR", "Bạn là người được giao phiếu nên không thể tự nghiệm thu."],
+  ])("blocks acceptance when the manager is the %s", async (_relationship, createdBy, assignee, reason) => {
+    vi.mocked(housekeepingTechnicalApi.workOrders).mockResolvedValue([{
+      id: 77, room_id: "R202", assignee, status: "WAITING_ACCEPTANCE", created_by: createdBy,
+      materials: "Sửa điều hòa", result_note: "Đã sửa xong",
+    }] as any);
+    const accept = vi.spyOn(housekeepingTechnicalApi, "accept");
     render(<ManagerDashboard role="manager" onBack={onBack} />);
-    fireEvent.click(await screen.findByRole("button",{name:/^Phê duyệt$/i}));
-    fireEvent.change(screen.getByPlaceholderText(/Nhập nhận xét nghiệm thu/i),{target:{value:"Đã kiểm tra"}});
-    fireEvent.click(screen.getByRole("button",{name:/Xác nhận nghiệm thu/i}));
-    await screen.findByText("Người tạo phiếu không được tự nghiệm thu");
-    expect(screen.getByText("Nghiệm thu phiếu bảo trì kỹ thuật")).toBeTruthy();
-    expect(accept).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(reason)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Phê duyệt$/i })).toBeNull();
+    expect(screen.queryByText("Nghiệm thu phiếu bảo trì kỹ thuật")).toBeNull();
+    expect(accept).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Trung tâm Phê duyệt/i }));
+    expect((await screen.findAllByText(reason)).length).toBeGreaterThan(0);
   });
 
   beforeEach(() => {
@@ -63,9 +70,14 @@ describe("ManagerDashboard Interface and Acceptance Workflow", () => {
 
     // Mock expenses
     vi.spyOn(kitchenAccountingApi, "expenses").mockResolvedValue([]);
+    vi.spyOn(kitchenAccountingApi, "approvals").mockResolvedValue([]);
+    vi.spyOn(enterpriseApi, "leaves").mockResolvedValue([]);
+    vi.spyOn(kitchenAccountingApi, "ledger").mockResolvedValue({items: [], page: 0, size: 100, totalElements: 0, totalPages: 0});
+    vi.spyOn(kitchenAccountingApi, "reconciliation").mockResolvedValue({recognized_revenue: 0, net_total: 0, total_payments: 0, total_refunds: 0} as any);
 
     // Mock work orders
     vi.spyOn(housekeepingTechnicalApi, "workOrders").mockResolvedValue([]);
+    vi.spyOn(housekeepingTechnicalApi, "equipment").mockResolvedValue([]);
   });
 
   it("loads dynamic manager profile and never renders hardcoded fake profiles or fake mock items", async () => {
@@ -97,7 +109,7 @@ describe("ManagerDashboard Interface and Acceptance Workflow", () => {
         accepted_by: null,
         accepted_at: null,
         status: "WAITING_ACCEPTANCE",
-        created_by: "MGR01",
+        created_by: "TEC01",
         created_at: "2026-09-20T08:00:00",
         updated_at: "2026-09-20T11:30:00",
       },
@@ -116,7 +128,7 @@ describe("ManagerDashboard Interface and Acceptance Workflow", () => {
       accepted_by: "EMP_MGR",
       accepted_at: "2026-09-20T12:00:00",
       status: "COMPLETED",
-      created_by: "MGR01",
+      created_by: "TEC01",
       created_at: "2026-09-20T08:00:00",
       updated_at: "2026-09-20T12:00:00",
     });
@@ -181,5 +193,100 @@ describe("ManagerDashboard Interface and Acceptance Workflow", () => {
     await waitFor(() => {
       expect(screen.getByText("Hiện không có yêu cầu phê duyệt nào đang chờ xử lý từ các bộ phận.")).toBeDefined();
     });
+  });
+
+  it("displays open room incidents in approvals and creates technical work order upon manager approval", async () => {
+    vi.spyOn(housekeepingTechnicalApi, "incidents").mockResolvedValue([
+      {
+        id: 99,
+        reservation_id: null,
+        room_id: "502",
+        equipment_name: "Điều hòa",
+        severity: "HIGH",
+        handoff_status: "OPEN",
+        handoff_note: "Điều hòa chảy nước nhiều",
+        compensation: 0,
+      },
+    ]);
+    const handoffSpy = vi.spyOn(housekeepingTechnicalApi, "handoffIncident").mockResolvedValue({
+      id: 99,
+      reservation_id: null,
+      room_id: "502",
+      equipment_name: "Điều hòa",
+      severity: "HIGH",
+      handoff_status: "ACKNOWLEDGED",
+      handoff_note: "Quản lý đã duyệt sự cố và điều phối kỹ thuật xử lý",
+      compensation: 0,
+    });
+    const workOrderSpy = vi.spyOn(housekeepingTechnicalApi, "createWorkOrder").mockResolvedValue({
+      id: 101,
+      room_id: "502",
+      equipment_id: null,
+      assignee: "TECHNICAL",
+      priority: "HIGH",
+      sla_due_at: null,
+      materials: "[Sự cố phòng] Điều hòa: Điều hòa chảy nước nhiều",
+      result_note: null,
+      acceptance_note: null,
+      accepted_by: null,
+      accepted_at: null,
+      status: "NEW",
+      created_by: "MANAGER",
+      created_at: "2026-10-15T00:01:00",
+      updated_at: "2026-10-15T00:01:00",
+    });
+
+    render(<ManagerDashboard role="manager" onBack={onBack} />);
+
+    // Check that open incident is displayed in Approvals list on Overview
+    await waitFor(() => {
+      expect(screen.getAllByText("Sự cố phòng 502: Điều hòa").length).toBeGreaterThan(0);
+    });
+
+    const approveBtn = screen.getByRole("button", { name: /^phê duyệt$/i });
+    fireEvent.click(approveBtn);
+
+    await waitFor(() => {
+      expect(handoffSpy).toHaveBeenCalledWith(99, expect.objectContaining({
+        status: "ACKNOWLEDGED",
+      }), expect.objectContaining({idempotencyKey: "MGMT-INCIDENT-99-DISPATCH"}));
+      expect(workOrderSpy).toHaveBeenCalledWith(expect.objectContaining({
+        room_id: "502",
+        assignee: undefined,
+        priority: "HIGH",
+      }), expect.objectContaining({idempotencyKey: "MGMT-INCIDENT-99-ORDER"}));
+    });
+  });
+
+  it("does not acknowledge an incident or show success when work order creation fails", async () => {
+    const incident = {id: 99, room_id: "502", equipment_name: "Điều hòa", severity: "HIGH", handoff_status: "OPEN", compensation: 0, handoff_note: null, reservation_id: null} as const;
+    vi.mocked(housekeepingTechnicalApi.incidents).mockResolvedValue([incident]);
+    const create = vi.spyOn(housekeepingTechnicalApi, "createWorkOrder").mockRejectedValue(new Error("Create failed"));
+    const handoff = vi.spyOn(housekeepingTechnicalApi, "handoffIncident");
+    vi.spyOn(window, "alert").mockImplementation(() => {});
+    render(<ManagerDashboard role="manager" onBack={onBack} />);
+    fireEvent.click(screen.getByRole("button", {name: "Sự cố & Khẩn cấp"}));
+    fireEvent.click(await screen.findByRole("button", {name: "Duyệt & Giao kỹ thuật"}));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", {name: "Duyệt & Giao kỹ thuật"}).hasAttribute("disabled")).toBe(false));
+    expect(handoff).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", {name: "Đã tiếp nhận"})).toBeNull();
+  });
+
+  it("reuses an already persisted dispatch work order when retrying the incident handoff", async () => {
+    const incident = {id: 99, room_id: "502", equipment_name: "Điều hòa", severity: "HIGH", handoff_status: "OPEN", compensation: 0, handoff_note: null, reservation_id: null} as const;
+    vi.mocked(housekeepingTechnicalApi.incidents).mockResolvedValue([incident]);
+    vi.mocked(housekeepingTechnicalApi.workOrders).mockResolvedValue([{id:101, room_id:"502", materials:"[Sự cố #99] Điều hòa", status:"NEW"}] as any);
+    const create = vi.spyOn(housekeepingTechnicalApi, "createWorkOrder");
+    const handoff = vi.spyOn(housekeepingTechnicalApi, "handoffIncident").mockRejectedValueOnce(new Error("Handoff failed")).mockResolvedValue({...incident,handoff_status:"ACKNOWLEDGED"});
+    vi.spyOn(window, "alert").mockImplementation(() => {});
+    render(<ManagerDashboard role="manager" onBack={onBack} />);
+    fireEvent.click(screen.getByRole("button", {name: "Sự cố & Khẩn cấp"}));
+    fireEvent.click(await screen.findByRole("button", {name: "Duyệt & Giao kỹ thuật"}));
+    await waitFor(() => expect(screen.getByRole("button", {name: "Duyệt & Giao kỹ thuật"}).hasAttribute("disabled")).toBe(false));
+    fireEvent.click(screen.getByRole("button", {name: "Duyệt & Giao kỹ thuật"}));
+    await screen.findByRole("button", {name: "Đã tiếp nhận"});
+    expect(handoff).toHaveBeenCalledTimes(2);
+    expect(create).not.toHaveBeenCalled();
   });
 });

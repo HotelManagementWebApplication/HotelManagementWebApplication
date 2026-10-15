@@ -24,7 +24,6 @@ Backend permissions remain authoritative.
 | Management | `frontend/src/features/management/ManagerDashboard.tsx` | `MANAGER` and `DIRECTOR` |
 | HR | `frontend/src/features/hr/HRStation.tsx` | `HR` |
 | Administration | `frontend/src/features/admin/AdminStation.tsx` | `ADMIN` |
-| General staff portal | `frontend/src/features/staff-portal/StaffPortal.tsx` | Other authenticated staff |
 
 `features/auth/LoginPage.tsx` is the employee/customer login surface. `ScreenRouter.tsx` imports the
 screens above; they are not merely unreachable legacy pages.
@@ -46,13 +45,3 @@ screens above; they are not merely unreachable legacy pages.
   implied by this inventory. A row-level status must be added only with
   current focused test evidence; live proof must identify the exact run and
   report zero skipped scenarios.
-
-## Actual browser audit — 2026-10-08
-
-The [manual browser report](kiem-tra-hardcut-web-2026-10-08.md) records actual
-actions on localhost for all 11 roles, including bad inputs and persisted
-outcomes. It found blocking UI defects even though backend, frontend and live
-HTTP suites passed. It is **not exhaustive every-button acceptance**; untested
-and browser-control-blocked cases are explicitly listed. The employee-profile
-fallback above remains source-observed migration residue, not proof of backend
-authorization bypass.

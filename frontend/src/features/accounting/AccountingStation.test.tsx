@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AccountingStation from "./AccountingStation";
 import { kitchenAccountingApi as api } from "../../shared/api/kitchenAccounting";
@@ -13,26 +13,28 @@ const mount=()=>render(<AccountingStation onBack={vi.fn()} />);
 describe("Accounting server pagination",()=>{
   beforeEach(()=>{
     vi.restoreAllMocks();
+    vi.spyOn(api,"cashBalance").mockResolvedValue({actor_id:"ACCOUNTING",calculated_at:"2026-10-09T10:00:00",payments:0,refunds:0,received_handovers:0,handed_over_expected:0,cash_expenses:0,cash_debt_settlements:0,expected_amount:0});
+    vi.spyOn(api,"cashRecipients").mockResolvedValue([]);vi.spyOn(api,"refundRequests").mockResolvedValue([]);
     vi.spyOn(authApi,"employeeProfile").mockResolvedValue({employee_id:"ACCOUNTING",full_name:"Kế toán kiểm thử",role:"ACCOUNTING",permissions:[]});
     vi.spyOn(api,"partnerDebts").mockResolvedValue([]); vi.spyOn(api,"cashHandovers").mockResolvedValue([]);
     vi.spyOn(enterpriseApi,"ota").mockResolvedValue([]); vi.spyOn(enterpriseApi,"vatInvoices").mockResolvedValue([]);
-    vi.spyOn(api,"reconciliation").mockResolvedValue({from_date:"2026-10-09",to_date:"2026-10-09",totals_by_method:{CASH:15000000},total_payments:15000000,total_refunds:0,net_total:15000000,recognized_revenue:15000000,outstanding_partner_debt:0,cash_variance:0,completed_transactions:150,pending_bank_transfers:0});
+    vi.spyOn(api,"reconciliation").mockResolvedValue({from_date:"2026-10-09",to_date:"2026-10-09",totals_by_method:{CASH:15000000},total_payments:15000000,total_refunds:0,net_total:15000000,recognized_revenue:15000000,outstanding_partner_debt:0,cash_variance:0,completed_transactions:150,outstanding_bank_transfer_balances:0});
   });
   it("fills the handover amount from the popup and preserves confirmed counts after cancel", async()=>{
     vi.spyOn(api,"payments").mockResolvedValue(result(0,0));
     mount(); await screen.findByText("Hiển thị 0–0 trên 0 giao dịch");
     fireEvent.click(screen.getByRole("button",{name:"Ghi nhận bàn giao"}));
     fireEvent.click(screen.getByRole("button",{name:"Chi tiết mệnh giá"}));
-    fireEvent.change(screen.getAllByRole("spinbutton")[0],{target:{value:"2"}});
-    fireEvent.change(screen.getAllByRole("spinbutton")[1],{target:{value:"3"}});
+    fireEvent.change(within(screen.getByRole("dialog")).getAllByRole("spinbutton")[0],{target:{value:"2"}});
+    fireEvent.change(within(screen.getByRole("dialog")).getAllByRole("spinbutton")[1],{target:{value:"3"}});
     fireEvent.click(screen.getByRole("button",{name:"Xác nhận & Điền"}));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect((screen.getByLabelText("Số tiền thực tế") as HTMLInputElement).value).toBe("1600000");
+    expect((screen.getByLabelText("Số tiền thực đếm") as HTMLInputElement).value).toBe("1600000");
     fireEvent.click(screen.getByRole("button",{name:"Chi tiết mệnh giá"}));
-    expect((screen.getAllByRole("spinbutton")[0] as HTMLInputElement).value).toBe("2");
-    fireEvent.change(screen.getAllByRole("spinbutton")[0],{target:{value:"8"}});
+    expect((within(screen.getByRole("dialog")).getAllByRole("spinbutton")[0] as HTMLInputElement).value).toBe("2");
+    fireEvent.change(within(screen.getByRole("dialog")).getAllByRole("spinbutton")[0],{target:{value:"8"}});
     fireEvent.click(screen.getByRole("button",{name:"Hủy bỏ"}));
-    expect((screen.getByLabelText("Số tiền thực tế") as HTMLInputElement).value).toBe("1600000");
+    expect((screen.getByLabelText("Số tiền thực đếm") as HTMLInputElement).value).toBe("1600000");
     expect(screen.getByRole("button",{name:"Chi tiết mệnh giá"}).textContent).toContain("× 2");
   });
   it("fetches only the selected page, shows records after 100 and keeps whole-day KPIs",async()=>{
@@ -59,8 +61,8 @@ describe("Accounting server pagination",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Trang 15"})); await screen.findByText("PAY-150");
     fireEvent.change(screen.getByPlaceholderText("Tìm mã giao dịch, hóa đơn hoặc đặt phòng..."),{target:{value:"PAY-150"}}); await screen.findByText("Hiển thị 1–1 trên 1 giao dịch");
     expect(payments).toHaveBeenLastCalledWith(expect.objectContaining({page:0,size:10,search:"PAY-150"}));
-    fireEvent.change(screen.getByRole("combobox",{name:"Phương thức thanh toán"}),{target:{value:"momo"}});
-    await waitFor(()=>expect(payments).toHaveBeenLastCalledWith(expect.objectContaining({page:0,method:"MOMO",search:"PAY-150"})));
+    fireEvent.change(screen.getByRole("combobox",{name:"Phương thức thanh toán"}),{target:{value:"card"}});
+    await waitFor(()=>expect(payments).toHaveBeenLastCalledWith(expect.objectContaining({page:0,method:"CARD",search:"PAY-150"})));
   });
   it("ignores a late response from an obsolete search",async()=>{
     let finish!: (page:PaymentPage)=>void;

@@ -50,6 +50,9 @@ public class ApprovalService {
     @Transactional public List<ApprovalDtos.Response> requestedServicePriceChanges(String requester){
         String actor=SecurityActor.requireBoundActor(requester);database.expire(Instant.now(clock));return database.list(null,actor,"SERVICE_PRICE_CHANGE");
     }
+    @Transactional public List<ApprovalDtos.Response> requestedPaymentRefunds(){
+        String actor=SecurityActor.currentActor();database.expire(Instant.now(clock));return database.list(null,actor,"PAYMENT_REFUND");
+    }
     @Transactional public Page<ApprovalDtos.Response> page(String status,String action,String target,int page,int size){return page(status,action,target,null,null,null,null,page,size);}
     @Transactional public Page<ApprovalDtos.Response> page(String status,String action,String target,String requester,Instant from,Instant to,int page,int size){return page(status,action,target,requester,null,from,to,page,size);}
     @Transactional public Page<ApprovalDtos.Response> page(String status,String action,String target,String requester,String risk,Instant from,Instant to,int page,int size){

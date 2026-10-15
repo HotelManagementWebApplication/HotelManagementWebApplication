@@ -102,7 +102,6 @@ const ROLE_META: Record<EmployeeRole, { name: string; department: string; badgeC
   DIRECTOR: { name: "Giám đốc", department: "Ban giám đốc", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   ADMIN: { name: "Quản trị hệ thống", department: "CNTT", badgeColor: "bg-slate-100 text-slate-700 border-slate-200" },
   HR: { name: "Nhân sự", department: "Nhân sự", badgeColor: "bg-pink-50 text-pink-700 border-pink-200" },
-  STAFF: { name: "Nhân viên", department: "Vận hành", badgeColor: "bg-stone-100 text-stone-700 border-stone-200" },
 };
 
 type LoadState = "loading" | "ready" | "error";

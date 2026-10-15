@@ -36,6 +36,8 @@ public class PaymentTransactionService {
             throw new DomainException("IDEMPOTENCY_KEY_INVALID","Idempotency-Key chứa ký tự không hợp lệ");
         if(request.type()==PaymentTransaction.TransactionType.REFUND&&(request.reference()==null||request.reference().isBlank()))
             throw new DomainException("REFUND_REASON_REQUIRED","Refund phải có lý do");
+        if(request.reference()!=null && request.reference().length()>(request.type()==PaymentTransaction.TransactionType.REFUND?69:100))
+            throw new DomainException("TRANSACTION_REFERENCE_TOO_LONG","Nội dung thu tiền tối đa 100 ký tự; lý do hoàn tiền tối đa 69 ký tự");
         String canonicalReference="invoice:"+invoiceId+"|reference:"+(request.reference()==null?"":request.reference());
         String stored=PaymentTransaction.storageIdempotencyKey(normalized,principal,request.amount(),request.method(),request.type(),canonicalReference);
         String payload=request.type()==PaymentTransaction.TransactionType.REFUND?request.approvalPayload(invoiceId,normalized):"";

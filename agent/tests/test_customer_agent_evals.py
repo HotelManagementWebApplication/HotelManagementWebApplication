@@ -7,15 +7,15 @@ from agent.orchestrator import CustomerChatService
 
 
 _CATALOG = [
-    {"room_name": "501", "room_type_id": "RT001", "room_type_code": "STD", "room_type_name": "Standard (STD) · Đơn", "daily_price": 1_200_000},
-    {"room_name": "502", "room_type_id": "RT002", "room_type_code": "STD", "room_type_name": "Standard (STD) · Đôi", "daily_price": 1_450_000},
-    {"room_name": "503", "room_type_id": "RT003", "room_type_code": "SUP", "room_type_name": "Superior (SUP) · Đơn", "daily_price": 1_800_000},
-    {"room_name": "504", "room_type_id": "RT004", "room_type_code": "SUP", "room_type_name": "Superior (SUP) · Đôi", "daily_price": 2_100_000},
-    {"room_name": "903", "room_type_id": "RT005", "room_type_code": "DLX", "room_type_name": "Deluxe (DLX) · King", "daily_price": 2_600_000},
-    {"room_name": "904", "room_type_id": "RT006", "room_type_code": "DLX", "room_type_name": "Deluxe (DLX) · Family", "daily_price": 3_200_000},
-    {"room_name": "1104", "room_type_id": "RT007", "room_type_code": "SUT", "room_type_name": "Suite (SUT) · Residence", "daily_price": 4_500_000},
-    {"room_name": "1304", "room_type_id": "RT008", "room_type_code": "SUT", "room_type_name": "Suite (SUT) · Executive", "daily_price": 5_800_000},
-    {"room_name": "1704", "room_type_id": "RT009", "room_type_code": "VIP", "room_type_name": "Biệt thự Hoàng gia · Nguyên căn", "daily_price": 9_500_000},
+    {"room_name": "501", "room_type_id": "RT001", "room_type_code": "STD", "room_type_name": "Phòng Classic Queen", "marketing_name": "Phòng Classic", "daily_price": 1_200_000},
+    {"room_name": "502", "room_type_id": "RT002", "room_type_code": "STD", "room_type_name": "Phòng Classic Twin", "marketing_name": "Phòng Classic", "daily_price": 1_450_000},
+    {"room_name": "503", "room_type_id": "RT003", "room_type_code": "SUP", "room_type_name": "Phòng Superior King", "marketing_name": "Phòng Superior", "daily_price": 1_800_000},
+    {"room_name": "504", "room_type_id": "RT004", "room_type_code": "SUP", "room_type_name": "Phòng Superior Hai Giường Queen", "marketing_name": "Phòng Superior", "daily_price": 2_100_000},
+    {"room_name": "903", "room_type_id": "RT005", "room_type_code": "DLX", "room_type_name": "Phòng Deluxe King", "marketing_name": "Phòng Deluxe", "daily_price": 2_600_000},
+    {"room_name": "904", "room_type_id": "RT006", "room_type_code": "DLX", "room_type_name": "Phòng Deluxe Family", "marketing_name": "Phòng Deluxe", "daily_price": 3_200_000},
+    {"room_name": "1104", "room_type_id": "RT007", "room_type_code": "SUT", "room_type_name": "Suite Hoàng Gia Residence", "marketing_name": "Suite Hoàng Gia", "daily_price": 4_500_000},
+    {"room_name": "1304", "room_type_id": "RT008", "room_type_code": "SUT", "room_type_name": "Suite Hoàng Gia Executive", "marketing_name": "Suite Hoàng Gia", "daily_price": 5_800_000},
+    {"room_name": "1704", "room_type_id": "RT009", "room_type_code": "VIP", "room_type_name": "Penthouse Tổng Thống", "marketing_name": "Penthouse Tổng Thống", "daily_price": 9_500_000},
 ]
 
 

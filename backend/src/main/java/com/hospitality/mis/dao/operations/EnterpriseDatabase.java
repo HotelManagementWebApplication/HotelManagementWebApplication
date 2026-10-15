@@ -71,6 +71,8 @@ public class EnterpriseDatabase {
                     case 51207 -> "INVOICE_NOT_FOUND";
                     case 51208 -> "INVALID_LEAVE_PERIOD";
                     case 51209 -> "INVALID_STOCK_MOVEMENT";
+                    case 51211 -> "VAT_INVOICE_NOT_FINALIZED";
+                    case 51212 -> "VAT_AMOUNT_MISMATCH";
                     default -> null;
                 };
                 if(code!=null) return new DomainException(code,sql.getMessage());

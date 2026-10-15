@@ -48,6 +48,7 @@
 - Công thức tổng tiền phải trả: `room + surcharge + services/minibar + compensation + extensions - deposit - discount`.
 - Không xóa cứng hóa đơn; phải dùng hủy hóa đơn.
 - Đối soát theo ca đối với tiền mặt, thẻ và chuyển khoản.
+- Giá phòng và dịch vụ đã bao gồm VAT (chủ sở hữu xác nhận ngày 14/10/2026). Khi phát hành hóa đơn VAT, tách tiền trước thuế từ tổng tiền sau giảm giá; tiền cọc và các lần thanh toán không giảm cơ sở tính thuế.
 
 ## 8. VIP
 
@@ -74,13 +75,12 @@
 - Có module Nhân sự và phân ca. HR quản lý hồ sơ nhân viên và phân ca; HR không xem lương/tài chính và không tự cấp hoặc đổi role.
 - DIRECTOR xem toàn bộ báo cáo, phê duyệt hoàn tiền và thay đổi giá; DIRECTOR được cấp mọi role, kể cả ADMIN, nhưng không tự đổi role.
 - ADMIN quản trị toàn hệ thống nhưng không quản lý DIRECTOR; ADMIN được cấp mọi role trừ DIRECTOR.
-- MANAGER trực tiếp quản lý FRONT_DESK, HOUSEKEEPING, TECHNICAL và KITCHEN; MANAGER được cấp các role cấp dưới gồm HR, FRONT_DESK, HOUSEKEEPING, TECHNICAL, KITCHEN, ACCOUNTING và STAFF; MANAGER không được cấp ADMIN hoặc DIRECTOR.
+- MANAGER trực tiếp quản lý FRONT_DESK, HOUSEKEEPING, TECHNICAL và KITCHEN; MANAGER được cấp các role cấp dưới gồm HR, FRONT_DESK, HOUSEKEEPING, TECHNICAL, KITCHEN và ACCOUNTING; MANAGER không được cấp ADMIN hoặc DIRECTOR.
 - FRONT_DESK thực hiện reservation, check-in/out, chuyển phòng, dịch vụ/minibar và giao ca; FRONT_DESK không xem báo cáo tài chính. FRONT_DESK cùng role được xử lý reservation do ca khác tạo.
 - HOUSEKEEPING thực hiện dọn phòng, checklist, cập nhật trạng thái vệ sinh và báo sự cố; HOUSEKEEPING không tự đưa phòng sang `AVAILABLE`.
 - TECHNICAL tạo phòng, loại phòng, thiết bị và cấu hình kỹ thuật ở trạng thái `DRAFT`; giá phòng/thay đổi giá chưa có hiệu lực cho tới khi MANAGER hoặc DIRECTOR duyệt; TECHNICAL không tự duyệt cấu hình/giá của mình.
 - KITCHEN quản lý dịch vụ, minibar, kho tổng và tồn minibar từng phòng; đổi giá dịch vụ cần MANAGER duyệt.
 - ACCOUNTING độc lập quản lý hóa đơn, thanh toán, thu/chi và công nợ; ACCOUNTING không sửa reservation hoặc trạng thái phòng, kể cả sau approval. Chỉ FRONT_DESK hoặc MANAGER mới sửa reservation/phòng; ACCOUNTING chỉ ghi nhận tài chính.
-- STAFF chỉ xem dữ liệu cơ bản.
 - Khách chưa đăng nhập trên public portal chỉ được xem DTO công khai của phòng, trạng thái phòng và các dịch vụ đang hoạt động. Không được xem PII, người đặt/đang ở, booking, invoice, payment, receipt, ghi chú hoặc dữ liệu nội bộ. CUSTOMER đã đăng nhập được phép tạo booking cho chính mình và nhận mã/hướng dẫn thanh toán tiền cọc; chỉ được xem tóm tắt booking và trạng thái thanh toán của chính mình, không được xem dữ liệu của khách khác hoặc giao diện quản trị.
 - Không ai tự đổi role, tự cấp quyền vượt ceiling hoặc tự khóa tài khoản.
 

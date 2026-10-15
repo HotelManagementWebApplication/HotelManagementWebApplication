@@ -14,6 +14,6 @@ class ReservationSearchIntegrationTest extends ReservationSqlFixture {
         assertThat(page.totalElements()).isEqualTo(2);assertThat(page.items()).hasSize(1);
         assertThat(page.items().get(0).bookedAt()).isEqualTo(now);
         assertThat(service.list(null,guest,1,20).items()).hasSize(20);
-        actor("other","STAFF");assertThat(service.list(null,guest,0,20).totalElements()).isZero();
+        actor("other","HOUSEKEEPING");assertThat(service.list(null,guest,0,20).totalElements()).isZero();
     }
 }

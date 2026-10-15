@@ -37,7 +37,6 @@ EmployeeRole,ACCOUNTING,Kế toán,NhanVien.vaiTro,EmployeeRoleConverter,30,
 EmployeeRole,HOUSEKEEPING,Buồng phòng,NhanVien.vaiTro,EmployeeRoleConverter,30,
 EmployeeRole,TECHNICAL,Kỹ thuật,NhanVien.vaiTro,EmployeeRoleConverter,30,
 EmployeeRole,KITCHEN,Nhà bếp,NhanVien.vaiTro,EmployeeRoleConverter,30,
-EmployeeRole,STAFF,Nhân viên,NhanVien.vaiTro,EmployeeRoleConverter,30,
 EmployeeRole,HR,Nhân sự,NhanVien.vaiTro,EmployeeRoleConverter,30,
 EmploymentStatus,WORKING,Đang làm việc,NhanVien.trangThaiLamViec,EmploymentStatusConverter,20,
 EmploymentStatus,ON_LEAVE,Đang nghỉ phép,NhanVien.trangThaiLamViec,EmploymentStatusConverter,20,
@@ -177,7 +176,6 @@ EmployeeRole,ACCOUNTING,Kế toán,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleC
 EmployeeRole,HOUSEKEEPING,Buồng phòng,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
 EmployeeRole,TECHNICAL,Kỹ thuật,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
 EmployeeRole,KITCHEN,Nhà bếp,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
-EmployeeRole,STAFF,Nhân viên,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
 EmployeeRole,HR,Nhân sự,HangDoiThongBao.vaiTroNguoiNhan,EmployeeRoleCodeConverter,30,Mã vai trò API giữ nguyên
 ApprovalAction,ROOM_TYPE_ACTIVATE,Kích hoạt loại phòng,YeuCauPheDuyet.hanhDong,ApprovalActionConverter,50,Mã thao tác API giữ nguyên
 ApprovalAction,SERVICE_PRICE_CHANGE,Thay đổi giá dịch vụ,YeuCauPheDuyet.hanhDong,ApprovalActionConverter,50,Mã thao tác API giữ nguyên
@@ -197,6 +195,7 @@ ServiceCategory,inroom,Dịch vụ tại phòng,DichVu.danhMuc,ServiceCategoryCo
 ServiceCategory,laundry,Giặt ủi,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
 ServiceCategory,other,Khác,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
 ServiceCategory,recreation,Giải trí,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
+ServiceCategory,room-amenity,Vật dụng phòng,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
 ServiceCategory,spa,Spa,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
 ServiceCategory,transport,Đưa đón,DichVu.danhMuc,ServiceCategoryConverter,50,Mã danh mục API giữ nguyên
 ShiftCode,MORNING,Ca sáng,CaLamViecNhanVien.maCa,ShiftCodeConverter,30,"Mã ca MORNING/AFTERNOON/NIGHT ánh xạ sang tiếng Việt; mã ca kỹ thuật an toàn khác được giữ nguyên"
@@ -227,6 +226,12 @@ ServiceUnit,UNIT,đơn vị,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đ
 ServiceUnit,TIME,lần,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào cũ; phản hồi API và database dùng nhãn tiếng Việt chuẩn
 ServiceUnit,LẦN,lần,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào cũ; phản hồi API và database dùng nhãn tiếng Việt chuẩn
 ServiceUnit,set,bộ,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào cũ; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,PCS,cái,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,piece,cái,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,Pack,gói,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,PACK,gói,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,Roll,cuộn,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào; phản hồi API và database dùng nhãn tiếng Việt chuẩn
+ServiceUnit,ROLL,cuộn,DichVu.donViTinh,ServiceUnitConverter,20,Bí danh đầu vào; phản hồi API và database dùng nhãn tiếng Việt chuẩn
 ServiceUnit,bộ,bộ,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
 ServiceUnit,lần,lần,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
 ServiceUnit,suất,suất,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
@@ -240,3 +245,7 @@ ServiceUnit,giờ,giờ,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển th
 ServiceUnit,ngày,ngày,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
 ServiceUnit,chai,chai,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
 ServiceUnit,đơn vị,đơn vị,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,cái,cái,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,gói,gói,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,cuộn,cuộn,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+ServiceUnit,tuýp,tuýp,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
