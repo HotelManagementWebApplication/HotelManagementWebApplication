@@ -23,7 +23,7 @@ describe("Kitchen & restaurant operations", () => {
     vi.restoreAllMocks();
     vi.spyOn(catalogProposalsApi,"list").mockResolvedValue([]);
     vi.spyOn(serviceAvailabilityApi,"list").mockResolvedValue([
-      {service_id:"MAMREST",unit:"suất",capacity:20,booked:0,available:20,mode:"UNITS"},
+      {service_id:"MAMREST",unit:"suất",capacity:20,booked:0,available:20,mode:"UNITS",consumes_stock:true},
       {service_id:"SPAMASS",unit:"suất",capacity:20,booked:0,available:20,mode:"UNITS"},
       {service_id:"INROOMQA",unit:"suất",capacity:20,booked:20,available:0,mode:"UNITS"},
     ]);
@@ -31,8 +31,8 @@ describe("Kitchen & restaurant operations", () => {
     vi.spyOn(kitchenAccountingApi, "services").mockResolvedValue([service, spaService, outOfStockService]);
     vi.spyOn(kitchenAccountingApi, "inventoryMovements").mockResolvedValue([]);
     vi.spyOn(kitchenAccountingApi, "priceRequests").mockResolvedValue([]);
-    vi.spyOn(kitchenAccountingApi, "restaurantBookings").mockResolvedValue([booking]);
-    vi.spyOn(kitchenAccountingApi, "markRestaurantBookingUsed").mockResolvedValue({ ...booking, status:"USED" });
+    vi.spyOn(kitchenAccountingApi, "coordinatedBookings").mockResolvedValue([booking]);
+    vi.spyOn(kitchenAccountingApi, "markServiceBookingUsed").mockResolvedValue({ ...booking, status:"USED" });
     vi.spyOn(kitchenAccountingApi, "recordInventoryMovement").mockResolvedValue({
       id: 901, service_id:"MAMREST", type:"RECEIVE", quantity:4, actor_id:"KITCHEN", occurred_at:new Date().toISOString(), reason:"Nhập thử" });
     vi.spyOn(kitchenAccountingApi, "submitPrice").mockResolvedValue({
@@ -44,9 +44,9 @@ describe("Kitchen & restaurant operations", () => {
   it("loads restaurant orders and confirms service through the backend", async () => {
     render(<KitchenInventory onBack={vi.fn()} />);
     expect(await screen.findByText("MaM Restaurant")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name:"Xác nhận phục vụ" }));
-    await waitFor(() => expect(kitchenAccountingApi.markRestaurantBookingUsed).toHaveBeenCalledWith(71));
-    expect((await screen.findAllByText("Đang sử dụng")).length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(screen.getByRole("button", { name:"Xác nhận sử dụng" }));
+    await waitFor(() => expect(kitchenAccountingApi.markServiceBookingUsed).toHaveBeenCalledWith(71));
+    expect((await screen.findAllByText("Đã sử dụng")).length).toBeGreaterThanOrEqual(2);
   });
 
   it("separates physical stock from services and filters food, drinks and household goods", async () => {

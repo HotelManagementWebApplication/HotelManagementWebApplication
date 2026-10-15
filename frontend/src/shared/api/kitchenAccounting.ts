@@ -23,8 +23,8 @@ const normalizePage = <T>(res: ApiPage<T>): Page<T> => {
 
 export const kitchenAccountingApi = {
   services: () => apiClient.request<Service[]>("/api/services"),
-  restaurantBookings: (params: { date?: string; status?: string } = {}) => apiClient.request<RestaurantBooking[]>(`/api/operations/restaurant/service-bookings${query(params)}`),
-  markRestaurantBookingUsed: (id: number) => apiClient.request<RestaurantBooking>(`/api/operations/restaurant/service-bookings/${id}/use`, { method: "POST" }),
+  coordinatedBookings: (params: { date?: string; status?: string } = {}) => apiClient.request<RestaurantBooking[]>(`/api/operations/restaurant/service-bookings${query(params)}`),
+  markServiceBookingUsed: (id: number) => apiClient.request<RestaurantBooking>(`/api/operations/restaurant/service-bookings/${id}/use`, { method: "POST" }),
   priceRequests: () => apiClient.request<Approval[]>("/api/services/price-requests"),
   lowStock: () => apiClient.request<Service[]>("/api/services/low-stock"),
   inventoryMovements: (serviceId: string) => apiClient.request<InventoryMovement[]>(`/api/services/${encodeURIComponent(serviceId)}/inventory-movements`),
