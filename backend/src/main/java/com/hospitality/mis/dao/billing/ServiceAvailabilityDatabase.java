@@ -11,6 +11,6 @@ public class ServiceAvailabilityDatabase {
     public List<ServiceAvailabilityDtos.Response> list(LocalDateTime from,LocalDateTime to){
         return jdbc.query("SELECT * FROM dbo.fnKhaDungDichVu(?,?) ORDER BY maDichVu",(r,n)->new ServiceAvailabilityDtos.Response(
             r.getString("maDichVu"),r.getString("donViKhaDung"),r.getInt("congSuat"),r.getLong("daDat"),r.getLong("conLai"),
-            switch(r.getString("cachTinh")){case "Theo thời lượng"->"DURATION";case "Theo kỳ lưu trú"->"STAY";case "Theo tồn kho"->"STOCK";case "Theo ngày"->"DAILY";case "Qua đêm"->"OVERNIGHT";default->"UNITS";}),from,to);
+            switch(r.getString("cachTinh")){case "Theo thời lượng"->"DURATION";case "Theo kỳ lưu trú"->"STAY";case "Theo tồn kho"->"STOCK";case "Theo ngày"->"DAILY";case "Qua đêm"->"OVERNIGHT";default->"UNITS";},r.getBoolean("truTon")),from,to);
     }
 }

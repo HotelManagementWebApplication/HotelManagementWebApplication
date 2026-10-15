@@ -2730,6 +2730,15 @@ BEGIN
 
     BEGIN TRY
         BEGIN TRANSACTION;
+        -- Tuần tự hóa kiểm tra công suất và ghi nhận sử dụng trước khi khóa booking.
+        -- Dùng chung một thứ tự khóa cho các dịch vụ của cùng khách sạn để tránh
+        -- hai booking khác nhau giữ khóa phòng rồi chờ khóa dịch vụ của nhau.
+        DECLARE @khoaCongSuat INT;
+        EXEC @khoaCongSuat = sys.sp_getapplock @Resource = N'hotel-service-capacity',
+            @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
+        IF @khoaCongSuat < 0
+            THROW 51005, N'Không thể khóa công suất dịch vụ, vui lòng thử lại', 1;
+
         DECLARE @maPhieu BIGINT,
             @maDichVu NVARCHAR(10),
             @soLuong INT,
@@ -2765,16 +2774,20 @@ BEGIN
             THROW 51002, N'Dịch vụ đã bị hủy', 1;
         IF @duKien > @thoiDiemHienTai
             THROW 51102, N'Chưa đến thời gian sử dụng dịch vụ', 1;
-        UPDATE dbo.DichVu WITH (UPDLOCK, HOLDLOCK)
-        SET soLuongTonKho = soLuongTonKho - @soLuong
-        WHERE maDichVu = @maDichVu
+        DECLARE @truTon BIT=dbo.fnDichVuTruTon(@maDichVu);
+        IF NOT EXISTS (SELECT 1 FROM dbo.DichVu WHERE maDichVu=@maDichVu AND dangHoatDong=1)
+            THROW 51109, N'Dịch vụ không còn phục vụ', 1;
+        -- Tài nguyên giữ theo lịch không mất đi khi được sử dụng.
+        -- Chỉ hàng/dịch vụ tiêu hao mới trừ tồn và có phiếu xuất kho.
+        IF @truTon=1
+        BEGIN
+            UPDATE dbo.DichVu WITH (UPDLOCK, HOLDLOCK)
+            SET soLuongTonKho = soLuongTonKho - @soLuong
+            WHERE maDichVu = @maDichVu
             AND dangHoatDong = 1
             AND soLuongTonKho >= @soLuong;
         IF @@ROWCOUNT <> 1
             THROW 51006, N'Dịch vụ đã hết khả dụng', 1;
-        UPDATE dbo.DatDichVuKhachSan
-        SET trangThai = N'Đã sử dụng', thoiDiemSuDung = @thoiDiemHienTai, nguoiXacNhanSuDung = @nguoiThucHien
-        WHERE maDatDichVuKhachSan = @maDatDichVuKhachSan;
         INSERT dbo.BienDongKhoDichVu(
             maDichVu,
             loai,
@@ -2791,6 +2804,10 @@ BEGIN
             @thoiDiemHienTai,
             N'HOTEL_SERVICE_BOOKING:' + CONVERT(NVARCHAR(30), @maDatDichVuKhachSan)
         );
+        END;
+        UPDATE dbo.DatDichVuKhachSan
+        SET trangThai = N'Đã sử dụng', thoiDiemSuDung = @thoiDiemHienTai, nguoiXacNhanSuDung = @nguoiThucHien
+        WHERE maDatDichVuKhachSan = @maDatDichVuKhachSan;
         INSERT dbo.NhatKyKiemSoat(
             nguoiThucHien,
             hanhDong,
@@ -3046,6 +3063,15 @@ BEGIN
 
     BEGIN TRY
         BEGIN TRANSACTION;
+        -- Tuần tự hóa kiểm tra công suất và ghi nhận sử dụng trước khi khóa booking.
+        -- Dùng chung một thứ tự khóa cho các dịch vụ của cùng khách sạn để tránh
+        -- hai booking khác nhau giữ khóa phòng rồi chờ khóa dịch vụ của nhau.
+        DECLARE @khoaCongSuat INT;
+        EXEC @khoaCongSuat = sys.sp_getapplock @Resource = N'hotel-service-capacity',
+            @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
+        IF @khoaCongSuat < 0
+            THROW 51005, N'Không thể khóa công suất dịch vụ, vui lòng thử lại', 1;
+
         IF @soLuong IS NULL
             OR @soLuong < 1
             OR @duKien IS NULL
@@ -3146,8 +3172,50 @@ BEGIN
             THROW 51109, N'Dịch vụ không còn phục vụ', 1;
         IF @giaDichVu <= 0
             THROW 51110, N'Dịch vụ chưa có giá niêm yết', 1;
-        IF @tonKhoDichVu < @soLuong
+        DECLARE @truTonKhiDat BIT=dbo.fnDichVuTruTon(@maDichVu);
+        IF @truTonKhiDat=1 AND @tonKhoDichVu < @soLuong
             THROW 51006, N'Dịch vụ đã hết khả dụng', 1;
+
+        -- Cùng công thức với màn hình khả dụng; đặt chỗ giữ công suất ngay
+        -- khi CONFIRMED, còn việc trừ kho và tính phí chỉ diễn ra khi USED.
+        DECLARE @cachTinhLich NVARCHAR(30), @phutMoiLuot INT,
+            @batDauLich DATETIME2(6) = @duKien, @ketThucLich DATETIME2(6),
+            @canCongSuat BIGINT = @soLuong, @conLaiCongSuat BIGINT;
+        SELECT @cachTinhLich = cachTinh, @phutMoiLuot = soPhutMoiLuot
+        FROM dbo.CauHinhLichDichVu WHERE maDichVu = @maDichVu;
+        IF @cachTinhLich IS NOT NULL
+        BEGIN
+            DECLARE @phutYeuCau BIGINT = CONVERT(BIGINT,@phutMoiLuot)
+                * CASE WHEN @cachTinhLich=N'Theo thời lượng' THEN @soLuong ELSE 1 END;
+            IF @cachTinhLich=N'Theo thời lượng'
+            BEGIN
+                SET @canCongSuat=1;
+                IF @phutYeuCau>DATEDIFF_BIG(MINUTE,@duKien,@thoiDiemTraPhong)
+                    THROW 51108, N'Thời lượng dịch vụ vượt quá kỳ lưu trú', 1;
+            END;
+            IF @cachTinhLich=N'Theo ngày'
+                SET @batDauLich=CONVERT(DATETIME2(6),CAST(@duKien AS DATE));
+            SET @ketThucLich=CASE
+                WHEN @cachTinhLich=N'Theo kỳ lưu trú' THEN @thoiDiemTraPhong
+                WHEN @cachTinhLich=N'Theo ngày' THEN DATEADD(DAY,1,@batDauLich)
+                WHEN @cachTinhLich=N'Qua đêm' THEN DATEADD(HOUR,8,DATEADD(DAY,1,CONVERT(DATETIME2(6),CAST(@duKien AS DATE))))
+                ELSE DATEADD(MINUTE,CONVERT(INT,CASE
+                    WHEN @phutYeuCau>DATEDIFF_BIG(MINUTE,@duKien,@thoiDiemTraPhong)
+                    THEN DATEDIFF_BIG(MINUTE,@duKien,@thoiDiemTraPhong) ELSE @phutYeuCau END),@duKien)
+                END;
+            SELECT @conLaiCongSuat=conLai FROM dbo.fnKhaDungDichVu(@batDauLich,@ketThucLich)
+                WHERE maDichVu=@maDichVu;
+        END
+        ELSE
+        BEGIN
+            IF @truTonKhiDat=0
+                THROW 51111, N'Dịch vụ chưa được cấu hình công suất và thời lượng thực tế', 1;
+            SELECT @conLaiCongSuat=CONVERT(BIGINT,@tonKhoDichVu)-COALESCE(SUM(CONVERT(BIGINT,b.soLuong)),0)
+            FROM dbo.DatDichVuKhachSan b
+            WHERE b.maDichVu=@maDichVu AND b.trangThai=N'Đã xác nhận';
+        END;
+        IF @conLaiCongSuat IS NULL OR @conLaiCongSuat<@canCongSuat
+            THROW 51006, N'Dịch vụ không đủ chỗ trong thời gian đã chọn', 1;
 
         -- Tính hạn mức miễn phí theo hình thức thuê, dịch vụ và số khách.
         DECLARE @dinhMucMienPhi INT = CASE
@@ -4252,6 +4320,8 @@ BEGIN
             SELECT @phanHoiJson AS phanHoiJson;
             RETURN;
         END;
+        IF dbo.fnDichVuTruTon(@dichVu)=0
+            THROW 51505, N'Tài nguyên giữ chỗ theo lịch; hãy cấu hình công suất thay vì nhập/xuất tồn', 1;
         IF @soLuong = 0
             OR (
                 @loai <> N'Điều chỉnh'
@@ -8558,6 +8628,44 @@ BEGIN
     BEGIN CATCH
         IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+-- Thay đổi công suất/tiêu hao qua backend, cùng khóa với đặt và sử dụng dịch vụ.
+CREATE PROCEDURE dbo.uspCauHinhLichDichVu
+    @id NVARCHAR(10),@capacity INT,@unit NVARCHAR(20),@minutes INT,@mode NVARCHAR(30),
+    @consume BIT,@actor NVARCHAR(50),@reason NVARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON; SET XACT_ABORT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @lock INT;
+        EXEC @lock=sys.sp_getapplock @Resource=N'hotel-service-capacity',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock<0 THROW 53801,N'Không thể khóa cấu hình',1;
+        IF NOT EXISTS(SELECT 1 FROM dbo.DichVu WITH(UPDLOCK,HOLDLOCK) WHERE maDichVu=@id)
+            THROW 53802,N'Không tìm thấy dịch vụ',1;
+        IF EXISTS(SELECT 1 FROM dbo.CauHinhLichDichVu WHERE maDichVu=@id AND congSuat=@capacity
+            AND donViKhaDung=@unit AND soPhutMoiLuot=@minutes AND cachTinh=@mode AND truTonKhiSuDung=@consume)
+        BEGIN
+            COMMIT; RETURN;
+        END;
+        -- Không đổi cách diễn giải các lượt còn đang giữ chỗ.
+        IF EXISTS(SELECT 1 FROM dbo.DatDichVuKhachSan WHERE maDichVu=@id AND trangThai=N'Đã xác nhận')
+            OR EXISTS(SELECT 1 FROM dbo.fnKhaDungDichVu(SYSDATETIME(),DATEADD(MINUTE,1,SYSDATETIME())) WHERE maDichVu=@id AND daDat>0)
+            THROW 53801,N'Còn lượt đặt đang giữ chỗ',1;
+        UPDATE dbo.CauHinhLichDichVu SET congSuat=@capacity,donViKhaDung=@unit,
+            soPhutMoiLuot=@minutes,cachTinh=@mode,truTonKhiSuDung=@consume WHERE maDichVu=@id;
+        IF @@ROWCOUNT=0 INSERT dbo.CauHinhLichDichVu(maDichVu,congSuat,donViKhaDung,soPhutMoiLuot,cachTinh,truTonKhiSuDung)
+            VALUES(@id,@capacity,@unit,@minutes,@mode,@consume);
+        INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,lyDo)
+            VALUES(@actor,N'SERVICE_SCHEDULE_CHANGED',N'SERVICE',@id,@reason);
+        COMMIT;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT>0 ROLLBACK;
         THROW;
     END CATCH;
 END;

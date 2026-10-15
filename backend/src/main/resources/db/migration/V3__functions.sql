@@ -508,6 +508,23 @@ BEGIN
 END;
 GO
 
+-- Chính sách tồn dùng chung cho dữ liệu thật và demo. Cấu hình từng dịch vụ
+-- được ưu tiên; hàng kho/nhà hàng mặc định tiêu hao, nhóm khác giữ theo lịch.
+CREATE FUNCTION dbo.fnDichVuTruTon(@maDichVu NVARCHAR(10))
+RETURNS BIT
+AS
+BEGIN
+    DECLARE @truTon BIT;
+    SELECT @truTon=CASE WHEN c.cachTinh=N'Theo tồn kho' THEN 1
+        ELSE COALESCE(c.truTonKhiSuDung,CASE WHEN d.danhMuc IN (
+            N'Dịch vụ doanh nghiệp',N'Dịch vụ tại phòng',N'Giặt ủi',N'Giải trí',N'Spa',N'Đưa đón')
+            THEN 0 ELSE 1 END) END
+    FROM dbo.DichVu d LEFT JOIN dbo.CauHinhLichDichVu c ON c.maDichVu=d.maDichVu
+    WHERE d.maDichVu=@maDichVu;
+    RETURN @truTon;
+END;
+GO
+
 -- Khả dụng trong [từ, đến): lấy mức chiếm dụng đồng thời lớn nhất, không cộng
 -- các lượt đặt nối tiếp nhau. Giờ/ngày tính giá tách khỏi đơn vị sân/phòng/suất.
 CREATE FUNCTION dbo.fnKhaDungDichVu(@tu DATETIME2(6), @den DATETIME2(6))
@@ -541,6 +558,11 @@ AS RETURN (
         SELECT maDichVu,MAX(daDat) AS daDat FROM Occupancy GROUP BY maDichVu
     ), Counts AS (
         SELECT c.maDichVu,c.donViKhaDung,c.cachTinh,
+            CASE WHEN dbo.fnDichVuTruTon(c.maDichVu)=1 THEN CONVERT(BIGINT,d.soLuongTonKho)-COALESCE((
+                SELECT SUM(CONVERT(BIGINT,b.soLuong)) FROM dbo.DatDichVuKhachSan b
+                JOIN dbo.PhieuDatPhong r ON r.maPhieuDatPhong=b.maPhieuDatPhong
+                WHERE b.maDichVu=c.maDichVu AND b.trangThai=N'Đã xác nhận' AND r.trangThai NOT IN (N'Đã hủy',N'Không đến')
+            ),0) ELSE NULL END AS tonKhaDung,
             CASE WHEN c.cachTinh=N'Theo tồn kho' THEN d.soLuongTonKho ELSE c.congSuat END AS congSuat,
             CASE WHEN c.cachTinh=N'Theo tồn kho'
                 THEN COALESCE((SELECT SUM(CONVERT(BIGINT,b.soLuong)) FROM dbo.DatDichVuKhachSan b JOIN dbo.PhieuDatPhong r ON r.maPhieuDatPhong=b.maPhieuDatPhong
@@ -549,8 +571,9 @@ AS RETURN (
         FROM dbo.CauHinhLichDichVu c JOIN dbo.DichVu d ON d.maDichVu=c.maDichVu LEFT JOIN Peak p ON p.maDichVu=c.maDichVu
         WHERE d.dangHoatDong=1 AND @tu<@den
     )
-    SELECT maDichVu,donViKhaDung,cachTinh,congSuat,daDat,
-        CASE WHEN daDat>=congSuat THEN CONVERT(BIGINT,0) ELSE congSuat-daDat END AS conLai
+    SELECT maDichVu,donViKhaDung,cachTinh,congSuat,daDat,dbo.fnDichVuTruTon(maDichVu) AS truTon,
+        CASE WHEN daDat>=congSuat OR tonKhaDung<=0 THEN CONVERT(BIGINT,0)
+            WHEN tonKhaDung<congSuat-daDat THEN tonKhaDung ELSE congSuat-daDat END AS conLai
     FROM Counts
 );
 GO

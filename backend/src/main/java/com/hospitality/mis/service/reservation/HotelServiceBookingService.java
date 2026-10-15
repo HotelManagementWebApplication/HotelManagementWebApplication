@@ -54,12 +54,12 @@ public class HotelServiceBookingService {
     public List<Response> staffBookings(long reservationId) { return database.list(reservationId,null); }
 
     @Transactional(readOnly = true)
-    public List<Response> restaurantBookings(LocalDate date, String status) {
+    public List<Response> coordinatedBookings(LocalDate date, String status) {
         String normalized = status==null || status.isBlank() ? null : databaseBookingStatus(status.trim().toUpperCase(Locale.ROOT));
-        return database.restaurant(date==null ? LocalDate.now(clock) : date,normalized);
+        return database.coordinatedBookings(date==null ? LocalDate.now(clock) : date,normalized);
     }
 
-    public Response markRestaurantUsed(long id, String actor) {
+    public Response markCoordinatedServiceUsed(long id, String actor) {
         SecurityActor.requireBoundActor(actor);
         return database.use(database.find(id).reservationId(),id,actor,LocalDateTime.now(clock));
     }

@@ -8,6 +8,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,11 +28,13 @@ import static org.assertj.core.api.Assertions.*;
 @SpringBootTest(properties={"spring.datasource.url=${MIGRATION_TEST_DB_URL}",
         "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}","spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
         "spring.flyway.enabled=true","spring.jpa.hibernate.ddl-auto=validate"})
+@AutoConfigureMockMvc
 class SqlServerHotelServiceBookingTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired HotelServiceBookingDatabase database;
+    @Autowired MockMvc mvc;
     private HotelServiceBookingService service;
-    private long reservation, guest, owner;
+    private long reservation, guest, owner, otherReservation;
     private final LocalDateTime now=LocalDateTime.of(2035,1,10,12,0);
 
     @BeforeEach void seed() {
@@ -39,11 +46,20 @@ class SqlServerHotelServiceBookingTest {
         reservation=jdbc.queryForObject("INSERT PhieuDatPhong(maKhachLuuTru,maTaiKhoanKhachHang,trangThai,hinhThucThue,trangThaiThanhToanCoc) OUTPUT INSERTED.maPhieuDatPhong VALUES(?,?,N'Đã nhận phòng',N'Theo gói',N'Đã thanh toán')",Long.class,guest,owner);
         jdbc.update("INSERT ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,thoiDiemTraPhongBanDau,soLuongKhach,trangThai) VALUES(?,N'SB-ROOM','2035-01-10T00:00:00','2035-01-12T12:00:00','2035-01-12T12:00:00',2,N'Đang có khách')",reservation);
         for(String id:List.of("MAMREST","BREAKFAST","LNDRYSTD")) jdbc.update("INSERT DichVu(maDichVu,ten,gia,donViTinh,danhMuc,soLuongTonKho) VALUES(?,?,150000,N'lần',N'Nhà hàng cao cấp',10)",id,id);
+        jdbc.update("UPDATE DichVu SET danhMuc=N'Giặt ủi' WHERE maDichVu=N'LNDRYSTD'");
         staff();
     }
 
     @AfterEach void cleanup() {
         SecurityContextHolder.clearContext();
+        jdbc.update("DELETE NhatKyKiemSoat WHERE hanhDong=N'SERVICE_SCHEDULE_CHANGED' AND maDoiTuong=N'LNDRYSTD'");
+        if (otherReservation != 0) {
+            jdbc.update("DELETE NhatKyKiemSoat WHERE maDoiTuong=? AND loaiDoiTuong=N'RESERVATION'",String.valueOf(otherReservation));
+            jdbc.update("DELETE DatDichVuKhachSan WHERE maPhieuDatPhong=?",otherReservation);
+            jdbc.update("DELETE PhieuDatPhong WHERE maPhieuDatPhong=?",otherReservation);
+            jdbc.update("DELETE Phong WHERE maPhong=N'SB-ROOM2'");
+            otherReservation=0;
+        }
         jdbc.update("DELETE NhatKyKiemSoat WHERE maDoiTuong=? AND loaiDoiTuong=N'RESERVATION'",String.valueOf(reservation));
         jdbc.update("DELETE BienDongKhoDichVu WHERE maDichVu IN('MAMREST','BREAKFAST','LNDRYSTD')");
         jdbc.update("DELETE DatDichVuKhachSan WHERE maPhieuDatPhong=?",reservation);
@@ -53,28 +69,123 @@ class SqlServerHotelServiceBookingTest {
         jdbc.update("DELETE KhachLuuTru WHERE maKhachLuuTru=?",guest);
         jdbc.update("DELETE Phong WHERE maPhong=N'SB-ROOM'");
         jdbc.update("DELETE LoaiPhong WHERE maLoaiPhong=N'SB-TYPE'");
+        jdbc.update("DELETE CauHinhLichDichVu WHERE maDichVu IN('MAMREST','BREAKFAST','LNDRYSTD')");
         jdbc.update("DELETE DichVu WHERE maDichVu IN('MAMREST','BREAKFAST','LNDRYSTD')");
     }
 
-    @Test void restaurantQueueContainsOnlyFoodOrdersForSelectedDateAndCanFilterStatus() {
+    @Test void coordinationIncludesAllServiceGroupsForSelectedDateAndFiltersStatus() {
         var lunch=book("MAMREST",2,"LUNCH","queue-1",now);
         var breakfast=book("BREAKFAST",1,null,"queue-2",now.minusHours(4));
         staff();
         service.markUsed(reservation,breakfast.id(),"KITCHEN");
-        book("LNDRYSTD",1,null,"queue-3",now.minusHours(3));
+        jdbc.update("INSERT CauHinhLichDichVu(maDichVu,congSuat,donViKhaDung,soPhutMoiLuot,cachTinh) VALUES(N'LNDRYSTD',10,N'lượt',1440,N'Qua đêm')");
+        var laundry=book("LNDRYSTD",1,null,"queue-3",now.minusHours(3));
         jdbc.update("UPDATE DichVu SET danhMuc=N'Giặt ủi' WHERE maDichVu=N'LNDRYSTD'");
-        assertThat(service.restaurantBookings(now.toLocalDate(),null)).extracting(HotelServiceBookingService.Response::id).containsExactly(breakfast.id(),lunch.id());
-        assertThat(service.restaurantBookings(now.toLocalDate()," confirmed ")).extracting(HotelServiceBookingService.Response::id).containsExactly(lunch.id());
+        assertThat(service.coordinatedBookings(now.toLocalDate(),null)).extracting(HotelServiceBookingService.Response::id).containsExactly(breakfast.id(),laundry.id(),lunch.id());
+        assertThat(service.coordinatedBookings(now.toLocalDate()," confirmed ")).extracting(HotelServiceBookingService.Response::id).containsExactly(laundry.id(),lunch.id());
     }
 
     @Test void markingRestaurantOrderUsedPersistsStatusStockMovementAndAudit() {
         var booked=book("MAMREST",2,"LUNCH","used-1",now);
         staff();
-        assertThat(service.markRestaurantUsed(booked.id(),"KITCHEN").status()).isEqualTo("USED");
-        assertThat(service.markRestaurantUsed(booked.id(),"KITCHEN").status()).isEqualTo("USED");
+        assertThat(service.markCoordinatedServiceUsed(booked.id(),"KITCHEN").status()).isEqualTo("USED");
+        assertThat(service.markCoordinatedServiceUsed(booked.id(),"KITCHEN").status()).isEqualTo("USED");
         assertThat(stock("MAMREST")).isEqualTo(8);
         assertThat(count("BienDongKhoDichVu")).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE hanhDong=N'HOTEL_SERVICE_USED' AND maDoiTuong=?",Integer.class,String.valueOf(reservation))).isEqualTo(1);
+    }
+
+    @Test void durationUsesOneResourceAndRejectsOverlapsButAllowsAdjacentBookings() {
+        jdbc.update("INSERT CauHinhLichDichVu(maDichVu,congSuat,donViKhaDung,soPhutMoiLuot,cachTinh) VALUES(N'LNDRYSTD',1,N'phòng',60,N'Theo thời lượng')");
+        book("LNDRYSTD",2,null,"capacity-duration",now);
+        assertCode(()->book("LNDRYSTD",1,null,"capacity-overlap",now.plusHours(1)),"INSUFFICIENT_STOCK");
+        assertThat(book("LNDRYSTD",1,null,"capacity-adjacent",now.plusHours(2)).status()).isEqualTo("CONFIRMED");
+        assertCode(()->book("LNDRYSTD",100,null,"capacity-stay",now),"SERVICE_OUTSIDE_STAY");
+        assertThat(count("DatDichVuKhachSan")).isEqualTo(2);
+    }
+
+    @Test void concurrentRequestsCannotReserveTheSameLastPlace() throws Exception {
+        jdbc.update("INSERT CauHinhLichDichVu(maDichVu,congSuat,donViKhaDung,soPhutMoiLuot,cachTinh) VALUES(N'LNDRYSTD',1,N'suất',60,N'Theo lượt')");
+        jdbc.update("INSERT Phong(maPhong,maLoaiPhong,trangThai) VALUES(N'SB-ROOM2',N'SB-TYPE',N'Đang có khách')");
+        otherReservation=jdbc.queryForObject("INSERT PhieuDatPhong(maKhachLuuTru,maTaiKhoanKhachHang,trangThai,hinhThucThue,trangThaiThanhToanCoc) OUTPUT INSERTED.maPhieuDatPhong VALUES(?,?,N'Đã nhận phòng',N'Theo gói',N'Đã thanh toán')",Long.class,guest,owner);
+        jdbc.update("INSERT ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,thoiDiemTraPhongBanDau,soLuongKhach,trangThai) VALUES(?,N'SB-ROOM2','2035-01-10T00:00:00','2035-01-12T12:00:00','2035-01-12T12:00:00',2,N'Đang có khách')",otherReservation);
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            Callable<Boolean> first=()->{start.await(); try { book("LNDRYSTD",1,null,"last-place-1",now); return true; }
+                catch(DomainException e) { assertThat(e.getCode()).isEqualTo("INSUFFICIENT_STOCK"); return false; }};
+            Callable<Boolean> second=()->{start.await(); try { customer(owner); service.bookForCustomer(new HotelServiceBookingService.Request(otherReservation,"SB-ROOM2","LNDRYSTD",now,1,null,null),"last-place-2"); return true; }
+                catch(DomainException e) { assertThat(e.getCode()).isEqualTo("INSUFFICIENT_STOCK"); return false; }};
+            var a=pool.submit(first); var b=pool.submit(second); start.countDown();
+            assertThat(List.of(a.get(20,TimeUnit.SECONDS),b.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(true,false);
+        }
+        assertThat(count("DatDichVuKhachSan")).isEqualTo(1);
+        assertThat(stock("LNDRYSTD")).isEqualTo(10);
+    }
+
+    @Test void pendingStockBookingsReserveQuantityAndCancellationReleasesIt() {
+        jdbc.update("INSERT CauHinhLichDichVu(maDichVu,congSuat,donViKhaDung,soPhutMoiLuot,cachTinh) VALUES(N'LNDRYSTD',10,N'bộ',60,N'Theo tồn kho')");
+        var first=book("LNDRYSTD",8,null,"reserved-stock",now);
+        assertCode(()->book("LNDRYSTD",3,null,"reserved-stock-full",now.plusHours(2)),"INSUFFICIENT_STOCK");
+        service.cancelForCustomer(first.id());
+        assertThat(book("LNDRYSTD",3,null,"reserved-stock-released",now.plusHours(2)).status()).isEqualTo("CONFIRMED");
+        assertThat(stock("LNDRYSTD")).isEqualTo(10);
+    }
+
+    @Test void durationCannotExtendBeyondCheckoutEvenWhenStockIsEnough() {
+        jdbc.update("UPDATE DichVu SET soLuongTonKho=1000 WHERE maDichVu=N'LNDRYSTD'");
+        jdbc.update("INSERT CauHinhLichDichVu(maDichVu,congSuat,donViKhaDung,soPhutMoiLuot,cachTinh) VALUES(N'LNDRYSTD',1,N'phòng',60,N'Theo thời lượng')");
+        assertCode(()->book("LNDRYSTD",2,null,"duration-outside-stay",LocalDateTime.of(2035,1,12,11,0)),"SERVICE_OUTSIDE_STAY");
+        assertThat(count("DatDichVuKhachSan")).isZero();
+    }
+
+    @Test void resourceUsageKeepsStockAndCapacityButIsStillBilledAndReportedOnce() throws Exception {
+        jdbc.update("UPDATE DichVu SET soLuongTonKho=0 WHERE maDichVu=N'LNDRYSTD'");
+        jdbc.update("INSERT CauHinhLichDichVu(maDichVu,congSuat,donViKhaDung,soPhutMoiLuot,cachTinh,truTonKhiSuDung) VALUES(N'LNDRYSTD',1,N'phòng',60,N'Theo thời lượng',0)");
+        var booked=book("LNDRYSTD",2,null,"resource-used",now);
+        staff(); service.markUsed(reservation,booked.id(),"KITCHEN");
+        service.markUsed(reservation,booked.id(),"KITCHEN");
+        assertThat(stock("LNDRYSTD")).isZero();
+        assertThat(count("BienDongKhoDichVu")).isZero();
+        assertThat(service.usedTotal(reservation)).isEqualByComparingTo("150000");
+        assertThat(jdbc.queryForObject("SELECT conLai FROM dbo.fnKhaDungDichVu(?,?) WHERE maDichVu=N'LNDRYSTD'",Long.class,now,now.plusHours(1))).isZero();
+        assertThat(jdbc.queryForObject("SELECT conLai FROM dbo.fnKhaDungDichVu(?,?) WHERE maDichVu=N'LNDRYSTD'",Long.class,now.plusHours(2),now.plusHours(3))).isEqualTo(1);
+        mvc.perform(get("/api/services/consumption?from=2035-01-10&to=2035-01-10").with(user("KITCHEN").roles("KITCHEN")))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].amount_due").value(150000));
+        mvc.perform(get("/api/services/consumption?from=2035-01-10&to=2035-01-10").with(user("customer").roles("CUSTOMER")))
+            .andExpect(status().isForbidden());
+        mvc.perform(get("/api/services/consumption?from=2035-01-10&to=2035-01-10").with(user("HOUSEKEEP").roles("HOUSEKEEPING")))
+            .andExpect(status().isForbidden());
+        mvc.perform(post("/api/services/LNDRYSTD/inventory-movements").with(user("KITCHEN").roles("KITCHEN"))
+            .header("Idempotency-Key","resource-no-stock-write").contentType("application/json")
+            .content("{\"service_id\":\"LNDRYSTD\",\"type\":\"RECEIVE\",\"quantity\":2,\"reason\":\"Không nhập tồn tài nguyên\"}"))
+            .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("INVENTORY_NOT_MANAGED"));
+    }
+
+    @Test void consumableServicesUseBothPhysicalStockAndTimeCapacity() {
+        jdbc.update("UPDATE DichVu SET soLuongTonKho=4 WHERE maDichVu=N'BREAKFAST'");
+        jdbc.update("INSERT CauHinhLichDichVu(maDichVu,congSuat,donViKhaDung,soPhutMoiLuot,cachTinh,truTonKhiSuDung) VALUES(N'BREAKFAST',20,N'suất',60,N'Theo lượt',1)");
+        var booked=book("BREAKFAST",2,null,"consumable-used",now);
+        assertThat(jdbc.queryForObject("SELECT conLai FROM dbo.fnKhaDungDichVu(?,?) WHERE maDichVu=N'BREAKFAST'",Long.class,now,now.plusHours(1))).isEqualTo(2);
+        staff(); service.markUsed(reservation,booked.id(),"KITCHEN");
+        assertThat(stock("BREAKFAST")).isEqualTo(2);
+        assertThat(count("BienDongKhoDichVu")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT conLai FROM dbo.fnKhaDungDichVu(?,?) WHERE maDichVu=N'BREAKFAST'",Long.class,now.plusHours(2),now.plusHours(3))).isEqualTo(2);
+    }
+
+    @Test void realCatalogConfigurationUsesAuthenticatedApiAndCannotChangeReservedResources() throws Exception {
+        assertCode(()->book("LNDRYSTD",1,null,"missing-real-config",now),"SERVICE_SCHEDULE_NOT_CONFIGURED");
+        String body="""
+            {"capacity":2,"unit":"phòng","minutes_per_unit":60,"mode":"DURATION","consumes_stock":false,"reason":"Công suất thực tế"}
+            """;
+        mvc.perform(put("/api/services/LNDRYSTD/schedule").with(user("HOUSEKEEP").roles("HOUSEKEEPING")).contentType("application/json").content(body)).andExpect(status().isForbidden());
+        mvc.perform(put("/api/services/LNDRYSTD/schedule").with(user("KITCHEN").roles("KITCHEN")).contentType("application/json").content(body))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.consumes_stock").value(false)).andExpect(jsonPath("$.capacity").value(2));
+        mvc.perform(put("/api/services/LNDRYSTD/schedule").with(user("KITCHEN").roles("KITCHEN")).contentType("application/json").content(body)).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE hanhDong=N'SERVICE_SCHEDULE_CHANGED' AND maDoiTuong=N'LNDRYSTD'",Integer.class)).isEqualTo(1);
+        book("LNDRYSTD",1,null,"real-config-booked",now);
+        mvc.perform(put("/api/services/LNDRYSTD/schedule").with(user("KITCHEN").roles("KITCHEN")).contentType("application/json").content(body.replace("\"capacity\":2","\"capacity\":3")))
+            .andExpect(status().isUnprocessableEntity());
+        assertThat(jdbc.queryForObject("SELECT congSuat FROM CauHinhLichDichVu WHERE maDichVu=N'LNDRYSTD'",Integer.class)).isEqualTo(2);
     }
 
     @Test void customerOwnershipIsEnforcedForReadAndCancel() {

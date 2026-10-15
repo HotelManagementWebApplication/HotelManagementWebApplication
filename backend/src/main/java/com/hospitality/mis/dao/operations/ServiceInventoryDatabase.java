@@ -30,7 +30,7 @@ public class ServiceInventoryDatabase {
         } catch(JsonProcessingException error){throw new IllegalStateException("Không thể đọc kết quả inventory",error);}
         catch(DataAccessException error){
             for(Throwable cause=error;cause!=null;cause=cause.getCause())if(cause instanceof SQLException sql){
-                String code=switch(sql.getErrorCode()){case 51501->"SERVICE_NOT_FOUND";case 51006->"INSUFFICIENT_STOCK";case 51005->"IDEMPOTENCY_KEY_CONFLICT";case 51503->"IDEMPOTENCY_REQUEST_IN_PROGRESS";case 51504->"INVALID_INVENTORY_QUANTITY";default->null;};
+                String code=switch(sql.getErrorCode()){case 51501->"SERVICE_NOT_FOUND";case 51505->"INVENTORY_NOT_MANAGED";case 51006->"INSUFFICIENT_STOCK";case 51005->"IDEMPOTENCY_KEY_CONFLICT";case 51503->"IDEMPOTENCY_REQUEST_IN_PROGRESS";case 51504->"INVALID_INVENTORY_QUANTITY";default->null;};
                 if(code!=null)throw new DomainException(code,sql.getMessage());
             }
             throw error;

@@ -557,7 +557,9 @@ CREATE TABLE CauHinhLichDichVu (
     congSuat INT NOT NULL CHECK (congSuat > 0),
     donViKhaDung NVARCHAR(20) NOT NULL,
     soPhutMoiLuot INT NOT NULL CHECK (soPhutMoiLuot BETWEEN 1 AND 10080),
-    cachTinh NVARCHAR(30) NOT NULL CHECK (cachTinh IN (N'Theo lượt',N'Theo thời lượng',N'Theo kỳ lưu trú',N'Theo tồn kho',N'Theo ngày',N'Qua đêm'))
+    cachTinh NVARCHAR(30) NOT NULL CHECK (cachTinh IN (N'Theo lượt',N'Theo thời lượng',N'Theo kỳ lưu trú',N'Theo tồn kho',N'Theo ngày',N'Qua đêm')),
+    -- Chính sách tiêu hao độc lập với đơn vị và thời lượng giữ chỗ.
+    truTonKhiSuDung BIT NULL
 );
 
 CREATE TABLE YeuCauTraKho (

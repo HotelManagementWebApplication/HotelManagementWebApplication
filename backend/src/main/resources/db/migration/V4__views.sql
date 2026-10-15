@@ -1335,3 +1335,26 @@ SELECT y.maYeuCauTraKho, y.maDichVu, d.ten, d.donViTinh, y.soLuong, y.maPhong,
     y.nguoiGui, y.lyDo, y.trangThai, y.nguoiDuyet, y.ghiChuDuyet, y.ngayGui, y.ngayDuyet
 FROM dbo.YeuCauTraKho y JOIN dbo.DichVu d ON d.maDichVu = y.maDichVu;
 GO
+
+-- Cấu hình thực tế của danh mục, không phụ thuộc mã demo.
+CREATE VIEW dbo.vwCauHinhLichDichVu AS
+SELECT d.maDichVu,c.congSuat,c.donViKhaDung,c.soPhutMoiLuot,c.cachTinh,
+    dbo.fnDichVuTruTon(d.maDichVu) AS truTon
+FROM dbo.DichVu d LEFT JOIN dbo.CauHinhLichDichVu c ON c.maDichVu=d.maDichVu;
+GO
+
+-- Hai nguồn phát sinh khác nhau: đặt trước đã dùng và dịch vụ ghi trực tiếp.
+-- Không suy ra sử dụng dịch vụ từ phiếu xuất kho nên tài nguyên không bị bỏ sót.
+CREATE VIEW dbo.vwTieuThuDichVu AS
+SELECT N'BOOKING:'+CONVERT(NVARCHAR(30),b.maDatDichVuKhachSan) AS maLuot,
+    b.maDichVu,COALESCE(b.thoiDiemSuDung,b.thoiDiemDuKien) AS thoiDiem,
+    b.soLuong,b.soLuongMienPhi,b.donGia,
+    CONVERT(DECIMAL(19,2),(CONVERT(BIGINT,b.soLuong)-b.soLuongMienPhi)*b.donGia) AS thanhTien
+FROM dbo.DatDichVuKhachSan b WHERE b.trangThai=N'Đã sử dụng'
+UNION ALL
+SELECT N'DIRECT:'+CONVERT(NVARCHAR(30),s.maPhieuDatPhong)+N':'+s.maDichVu+N':'+CONVERT(NVARCHAR(10),s.ngaySuDung,23),
+    s.maDichVu,CONVERT(DATETIME2(6),s.ngaySuDung),s.soLuong,
+    CASE WHEN s.donGia=0 THEN s.soLuong ELSE 0 END,s.donGia,
+    CONVERT(DECIMAL(19,2),CONVERT(BIGINT,s.soLuong)*s.donGia)
+FROM dbo.SuDungDichVu s;
+GO

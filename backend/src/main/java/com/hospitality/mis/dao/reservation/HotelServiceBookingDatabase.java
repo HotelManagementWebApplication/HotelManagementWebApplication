@@ -32,10 +32,9 @@ public class HotelServiceBookingDatabase {
                 (rs, n) -> HotelServiceBookingService.response(rs), reservationId);
     }
 
-    public List<HotelServiceBookingService.Response> restaurant(LocalDate date, String status) {
+    public List<HotelServiceBookingService.Response> coordinatedBookings(LocalDate date, String status) {
         return jdbc.query(READ+"""
                  WHERE CAST(thoiDiemDuKien AS DATE)=?
-                AND (maDichVu IN ('MAMREST','BREAKFAST') OR danhMuc=N'Nhà hàng cao cấp')
                 AND (? IS NULL OR trangThai=?) ORDER BY thoiDiemDuKien,maPhong,maDatDichVuKhachSan
                 """, (rs, n) -> HotelServiceBookingService.response(rs), date, status, status);
     }
@@ -97,6 +96,7 @@ public class HotelServiceBookingDatabase {
                 case 51108, 53610 -> "SERVICE_OUTSIDE_STAY";
                 case 51109 -> "SERVICE_NOT_FOUND";
                 case 51110 -> "SERVICE_PRICE_NOT_SET";
+                case 51111 -> "SERVICE_SCHEDULE_NOT_CONFIGURED";
                 case 53609 -> "SERVICE_OUTSIDE_MEAL_HOURS";
                 default -> null;
             };

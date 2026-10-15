@@ -106,7 +106,7 @@ public class ReservationService {
         if(request==null||request.serviceId()==null||request.quantity()==null||request.quantity()<=0)throw error("INVALID_REQUEST","Thiếu thông tin dịch vụ");
         String hash="SERVICE|"+id+"|"+request.serviceId()+"|"+request.quantity()+"|"+request.usedAt()+"|"+request.roomId()+"|"+request.mealPeriod();
         return mutate("reservation-service",key,bound,hash,()->{
-            if(Set.of("BREAKFAST","LNDRYSTD","MAMREST","POOL").contains(request.serviceId())){
+            if(Set.of("BREAKFAST","LNDRYSTD","MAMREST","POOL").contains(request.serviceId()) || !database.inventoryManaged(request.serviceId())){
                 var booking=get(id);if(booking.status()!=ReservationStatus.CHECKED_IN)throw error("INVALID_STATE","Chỉ booking đang ở mới được dùng dịch vụ");
                 String room=request.roomId()==null?booking.rooms().get(0).roomId():request.roomId();
                 serviceBookings.recordAtFrontDesk(new HotelServiceBookingService.Request(id,room,request.serviceId(),

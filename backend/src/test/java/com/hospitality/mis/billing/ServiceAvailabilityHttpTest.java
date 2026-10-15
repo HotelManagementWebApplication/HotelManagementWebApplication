@@ -25,7 +25,7 @@ class ServiceAvailabilityHttpTest {
         reservation=jdbc.queryForObject("INSERT PhieuDatPhong(maKhachLuuTru,trangThai,hinhThucThue,trangThaiThanhToanCoc) OUTPUT INSERTED.maPhieuDatPhong VALUES(?,N'Đã nhận phòng',N'Theo gói',N'Đã thanh toán')",Long.class,guest);
         jdbc.update("INSERT ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,thoiDiemTraPhongBanDau,soLuongKhach,trangThai) VALUES(?,N'AVROOM','2035-01-10T00:00:00','2035-01-13T12:00:00','2035-01-13T12:00:00',2,N'Đang có khách')",reservation);
         for(String id:new String[]{"AVCOURT","AVTOUR","AVBED","AVSTOCK"})jdbc.update("INSERT DichVu(maDichVu,ten,gia,donViTinh,danhMuc,soLuongTonKho) VALUES(?,?,100,N'giờ',N'Giải trí',5)",id,id);
-        jdbc.update("INSERT CauHinhLichDichVu VALUES(N'AVCOURT',2,N'sân',60,N'Theo thời lượng'),(N'AVTOUR',20,N'suất',240,N'Theo lượt'),(N'AVBED',3,N'giường',1440,N'Theo kỳ lưu trú'),(N'AVSTOCK',5,N'bộ',60,N'Theo tồn kho')");
+        jdbc.update("INSERT CauHinhLichDichVu(maDichVu,congSuat,donViKhaDung,soPhutMoiLuot,cachTinh) VALUES(N'AVCOURT',2,N'sân',60,N'Theo thời lượng'),(N'AVTOUR',20,N'suất',240,N'Theo lượt'),(N'AVBED',3,N'giường',1440,N'Theo kỳ lưu trú'),(N'AVSTOCK',5,N'bộ',60,N'Theo tồn kho')");
     }
     @AfterEach void cleanup(){
         jdbc.update("DELETE DatDichVuKhachSan WHERE maPhieuDatPhong=?",reservation);

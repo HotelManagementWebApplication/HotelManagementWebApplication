@@ -38,16 +38,16 @@ public class HotelServiceBookingController {
 
     @GetMapping("/api/operations/restaurant/service-bookings")
     @PreAuthorize("@departmentAccess.allows(authentication, 'RESTAURANT_ORDER_READ')")
-    public List<HotelServiceBookingService.Response> restaurantBookings(
+    public List<HotelServiceBookingService.Response> coordinatedBookings(
             @RequestParam(name = "date", required = false) LocalDate date,
             @RequestParam(name = "status", required = false) String status) {
-        return service.restaurantBookings(date, status);
+        return service.coordinatedBookings(date, status);
     }
 
     @PostMapping("/api/operations/restaurant/service-bookings/{id}/use")
     @PreAuthorize("@departmentAccess.allows(authentication, 'RESTAURANT_ORDER_WRITE')")
     public HotelServiceBookingService.Response useRestaurantBooking(@PathVariable long id) {
-        return service.markRestaurantUsed(id, SecurityActor.currentActor());
+        return service.markCoordinatedServiceUsed(id, SecurityActor.currentActor());
     }
 
     @PostMapping("/api/customer/service-bookings/{id}/cancel")

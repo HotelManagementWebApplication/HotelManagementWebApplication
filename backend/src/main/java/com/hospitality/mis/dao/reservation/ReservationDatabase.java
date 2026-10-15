@@ -18,6 +18,9 @@ import java.util.*;
 /** Reservation projections and SQL Server commands; no managed entity state. */
 @Repository
 public class ReservationDatabase {
+    public boolean inventoryManaged(String serviceId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT dbo.fnDichVuTruTon(?)",Boolean.class,serviceId));
+    }
     public record Snapshot(ReservationDtos.Response response,Long customerId,String paymentCode,
             LocalDateTime expiresAt,String pendingType,LocalDateTime previousCheckIn,
             LocalDateTime previousCheckOut,BigDecimal additionalDeposit,long version,
