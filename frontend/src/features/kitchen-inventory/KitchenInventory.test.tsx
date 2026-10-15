@@ -4,6 +4,7 @@ import KitchenInventory from "./KitchenInventory";
 import { kitchenAccountingApi } from "../../shared/api/kitchenAccounting";
 import { authApi } from "../../shared/api/auth";
 import { serviceAvailabilityApi } from "../../shared/api/serviceAvailability";
+import { catalogProposalsApi } from "../../shared/api/catalogProposals";
 
 describe("Kitchen & restaurant operations", () => {
   const booking = {
@@ -20,6 +21,7 @@ describe("Kitchen & restaurant operations", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(catalogProposalsApi,"list").mockResolvedValue([]);
     vi.spyOn(serviceAvailabilityApi,"list").mockResolvedValue([
       {service_id:"MAMREST",unit:"suất",capacity:20,booked:0,available:20,mode:"UNITS"},
       {service_id:"SPAMASS",unit:"suất",capacity:20,booked:0,available:20,mode:"UNITS"},
@@ -132,6 +134,30 @@ describe("Kitchen & restaurant operations", () => {
     expect(screen.queryByText("0 suất")).toBeNull();
   });
 
+  it("opens stock activity from the header bell, dismisses it and opens the full history", async () => {
+    vi.mocked(kitchenAccountingApi.inventoryMovements).mockImplementation(async id=>id==="MAMREST" ? [{
+      id:909, service_id:"MAMREST", type:"RECEIVE", quantity:4, actor_id:"KITCHEN", occurred_at:new Date().toISOString(), reason:"Nhập kiểm thử thông báo",
+    }] : []);
+    render(<KitchenInventory onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name:"Dịch vụ" }));
+    await screen.findByText("SKU: MAMREST");
+    expect(screen.queryByText("Biến động tồn kho gần đây")).toBeNull();
+    const bell=screen.getByRole("button", { name:"Thông báo biến động kho" });
+    fireEvent.click(bell);
+    expect(await screen.findByRole("dialog", { name:"Thông báo biến động kho" })).toBeTruthy();
+    expect(await screen.findByText("+4")).toBeTruthy();
+    expect(bell.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.keyDown(document, { key:"Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(bell);
+    fireEvent.click(bell);
+    fireEvent.pointerDown(screen.getByRole("heading", { name:"Danh mục dịch vụ" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(bell);
+    fireEvent.click(screen.getByRole("button", { name:"Xem tất cả biến động" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(await screen.findByText("Nhập kiểm thử thông báo")).toBeTruthy();
+  });
 
   it("records stock intake from the inventory screen with an auditable reason", async () => {
     render(<KitchenInventory onBack={vi.fn()} />);
@@ -171,16 +197,47 @@ describe("Kitchen & restaurant operations", () => {
     render(<KitchenInventory onBack={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name:"Dịch vụ" }));
     expect(await screen.findByText("SKU: MAMREST")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name:"Đề xuất giá dịch vụ" }));
+    fireEvent.click(screen.getByRole("button", { name:"Đề xuất" }));
     fireEvent.click(screen.getByRole("button", { name:"Tạo yêu cầu" }));
+    fireEvent.click(screen.getByRole("button", { name:"Tiếp tục" }));
     fireEvent.change(screen.getByRole("spinbutton"), { target:{ value:"300000" } });
     fireEvent.change(screen.getByPlaceholderText("Nêu rõ lý do thay đổi"), { target:{ value:"Giá đầu vào thay đổi" } });
-    fireEvent.click(screen.getByRole("button", { name:"Gửi quản lý" }));
+    fireEvent.click(screen.getByRole("button", { name:"Gửi quản lý phê duyệt" }));
     await waitFor(() => expect(kitchenAccountingApi.submitPrice).toHaveBeenCalledWith(
       "MAMREST", { price:300000, reason:"Giá đầu vào thay đổi" }, expect.any(String)));
   });
 
+  it("opens the catalog proposal popup without a product choice and submits warehouse details", async () => {
+    vi.spyOn(catalogProposalsApi,"submit").mockResolvedValue({id:910} as never);
+    render(<KitchenInventory onBack={vi.fn()}/>);
+    fireEvent.click(screen.getByRole("button",{name:"Dịch vụ"}));
+    await screen.findByText("SKU: MAMREST");
+    fireEvent.click(screen.getByRole("button",{name:"Đề xuất"}));
+    expect(screen.queryByPlaceholderText("Nêu rõ lý do thay đổi")).toBeNull();
+    fireEvent.click(screen.getByRole("button",{name:"Tạo yêu cầu"}));
+    fireEvent.click(screen.getByRole("button",{name:/Đề xuất thêm danh mục/}));
+    fireEvent.click(screen.getByRole("button",{name:"Tiếp tục"}));
+    const dialog=screen.getByRole("dialog");
+    expect(within(dialog).queryByRole("button",{name:"Sản phẩm"})).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button",{name:"Danh mục kho"}));
+    fireEvent.change(within(dialog).getByLabelText("Tên mặt hàng"),{target:{value:"Khăn mới"}});
+    fireEvent.change(within(dialog).getByLabelText("Mã danh mục (SKU)"),{target:{value:"TOWELNEW"}});
+    fireEvent.change(within(dialog).getByLabelText("Phân loại"),{target:{value:"room-amenity"}});
+    fireEvent.change(within(dialog).getByRole("spinbutton"),{target:{value:"50000"}});
+    fireEvent.change(within(dialog).getByPlaceholderText("Nêu rõ lý do cần thêm mới"),{target:{value:"Bổ sung đồ dùng"}});
+    fireEvent.click(within(dialog).getByRole("button",{name:"Gửi quản lý phê duyệt"}));
+    await waitFor(()=>expect(catalogProposalsApi.submit).toHaveBeenCalledWith({kind:"WAREHOUSE",id:"TOWELNEW",name:"Khăn mới",unit:"cái",category:"room-amenity",price:50000,reason:"Bổ sung đồ dùng"},expect.any(String)));
+    await waitFor(()=>expect(screen.queryByRole("dialog")).toBeNull());
+  });
 
+  it("shows pending additions before the SKU exists and supports zero-price proposals", async () => {
+    vi.mocked(catalogProposalsApi.list).mockResolvedValue([{id:911,requester:"KITCHEN",action:"SERVICE_CATALOG_CREATE",target_id:"NEWTOWEL",payload:JSON.stringify({kind:"WAREHOUSE",id:"NEWTOWEL",name:"Khăn mới miễn phí",price:0}),amount:0,reason:"Bổ sung",status:"PENDING",requested_at:new Date().toISOString()} as never]);
+    render(<KitchenInventory onBack={vi.fn()}/>);
+    fireEvent.click(screen.getByRole("button",{name:"Đề xuất"}));
+    expect(await screen.findByText("Khăn mới miễn phí")).toBeTruthy();
+    expect(screen.getByText("Thêm mới")).toBeTruthy();
+    expect(screen.queryByText(/Infinity|NaN/)).toBeNull();
+  });
 
   it("filters by actual backend categories and handles the out-of-stock status", async () => {
     render(<KitchenInventory onBack={vi.fn()} />);
@@ -212,7 +269,7 @@ describe("Kitchen & restaurant operations", () => {
       },
     ]);
     render(<KitchenInventory onBack={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name:"Đề xuất giá dịch vụ" }));
+    fireEvent.click(screen.getByRole("button", { name:"Đề xuất" }));
     expect(await screen.findByText("Yêu cầu định dạng số thuần")).toBeTruthy();
     expect(screen.getByText("251.000")).toBeTruthy();
     expect(screen.getByText("Dữ liệu lịch sử")).toBeTruthy();
@@ -229,38 +286,14 @@ describe("Kitchen & restaurant operations", () => {
       },
     ]);
     render(<KitchenInventory onBack={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name:"Đề xuất giá dịch vụ" }));
+    fireEvent.click(screen.getByRole("button", { name:"Đề xuất" }));
     expect(await screen.findByText("Đã duyệt tăng giá")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name:"Xem kết quả" }));
-    expect(await screen.findByText("Tiến trình & Kết quả đề xuất giá")).toBeTruthy();
+    expect(await screen.findByText("Tiến trình & Kết quả đề xuất")).toBeTruthy();
     expect(screen.getByText("Quản lý Demo")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name:"Kích hoạt giá ngay" }));
     await waitFor(() => expect(kitchenAccountingApi.activatePrice).toHaveBeenCalledWith(
       "MAMREST", { price:320000, reason:"Đã duyệt tăng giá" }, expect.any(String)));
     expect(await screen.findByText("Kích hoạt giá thành công! Dịch vụ đã cập nhật mức giá mới.")).toBeTruthy();
-  });
-  it("opens stock activity from the header bell, dismisses it and opens the full history", async () => {
-    vi.mocked(kitchenAccountingApi.inventoryMovements).mockImplementation(async id=>id==="MAMREST" ? [{
-      id:909, service_id:"MAMREST", type:"RECEIVE", quantity:4, actor_id:"KITCHEN", occurred_at:new Date().toISOString(), reason:"Nhập kiểm thử thông báo",
-    }] : []);
-    render(<KitchenInventory onBack={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name:"Dịch vụ" }));
-    await screen.findByText("SKU: MAMREST");
-    expect(screen.queryByText("Biến động tồn kho gần đây")).toBeNull();
-    const bell=screen.getByRole("button", { name:"Thông báo biến động kho" });
-    fireEvent.click(bell);
-    expect(await screen.findByRole("dialog", { name:"Thông báo biến động kho" })).toBeTruthy();
-    expect(await screen.findByText("+4")).toBeTruthy();
-    expect(bell.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.keyDown(document, { key:"Escape" });
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(document.activeElement).toBe(bell);
-    fireEvent.click(bell);
-    fireEvent.pointerDown(screen.getByRole("heading", { name:"Danh mục dịch vụ" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.click(bell);
-    fireEvent.click(screen.getByRole("button", { name:"Xem tất cả biến động" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(await screen.findByText("Nhập kiểm thử thông báo")).toBeTruthy();
   });
 });

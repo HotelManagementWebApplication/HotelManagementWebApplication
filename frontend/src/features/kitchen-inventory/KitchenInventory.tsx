@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import StockReturnsPanel from "../stock-returns/StockReturnsPanel";
+import ProposalDialog from "./ProposalDialog";
 import StockNotifications, { type StockActivity } from "./StockNotifications";
+import { catalogProposalsApi, type CatalogProposal } from "../../shared/api/catalogProposals";
 import { serviceAvailabilityApi, type ServiceAvailability } from "../../shared/api/serviceAvailability";
 import { kitchenAccountingApi, newKitchenIdempotencyKey } from "../../shared/api/kitchenAccounting";
 import { authApi } from "../../shared/api/auth";
@@ -47,6 +49,8 @@ interface PriceRequest {
   requestedBy: string; requestedAt: string;
   status: PriceStatus; reason?: string;
   rawApproval?: Approval;
+  catalogAddition?: boolean;
+  catalogKind?: CatalogProposal["kind"];
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -988,7 +992,7 @@ function PriceProposalResultModal({
         }}>
           <div>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>
-              Tiến trình &amp; Kết quả đề xuất giá
+              Tiến trình &amp; Kết quả đề xuất
             </h3>
             <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>
               Mã đề xuất: #{request.id} · Dịch vụ: {request.sku}
@@ -1017,14 +1021,14 @@ function PriceProposalResultModal({
               {currentStat.label}
             </div>
             <p style={{ fontSize: 12, color: currentStat.text, margin: 0, lineHeight: 1.5 }}>
-              {currentStat.desc}
+              {request.catalogAddition && request.status==="consumed" ? "Quản lý đã duyệt và tạo danh mục mới thành công." : currentStat.desc}
             </p>
           </div>
 
           {/* Service & Price Details */}
           <div style={{ background: "#F8FAFC", borderRadius: 12, border: "1px solid #E2E8F0", padding: "14px 16px", marginBottom: 16 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-              Thông tin dịch vụ &amp; Mức giá
+              Thông tin danh mục &amp; Mức giá
             </p>
             <p style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>
               {request.item} <span style={{ fontSize: 12, fontWeight: 500, color: "#64748B", fontFamily: "'JetBrains Mono',monospace" }}>({request.sku})</span>
@@ -1042,7 +1046,7 @@ function PriceProposalResultModal({
               <div style={{ background: "#FFF", padding: "8px 12px", borderRadius: 8, border: "1px solid #E2E8F0" }}>
                 <p style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>Thay đổi</p>
                 <p style={{ fontSize: 13, fontWeight: 700, color: up ? "#16A34A" : "#DC2626" }}>
-                  {up ? "+" : ""}{deltaPct}%
+                  {request.catalogAddition?"Thêm mới":request.currentPrice===0?formatVnd(delta):`${up?"+":""}${deltaPct}%`}
                 </p>
               </div>
             </div>
@@ -1107,7 +1111,7 @@ function PriceProposalResultModal({
             >
               Đóng
             </button>
-            {request.status === "approved" && onActivate && (
+            {!request.catalogAddition && request.status === "approved" && onActivate && (
               <button
                 onClick={handleActivateClick}
                 disabled={activating || Boolean(successMsg)}
@@ -1137,6 +1141,7 @@ function PricingScreen({
   items,
   onAddPriceRequest,
   onActivatePrice,
+  onAddCatalogRequest,
   requesterName,
   searchQuery,
   userProfile,
@@ -1145,48 +1150,16 @@ function PricingScreen({
   items: InventoryItem[];
   onAddPriceRequest: (req: PriceRequest) => Promise<void>;
   onActivatePrice?: (req: PriceRequest) => Promise<void>;
+  onAddCatalogRequest: (body: CatalogProposal) => Promise<void>;
   requesterName?: string;
   searchQuery: string;
   userProfile?: EmployeeProfileDto | null;
 }) {
   const [priceStatus, setPriceStatus] = useState<"all"|PriceStatus>("all");
   const [showForm, setShowForm] = useState(false);
-  const priceableItems = useMemo(() => items.filter(item => item.active), [items]);
-  const [draft, setDraft] = useState(() => ({ serviceId:priceableItems[0]?.id ?? "", newPrice:"", reason:"" }));
-  const [formError, setFormError] = useState("");
-  const [saving, setSaving] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState<PriceRequest | null>(null);
-
-  useEffect(() => {
-    if (!draft.serviceId && priceableItems.length > 0) {
-      setDraft(value => ({ ...value, serviceId: priceableItems[0].id }));
-    }
-  }, [draft.serviceId, priceableItems]);
-  const selectedItem = priceableItems.find(item => item.id === draft.serviceId);
   const filtered = requests.filter(request => (priceStatus === "all" || request.status === priceStatus)
     && (!searchQuery.trim() || `${request.item} ${request.sku} ${request.reason ?? ""}`.toLowerCase().includes(searchQuery.trim().toLowerCase())));
-  const submitRequest = async () => {
-    const newPrice = Number(draft.newPrice);
-    if (!selectedItem) { setFormError("Chọn một dịch vụ đang mở bán trong danh mục."); return; }
-    if (!Number.isFinite(newPrice) || newPrice <= 0 || newPrice === selectedItem.price) { setFormError("Giá mới phải là số dương và khác giá hiện tại."); return; }
-    if (!draft.reason.trim()) { setFormError("Nhập lý do để quản lý xem xét."); return; }
-    setSaving(true);
-    setFormError("");
-    try {
-      await onAddPriceRequest({
-        id:`new-${Date.now()}`, item:selectedItem.name, sku:selectedItem.id,
-        currentPrice:selectedItem.price, newPrice,
-        requestedBy:requesterName || "Bộ phận Kho và Dịch vụ", requestedAt:new Date().toLocaleString("vi-VN"), status:"pending", reason:draft.reason.trim(),
-      });
-      setDraft(value => ({ ...value, newPrice:"", reason:"" }));
-      setShowForm(false);
-      setPriceStatus("all");
-    } catch (requestError) {
-      setFormError(requestError instanceof Error ? requestError.message : "Không thể gửi đề xuất giá.");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const STAT_CFG: Record<PriceStatus,{label:string;bg:string;text:string}> = {
     pending:  { label:"Chờ duyệt",bg:"#FEF9C3",text:"#92400E" },
@@ -1200,35 +1173,20 @@ function PricingScreen({
     <div style={{ flex:1,overflowY:"auto",padding:"20px 24px",background:"#F8FAFC" }}>
       <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16 }}>
         <div>
-          <h2 style={{ fontSize:18,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Đề xuất giá dịch vụ</h2>
-          <p style={{ fontSize:12,color:"#94A3B8" }}>Kho và Dịch vụ tạo đề xuất; Quản lý phê duyệt và kích hoạt giá mới</p>
+          <h2 style={{ fontSize:18,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Đề xuất</h2>
         </div>
-        <button onClick={() => { setShowForm(open => !open); setFormError(""); }} style={{ height:34,padding:"0 14px",borderRadius:8,
+        <button onClick={() => { setShowForm(true); }} style={{ height:34,padding:"0 14px",borderRadius:8,
           background:"#0F172A",color:"#FFF",fontSize:12,fontWeight:600,cursor:"pointer",
           display:"flex",alignItems:"center",gap:5 }}>
           <Plus size={14} /> Tạo yêu cầu
         </button>
       </div>
 
-      {showForm && (
-        <div style={{background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,padding:14,marginBottom:16}}>
-          <div style={{display:"grid",gridTemplateColumns:"1.2fr .8fr 1.5fr auto",gap:8,alignItems:"end"}}>
-            <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:10,fontWeight:700,color:"#64748B"}}>Dịch vụ
-              <select value={draft.serviceId} onChange={event=>setDraft(value=>({...value,serviceId:event.target.value}))} style={{height:34,border:"1px solid #E2E8F0",borderRadius:8,padding:"0 10px",fontSize:11,background:"#FFF"}}>
-                {priceableItems.map(item=><option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}
-              </select>
-            </label>
-            <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:10,fontWeight:700,color:"#64748B"}}>Giá mới · giá hiện tại {selectedItem ? formatVnd(selectedItem.price) : "—"}
-              <input type="number" min="1" step="1" value={draft.newPrice} onChange={event=>setDraft(value=>({...value,newPrice:event.target.value}))} placeholder="VND" style={{height:34,border:"1px solid #E2E8F0",borderRadius:8,padding:"0 10px",fontSize:11,outline:"none"}} />
-            </label>
-            <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:10,fontWeight:700,color:"#64748B"}}>Lý do
-              <input value={draft.reason} onChange={event=>setDraft(value=>({...value,reason:event.target.value}))} placeholder="Nêu rõ lý do thay đổi" style={{height:34,border:"1px solid #E2E8F0",borderRadius:8,padding:"0 10px",fontSize:11,outline:"none"}} />
-            </label>
-            <button onClick={() => void submitRequest()} disabled={saving || !priceableItems.length} style={{height:34,padding:"0 14px",borderRadius:8,border:"none",background:saving?"#64748B":"#0F172A",color:"#FFF",fontSize:11,fontWeight:700,cursor:saving?"wait":"pointer"}}>{saving?"Đang gửi…":"Gửi quản lý"}</button>
-          </div>
-          {formError && <div role="alert" style={{marginTop:10,padding:"8px 10px",borderRadius:8,background:"#FFF1F2",border:"1px solid #FECDD3",color:"#BE123C",fontSize:11}}>{formError}</div>}
-        </div>
-      )}
+      {showForm && <ProposalDialog items={items} onClose={()=>setShowForm(false)}
+        onPrice={async(item,price,reason)=>{
+          await onAddPriceRequest({id:`new-${Date.now()}`,item:item.name,sku:item.id,currentPrice:item.price,newPrice:price,
+            requestedBy:requesterName||"KITCHEN",requestedAt:new Date().toISOString(),status:"pending",reason});
+        }} onCatalog={onAddCatalogRequest}/>}
 
       <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16 }}>
         {(["pending","approved","rejected","expired","consumed"] as PriceStatus[]).map(s => {
@@ -1263,7 +1221,7 @@ function PricingScreen({
         <table style={{ width:"100%",minWidth:1040,borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:"#F8FAFC" }}>
-              {["Mặt hàng","SKU","Giá hiện tại","Giá đề xuất","Thay đổi","Yêu cầu bởi","Trạng thái","Thao tác"].map(h => (
+              {["Danh mục / mặt hàng","SKU","Giá hiện tại","Giá đề xuất","Thay đổi","Yêu cầu bởi","Trạng thái","Thao tác"].map(h => (
                 <th key={h} style={{ padding:"10px 14px",fontSize:11,fontWeight:700,color:"#64748B",
                   textAlign:"left",letterSpacing:"0.04em",textTransform:"uppercase",whiteSpace:"nowrap" }}>{h}</th>
               ))}
@@ -1282,11 +1240,11 @@ function PricingScreen({
                     {pr.reason && <p style={{ fontSize:11,color:"#94A3B8" }}>{pr.reason}</p>}
                   </td>
                   <td style={{ padding:"11px 14px",fontSize:11,color:"#94A3B8",fontFamily:"'JetBrains Mono',monospace" }}>{pr.sku}</td>
-                  <td style={{ padding:"11px 14px",fontSize:12,color:"#475569" }}>{pr.currentPrice.toLocaleString("vi-VN")}</td>
+                  <td style={{ padding:"11px 14px",fontSize:12,color:"#475569" }}>{pr.catalogAddition?"—":pr.currentPrice.toLocaleString("vi-VN")}</td>
                   <td style={{ padding:"11px 14px",fontSize:12,fontWeight:700,color:"#0F172A" }}>{pr.newPrice.toLocaleString("vi-VN")}</td>
                   <td style={{ padding:"11px 14px" }}>
                     <span style={{ fontSize:12,fontWeight:700,color:up?"#16A34A":"#DC2626" }}>
-                      {up?"+":""}{deltaPct}%
+                      {pr.catalogAddition?"Thêm mới":pr.currentPrice===0?formatVnd(delta):`${up?"+":""}${deltaPct}%`}
                     </span>
                   </td>
                   <td style={{ padding:"11px 14px" }}>
@@ -1555,7 +1513,7 @@ const NAV: { id: NavPage; label: string; Icon: React.ElementType }[] = [
   { id:"inventory",    label:"Kho",                Icon:Package },
   { id:"services",     label:"Dịch vụ",            Icon:Tag },
   { id:"returns",      label:"Duyệt trả kho",      Icon:RefreshCw },
-  { id:"pricing",      label:"Đề xuất giá dịch vụ", Icon:Tag },
+  { id:"pricing",      label:"Đề xuất", Icon:Tag },
   { id:"reports",      label:"Báo cáo tiêu thụ",    Icon:BarChart2 },
 ];
 
@@ -1565,7 +1523,7 @@ const NAV_LABELS: Record<NavPage, string> = {
   services:     "Dịch vụ",
   returns:      "Duyệt trả kho",
   transactions: "Nhập – Xuất kho",
-  pricing:      "Đề xuất giá dịch vụ",
+  pricing:      "Đề xuất",
   reports:      "Báo cáo tiêu thụ",
 };
 
@@ -1598,7 +1556,9 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
   const catalogItems = liveItems.filter(item => page === "inventory" ? isStockItem(item) : page === "services" ? !isStockItem(item) : true);
   const catalogIds = new Set(catalogItems.map(item => item.id));
   const catalogTransactions = liveTransactions.filter(transaction => catalogIds.has(transaction.serviceId));
-  const catalogPriceRequests = priceRequests.filter(request => catalogIds.has(request.sku));
+  const catalogPriceRequests = priceRequests.filter(request => request.catalogAddition
+    ? page === "inventory" ? request.catalogKind === "WAREHOUSE" : page === "services" ? request.catalogKind === "SERVICE" : true
+    : catalogIds.has(request.sku));
   const liveUsage: StockActivity[] = catalogTransactions.slice(0, 10).map(transaction => ({
     id: transaction.id,
     name: liveItems.find(item=>item.id===transaction.serviceId)?.name ?? transaction.item,
@@ -1683,7 +1643,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     if (liveItems.length === 0) return;
     let active = true;
-    kitchenAccountingApi.priceRequests()
+    Promise.all([kitchenAccountingApi.priceRequests(), catalogProposalsApi.list()]).then(groups=>groups.flat())
       .then(requests => {
         const mapped = requests.map((approval: Approval): PriceRequest | null => {
           let requestedPrice: unknown;
@@ -1696,15 +1656,20 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
           } catch {
             requestedPrice = approval.payload;
           }
-          const item = liveItems.find(entry => entry.id === approval.target_id);
+          let addition: CatalogProposal | undefined;
+          if(approval.action === "SERVICE_CATALOG_CREATE") {
+            try { addition=JSON.parse(approval.payload) as CatalogProposal; } catch { return null; }
+          }
+          const item = liveItems.find(entry => entry.id === approval.target_id)
+            ?? (addition ? {name:addition.name,sku:addition.id,price:0} : undefined);
           const newPrice = Number(requestedPrice);
-          if (!item || !Number.isFinite(newPrice) || newPrice <= 0) return null;
+          if (!item || !Number.isFinite(newPrice) || newPrice < 0) return null;
           const status: PriceStatus = approval.status === "PENDING" ? "pending"
             : (approval.status === "APPROVED" && !approval.consumed_at) ? "approved"
             : approval.status === "REJECTED" ? "rejected"
             : approval.status === "EXPIRED" ? "expired" : "consumed";
           return {
-            id: String(approval.id), item: item.name, sku: item.sku, currentPrice: item.price,
+            id: String(approval.id), item: item.name, sku: item.sku, currentPrice: addition ? 0 : item.price, catalogAddition: Boolean(addition), catalogKind: addition?.kind,
             newPrice, requestedBy: approval.requester, requestedAt: new Date(approval.requested_at).toLocaleString("vi-VN"),
             status, reason: approval.reason,
             rawApproval: approval,
@@ -1719,16 +1684,28 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
     return () => { active = false; };
   }, [liveItems]);
 
+  const priceSubmission = useRef<{payload:string;key:string}|null>(null);
   const handleAddPriceRequest = async (req: PriceRequest): Promise<void> => {
     const service = liveItems.find(item => item.sku === req.sku || item.name === req.item);
     if (!service) throw new Error("Dịch vụ không còn trong danh mục; tải lại dữ liệu rồi thử lại.");
-    if (!service.active) throw new Error("Vật tư nội bộ không có giá bán để đề xuất thay đổi.");
+    const payload=JSON.stringify([service.id,req.newPrice,req.reason??""]);
+    if(priceSubmission.current?.payload!==payload) priceSubmission.current={payload,key:newKitchenIdempotencyKey()};
     const approval = await kitchenAccountingApi.submitPrice(service.id, {
       price: req.newPrice,
       reason: req.reason ?? "",
-    }, newKitchenIdempotencyKey());
+    }, priceSubmission.current!.key);
+    priceSubmission.current=null;
     setPriceRequests(prev => [{ ...req, id: String(approval.id), requestedBy: approval.requester,
       requestedAt: new Date(approval.requested_at).toLocaleString("vi-VN"), reason: approval.reason, rawApproval: approval }, ...prev]);
+  };
+
+  const catalogSubmission = useRef<{payload:string;key:string}|null>(null);
+  const handleAddCatalogRequest = async (body:CatalogProposal) => {
+    const payload=JSON.stringify(body);
+    if(catalogSubmission.current?.payload!==payload) catalogSubmission.current={payload,key:newKitchenIdempotencyKey()};
+    await catalogProposalsApi.submit(body,catalogSubmission.current!.key);
+    catalogSubmission.current=null;
+    setInventoryRefreshKey(key=>key+1);
   };
 
   const handleActivatePrice = async (req: PriceRequest): Promise<void> => {
@@ -1948,6 +1925,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
               items={liveItems}
               onAddPriceRequest={handleAddPriceRequest}
               onActivatePrice={handleActivatePrice}
+              onAddCatalogRequest={handleAddCatalogRequest}
               searchQuery={globalSearch}
               requesterName={userProfile?.full_name ? `${userProfile.full_name} (${employeeRoleLabel(userProfile.role)})` : "Bộ phận Kho và Dịch vụ"}
               userProfile={userProfile}

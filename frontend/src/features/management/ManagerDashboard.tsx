@@ -47,7 +47,7 @@ interface Approval {
 ══════════════════════════════════════════════════════════ */
 const fmtVND = formatVnd;
 const incidentStatusLabel = (status: EquipmentIncident["handoff_status"]) => ({OPEN:"Chờ tiếp nhận",ACKNOWLEDGED:"Đang xử lý",RESOLVED:"Đã xử lý"}[status]);
-const approvalActionLabels: Record<string, string> = {SERVICE_PRICE_CHANGE:"Thay đổi giá dịch vụ",PAYMENT_REFUND:"Hoàn tiền",BILLING_ADJUSTMENT:"Điều chỉnh hóa đơn",ROOM_TYPE_ACTIVATE:"Phê duyệt loại phòng"};
+const approvalActionLabels: Record<string, string> = {SERVICE_CATALOG_CREATE:"Thêm danh mục dịch vụ / kho",SERVICE_PRICE_CHANGE:"Thay đổi giá dịch vụ",PAYMENT_REFUND:"Hoàn tiền",BILLING_ADJUSTMENT:"Điều chỉnh hóa đơn",ROOM_TYPE_ACTIVATE:"Phê duyệt loại phòng"};
 const approvalActionLabel = (action: string) => approvalActionLabels[action] ?? action;
 const roomTypeLabel = (type: string) => ({
   Standard:"Tiêu chuẩn", Deluxe:"Cao cấp", Suite:"Suite", "VIP Suite":"Suite VIP",
@@ -799,7 +799,9 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
           let detail: string[] = [];
           try {
             const payload = JSON.parse(approval.payload) as Record<string, unknown>;
-            detail = Object.entries(payload).slice(0, 2).map(([key, item]) => `${key}: ${String(item)}`);
+            detail = approval.action === "SERVICE_CATALOG_CREATE"
+              ? [`${payload.kind === "WAREHOUSE" ? "Kho" : "Dịch vụ"}: ${String(payload.name)} (${String(payload.id)})`, `Đơn vị: ${String(payload.unit)} · Giá: ${fmtVND(Number(payload.price))}`, approval.reason]
+              : Object.entries(payload).slice(0, 2).map(([key, item]) => `${key}: ${String(item)}`);
           } catch { /* reason remains the visible fallback */ }
           return {
             id: String(approval.id), dept: "Đề xuất nghiệp vụ", deptColor: "#3B82F6", emoji: "✓",
