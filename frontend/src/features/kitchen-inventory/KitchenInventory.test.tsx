@@ -239,4 +239,28 @@ describe("Kitchen & restaurant operations", () => {
       "MAMREST", { price:320000, reason:"Đã duyệt tăng giá" }, expect.any(String)));
     expect(await screen.findByText("Kích hoạt giá thành công! Dịch vụ đã cập nhật mức giá mới.")).toBeTruthy();
   });
+  it("opens stock activity from the header bell, dismisses it and opens the full history", async () => {
+    vi.mocked(kitchenAccountingApi.inventoryMovements).mockImplementation(async id=>id==="MAMREST" ? [{
+      id:909, service_id:"MAMREST", type:"RECEIVE", quantity:4, actor_id:"KITCHEN", occurred_at:new Date().toISOString(), reason:"Nhập kiểm thử thông báo",
+    }] : []);
+    render(<KitchenInventory onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name:"Dịch vụ" }));
+    await screen.findByText("SKU: MAMREST");
+    expect(screen.queryByText("Biến động tồn kho gần đây")).toBeNull();
+    const bell=screen.getByRole("button", { name:"Thông báo biến động kho" });
+    fireEvent.click(bell);
+    expect(await screen.findByRole("dialog", { name:"Thông báo biến động kho" })).toBeTruthy();
+    expect(await screen.findByText("+4")).toBeTruthy();
+    expect(bell.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.keyDown(document, { key:"Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(bell);
+    fireEvent.click(bell);
+    fireEvent.pointerDown(screen.getByRole("heading", { name:"Danh mục dịch vụ" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(bell);
+    fireEvent.click(screen.getByRole("button", { name:"Xem tất cả biến động" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(await screen.findByText("Nhập kiểm thử thông báo")).toBeTruthy();
+  });
 });

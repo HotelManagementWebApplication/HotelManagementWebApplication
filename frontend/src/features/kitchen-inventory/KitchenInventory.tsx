@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import StockReturnsPanel from "../stock-returns/StockReturnsPanel";
+import StockNotifications, { type StockActivity } from "./StockNotifications";
 import { serviceAvailabilityApi, type ServiceAvailability } from "../../shared/api/serviceAvailability";
 import { kitchenAccountingApi, newKitchenIdempotencyKey } from "../../shared/api/kitchenAccounting";
 import { authApi } from "../../shared/api/auth";
@@ -1598,6 +1599,16 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
   const catalogIds = new Set(catalogItems.map(item => item.id));
   const catalogTransactions = liveTransactions.filter(transaction => catalogIds.has(transaction.serviceId));
   const catalogPriceRequests = priceRequests.filter(request => catalogIds.has(request.sku));
+  const liveUsage: StockActivity[] = catalogTransactions.slice(0, 10).map(transaction => ({
+    id: transaction.id,
+    name: liveItems.find(item=>item.id===transaction.serviceId)?.name ?? transaction.item,
+    sku: transaction.serviceId,
+    qty: transaction.qty,
+    occurredAt: transaction.occurredAt,
+    staff: transaction.staff,
+    movementType: transaction.movementType,
+  }));
+
 
   useEffect(() => {
     let active = true;
@@ -1853,6 +1864,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
                 border:"1px solid #E2E8F0",background:"#F8FAFC",fontSize:12,outline:"none",boxSizing:"border-box" }} />
           </div>
           <div style={{ flex:1 }} />
+          <StockNotifications usage={liveUsage} onSeeAll={()=>setPage("transactions")}/>
           <div style={{ position:"relative" }}>
             <div
               onClick={()=>setTopProfileOpen(p=>!p)}
