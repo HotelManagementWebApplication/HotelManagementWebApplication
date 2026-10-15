@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import StockReturnsPanel from "../stock-returns/StockReturnsPanel";
 import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { authApi } from "../../shared/api/auth";
@@ -21,7 +22,7 @@ import {
 ══════════════════════════════════════════════════════════ */
 export type HKStatus  = "to-clean" | "in-progress" | "inspecting" | "ready";
 export type SubType   = "checkout-dirty" | "stayover" | "vip-arrival" | "maintenance";
-export type NavPage   = "overview" | "board" | "inspection" | "linen" | "incidents";
+export type NavPage   = "overview" | "board" | "inspection" | "linen" | "returns" | "incidents";
 export type ShiftName = "Sáng" | "Chiều" | "Tối";
 export type Priority  = "high" | "medium" | "low";
 export type IncStatus = "open" | "in-progress" | "resolved";
@@ -1685,6 +1686,7 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
     { id:"board",      label:"Nhiệm vụ & Checklist", Icon:LayoutGrid },
     { id:"inspection", label:"Kiểm tra & Nghiệm thu", Icon:ClipboardList },
     { id:"linen",      label:"Đồ vải & Vật tư ca",   Icon:Package },
+    { id:"returns",    label:"Trả hàng về Kho",      Icon:Archive },
     { id:"incidents",  label:"Báo sự cố kỹ thuật",   Icon:Wrench },
   ];
 
@@ -1888,6 +1890,7 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
             onMove={handleLinenMovement}
           />
         )}
+        {page === "returns" && <StockReturnsPanel/>}
         {page === "incidents"  && (
           <IncidentsScreen
             incidents={liveIncidents}
