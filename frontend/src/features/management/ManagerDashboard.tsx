@@ -26,6 +26,10 @@ import {
   ConciergeBell, Sparkles, UtensilsCrossed, Wrench,
 } from "lucide-react";
 
+import { ServicePriceReviewContext, useServicePriceReview } from "./ServicePriceReviewContext";
+import { proposedPrice, priceReviewDetails } from "./servicePriceReview";
+import type { Service } from "../../shared/types/kitchenAccounting";
+
 /* ══════════════════════════════════════════════════════════
    TYPES & DATA
 ══════════════════════════════════════════════════════════ */
@@ -98,6 +102,7 @@ function OverviewScreen({
   techOrders?: TechnicalWorkOrder[];
   onDecision?: (id: string, action: ApprovalDecision) => Promise<boolean>;
 }) {
+  const {services:priceCatalog,employees:priceEmployees} = useServicePriceReview();
   const [approvals, setApprovals] = useState<Record<string,ApprovalStatus>>({});
   const visibleApprovals = approvalsForRole(role, approvalsData);
   const occupiedRooms = rooms.filter(room => room.status === "occupied").length;
@@ -192,7 +197,7 @@ function OverviewScreen({
                         <span style={{ fontSize:10,color:"#94A3B8",marginLeft:"auto",whiteSpace:"nowrap" }}>{a.time}</span>
                       </div>
                       <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",marginBottom:3 }}>{a.title}</p>
-                      {a.detail.map((d,i) => (
+                      {(a.kind === "service-price" && a.rawApproval ? priceReviewDetails(a.rawApproval, priceCatalog, priceEmployees) : a.detail).map((d,i) => (
                         <p key={i} style={{ fontSize:11,color:"#64748B",lineHeight:1.4 }}>{d}</p>
                       ))}
                     </div>
@@ -377,6 +382,7 @@ function ApprovalsScreen({
   activatingPriceId?: number | null;
   onActivatePrice?: (approval: KitchenApproval) => Promise<void>;
 }) {
+  const {services:priceCatalog,employees:priceEmployees,managerId} = useServicePriceReview();
   const [approvals, setApprovals] = useState<Record<string,ApprovalStatus>>({});
   const handle = async (id: string, action: ApprovalDecision) => {
     if (onDecision && !(await onDecision(id, action))) return;
@@ -402,29 +408,17 @@ function ApprovalsScreen({
           </p>
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
             {approvedPriceProposals.map(pr => {
-              let priceVal = pr.amount ? Number(pr.amount) : 0;
-              if (!priceVal) {
-                try {
-                  const p = JSON.parse(pr.payload);
-                  priceVal = Number(typeof p === "number" ? p : (p as { price?: unknown }).price);
-                } catch {
-                  priceVal = Number(pr.payload);
-                }
-              }
               const isActivating = activatingPriceId === pr.id;
               return (
                 <div key={pr.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"10px 14px",background:"#FFF",borderRadius:8,border:"1px solid #DBEAFE" }}>
                   <div>
-                    <p style={{ margin:0,fontSize:13,fontWeight:700,color:"#0F172A" }}>
-                      {pr.target_id} · Giá đề xuất: <span style={{ color:"#16A34A" }}>{priceVal ? formatVnd(priceVal) : "—"}</span>
-                    </p>
-                    <p style={{ margin:"2px 0 0",fontSize:11,color:"#64748B" }}>
-                      Người gửi: <strong>{pr.requester}</strong> · Lý do: {pr.reason || "Thay đổi giá dịch vụ"}
-                    </p>
+                    {priceReviewDetails(pr, priceCatalog, priceEmployees).map((line, index) => <p key={index} style={{margin:"2px 0",fontSize:12,color:"#334155"}}>{line}</p>)}
+                    <p style={{fontSize:12,color:"#1D4ED8"}}>Đã duyệt · Chưa áp dụng</p>
                   </div>
                   <button
                     onClick={() => onActivatePrice?.(pr)}
-                    disabled={isActivating}
+                    disabled={activatingPriceId !== null || !managerId || pr.approver !== managerId}
+                    title={pr.approver !== managerId ? "Chỉ người đã phê duyệt được áp dụng giá" : undefined}
                     style={{
                       display:"flex",alignItems:"center",gap:5,padding:"7px 14px",borderRadius:7,
                       border:"none",background:isActivating ? "#94A3B8" : "#2563EB",
@@ -463,7 +457,7 @@ function ApprovalsScreen({
                   <span style={{ fontSize:11,color:"#94A3B8",marginLeft:"auto" }}>{a.time}</span>
                 </div>
                 <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",marginBottom:4 }}>{a.title}</p>
-                {a.detail.map((d,i) => <p key={i} style={{ fontSize:12,color:"#64748B",lineHeight:1.5 }}>{d}</p>)}
+                {(a.kind === "service-price" && a.rawApproval ? priceReviewDetails(a.rawApproval, priceCatalog, priceEmployees) : a.detail).map((d,i) => <p key={i} style={{ fontSize:12,color:"#64748B",lineHeight:1.5 }}>{d}</p>)}
               </div>
               {a.approvalBlockedReason && !st ? (
                 <p role="note" style={{ maxWidth:220,flexShrink:0,alignSelf:"center",fontSize:12,lineHeight:1.5,color:"#B45309" }}>
@@ -758,6 +752,9 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
   const [acceptNoteInput, setAcceptNoteInput] = useState("");
   const [acceptModalError, setAcceptModalError] = useState<string | null>(null);
   const [isAccepting, setIsAccepting] = useState(false);
+  const [priceCatalog, setPriceCatalog] = useState<Service[]>([]);
+  const [priceNotice, setPriceNotice] = useState<string | null>(null);
+  const [priceError, setPriceError] = useState<string | null>(null);
   const [approvedPriceProposals, setApprovedPriceProposals] = useState<KitchenApproval[]>([]);
   const [activatingPriceId, setActivatingPriceId] = useState<number | null>(null);
   const [refreshApprovalsCount, setRefreshApprovalsCount] = useState(0);
@@ -823,7 +820,7 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
         );
         setApprovedPriceProposals(unconsumed);
       })
-      .catch(() => { if (active) setApprovedPriceProposals([]); });
+      .catch(() => { if (active) { setApprovedPriceProposals([]); setPriceError("Không tải được đề xuất đã duyệt chờ áp dụng. Vui lòng tải lại."); } });
 
     enterpriseApi.leaves("PENDING")
       .then(rows => { if (active) setLiveLeaveRequests(rows); })
@@ -872,6 +869,9 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
     kitchenAccountingApi.expenses()
       .then(expenses => { if (active) setLiveExpenses(expenses); })
       .catch(err => { console.warn("Backend manager expenses unavailable:", err); if (active) setLiveExpenses([]); });
+
+    kitchenAccountingApi.services().then(rows => { if (active) setPriceCatalog(rows); })
+      .catch(() => { if (active) { setPriceCatalog([]); setPriceError("Không tải được bảng giá hiện tại. Vui lòng tải lại trước khi đối chiếu giá."); } });
 
     return () => { active = false; };
   }, [role, refreshApprovalsCount]);
@@ -1063,27 +1063,9 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
       if (action === "approved") {
         await hrGovernanceApi.approve(numericId);
         const target = liveApprovals.find(item => item.id === id);
-        if (target?.kind === "service-price" && target.rawApproval?.target_id) {
-          const raw = target.rawApproval;
-          let newPrice = raw.amount ? Number(raw.amount) : 0;
-          if (!newPrice || Number.isNaN(newPrice)) {
-            try {
-              const parsed = JSON.parse(raw.payload);
-              newPrice = Number(typeof parsed === "number" ? parsed : (parsed as { price?: unknown }).price);
-            } catch {
-              newPrice = Number(raw.payload);
-            }
-          }
-          if (newPrice > 0) {
-            try {
-              await kitchenAccountingApi.activatePrice(raw.target_id, {
-                price: newPrice,
-                reason: raw.reason || "Quản lý duyệt và áp dụng giá",
-              }, `act-mgr-${raw.id}-${Date.now()}`);
-            } catch (err) {
-              console.warn("Unable to auto-activate service price upon approval:", err);
-            }
-          }
+        if (target?.kind === "service-price") {
+          setPriceError(null);
+          setPriceNotice("Đã phê duyệt đề xuất. Giá hiện tại được giữ đến khi bấm Áp dụng giá ngay.");
         }
       } else {
         await hrGovernanceApi.reject(numericId);
@@ -1100,26 +1082,22 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
   };
 
   const handleActivateApprovedPrice = async (approval: KitchenApproval) => {
+    if (activatingPriceId !== null) return;
     setActivatingPriceId(approval.id);
+    setPriceError(null);
+    setPriceNotice(null);
     try {
-      let newPrice = approval.amount ? Number(approval.amount) : 0;
-      if (!newPrice || Number.isNaN(newPrice)) {
-        try {
-          const parsed = JSON.parse(approval.payload);
-          newPrice = Number(typeof parsed === "number" ? parsed : (parsed as { price?: unknown }).price);
-        } catch {
-          newPrice = Number(approval.payload);
-        }
-      }
-      if (!Number.isFinite(newPrice) || newPrice <= 0) throw new Error("Giá dịch vụ không hợp lệ");
+      const newPrice = proposedPrice(approval);
+      if (newPrice === null) throw new Error("Giá dịch vụ không hợp lệ");
       await kitchenAccountingApi.activatePrice(approval.target_id, {
         price: newPrice,
         reason: approval.reason || "Quản lý kích hoạt giá đã duyệt",
-      }, `act-mgr-${approval.id}-${Date.now()}`);
+      }, `act-mgr-${approval.id}`);
       setApprovedPriceProposals(prev => prev.filter(p => p.id !== approval.id));
-      window.alert(`Đã áp dụng thành công giá mới (${formatVnd(newPrice)}) cho dịch vụ ${approval.target_id}!`);
+      setPriceCatalog(prev => prev.map(service => service.id === approval.target_id ? { ...service, price: newPrice } : service));
+      setPriceNotice(`Đã áp dụng giá ${formatVnd(newPrice)} cho ${approval.target_id}.`);
     } catch (err) {
-      window.alert(apiErrorMessage(err, "Không thể kích hoạt giá dịch vụ."));
+      setPriceError(apiErrorMessage(err, "Không thể áp dụng giá. Đề xuất vẫn ở trạng thái đã duyệt; vui lòng thử lại."));
     } finally {
       setActivatingPriceId(null);
     }
@@ -1152,6 +1130,7 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
   const managerInitials = profileLoading ? "..." : profileError ? (role === "director" ? "GĐ" : "QL") : currentManager?.initials || (role === "director" ? "GĐ" : "QL");
 
   return (
+    <ServicePriceReviewContext.Provider value={{services:priceCatalog,employees:liveEmployees,managerId:currentManager?.id}}>
     <div className="management-station" style={{ display:"flex",height:"100vh",overflow:"hidden",
       background:"#F8FAFC",fontFamily:"'Inter',system-ui,sans-serif" }}>
 
@@ -1315,6 +1294,8 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
 
         {/* CONTENT */}
         <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}>
+          {priceNotice && <p role="status" style={{padding:12,color:"#1D4ED8",background:"#EFF6FF"}}>{priceNotice}</p>}
+          {priceError && <p role="alert" style={{padding:12,color:"#B91C1C",background:"#FEF2F2"}}>{priceError}</p>}
           {operationsError && <p role="alert" style={{padding:12,color:"#B91C1C",background:"#FEF2F2"}}>{operationsError} <button onClick={()=>setRefreshApprovalsCount(value=>value+1)}>Tải lại</button></p>}
           {page==="notifications" && <div style={{padding:24,overflowY:"auto"}}>
             <h2 style={{fontWeight:700,marginBottom:12}}>Sự cố chưa xử lý</h2>
@@ -1417,5 +1398,6 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
         </div>
       )}
     </div>
+    </ServicePriceReviewContext.Provider>
   );
 }
