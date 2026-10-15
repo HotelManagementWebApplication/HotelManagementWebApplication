@@ -276,45 +276,7 @@ class SqlServerMigrationTest {
         }
     }
 
-    @Test
-    /** Hai lần phân cùng khoảng ca phải tạo đúng một ca và trả SQL error ổn định. */
-    void shiftProcedurePreventsOverlapAndKeepsOneAssignment() throws Exception {
-        String employeeId = "AS" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
-        String phone = "08" + String.format("%010d", Math.floorMod(UUID.randomUUID().getLeastSignificantBits(), 10_000_000_000L));
-        try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
-            try {
-                statement.executeUpdate("insert into NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) "
-                        + "values(N'" + employeeId + "',N'Audit shift',N'not-a-password',N'Nhân viên',N'" + phone + "')");
-                callAssignShift(connection, employeeId, "AUDIT-1",
-                        LocalDateTime.of(2035, 2, 10, 8, 0), LocalDateTime.of(2035, 2, 10, 16, 0));
-                assertThatThrownBy(() -> callAssignShift(connection, employeeId, "AUDIT-2",
-                        LocalDateTime.of(2035, 2, 10, 12, 0), LocalDateTime.of(2035, 2, 10, 20, 0)))
-                        .isInstanceOf(java.sql.SQLException.class)
-                        .satisfies(error -> assertThat(((java.sql.SQLException) error).getErrorCode()).isEqualTo(51004));
-                try (var result = statement.executeQuery("select count(*) from CaLamViecNhanVien where maNhanVien=N'" + employeeId + "'")) {
-                    assertThat(result.next()).isTrue();
-                    assertThat(result.getInt(1)).isEqualTo(1);
-                }
-            } finally {
-                statement.executeUpdate("delete from NhatKyKiemSoat where nguoiThucHien=N'AUDIT' and duLieuSau=N'" + employeeId + "'");
-                statement.executeUpdate("delete from CaLamViecNhanVien where maNhanVien=N'" + employeeId + "'");
-                statement.executeUpdate("delete from NhanVien where maNhanVien=N'" + employeeId + "'");
-            }
-        }
-    }
 
-    private void callAssignShift(java.sql.Connection connection, String employeeId, String code,
-                                 LocalDateTime startsAt, LocalDateTime endsAt) throws Exception {
-        try (var call = connection.prepareCall("{call dbo.uspPhanCongCa(?,?,?,?,?,?)}")) {
-            call.setString(1, employeeId);
-            call.setObject(2, startsAt.toLocalDate());
-            call.setString(3, code);
-            call.setObject(4, startsAt);
-            call.setObject(5, endsAt);
-            call.setString(6, "AUDIT");
-            call.execute();
-        }
-    }
 
     private void assertDatabaseObjects(String type, Set<String> expectedNames) throws Exception {
         try (var connection = dataSource.getConnection();

@@ -12,6 +12,10 @@ public class PartnerDebtSettlement {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "maCongNoDoiTac", nullable = false)
     private PartnerDebt partnerDebt;
     @Column(name = "soTien", nullable = false, precision = 14, scale = 2) private BigDecimal amount;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.PaymentMethodConverter.class)
+    @Column(name = "phuongThucThanhToan", length = 30) private com.hospitality.mis.entity.billing.PaymentMethod method;
+    public com.hospitality.mis.entity.billing.PaymentMethod getMethod(){return method;}
+    public void setMethod(com.hospitality.mis.entity.billing.PaymentMethod value){method=value;}
     @Column(name = "nguoiThanhToan", nullable = false, length = 50) private String settledBy;
     @Column(name = "thoiDiemThanhToan", nullable = false) private LocalDateTime settledAt;
     @Column(name = "ghiChu", length = 500) private String note;

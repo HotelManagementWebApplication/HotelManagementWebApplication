@@ -45,7 +45,7 @@ describe("ApiClient", () => {
 
   it("turns browser network failures into an actionable API error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
-    await expect(new ApiClient("https://api.mamresort.example").request("/api/public/rooms"))
+    await expect(new ApiClient("https://api.mamhotel.example").request("/api/public/rooms"))
       .rejects.toMatchObject({ status: 0, code: "API_UNAVAILABLE" });
   });
 

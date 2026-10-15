@@ -10,10 +10,10 @@ import type { CustomerReservation, HotelServiceBooking, HotelServiceBookingReque
 import {
   Search, MapPin, Calendar, Users, Star, Wifi, Coffee, Car, Dumbbell,
   ChevronLeft, ChevronRight, ChevronDown, X, Heart, BedDouble, Maximize2, Eye,
-  CheckCircle, ArrowLeft, Phone, Mail, Globe, Shield, Waves, Utensils, User
+  CheckCircle, ArrowLeft, Phone, Mail, Shield, Waves, Utensils, User
 } from "lucide-react";
 
-// Newly created luxury retreat components
+// Customer-facing luxury hotel components
 import { LuxuryHero } from "./components/LuxuryHero";
 import { AmenitiesMosaic } from "./components/AmenitiesMosaic";
 import { CuratedServicesSection } from "./components/CuratedServicesSection";
@@ -24,6 +24,7 @@ import { LuxuryFnBView, type FnbService } from "./components/LuxuryFnBView";
 import { CustomerProfileDropdown } from "./components/CustomerProfileDropdown";
 import { VnpayPaymentResultPage } from "./components/VnpayPaymentResultPage";
 import { localDateValue } from "../../shared/utils/localDate";
+import { getRoomFullName } from "./roomProfiles";
 
 interface CustomerPortalProps {
   onBack: () => void;
@@ -41,8 +42,8 @@ const dateInputValue = (offsetDays: number) => {
 
 const displayRoomType = (value: string): Room["type"] => {
   const normalized = value.toLowerCase();
-  if (normalized.includes("vip")) return "VIP Suite";
-  if (normalized.includes("suite") || normalized.includes("gia đình") || normalized.includes("gia dinh")) return "Suite";
+  if (normalized === "vip") return "VIP Suite";
+  if (normalized === "sut") return "Suite";
   if (normalized.includes("superior") || normalized.includes("sup")) return "Superior";
   if (normalized.includes("deluxe") || normalized.includes("dlx")) return "Deluxe";
   return "Standard";
@@ -64,7 +65,7 @@ const mapPublicRoom = (room: PublicRoomSummary | PublicRoomAvailability | Public
     id: room.room_id,
     number: room.room_name,
     floor: room.floor,
-    type: displayRoomType(room.room_type_name),
+    type: displayRoomType(room.room_type_code),
     roomTypeCode: room.room_type_code,
     roomTypeName: room.room_type_name,
     marketingName: room.marketing_name || undefined,
@@ -547,7 +548,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             <div className="flex justify-between items-center text-sm">
               <span className="text-[#78716C]">Không gian:</span>
               <span className="font-semibold text-[#1C1917]">
-                Phòng {bookingConfirmation.room.number} – {bookingConfirmation.room.type}
+                {getRoomFullName(bookingConfirmation.room)}
               </span>
             </div>
             <div className="flex justify-between items-center text-sm">
@@ -719,7 +720,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             <img src="/hotel_logo.png" alt="MaM Hotel Logo" className="w-8 h-auto object-contain drop-shadow" />
             <div>
               <span className="font-display text-xl leading-none text-[#0D1117] tracking-tight block">MaM Hotel</span>
-              <span className="text-[10px] uppercase tracking-[0.25em] text-[#8C6D37] font-semibold block mt-0.5">Beach Hotel &amp; Spa</span>
+              <span className="text-[10px] uppercase tracking-[0.25em] text-[#8C6D37] font-semibold block mt-0.5">Luxury Hotel &amp; Spa</span>
             </div>
           </div>
         </div>
@@ -738,7 +739,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
                 : "text-[#57534E] hover:text-[#1C1917]"
             }`}
           >
-            Nghỉ dưỡng
+            Khách sạn
           </button>
           <button
             onClick={() => {
@@ -752,7 +753,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
                 : "text-[#57534E] hover:text-[#1C1917]"
             }`}
           >
-            Phòng &amp; Biệt thự
+            Phòng &amp; Suite
           </button>
           <button
             onClick={() => {
@@ -967,8 +968,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-white/60">
             <span className="flex items-center gap-1.5"><MapPin size={13} className="text-[#D4AF6E]" /> Số 1 VVN, Vũng Tàu</span>
             <span className="flex items-center gap-1.5"><Phone size={13} className="text-[#D4AF6E]" /> Hotline: 1900 6789</span>
-            <span className="flex items-center gap-1.5"><Mail size={13} className="text-[#D4AF6E]" /> retreat@mamresort.vn</span>
-            <span className="flex items-center gap-1.5"><Globe size={13} className="text-[#D4AF6E]" /> www.mamresort.vn</span>
+            <a href="mailto:mam@hotel.com" className="flex items-center gap-1.5"><Mail size={13} className="text-[#D4AF6E]" /> mam@hotel.com</a>
           </div>
 
           <p className="text-xs text-white/40">

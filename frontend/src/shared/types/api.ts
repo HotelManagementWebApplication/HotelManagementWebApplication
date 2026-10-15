@@ -9,7 +9,7 @@ export const EMPLOYEE_ROLE_LABELS: Record<EmployeeRole, string> = {
   FRONT_DESK: "Lễ tân",
   HOUSEKEEPING: "Buồng phòng",
   TECHNICAL: "Kỹ thuật",
-  KITCHEN: "Bếp & Nhà hàng",
+  KITCHEN: "Kho và Dịch vụ",
   ACCOUNTING: "Kế toán",
   DIRECTOR: "Giám đốc",
   ADMIN: "Quản trị hệ thống",

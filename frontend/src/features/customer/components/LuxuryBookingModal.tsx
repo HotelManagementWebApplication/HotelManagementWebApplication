@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Room } from "../../../shared/types/domain";
+import { getRoomFullName } from "../roomProfiles";
 import { X, Calendar, Clock, Users, ShieldCheck, Wallet, Banknote } from "lucide-react";
 
 interface LuxuryBookingModalProps {
@@ -193,10 +194,10 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
         <div className="px-6 py-5 border-b border-[#EAE6DD] flex items-center justify-between bg-[#FAF8F5]">
           <div>
             <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[#8C6D37]">
-              Phiếu Đặt phòng Nghỉ dưỡng
+              Phiếu Đặt phòng MaM Hotel
             </span>
             <h3 className="font-display text-2xl text-[#1C1917] font-normal">
-              {room.type} – Phòng {room.number}
+              {getRoomFullName(room)}
             </h3>
           </div>
           <button
@@ -238,7 +239,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
                   : "text-[#78716C] hover:text-[#1C1917]"
               }`}
             >
-              Nghỉ dưỡng trong ngày (Theo giờ)
+              Lưu trú trong ngày (Theo giờ)
             </button>
           </div>
 

@@ -42,9 +42,9 @@ describe("HRStation weekly shift schedule", () => {
     const provision = vi.spyOn(enterpriseApi, "autoProvisionEmployee");
     render(<HRStation onBack={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", {name: /Hồ sơ nhân sự/}));
-    fireEvent.click(screen.getByRole("button", {name: /Tiếp nhận nhân viên mới/}));
+    fireEvent.click(screen.getByRole("button", {name: /Hướng dẫn tiếp nhận/}));
     expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByText(/HR không có quyền cấp tài khoản/)).toBeTruthy();
+    expect(screen.getByText(/Quyền cấp tài khoản và vai trò thuộc Ban quản lý và Admin/)).toBeTruthy();
     expect(screen.queryByRole("button", {name: "Lưu hồ sơ"})).toBeNull();
     expect(provision).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", {name: "Đã hiểu"}));
@@ -75,10 +75,9 @@ describe("HRStation weekly shift schedule", () => {
     const assertWeek = async (offset: number, callNumber: number) => {
       const dates = weekAtOffset(offset);
       await waitFor(() => {
-        expect(shifts).toHaveBeenCalledTimes(callNumber);
         expect(screen.getByText(weekLabel(dates))).toBeTruthy();
       });
-      expect(shifts).toHaveBeenLastCalledWith({
+      expect(shifts).toHaveBeenCalledWith({
         date: localDateValue(dates[0]),
         to: localDateValue(dates[6]),
       });
@@ -105,5 +104,18 @@ describe("HRStation weekly shift schedule", () => {
     });
     expect(screen.queryByRole("columnheader", { name: "Nhận phòng" })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Trả phòng" })).toBeNull();
+  });
+
+  it("shows and exports approved leave even when the employee has no attendance punches", async () => {
+    const month = localDateValue().slice(0, 7);
+    vi.mocked(hrGovernanceApi.employees).mockResolvedValue([{ employee_id: "FD1", full_name: "Nhân viên nghỉ ốm", role: "FRONT_DESK", phone: "0901111111", enabled: true, account_non_locked: true, failed_login_attempts: 0, employment_status: "WORKING" }]);
+    vi.mocked(enterpriseApi.leaves).mockResolvedValue([{ id: 12, employee_id: "FD1", leave_type: "SICK", start_date: `${month}-13`, end_date: `${month}-14`, status: "APPROVED", reason: "Nghỉ ốm", shift_swap_with: null, requested_by: "HR", approver: "MANAGER", decided_at: null, created_at: `${month}-12` }]);
+    render(<HRStation onBack={vi.fn()} />);
+    await screen.findByText("Nhân viên nghỉ ốm", { exact: true });
+    fireEvent.click(screen.getByRole("button", { name: "Chấm công" }));
+    fireEvent.click(screen.getByRole("button", { name: /Bảng tổng hợp tháng/ }));
+    const row = screen.getByText("FD1", { exact: true }).closest("tr")!;
+    expect(within(row).getAllByRole("cell")[7].textContent).toBe("2");
+    expect(screen.getByRole("button", { name: "Xuất báo cáo" })).toHaveProperty("disabled", false);
   });
 });

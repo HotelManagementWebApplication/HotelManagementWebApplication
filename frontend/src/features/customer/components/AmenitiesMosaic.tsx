@@ -20,7 +20,7 @@ interface AmenityItem {
 const ACCOMMODATION: AmenityItem = {
   id: "accommodation",
   title: "ACCOMMODATION",
-  subtitle: "Biệt thự & Phòng nghỉ",
+  subtitle: "Phòng & Suite",
   desc: "Khám phá các hạng phòng và lựa chọn lưu trú hiện có tại MaM Hotel.",
   image: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&h=800&fit=crop&auto=format",
   actionText: "Khám phá phòng",

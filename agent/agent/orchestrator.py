@@ -37,7 +37,7 @@ _THANKS_ONLY = {"cam on", "cam on ban", "cam on nhe", "cam on ban nhe", "thanks"
 _GOODBYE_ONLY = {"tam biet", "hen gap lai", "bye", "goodbye"}
 
 _AVAILABILITY_TERMS = ("phòng trống", "còn phòng", "phòng còn", "khả dụng", "đặt được", "available", "availability")
-_ROOM_TERMS = ("phòng", "hạng phòng", "loại phòng", "room")
+_ROOM_TERMS = ("phòng", "hạng phòng", "loại phòng", "room", "penthouse", "suite")
 _ROOM_LIVE_TERMS = (
     "giá", "danh sách", "loại", "hạng", "diện tích", "giường", "view", "tiện nghi", "đang có", "hiện tại", "phòng nào",
     "bao nhiêu phòng", "mấy phòng", "tổng số phòng", "tổng cộng bao nhiêu phòng",
@@ -57,11 +57,11 @@ _POLICY_TERMS = (
 # IDs for the named room groups; the user-facing names/codes are not accepted
 # by that endpoint.
 _ROOM_TYPE_FILTERS = (
-    (("standard", "std"), "Standard", "RT001"),
+    (("classic", "standard", "std"), "Classic", "RT001"),
     (("superior", "sup"), "Superior", "RT003"),
     (("deluxe", "dlx"), "Deluxe", "RT005"),
-    (("suite", "sut"), "Suite", "RT007"),
-    (("vip", "biệt thự", "biet thu"), "VIP", "RT009"),
+    (("vip", "penthouse", "tổng thống", "tong thong"), "Penthouse Tổng Thống", "RT009"),
+    (("suite", "sut"), "Suite Hoàng Gia", "RT007"),
 )
 
 
@@ -356,7 +356,7 @@ class CustomerChatService:
 
     @staticmethod
     def _asks_policy(message: str) -> bool:
-        return any(term in message for term in _POLICY_TERMS)
+        return any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", message) for term in _POLICY_TERMS)
 
     @staticmethod
     def _asks_private_reservation(message: str) -> bool:
@@ -497,7 +497,7 @@ class CustomerChatService:
             name = str(room.get("marketing_name") or room.get("room_type_name") or "Hạng phòng")
             if "·" in name:
                 name = name.split("·", 1)[0].strip()
-            if code and str(code).casefold() not in name.casefold():
+            if code and not re.search(rf"(?<!\w){re.escape(str(code))}(?!\w)", name, re.IGNORECASE):
                 name += f" ({code})"
             variants = {
                 str(item.get("room_type_id") or item.get("room_type_name"))

@@ -48,6 +48,7 @@
 - Công thức tổng tiền phải trả: `room + surcharge + services/minibar + compensation + extensions - deposit - discount`.
 - Không xóa cứng hóa đơn; phải dùng hủy hóa đơn.
 - Đối soát theo ca đối với tiền mặt, thẻ và chuyển khoản.
+- Giá phòng và dịch vụ đã bao gồm VAT (chủ sở hữu xác nhận ngày 14/10/2026). Khi phát hành hóa đơn VAT, tách tiền trước thuế từ tổng tiền sau giảm giá; tiền cọc và các lần thanh toán không giảm cơ sở tính thuế.
 
 ## 8. VIP
 

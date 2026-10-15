@@ -1,7 +1,11 @@
--- Clean, deterministic schema for the web hotel MIS.
--- This is a hard cut: the database must be empty before Flyway runs V1.
--- Do not add compatibility aliases, conditional DDL, or legacy table names here.
+-- V1: bảng, cột và ràng buộc của dữ liệu khách sạn.
+-- Database phải trống trước khi Flyway chạy baseline V1–V6.
+-- PK: định danh; FK: liên kết; UNIQUE: chống trùng; CHECK: miền giá trị hợp lệ.
+-- Các CHECK danh mục/trạng thái tập trung ở phần cuối file.
 
+-- =============================================================================
+-- Bảng LoaiPhong
+-- =============================================================================
 CREATE TABLE LoaiPhong (
     maLoaiPhong NVARCHAR(10) NOT NULL,
     ten NVARCHAR(50) NOT NULL,
@@ -35,6 +39,9 @@ CREATE TABLE LoaiPhong (
 );
 
 
+-- =============================================================================
+-- Bảng Phong
+-- =============================================================================
 CREATE TABLE Phong (
     maPhong NVARCHAR(10) NOT NULL,
     maLoaiPhong NVARCHAR(10) NOT NULL,
@@ -51,6 +58,9 @@ CREATE TABLE Phong (
 );
 
 
+-- =============================================================================
+-- Bảng KhachLuuTru
+-- =============================================================================
 CREATE TABLE KhachLuuTru (
     maKhachLuuTru BIGINT IDENTITY(1,1) NOT NULL,
     hoVaTen NVARCHAR(100) NOT NULL,
@@ -78,6 +88,9 @@ CREATE TABLE KhachLuuTru (
 );
 
 
+-- =============================================================================
+-- Bảng NhanVien
+-- =============================================================================
 CREATE TABLE NhanVien (
     maNhanVien NVARCHAR(10) NOT NULL,
     hoVaTen NVARCHAR(100) NOT NULL,
@@ -103,6 +116,9 @@ CREATE TABLE NhanVien (
 );
 
 
+-- =============================================================================
+-- Bảng PhieuDatPhong
+-- =============================================================================
 CREATE TABLE PhieuDatPhong (
     maPhieuDatPhong BIGINT IDENTITY(1,1) NOT NULL,
     maKhachLuuTru BIGINT NOT NULL,
@@ -159,6 +175,9 @@ CREATE TABLE PhieuDatPhong (
 -- nullable deposit-payment reference is unique only when present (non-NULL)
 -- references must be unique.
 
+-- =============================================================================
+-- Bảng ChiTietDatPhong
+-- =============================================================================
 CREATE TABLE ChiTietDatPhong (
     maPhieuDatPhong BIGINT NOT NULL,
     maPhong NVARCHAR(10) NOT NULL,
@@ -180,6 +199,9 @@ CREATE TABLE ChiTietDatPhong (
 );
 
 
+-- =============================================================================
+-- Bảng ChuyenPhong
+-- =============================================================================
 CREATE TABLE ChuyenPhong (
     maChuyenPhong BIGINT IDENTITY(1,1) NOT NULL,
     maPhieuDatPhong BIGINT NOT NULL,
@@ -196,6 +218,9 @@ CREATE TABLE ChuyenPhong (
 );
 
 
+-- =============================================================================
+-- Bảng DichVu
+-- =============================================================================
 CREATE TABLE DichVu (
     maDichVu NVARCHAR(10) NOT NULL,
     ten NVARCHAR(100) NOT NULL,
@@ -214,6 +239,9 @@ CREATE TABLE DichVu (
 );
 
 
+-- =============================================================================
+-- Bảng SuDungDichVu
+-- =============================================================================
 CREATE TABLE SuDungDichVu (
     maPhieuDatPhong BIGINT,
     maDichVu NVARCHAR(10) NOT NULL,
@@ -229,6 +257,9 @@ CREATE TABLE SuDungDichVu (
 );
 
 
+-- =============================================================================
+-- Bảng HoaDon
+-- =============================================================================
 CREATE TABLE HoaDon (
     maHoaDon BIGINT IDENTITY(1,1) NOT NULL,
     maPhieuDatPhong BIGINT NOT NULL,
@@ -260,6 +291,9 @@ CREATE TABLE HoaDon (
 );
 
 
+-- =============================================================================
+-- Bảng DieuChinhHoaDon
+-- =============================================================================
 CREATE TABLE DieuChinhHoaDon (
     maDieuChinhHoaDon BIGINT IDENTITY(1,1) NOT NULL,
     maHoaDon BIGINT NOT NULL,
@@ -275,6 +309,9 @@ CREATE TABLE DieuChinhHoaDon (
 );
 
 
+-- =============================================================================
+-- Bảng PhieuBaoTri
+-- =============================================================================
 CREATE TABLE PhieuBaoTri (
     maPhieuBaoTri NVARCHAR(10) NOT NULL,
     maPhong NVARCHAR(10) NOT NULL,
@@ -287,6 +324,9 @@ CREATE TABLE PhieuBaoTri (
 );
 
 
+-- =============================================================================
+-- Bảng SuCoThietBi
+-- =============================================================================
 CREATE TABLE SuCoThietBi (
     maSuCoThietBi BIGINT IDENTITY(1,1) NOT NULL,
     maPhieuDatPhong BIGINT NULL,
@@ -309,6 +349,9 @@ CREATE TABLE SuCoThietBi (
 );
 
 
+-- =============================================================================
+-- Bảng YeuCauPheDuyet
+-- =============================================================================
 CREATE TABLE YeuCauPheDuyet (
     maYeuCauPheDuyet BIGINT IDENTITY(1,1) NOT NULL,
     nguoiYeuCau NVARCHAR(50) NOT NULL,
@@ -330,6 +373,9 @@ CREATE TABLE YeuCauPheDuyet (
 );
 
 
+-- =============================================================================
+-- Bảng NhatKyKiemSoat
+-- =============================================================================
 CREATE TABLE NhatKyKiemSoat (
     maNhatKyKiemSoat BIGINT IDENTITY(1,1) NOT NULL,
     nguoiThucHien NVARCHAR(50) NOT NULL,
@@ -345,6 +391,9 @@ CREATE TABLE NhatKyKiemSoat (
 );
 
 
+-- =============================================================================
+-- Bảng MaLamMoiDangNhap
+-- =============================================================================
 CREATE TABLE MaLamMoiDangNhap (
     maMaLamMoiDangNhap BIGINT IDENTITY(1,1) NOT NULL,
     maNhanVien NVARCHAR(10),
@@ -362,6 +411,9 @@ CREATE TABLE MaLamMoiDangNhap (
 );
 
 
+-- =============================================================================
+-- Bảng TaiKhoanKhachHang
+-- =============================================================================
 CREATE TABLE TaiKhoanKhachHang (
     maTaiKhoanKhachHang BIGINT IDENTITY(1,1) NOT NULL,
     maKhachLuuTru BIGINT NOT NULL,
@@ -379,6 +431,9 @@ ALTER TABLE PhieuDatPhong
     ADD CONSTRAINT fkPhieuDatPhong03
         FOREIGN KEY (maTaiKhoanKhachHang) REFERENCES TaiKhoanKhachHang (maTaiKhoanKhachHang);
 
+-- =============================================================================
+-- Bảng YeuCauThanhToanVnpay
+-- =============================================================================
 CREATE TABLE YeuCauThanhToanVnpay (
     maYeuCauThanhToanVnpay BIGINT IDENTITY(1,1) NOT NULL,
     maPhieuDatPhong BIGINT NOT NULL,
@@ -404,6 +459,9 @@ CREATE TABLE YeuCauThanhToanVnpay (
 );
 
 
+-- =============================================================================
+-- Bảng GiaoDichThanhToan
+-- =============================================================================
 CREATE TABLE GiaoDichThanhToan (
     maGiaoDichThanhToan BIGINT IDENTITY(1,1) NOT NULL,
     maHoaDon BIGINT NOT NULL,
@@ -424,6 +482,9 @@ CREATE TABLE GiaoDichThanhToan (
 -- Nullable external event IDs are unique only when present (filtered unique
 -- NULL behavior; SQL Server requires a filtered index for this contract).
 
+-- =============================================================================
+-- Bảng BienLai
+-- =============================================================================
 CREATE TABLE BienLai (
     maBienLai BIGINT IDENTITY(1,1) NOT NULL,
     soBienLai NVARCHAR(40) NOT NULL,
@@ -438,6 +499,9 @@ CREATE TABLE BienLai (
     CONSTRAINT chkBienLai01 CHECK (soTien > 0)
 );
 
+-- =============================================================================
+-- Bảng BanGiaoTienCa
+-- =============================================================================
 CREATE TABLE BanGiaoTienCa (
     maBanGiaoTienCa BIGINT IDENTITY(1,1) NOT NULL,
     maCa NVARCHAR(30) COLLATE Vietnamese_100_CS_AS NOT NULL,
@@ -450,18 +514,26 @@ CREATE TABLE BanGiaoTienCa (
     CONSTRAINT pkBanGiaoTienCa PRIMARY KEY (maBanGiaoTienCa)
 );
 
+-- =============================================================================
+-- Bảng KhoanChi
+-- =============================================================================
 CREATE TABLE KhoanChi (
     maKhoanChi BIGINT IDENTITY(1,1) NOT NULL,
     danhMuc NVARCHAR(100) NOT NULL,
     moTa NVARCHAR(255) NOT NULL,
     soTien DECIMAL(14,2) NOT NULL,
+    phuongThucThanhToan NVARCHAR(30) COLLATE Vietnamese_100_CS_AS,
     nguoiChiTra NVARCHAR(50) NOT NULL,
     thoiDiemChiTra DATETIME2(6) NOT NULL,
     trangThai NVARCHAR(20) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Đã ghi nhận',
     CONSTRAINT pkKhoanChi PRIMARY KEY (maKhoanChi),
-    CONSTRAINT chkKhoanChi01 CHECK (soTien > 0)
+    CONSTRAINT chkKhoanChi01 CHECK (soTien > 0),
+    CONSTRAINT chkKhoanChiPhuongThuc CHECK(phuongThucThanhToan IN(N'Tiền mặt',N'Thẻ',N'Chuyển khoản ngân hàng'))
 );
 
+-- =============================================================================
+-- Bảng CongNoDoiTac
+-- =============================================================================
 CREATE TABLE CongNoDoiTac (
     maCongNoDoiTac BIGINT IDENTITY(1,1) NOT NULL,
     tenDoiTac NVARCHAR(150) NOT NULL,
@@ -476,6 +548,9 @@ CREATE TABLE CongNoDoiTac (
     CONSTRAINT chkCongNoDoiTac02 CHECK (soTienDaThanhToan >= 0 AND soTienDaThanhToan <= soTien)
 );
 
+-- =============================================================================
+-- Bảng BienDongKhoDichVu
+-- =============================================================================
 CREATE TABLE BienDongKhoDichVu (
     maBienDongKhoDichVu BIGINT IDENTITY(1,1) NOT NULL,
     maDichVu NVARCHAR(10) NOT NULL,
@@ -489,6 +564,9 @@ CREATE TABLE BienDongKhoDichVu (
     CONSTRAINT chkBienDongKhoDichVu01 CHECK (soLuong <> 0)
 );
 
+-- =============================================================================
+-- Bảng ThietBiPhong
+-- =============================================================================
 CREATE TABLE ThietBiPhong (
     maThietBiPhong BIGINT IDENTITY(1,1) NOT NULL,
     maPhong NVARCHAR(10) NOT NULL,
@@ -503,6 +581,9 @@ CREATE TABLE ThietBiPhong (
     CONSTRAINT chkThietBiPhong02 CHECK (soLuong > 0)
 );
 
+-- =============================================================================
+-- Bảng LichSuHangThanhVien
+-- =============================================================================
 CREATE TABLE LichSuHangThanhVien (
     maLichSuHangThanhVien BIGINT IDENTITY(1,1) NOT NULL,
     maKhachLuuTru BIGINT NOT NULL,
@@ -515,6 +596,9 @@ CREATE TABLE LichSuHangThanhVien (
 );
 
 
+-- =============================================================================
+-- Bảng TienNghi
+-- =============================================================================
 CREATE TABLE TienNghi (
     maTienNghi BIGINT IDENTITY(1,1) NOT NULL,
     ten NVARCHAR(100) NOT NULL,
@@ -523,6 +607,9 @@ CREATE TABLE TienNghi (
     CONSTRAINT ukTienNghi01 UNIQUE (ten)
 );
 
+-- =============================================================================
+-- Bảng LoaiPhongTienNghi
+-- =============================================================================
 CREATE TABLE LoaiPhongTienNghi (
     maLoaiPhong NVARCHAR(10) NOT NULL,
     maTienNghi BIGINT NOT NULL,
@@ -532,6 +619,9 @@ CREATE TABLE LoaiPhongTienNghi (
 );
 
 
+-- =============================================================================
+-- Bảng HinhAnhPhong
+-- =============================================================================
 CREATE TABLE HinhAnhPhong (
     maHinhAnhPhong BIGINT IDENTITY(1,1) NOT NULL,
     maPhong NVARCHAR(10) NOT NULL,
@@ -549,6 +639,9 @@ CREATE TABLE HinhAnhPhong (
 );
 
 
+-- =============================================================================
+-- Bảng BanGhiChongTrung
+-- =============================================================================
 CREATE TABLE BanGhiChongTrung (
     maBanGhiChongTrung BIGINT IDENTITY(1,1) NOT NULL,
     phamViLenh NVARCHAR(100) NOT NULL,
@@ -566,6 +659,9 @@ CREATE TABLE BanGhiChongTrung (
 );
 
 
+-- =============================================================================
+-- Bảng NhomKhoaChongTrung
+-- =============================================================================
 CREATE TABLE NhomKhoaChongTrung (
     maNhomKhoa SMALLINT NOT NULL,
     CONSTRAINT pkNhomKhoaChongTrung PRIMARY KEY (maNhomKhoa)
@@ -578,6 +674,9 @@ INSERT INTO NhomKhoaChongTrung (maNhomKhoa) VALUES
     (32),(33),(34),(35),(36),(37),(38),(39),(40),(41),(42),(43),(44),(45),(46),(47),
     (48),(49),(50),(51),(52),(53),(54),(55),(56),(57),(58),(59),(60),(61),(62),(63);
 
+-- =============================================================================
+-- Bảng LichSuGiaLoaiPhong
+-- =============================================================================
 CREATE TABLE LichSuGiaLoaiPhong (
     maLichSuGiaLoaiPhong BIGINT IDENTITY(1,1) NOT NULL,
     maLoaiPhong NVARCHAR(10) NOT NULL,
@@ -591,6 +690,9 @@ CREATE TABLE LichSuGiaLoaiPhong (
 );
 
 
+-- =============================================================================
+-- Bảng NhiemVuBuongPhong
+-- =============================================================================
 CREATE TABLE NhiemVuBuongPhong (
     maNhiemVuBuongPhong BIGINT IDENTITY(1,1) NOT NULL,
     maPhong NVARCHAR(10) NOT NULL,
@@ -607,6 +709,9 @@ CREATE TABLE NhiemVuBuongPhong (
 );
 
 
+-- =============================================================================
+-- Bảng PhieuCongViecKyThuat
+-- =============================================================================
 CREATE TABLE PhieuCongViecKyThuat (
     maPhieuCongViecKyThuat BIGINT IDENTITY(1,1) NOT NULL,
     maPhong NVARCHAR(10) NOT NULL,
@@ -631,6 +736,9 @@ CREATE TABLE PhieuCongViecKyThuat (
 );
 
 
+-- =============================================================================
+-- Bảng LichSuGiaDichVu
+-- =============================================================================
 CREATE TABLE LichSuGiaDichVu (
     maLichSuGiaDichVu BIGINT IDENTITY(1,1) NOT NULL,
     maDichVu NVARCHAR(10) NOT NULL,
@@ -644,6 +752,9 @@ CREATE TABLE LichSuGiaDichVu (
 );
 
 
+-- =============================================================================
+-- Bảng HangDoiThongBao
+-- =============================================================================
 CREATE TABLE HangDoiThongBao (
     maThongBao BIGINT IDENTITY(1,1) NOT NULL,
     chuDe NVARCHAR(100) NOT NULL,
@@ -659,6 +770,9 @@ CREATE TABLE HangDoiThongBao (
 );
 
 
+-- =============================================================================
+-- Bảng CaLamViecNhanVien
+-- =============================================================================
 CREATE TABLE CaLamViecNhanVien (
     maCaLamViecNhanVien BIGINT IDENTITY(1,1) NOT NULL,
     maNhanVien NVARCHAR(10) NOT NULL,
@@ -674,6 +788,9 @@ CREATE TABLE CaLamViecNhanVien (
 );
 
 
+-- =============================================================================
+-- Bảng MauChecklistBuongPhong
+-- =============================================================================
 CREATE TABLE MauChecklistBuongPhong (
     maMauChecklist BIGINT IDENTITY(1,1) NOT NULL,
     ten NVARCHAR(100) NOT NULL,
@@ -682,6 +799,9 @@ CREATE TABLE MauChecklistBuongPhong (
     CONSTRAINT ukMauChecklistBuongPhong01 UNIQUE (ten)
 );
 
+-- =============================================================================
+-- Bảng KetQuaChecklistBuongPhong
+-- =============================================================================
 CREATE TABLE KetQuaChecklistBuongPhong (
     maKetQuaChecklist BIGINT IDENTITY(1,1) NOT NULL,
     maNhiemVuBuongPhong BIGINT NOT NULL,
@@ -695,6 +815,9 @@ CREATE TABLE KetQuaChecklistBuongPhong (
 );
 
 
+-- =============================================================================
+-- Bảng KiemTraBuongPhong
+-- =============================================================================
 CREATE TABLE KiemTraBuongPhong (
     maKiemTraBuongPhong BIGINT IDENTITY(1,1) NOT NULL,
     maNhiemVuBuongPhong BIGINT NOT NULL,
@@ -710,19 +833,27 @@ CREATE TABLE KiemTraBuongPhong (
 );
 
 
+-- =============================================================================
+-- Bảng ThanhToanCongNoDoiTac
+-- =============================================================================
 CREATE TABLE ThanhToanCongNoDoiTac (
     maThanhToanCongNo BIGINT IDENTITY(1,1) NOT NULL,
     maCongNoDoiTac BIGINT NOT NULL,
     soTien DECIMAL(14,2) NOT NULL,
+    phuongThucThanhToan NVARCHAR(30) COLLATE Vietnamese_100_CS_AS,
     nguoiThanhToan NVARCHAR(50) NOT NULL,
     thoiDiemThanhToan DATETIME2(6) NOT NULL,
     ghiChu NVARCHAR(500),
     CONSTRAINT pkThanhToanCongNoDoiTac PRIMARY KEY (maThanhToanCongNo),
     CONSTRAINT fkThanhToanCongNoDoiTac01 FOREIGN KEY (maCongNoDoiTac) REFERENCES CongNoDoiTac (maCongNoDoiTac),
-    CONSTRAINT chkThanhToanCongNoDoiTac01 CHECK (soTien > 0)
+    CONSTRAINT chkThanhToanCongNoDoiTac01 CHECK (soTien > 0),
+    CONSTRAINT chkThanhToanCongNoPhuongThuc CHECK(phuongThucThanhToan IN(N'Tiền mặt',N'Thẻ',N'Chuyển khoản ngân hàng'))
 );
 
 
+-- =============================================================================
+-- Bảng ButToanTaiChinh
+-- =============================================================================
 CREATE TABLE ButToanTaiChinh (
     maButToanTaiChinh BIGINT IDENTITY(1,1) NOT NULL,
     loaiButToan NVARCHAR(40) NOT NULL,
@@ -740,6 +871,9 @@ CREATE TABLE ButToanTaiChinh (
 );
 
 
+-- =============================================================================
+-- Bảng SuKienDangNhapNhanVien
+-- =============================================================================
 CREATE TABLE SuKienDangNhapNhanVien (
     maSuKienDangNhap BIGINT IDENTITY(1,1) NOT NULL,
     maNhanVien NVARCHAR(10) NOT NULL,
@@ -752,6 +886,9 @@ CREATE TABLE SuKienDangNhapNhanVien (
 );
 
 
+-- =============================================================================
+-- Bảng HoaDonGiaTriGiaTang
+-- =============================================================================
 CREATE TABLE HoaDonGiaTriGiaTang (
     maHoaDonGiaTriGiaTang BIGINT IDENTITY(1,1) NOT NULL,
     maHoaDon BIGINT NOT NULL,
@@ -776,6 +913,9 @@ CREATE TABLE HoaDonGiaTriGiaTang (
     CONSTRAINT chkHoaDonGiaTriGiaTang02 CHECK (soTienChiuThue >= 0)
 );
 
+-- =============================================================================
+-- Bảng ChamCong
+-- =============================================================================
 CREATE TABLE ChamCong (
     maChamCong BIGINT IDENTITY(1,1) NOT NULL,
     maNhanVien NVARCHAR(10) NOT NULL,
@@ -794,6 +934,9 @@ CREATE TABLE ChamCong (
     CONSTRAINT chkChamCong01 CHECK (nguonDuLieu IN (N'Nhập thủ công', N'Nhập từ máy chấm công'))
 );
 
+-- =============================================================================
+-- Bảng DonNghiPhep
+-- =============================================================================
 CREATE TABLE DonNghiPhep (
     maDonNghiPhep BIGINT IDENTITY(1,1) NOT NULL,
     maNhanVien NVARCHAR(10) NOT NULL,
@@ -815,6 +958,9 @@ CREATE TABLE DonNghiPhep (
 );
 
 
+-- =============================================================================
+-- Bảng MatHangTonKho
+-- =============================================================================
 CREATE TABLE MatHangTonKho (
     maMatHang NVARCHAR(30) NOT NULL,
     ten NVARCHAR(150) NOT NULL,
@@ -829,6 +975,9 @@ CREATE TABLE MatHangTonKho (
     CONSTRAINT chkMatHangTonKho01 CHECK (soLuongHienTai >= 0 AND nguongAnToan >= 0)
 );
 
+-- =============================================================================
+-- Bảng BienDongTonKho
+-- =============================================================================
 CREATE TABLE BienDongTonKho (
     maBienDongTonKho BIGINT IDENTITY(1,1) NOT NULL,
     maMatHang NVARCHAR(30) NOT NULL,
@@ -843,6 +992,9 @@ CREATE TABLE BienDongTonKho (
 );
 
 
+-- =============================================================================
+-- Bảng TaiSanKyThuat
+-- =============================================================================
 CREATE TABLE TaiSanKyThuat (
     maTaiSanKyThuat NVARCHAR(30) NOT NULL,
     ten NVARCHAR(150) NOT NULL,
@@ -864,6 +1016,9 @@ CREATE TABLE TaiSanKyThuat (
 );
 
 
+-- =============================================================================
+-- Bảng ChiTietTienBanGiao
+-- =============================================================================
 CREATE TABLE ChiTietTienBanGiao (
     maChiTietTienBanGiao BIGINT IDENTITY(1,1) NOT NULL,
     maBanGiaoTienCa BIGINT NOT NULL,
@@ -876,6 +1031,9 @@ CREATE TABLE ChiTietTienBanGiao (
 );
 
 
+-- =============================================================================
+-- Bảng DatDichVuKhachSan
+-- =============================================================================
 CREATE TABLE DatDichVuKhachSan (
     maDatDichVuKhachSan BIGINT IDENTITY(1,1) NOT NULL,
     maPhieuDatPhong BIGINT NOT NULL,
@@ -906,51 +1064,230 @@ CREATE TABLE DatDichVuKhachSan (
 );
 
 
--- Final baseline table constraints. Later object types are owned by V2-V5.
+-- Ràng buộc giá trị danh mục và trạng thái.
+-- Các đối tượng còn lại được khai báo tại V2–V6 theo loại đối tượng.
 
-ALTER TABLE BanGhiChongTrung ADD CONSTRAINT chkBanGhiChongTrungtrangThai CHECK (trangThai IN (N'Đang xử lý', N'Đã hoàn tất'));
-ALTER TABLE BanGiaoTienCa ADD CONSTRAINT chkBanGiaoTienCamaCa CHECK (maCa IN (N'Ca sáng', N'Ca chiều', N'Ca đêm') OR (maCa NOT LIKE N'%[^-A-Za-z0-9_]%' COLLATE Latin1_General_100_BIN2 AND maCa LIKE N'[A-Za-z]%' COLLATE Latin1_General_100_BIN2 AND LEN(maCa) BETWEEN 1 AND 30));
-ALTER TABLE BienDongKhoDichVu ADD CONSTRAINT chkBienDongKhoDichVuloai CHECK (loai IN (N'Nhập kho', N'Xuất kho', N'Điều chỉnh', N'Hao hụt', N'Hoàn kho'));
-ALTER TABLE BienDongTonKho ADD CONSTRAINT chkBienDongTonKholoaiBienDong CHECK (loaiBienDong IN (N'Nhập kho', N'Hoàn kho', N'Xuất kho', N'Hao hụt', N'Điều chỉnh'));
-ALTER TABLE BienLai ADD CONSTRAINT chkBienLaiphuongThuc CHECK (phuongThuc IN (N'Tiền mặt', N'Thẻ', N'Chuyển khoản ngân hàng'));
-ALTER TABLE CaLamViecNhanVien ADD CONSTRAINT chkCaLamViecNhanVienmaCa CHECK (maCa IN (N'Ca sáng', N'Ca chiều', N'Ca đêm') OR (maCa NOT LIKE N'%[^-A-Za-z0-9_]%' COLLATE Latin1_General_100_BIN2 AND maCa LIKE N'[A-Za-z]%' COLLATE Latin1_General_100_BIN2 AND LEN(maCa) BETWEEN 1 AND 30));
-ALTER TABLE ChamCong ADD CONSTRAINT chkChamCongtrangThai CHECK (trangThai IN (N'Có mặt', N'Đi muộn', N'Vắng mặt', N'Nghỉ phép'));
-ALTER TABLE CongNoDoiTac ADD CONSTRAINT chkCongNoDoiTactrangThai CHECK (trangThai IN (N'Chưa thanh toán', N'Đã thanh toán một phần', N'Đã thanh toán', N'Đã hủy'));
-ALTER TABLE DichVu ADD CONSTRAINT chkDichVudanhMuc CHECK (danhMuc IN (N'Dịch vụ doanh nghiệp', N'Nhà hàng cao cấp', N'Dịch vụ tại phòng', N'Giặt ủi', N'Khác', N'Giải trí', N'Spa', N'Đưa đón'));
-ALTER TABLE DichVu ADD CONSTRAINT chkDichVudonViTinh CHECK (donViTinh IN (N'bộ', N'lần', N'suất', N'món', N'đêm', N'lượt', N'chuyến', N'khách', N'khách/ngày', N'giờ', N'ngày', N'chai', N'đơn vị'));
-ALTER TABLE DonNghiPhep ADD CONSTRAINT chkDonNghiPheploaiNghiPhep CHECK (loaiNghiPhep IN (N'Nghỉ phép năm', N'Nghỉ ốm', N'Đổi ca trực', N'Việc riêng'));
-ALTER TABLE GiaoDichThanhToan ADD CONSTRAINT chkGiaoDichThanhToanloai CHECK (loai IN (N'Thanh toán', N'Hoàn tiền'));
-ALTER TABLE GiaoDichThanhToan ADD CONSTRAINT chkGiaoDichThanhToanphuongThuc CHECK (phuongThuc IN (N'Tiền mặt', N'Thẻ', N'Chuyển khoản ngân hàng'));
-ALTER TABLE GiaoDichThanhToan ADD CONSTRAINT chkGiaoDichThanhToantrangThai CHECK (trangThai IN (N'Đã hoàn tất', N'Thất bại', N'Đã vô hiệu'));
-ALTER TABLE HangDoiThongBao ADD CONSTRAINT chkHangDoiThongBaotrangThai CHECK (trangThai IN (N'Chờ gửi', N'Đã gửi', N'Gửi thất bại'));
-ALTER TABLE HangDoiThongBao ADD CONSTRAINT chkHangDoiThongBaovaiTroNguoiNhan CHECK (vaiTroNguoiNhan IN (N'Quản trị viên', N'Giám đốc', N'Quản lý', N'Lễ tân', N'Kế toán', N'Buồng phòng', N'Kỹ thuật', N'Nhà bếp', N'Nhân sự'));
-ALTER TABLE HoaDon ADD CONSTRAINT chkHoaDonphuongThucThanhToan CHECK (phuongThucThanhToan IN (N'Tiền mặt', N'Thẻ', N'Chuyển khoản ngân hàng'));
-ALTER TABLE HoaDon ADD CONSTRAINT chkHoaDontrangThai CHECK (trangThai IN (N'Đã thanh toán', N'Chưa thanh toán', N'Dự kiến'));
-ALTER TABLE HoaDonGiaTriGiaTang ADD CONSTRAINT chkHoaDonGiaTriGiaTangloaiKhachHang CHECK (loaiKhachHang IN (N'Cá nhân', N'Doanh nghiệp'));
-ALTER TABLE HoaDonGiaTriGiaTang ADD CONSTRAINT chkHoaDonGiaTriGiaTangtrangThai CHECK (trangThai IN (N'Bản nháp', N'Đã phát hành', N'Đã hủy'));
-ALTER TABLE HoaDonGiaTriGiaTang ADD CONSTRAINT chkHoaDonGiaTriGiaTangtrangThaiXml CHECK (trangThaiXml IN (N'Chưa xuất', N'Đã xuất'));
-ALTER TABLE KhachLuuTru ADD CONSTRAINT chkKhachLuuTruhangThanhVien CHECK (hangThanhVien IN (N'Tiêu chuẩn', N'Bạc', N'Vàng', N'Bạch kim'));
-ALTER TABLE KhoanChi ADD CONSTRAINT chkKhoanChitrangThai CHECK (trangThai IN (N'Đã ghi nhận', N'Đã phê duyệt', N'Đã hủy'));
-ALTER TABLE KiemTraBuongPhong ADD CONSTRAINT chkKiemTraBuongPhongloaiKiemTra CHECK (loaiKiemTra IN (N'Minibar', N'Tài sản phòng'));
-ALTER TABLE KiemTraBuongPhong ADD CONSTRAINT chkKiemTraBuongPhongtinhTrangHangMuc CHECK (tinhTrangHangMuc IN (N'Bình thường', N'Hư hỏng', N'Thất lạc', N'Đã bổ sung'));
-ALTER TABLE LichSuHangThanhVien ADD CONSTRAINT chkLichSuHangThanhVienhangCu CHECK (hangCu IN (N'Tiêu chuẩn', N'Bạc', N'Vàng', N'Bạch kim'));
-ALTER TABLE LichSuHangThanhVien ADD CONSTRAINT chkLichSuHangThanhVienhangMoi CHECK (hangMoi IN (N'Tiêu chuẩn', N'Bạc', N'Vàng', N'Bạch kim'));
-ALTER TABLE MatHangTonKho ADD CONSTRAINT chkMatHangTonKhodanhMuc CHECK (danhMuc IN (N'Đồ vải', N'Khăn', N'Đồ dùng', N'Minibar', N'Khác'));
-ALTER TABLE NhanVien ADD CONSTRAINT chkNhanVienvaiTro CHECK (vaiTro IN (N'Quản trị viên', N'Giám đốc', N'Quản lý', N'Lễ tân', N'Kế toán', N'Buồng phòng', N'Kỹ thuật', N'Nhà bếp', N'Nhân sự'));
-ALTER TABLE PhieuBaoTri ADD CONSTRAINT chkPhieuBaoTritrangThai CHECK (trangThai IN (N'Chưa xử lý', N'Đang bảo trì', N'Đã hoàn thành'));
-ALTER TABLE PhieuDatPhong ADD CONSTRAINT chkPhieuDatPhonghinhThucThue CHECK (hinhThucThue IN (N'Theo gói', N'Theo giờ'));
-ALTER TABLE PhieuDatPhong ADD CONSTRAINT chkPhieuDatPhongnguonDatPhong CHECK (nguonDatPhong IN (N'Trực tiếp', N'AGODA', N'BOOKING_COM', N'EXPEDIA', N'AIRBNB'));
-ALTER TABLE PhieuDatPhong ADD CONSTRAINT chkPhieuDatPhongtrangThaiDoiSoatOta CHECK (trangThaiDoiSoatOta IN (N'Không áp dụng', N'Chờ đối soát', N'Đã khớp', N'Có tranh chấp'));
-ALTER TABLE PhieuDatPhong ADD CONSTRAINT chkPhieuDatPhongtrangThaiThanhToanCoc CHECK (trangThaiThanhToanCoc IN (N'Không yêu cầu', N'Chờ thanh toán', N'Đã thanh toán', N'Đã hết hạn'));
-ALTER TABLE SuCoThietBi ADD CONSTRAINT chkSuCoThietBimucDoNghiemTrong CHECK (mucDoNghiemTrong IN (N'Thấp', N'Trung bình', N'Cao', N'Nghiêm trọng'));
-ALTER TABLE SuCoThietBi ADD CONSTRAINT chkSuCoThietBitrangThaiBanGiao CHECK (trangThaiBanGiao IN (N'Đang mở', N'Đã tiếp nhận', N'Đã xử lý'));
-ALTER TABLE SuKienDangNhapNhanVien ADD CONSTRAINT chkSuKienDangNhapNhanVienketQua CHECK (ketQua IN (N'Thành công', N'Thất bại'));
-ALTER TABLE TaiSanKyThuat ADD CONSTRAINT chkTaiSanKyThuatloaiViTri CHECK (loaiViTri IN (N'Tòa nhà', N'Phòng'));
-ALTER TABLE TaiSanKyThuat ADD CONSTRAINT chkTaiSanKyThuattrangThai CHECK (trangThai IN (N'Tốt', N'Cần bảo trì', N'Đang sửa chữa', N'Ngừng sử dụng'));
-ALTER TABLE YeuCauPheDuyet ADD CONSTRAINT chkYeuCauPheDuyethanhDong CHECK (hanhDong IN (N'Kích hoạt loại phòng', N'Thay đổi giá dịch vụ', N'Hoàn tiền thanh toán', N'Hoàn tiền đặt cọc', N'Xóa hóa đơn', N'Điều chỉnh thanh toán', N'Điều chỉnh giá'));
-ALTER TABLE YeuCauPheDuyet ADD CONSTRAINT chkYeuCauPheDuyetmucDoRuiRo CHECK (mucDoRuiRo IN (N'Thấp', N'Trung bình', N'Cao', N'Nghiêm trọng'));
-ALTER TABLE YeuCauPheDuyet ADD CONSTRAINT chkYeuCauPheDuyettrangThai CHECK (trangThai IN (N'Chờ phê duyệt', N'Đã phê duyệt', N'Bị từ chối', N'Đã hết hạn', N'Đã sử dụng'));
 
+-- Giá trị hợp lệ: BanGhiChongTrung.
+ALTER TABLE BanGhiChongTrung
+    ADD CONSTRAINT chkBanGhiChongTrungtrangThai CHECK (trangThai IN (N'Đang xử lý', N'Đã hoàn tất'));
+
+-- Giá trị hợp lệ: BanGiaoTienCa.
+-- Chấp nhận tên ca có sẵn hoặc mã 1–30 ký tự, bắt đầu bằng chữ cái ASCII.
+-- COLLATE ... BIN2 kiểm tra chính xác tập ký tự ASCII, chữ số, gạch dưới và gạch ngang.
+ALTER TABLE BanGiaoTienCa
+    ADD CONSTRAINT chkBanGiaoTienCamaCa CHECK (
+        maCa IN (N'Ca sáng', N'Ca chiều', N'Ca đêm')
+        OR (maCa NOT LIKE N'%[^-A-Za-z0-9_]%' COLLATE Latin1_General_100_BIN2
+            AND maCa LIKE N'[A-Za-z]%' COLLATE Latin1_General_100_BIN2
+            AND LEN(maCa) BETWEEN 1 AND 30
+        )
+    );
+
+-- Giá trị hợp lệ: BienDongKhoDichVu.
+ALTER TABLE BienDongKhoDichVu
+    ADD CONSTRAINT chkBienDongKhoDichVuloai CHECK (loai IN (N'Nhập kho', N'Xuất kho', N'Điều chỉnh', N'Hao hụt', N'Hoàn kho'));
+
+-- Giá trị hợp lệ: BienDongTonKho.
+ALTER TABLE BienDongTonKho
+    ADD CONSTRAINT chkBienDongTonKholoaiBienDong CHECK (loaiBienDong IN (N'Nhập kho', N'Hoàn kho', N'Xuất kho', N'Hao hụt', N'Điều chỉnh'));
+
+-- Giá trị hợp lệ: BienLai.
+ALTER TABLE BienLai
+    ADD CONSTRAINT chkBienLaiphuongThuc CHECK (phuongThuc IN (N'Tiền mặt', N'Thẻ', N'Chuyển khoản ngân hàng'));
+
+-- Giá trị hợp lệ: CaLamViecNhanVien.
+-- Dùng cùng quy tắc tên/mã ca như bàn giao tiền ở trên.
+ALTER TABLE CaLamViecNhanVien
+    ADD CONSTRAINT chkCaLamViecNhanVienmaCa CHECK (
+        maCa IN (N'Ca sáng', N'Ca chiều', N'Ca đêm')
+        OR (maCa NOT LIKE N'%[^-A-Za-z0-9_]%' COLLATE Latin1_General_100_BIN2
+            AND maCa LIKE N'[A-Za-z]%' COLLATE Latin1_General_100_BIN2
+            AND LEN(maCa) BETWEEN 1 AND 30
+        )
+    );
+
+-- Giá trị hợp lệ: ChamCong.
+ALTER TABLE ChamCong
+    ADD CONSTRAINT chkChamCongtrangThai CHECK (trangThai IN (N'Có mặt', N'Đi muộn', N'Vắng mặt', N'Nghỉ phép'));
+
+-- Giá trị hợp lệ: CongNoDoiTac.
+ALTER TABLE CongNoDoiTac
+    ADD CONSTRAINT chkCongNoDoiTactrangThai CHECK (trangThai IN (N'Chưa thanh toán', N'Đã thanh toán một phần', N'Đã thanh toán', N'Đã hủy'));
+
+-- Giá trị hợp lệ: DichVu.
+ALTER TABLE DichVu
+    ADD CONSTRAINT chkDichVudanhMuc CHECK (
+        danhMuc IN (
+            N'Dịch vụ doanh nghiệp',
+            N'Nhà hàng cao cấp',
+            N'Dịch vụ tại phòng',
+            N'Giặt ủi',
+            N'Khác',
+            N'Giải trí',
+            N'Spa',
+            N'Đưa đón',
+            N'Vật dụng phòng'
+        )
+    );
+ALTER TABLE DichVu
+    ADD CONSTRAINT chkDichVudonViTinh CHECK (
+        donViTinh IN (
+            N'bộ',
+            N'lần',
+            N'suất',
+            N'món',
+            N'đêm',
+            N'lượt',
+            N'chuyến',
+            N'khách',
+            N'khách/ngày',
+            N'giờ',
+            N'ngày',
+            N'chai',
+            N'đơn vị',
+            N'cái',
+            N'gói',
+            N'cuộn',
+            N'tuýp'
+        )
+    );
+
+-- Giá trị hợp lệ: DonNghiPhep.
+ALTER TABLE DonNghiPhep
+    ADD CONSTRAINT chkDonNghiPheploaiNghiPhep CHECK (loaiNghiPhep IN (N'Nghỉ phép năm', N'Nghỉ ốm', N'Đổi ca trực', N'Việc riêng'));
+
+-- Giá trị hợp lệ: GiaoDichThanhToan.
+ALTER TABLE GiaoDichThanhToan
+    ADD CONSTRAINT chkGiaoDichThanhToanloai CHECK (loai IN (N'Thanh toán', N'Hoàn tiền'));
+ALTER TABLE GiaoDichThanhToan
+    ADD CONSTRAINT chkGiaoDichThanhToanphuongThuc CHECK (phuongThuc IN (N'Tiền mặt', N'Thẻ', N'Chuyển khoản ngân hàng'));
+ALTER TABLE GiaoDichThanhToan
+    ADD CONSTRAINT chkGiaoDichThanhToantrangThai CHECK (trangThai IN (N'Đã hoàn tất', N'Thất bại', N'Đã vô hiệu'));
+
+-- Giá trị hợp lệ: HangDoiThongBao.
+ALTER TABLE HangDoiThongBao
+    ADD CONSTRAINT chkHangDoiThongBaotrangThai CHECK (trangThai IN (N'Chờ gửi', N'Đã gửi', N'Gửi thất bại'));
+ALTER TABLE HangDoiThongBao
+    ADD CONSTRAINT chkHangDoiThongBaovaiTroNguoiNhan CHECK (
+        vaiTroNguoiNhan IN (
+            N'Quản trị viên',
+            N'Giám đốc',
+            N'Quản lý',
+            N'Lễ tân',
+            N'Kế toán',
+            N'Buồng phòng',
+            N'Kỹ thuật',
+            N'Nhà bếp',
+            N'Nhân sự'
+        )
+    );
+
+-- Giá trị hợp lệ: HoaDon.
+ALTER TABLE HoaDon
+    ADD CONSTRAINT chkHoaDonphuongThucThanhToan CHECK (phuongThucThanhToan IN (N'Tiền mặt', N'Thẻ', N'Chuyển khoản ngân hàng'));
+ALTER TABLE HoaDon
+    ADD CONSTRAINT chkHoaDontrangThai CHECK (trangThai IN (N'Đã thanh toán', N'Chưa thanh toán', N'Dự kiến'));
+
+-- Giá trị hợp lệ: HoaDonGiaTriGiaTang.
+ALTER TABLE HoaDonGiaTriGiaTang
+    ADD CONSTRAINT chkHoaDonGiaTriGiaTangloaiKhachHang CHECK (loaiKhachHang IN (N'Cá nhân', N'Doanh nghiệp'));
+ALTER TABLE HoaDonGiaTriGiaTang
+    ADD CONSTRAINT chkHoaDonGiaTriGiaTangtrangThai CHECK (trangThai IN (N'Bản nháp', N'Đã phát hành', N'Đã hủy'));
+ALTER TABLE HoaDonGiaTriGiaTang
+    ADD CONSTRAINT chkHoaDonGiaTriGiaTangtrangThaiXml CHECK (trangThaiXml IN (N'Chưa xuất', N'Đã xuất'));
+
+-- Giá trị hợp lệ: KhachLuuTru.
+ALTER TABLE KhachLuuTru
+    ADD CONSTRAINT chkKhachLuuTruhangThanhVien CHECK (hangThanhVien IN (N'Tiêu chuẩn', N'Bạc', N'Vàng', N'Bạch kim'));
+
+-- Giá trị hợp lệ: KhoanChi.
+ALTER TABLE KhoanChi
+    ADD CONSTRAINT chkKhoanChitrangThai CHECK (trangThai IN (N'Đã ghi nhận', N'Đã phê duyệt', N'Đã hủy'));
+
+-- Giá trị hợp lệ: KiemTraBuongPhong.
+ALTER TABLE KiemTraBuongPhong
+    ADD CONSTRAINT chkKiemTraBuongPhongloaiKiemTra CHECK (loaiKiemTra IN (N'Minibar', N'Tài sản phòng'));
+ALTER TABLE KiemTraBuongPhong
+    ADD CONSTRAINT chkKiemTraBuongPhongtinhTrangHangMuc CHECK (tinhTrangHangMuc IN (N'Bình thường', N'Hư hỏng', N'Thất lạc', N'Đã bổ sung'));
+
+-- Giá trị hợp lệ: LichSuHangThanhVien.
+ALTER TABLE LichSuHangThanhVien
+    ADD CONSTRAINT chkLichSuHangThanhVienhangCu CHECK (hangCu IN (N'Tiêu chuẩn', N'Bạc', N'Vàng', N'Bạch kim'));
+ALTER TABLE LichSuHangThanhVien
+    ADD CONSTRAINT chkLichSuHangThanhVienhangMoi CHECK (hangMoi IN (N'Tiêu chuẩn', N'Bạc', N'Vàng', N'Bạch kim'));
+
+-- Giá trị hợp lệ: MatHangTonKho.
+ALTER TABLE MatHangTonKho
+    ADD CONSTRAINT chkMatHangTonKhodanhMuc CHECK (danhMuc IN (N'Đồ vải', N'Khăn', N'Đồ dùng', N'Minibar', N'Khác'));
+
+-- Giá trị hợp lệ: NhanVien.
+ALTER TABLE NhanVien
+    ADD CONSTRAINT chkNhanVienvaiTro CHECK (
+        vaiTro IN (
+            N'Quản trị viên',
+            N'Giám đốc',
+            N'Quản lý',
+            N'Lễ tân',
+            N'Kế toán',
+            N'Buồng phòng',
+            N'Kỹ thuật',
+            N'Nhà bếp',
+            N'Nhân sự'
+        )
+    );
+
+-- Giá trị hợp lệ: PhieuBaoTri.
+ALTER TABLE PhieuBaoTri
+    ADD CONSTRAINT chkPhieuBaoTritrangThai CHECK (trangThai IN (N'Chưa xử lý', N'Đang bảo trì', N'Đã hoàn thành'));
+
+-- Giá trị hợp lệ: PhieuDatPhong.
+ALTER TABLE PhieuDatPhong
+    ADD CONSTRAINT chkPhieuDatPhonghinhThucThue CHECK (hinhThucThue IN (N'Theo gói', N'Theo giờ'));
+ALTER TABLE PhieuDatPhong
+    ADD CONSTRAINT chkPhieuDatPhongnguonDatPhong CHECK (nguonDatPhong IN (N'Trực tiếp', N'AGODA', N'BOOKING_COM', N'EXPEDIA', N'AIRBNB'));
+ALTER TABLE PhieuDatPhong
+    ADD CONSTRAINT chkPhieuDatPhongtrangThaiDoiSoatOta CHECK (trangThaiDoiSoatOta IN (N'Không áp dụng', N'Chờ đối soát', N'Đã khớp', N'Có tranh chấp'));
+ALTER TABLE PhieuDatPhong
+    ADD CONSTRAINT chkPhieuDatPhongtrangThaiThanhToanCoc CHECK (trangThaiThanhToanCoc IN (N'Không yêu cầu', N'Chờ thanh toán', N'Đã thanh toán', N'Đã hết hạn'));
+
+-- Giá trị hợp lệ: SuCoThietBi.
+ALTER TABLE SuCoThietBi
+    ADD CONSTRAINT chkSuCoThietBimucDoNghiemTrong CHECK (mucDoNghiemTrong IN (N'Thấp', N'Trung bình', N'Cao', N'Nghiêm trọng'));
+ALTER TABLE SuCoThietBi
+    ADD CONSTRAINT chkSuCoThietBitrangThaiBanGiao CHECK (trangThaiBanGiao IN (N'Đang mở', N'Đã tiếp nhận', N'Đã xử lý'));
+
+-- Giá trị hợp lệ: SuKienDangNhapNhanVien.
+ALTER TABLE SuKienDangNhapNhanVien
+    ADD CONSTRAINT chkSuKienDangNhapNhanVienketQua CHECK (ketQua IN (N'Thành công', N'Thất bại'));
+
+-- Giá trị hợp lệ: TaiSanKyThuat.
+ALTER TABLE TaiSanKyThuat
+    ADD CONSTRAINT chkTaiSanKyThuatloaiViTri CHECK (loaiViTri IN (N'Tòa nhà', N'Phòng'));
+ALTER TABLE TaiSanKyThuat
+    ADD CONSTRAINT chkTaiSanKyThuattrangThai CHECK (trangThai IN (N'Tốt', N'Cần bảo trì', N'Đang sửa chữa', N'Ngừng sử dụng'));
+
+-- Giá trị hợp lệ: YeuCauPheDuyet.
+ALTER TABLE YeuCauPheDuyet
+    ADD CONSTRAINT chkYeuCauPheDuyethanhDong CHECK (
+        hanhDong IN (
+            N'Kích hoạt loại phòng',
+            N'Thay đổi giá dịch vụ',
+            N'Hoàn tiền thanh toán',
+            N'Hoàn tiền đặt cọc',
+            N'Xóa hóa đơn',
+            N'Điều chỉnh thanh toán',
+            N'Điều chỉnh giá'
+        )
+    );
+ALTER TABLE YeuCauPheDuyet
+    ADD CONSTRAINT chkYeuCauPheDuyetmucDoRuiRo CHECK (mucDoRuiRo IN (N'Thấp', N'Trung bình', N'Cao', N'Nghiêm trọng'));
+ALTER TABLE YeuCauPheDuyet
+    ADD CONSTRAINT chkYeuCauPheDuyettrangThai CHECK (trangThai IN (N'Chờ phê duyệt', N'Đã phê duyệt', N'Bị từ chối', N'Đã hết hạn', N'Đã sử dụng'));
+
+-- =============================================================================
+-- Bảng HinhAnhLoaiPhong
+-- =============================================================================
 CREATE TABLE HinhAnhLoaiPhong (
     maHinhAnhLoaiPhong BIGINT IDENTITY(1,1) NOT NULL,
     maLoaiPhong NVARCHAR(10) NOT NULL,
@@ -962,5 +1299,17 @@ CREATE TABLE HinhAnhLoaiPhong (
     CONSTRAINT chkHinhAnhLoaiPhong01 CHECK (thuTuHienThi >= 0)
 );
 
+
+-- Giá trị hợp lệ: PhieuDatPhong.
 ALTER TABLE PhieuDatPhong
-    ADD CONSTRAINT chkPhieuDatPhongtrangThai CHECK (trangThai IN (N'Bản nháp', N'Đã xác nhận', N'Đã thanh toán cọc', N'Đã nhận phòng', N'Đã trả phòng', N'Đã hủy', N'Không đến'));
+    ADD CONSTRAINT chkPhieuDatPhongtrangThai CHECK (
+        trangThai IN (
+            N'Bản nháp',
+            N'Đã xác nhận',
+            N'Đã thanh toán cọc',
+            N'Đã nhận phòng',
+            N'Đã trả phòng',
+            N'Đã hủy',
+            N'Không đến'
+        )
+    );

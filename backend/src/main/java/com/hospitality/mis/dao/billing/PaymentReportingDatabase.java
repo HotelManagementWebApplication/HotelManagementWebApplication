@@ -17,8 +17,8 @@ public class PaymentReportingDatabase {
     public long completedCount(LocalDateTime from,LocalDateTime to){
         return jdbc.queryForObject("SELECT COUNT_BIG(*) FROM dbo.vwGiaoDichDoiSoat WHERE thoiDiemPhatSinh>=? AND thoiDiemPhatSinh<?",Long.class,from,to);
     }
-    public BigDecimal pendingBankTransfers(){
-        return jdbc.queryForObject("SELECT COALESCE(SUM(CASE WHEN trangThai=N'Dự kiến' THEN tienDatCocDaTra ELSE soDuConLai END),0) FROM dbo.vwHoaDonChiTiet WHERE phuongThucThanhToan=N'Chuyển khoản ngân hàng' AND (trangThai=N'Dự kiến' OR soDuConLai>0)",BigDecimal.class);
+    public BigDecimal outstandingBankTransferBalances(){
+        return jdbc.queryForObject("SELECT COALESCE(SUM(soDuConLai),0) FROM dbo.vwHoaDonChiTiet WHERE phuongThucThanhToan=N'Chuyển khoản ngân hàng' AND trangThai<>N'Dự kiến' AND soDuConLai>0",BigDecimal.class);
     }
     public BigDecimal netCashByActorBetween(String actor,LocalDateTime from,LocalDateTime to){
         return jdbc.queryForObject("SELECT dbo.fnTienMatRongTheoCa(?,?,?)",BigDecimal.class,actor,from,to);
