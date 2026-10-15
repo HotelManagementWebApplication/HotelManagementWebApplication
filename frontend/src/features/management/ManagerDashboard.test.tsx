@@ -289,4 +289,69 @@ describe("ManagerDashboard Interface and Acceptance Workflow", () => {
     expect(handoff).toHaveBeenCalledTimes(2);
     expect(create).not.toHaveBeenCalled();
   });
+
+  it("opens acceptance modal BP_BM3 from operations screen and prints properly", async () => {
+    vi.mocked(housekeepingTechnicalApi.rooms).mockResolvedValue([
+      { id: "R101", name: "101", room_type_id: "RT1", room_type_name: "Standard", daily_price: 1000000, floor: 1, status: "cleaning" },
+    ]);
+    vi.mocked(housekeepingTechnicalApi.tasks).mockResolvedValue([
+      {
+        id: "T101",
+        room_id: "R101",
+        assignee: "Nguyễn Thị Hoa",
+        status: "CLEANED",
+        checklist_complete: true,
+        blocking_incident: false,
+        created_at: "2026-10-15T08:00:00Z",
+        updated_at: "2026-10-15T09:00:00Z",
+      } as any,
+    ]);
+
+    render(<ManagerDashboard role="manager" onBack={onBack} />);
+    fireEvent.click(screen.getByRole("button", { name: "Vận hành & Phòng" }));
+
+    const bpBm3Button = await screen.findByRole("button", { name: /BB nghiệm thu \(BP_BM3\)/i });
+    expect(bpBm3Button).toBeTruthy();
+    fireEvent.click(bpBm3Button);
+
+    expect((await screen.findAllByText(/BIÊN BẢN NGHIỆM THU BUỒNG PHÒNG/i)).length).toBeGreaterThan(0);
+    expect(screen.getByText("BP_BM3:")).toBeTruthy();
+    expect(screen.getAllByText(/Trần Quản Lý Vận Hành/i).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Đóng" }));
+    await waitFor(() => {
+      expect(screen.queryByText(/BIÊN BẢN NGHIỆM THU BUỒNG PHÒNG/i)).toBeNull();
+    });
+  });
+
+  it("opens assignment modal BP_BM2 from staff operations screen", async () => {
+    vi.mocked(housekeepingTechnicalApi.tasks).mockResolvedValue([
+      {
+        id: "T101",
+        room_id: "101",
+        assignee: "Lê Văn Dọn",
+        status: "IN_PROGRESS",
+        checklist_complete: false,
+        blocking_incident: false,
+        created_at: "2026-10-15T08:00:00Z",
+        updated_at: "2026-10-15T09:00:00Z",
+      } as any,
+    ]);
+
+    render(<ManagerDashboard role="manager" onBack={onBack} />);
+    fireEvent.click(screen.getByRole("button", { name: "Nhân sự & Phân ca" }));
+
+    const bpBm2Button = await screen.findByRole("button", { name: /In phiếu phân công \(BP_BM2\)/i });
+    expect(bpBm2Button).toBeTruthy();
+    fireEvent.click(bpBm2Button);
+
+    expect((await screen.findAllByText(/PHIẾU PHÂN CÔNG NHIỆM VỤ BUỒNG PHÒNG/i)).length).toBeGreaterThan(0);
+    expect(screen.getByText("BP_BM2:")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Đóng" }));
+    await waitFor(() => {
+      expect(screen.queryByText(/PHIẾU PHÂN CÔNG NHIỆM VỤ BUỒNG PHÒNG/i)).toBeNull();
+    });
+  });
 });
+

@@ -13,7 +13,8 @@ import {
   CheckCircle2, Minus, Plus, User, Users, BedDouble,
   Sparkles, LogOut, Filter, BarChart2, ArrowUpRight,
   CheckSquare, Square, MoreHorizontal, Zap, RefreshCcw,
-  ShieldAlert, TrendingUp, Calendar, Inbox, Archive, Send
+  ShieldAlert, TrendingUp, Calendar, Inbox, Archive, Send,
+  Wine, Printer, FileText, Download
 } from "lucide-react";
 
 /* ══════════════════════════════════════════════════════════
@@ -21,7 +22,7 @@ import {
 ══════════════════════════════════════════════════════════ */
 export type HKStatus  = "to-clean" | "in-progress" | "inspecting" | "ready";
 export type SubType   = "checkout-dirty" | "stayover" | "vip-arrival" | "maintenance";
-export type NavPage   = "overview" | "board" | "inspection" | "linen" | "incidents";
+export type NavPage   = "overview" | "board" | "inspection" | "linen" | "minibar" | "incidents";
 export type ShiftName = "Sáng" | "Chiều" | "Tối";
 export type Priority  = "high" | "medium" | "low";
 export type IncStatus = "open" | "in-progress" | "resolved";
@@ -190,6 +191,7 @@ function RoomModal({
   onStartClean,
   onComplete,
   onReportIncident,
+  onExportPdf,
   staffInfo,
   currentUser,
 }: {
@@ -198,6 +200,7 @@ function RoomModal({
   onStartClean?: (room: HKRoom) => void;
   onComplete?: (room: HKRoom) => void;
   onReportIncident?: (roomNumber: string) => void;
+  onExportPdf?: (room: HKRoom) => void;
   staffInfo?: { name: string; shortName: string; color: string };
   currentUser?: EmployeeProfileDto | null;
 }) {
@@ -409,10 +412,46 @@ function RoomModal({
 
           {/* When inspecting */}
           {room.status === "inspecting" && (
-            <div style={{ flex:2,padding:"12px",borderRadius:9,
-              background:"#EDE9FE",color:"#6D28D9",fontSize:13,fontWeight:700,
-              display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
-              <Clock size={16} /> Đang chờ nghiệm thu
+            <div style={{ flex: 2, display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => onExportPdf ? onExportPdf(room) : printInspectionFormBpBm1(room, currentUser)}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 9,
+                  border: "1px solid #0284C7",
+                  background: "#F0F9FF",
+                  color: "#0369A1",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+                title="Xuất phiếu kiểm tra vệ sinh và minibar (BP_BM1)"
+              >
+                <Printer size={15} /> Xuất PDF (BP_BM1)
+              </button>
+              <div
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 9,
+                  background: "#EDE9FE",
+                  color: "#6D28D9",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                <Clock size={16} /> Đang chờ nghiệm thu
+              </div>
             </div>
           )}
 
@@ -880,6 +919,656 @@ function BoardScreen({
 }
 
 /* ══════════════════════════════════════════════════════════
+   INSPECTION FORM (BP_BM1) PRINT & PDF EXPORT
+══════════════════════════════════════════════════════════ */
+const STAFF_NAMES: Record<string, string> = {
+  EMP01: "Nguyễn Thị Lan",
+  NV001: "Trần Văn Bình",
+  NV002: "Phạm Hoàng Long",
+  NV003: "Lê Thị Hoa",
+  NV004: "Vũ Minh Tuấn",
+  NV005: "Đặng Thu Thảo",
+};
+
+export function resolveStaffName(staffId?: string, fallbackName?: string | null): string {
+  if (staffId && STAFF_NAMES[staffId]) {
+    return STAFF_NAMES[staffId];
+  }
+  if (staffId && staffId.trim().includes(" ")) {
+    return staffId;
+  }
+  if (fallbackName && fallbackName.trim()) {
+    return fallbackName;
+  }
+  if (staffId) {
+    return `Nhân viên ${staffId}`;
+  }
+  return "Nguyễn Thị Lan";
+}
+
+export function generateInspectionHtml(room: HKRoom, currentUser?: EmployeeProfileDto | null): string {
+  const now = new Date();
+  const dateStr = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+  const voucherCode = `SC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${room.number}`;
+  const taskCode = room.taskId ? `NVBP-${room.taskId}` : `NVBP-${room.number}`;
+  const cleanerName = resolveStaffName(room.staffId, currentUser?.full_name);
+
+  const checklistRows = [
+    { title: "Giường và đồ vải", passed: true, note: "Đã thay mới ga gối, chăn ga phẳng đẹp" },
+    { title: "Phòng tắm", passed: true, note: "Khô ráo, sạch khuẩn, đủ amenities" },
+    { title: "Sàn và bề mặt", passed: true, note: "Đã hút bụi và lau sàn bóng sạch" },
+    { title: "Điện nước và an toàn", passed: true, note: "Hệ thống điện lạnh, cấp thoát nước tốt" },
+    { title: "Đồ dùng và minibar", passed: true, note: room.notes || "Kiểm đếm đúng định mức tiêu chuẩn" },
+  ];
+
+  const minibarRows = room.minibar && room.minibar.length > 0
+    ? room.minibar.map((mb, idx) => {
+        const parStock = mb.count >= 2 ? mb.count : 4;
+        const used = Math.max(0, parStock - mb.count);
+        return {
+          name: mb.item,
+          stockBefore: parStock,
+          used: used,
+          restock: `KHO-MB0${(idx % 9) + 1} (Đã bù đủ)`,
+        };
+      })
+    : [
+        { name: "Nước suối Lavie 500ml", stockBefore: 4, used: 2, restock: "KHO-MB01 (Đã bù đủ)" },
+        { name: "Coca Cola 330ml", stockBefore: 2, used: 1, restock: "KHO-MB02 (Đã bù đủ)" },
+        { name: "Bia Heineken Sleek", stockBefore: 2, used: 0, restock: "KHO-MB03" },
+      ];
+
+  return `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <title>PHIẾU KIỂM TRA VỆ SINH VÀ MINIBAR - PHÒNG ${room.number}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 12mm 15mm;
+    }
+    @media print {
+      body {
+        background: transparent !important;
+        padding: 0 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .page-sheet {
+        border: 1.5px solid #000 !important;
+        box-shadow: none !important;
+        max-width: 100% !important;
+        padding: 24px 28px !important;
+      }
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #F8FAFC;
+      color: #000;
+      font-family: "Times New Roman", Times, Georgia, serif;
+      font-size: 13pt;
+      line-height: 1.35;
+    }
+    .no-print-toolbar {
+      max-width: 780px;
+      margin: 0 auto 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0F172A;
+      padding: 12px 20px;
+      border-radius: 8px;
+      color: #FFF;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .page-sheet {
+      width: 100%;
+      max-width: 780px;
+      margin: 0 auto;
+      background: #FFF;
+      border: 1.5px solid #000;
+      padding: 28px 32px;
+      box-shadow: 0 4px 24px rgba(15, 23, 42, 0.12);
+    }
+    .title-hotel {
+      text-align: center;
+      font-size: 14pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin: 0;
+      letter-spacing: 0.5px;
+    }
+    .title-doc {
+      text-align: center;
+      font-size: 15pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin: 6px 0 20px 0;
+      letter-spacing: 0.5px;
+    }
+    .meta-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5pt;
+      line-height: 1.6;
+      margin-bottom: 14px;
+    }
+    .meta-table td {
+      padding: 2px 0;
+      vertical-align: top;
+    }
+    .grid-table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      font-size: 11.5pt;
+      margin-bottom: 16px;
+    }
+    .grid-table th, .grid-table td {
+      border: 1px solid #000;
+      padding: 6px 10px;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+    .grid-table th {
+      font-weight: bold;
+      text-align: center;
+      background: #FFF;
+    }
+    .center {
+      text-align: center;
+    }
+    .box {
+      font-size: 13pt;
+      line-height: 1;
+      display: inline-block;
+    }
+    .dashed-divider {
+      border-top: 1px dashed #000;
+      margin: 18px 0 12px;
+    }
+    .duty-title {
+      font-weight: bold;
+      font-size: 11.5pt;
+      margin-bottom: 3px;
+    }
+    .duty-roles {
+      font-weight: bold;
+      font-size: 11.5pt;
+      margin-bottom: 20px;
+    }
+    .sign-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 11.5pt;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .dotted-line {
+      display: inline-block;
+      border-bottom: 1px dotted #000;
+      min-width: 150px;
+      height: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print no-print-toolbar">
+    <div style="font-size:14px;font-weight:600;">
+      Biểu mẫu BP_BM1 · Phiếu kiểm tra vệ sinh và minibar (Phòng ${room.number})
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="window.print()" style="padding:8px 16px;border-radius:6px;border:none;background:#2563EB;color:#FFF;font-weight:bold;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;gap:6px;">
+        🖨️ In phiếu / Lưu PDF
+      </button>
+      <button onclick="window.close()" style="padding:8px 14px;border-radius:6px;border:1px solid #475569;background:#1E293B;color:#CBD5E1;font-weight:600;cursor:pointer;font-size:13px;">
+        Đóng
+      </button>
+    </div>
+  </div>
+
+  <div class="page-sheet">
+    <div class="title-hotel">KHÁCH SẠN MAM HOTEL</div>
+    <div class="title-doc">PHIẾU KIỂM TRA VỆ SINH VÀ MINIBAR</div>
+
+    <table class="meta-table">
+      <tr>
+        <td style="width: 48%;"><strong>Mã biểu mẫu:</strong> BP_BM1</td>
+        <td style="width: 52%;"><strong>Đơn vị phụ trách:</strong> Buồng phòng</td>
+      </tr>
+      <tr>
+        <td><strong>Số chứng từ:</strong> ${voucherCode}</td>
+        <td><strong>Ngày lập:</strong> ${dateStr}</td>
+      </tr>
+      <tr>
+        <td><strong>Số phiếu/Mã nhiệm vụ:</strong> ${taskCode}</td>
+        <td><strong>Phòng:</strong> ${room.number} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <strong>Ngày:</strong> ${dateStr}</td>
+      </tr>
+      <tr>
+        <td><strong>Nhân viên:</strong> ${cleanerName}</td>
+        <td><strong>Bắt đầu:</strong> 08:00 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <strong>Hoàn thành:</strong> 08:35</td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding-top: 4px;">
+          <strong>Kiểm tra:</strong> &nbsp;&nbsp;
+          <span class="box">☐</span> Trước nhận &nbsp;&nbsp;
+          <span class="box">☑</span> Sau trả &nbsp;&nbsp;
+          <span class="box">☐</span> Định kỳ
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          <strong>Mã lưu trú nếu có:</strong> BK-${room.number}-2026
+        </td>
+      </tr>
+    </table>
+
+    <table class="grid-table">
+      <thead>
+        <tr>
+          <th style="width: 28%;">Hạng mục</th>
+          <th style="width: 16%;">Đạt</th>
+          <th style="width: 16%;">Không đạt</th>
+          <th style="width: 40%;">Ghi chú/Sự cố</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${checklistRows.map(row => `
+          <tr>
+            <td><strong>${row.title}</strong></td>
+            <td class="center"><span class="box">${row.passed ? "☑" : "☐"}</span></td>
+            <td class="center"><span class="box">${!row.passed ? "☑" : "☐"}</span></td>
+            <td>${row.note}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+
+    <table class="grid-table">
+      <thead>
+        <tr>
+          <th style="width: 28%;">Mặt hàng</th>
+          <th style="width: 16%;">Tồn trước</th>
+          <th style="width: 16%;">Đã dùng</th>
+          <th style="width: 40%;">Bổ sung/Mã kho</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${minibarRows.map(row => `
+          <tr>
+            <td>${row.name}</td>
+            <td class="center">${row.stockBefore}</td>
+            <td class="center"><strong>${row.used}</strong></td>
+            <td>${row.restock}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+
+    <div class="dashed-divider"></div>
+
+    <div class="duty-title">Xác nhận và trách nhiệm</div>
+    <div class="duty-roles">Nhân viên buồng phòng &nbsp;&nbsp;|&nbsp;&nbsp; Người tiếp nhận sự cố</div>
+
+    <div class="sign-row" style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 16px; font-size: 11.5pt;">
+      <div style="flex: 1; display: flex; align-items: baseline; margin-right: 32px;">
+        <span style="white-space: nowrap;">Ký/Tài khoản xác nhận:&nbsp;</span>
+        <span class="dotted-line" style="flex: 1; border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">
+          ${cleanerName}
+        </span>
+      </div>
+      <div style="flex: 1; display: flex; align-items: baseline;">
+        <span style="white-space: nowrap;">Thời điểm:&nbsp;</span>
+        <span class="dotted-line" style="flex: 1; border-bottom: 1px dotted #000; padding: 0 4px;">
+          08:35 ${dateStr}
+        </span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export function printInspectionFormBpBm1(room: HKRoom, currentUser?: EmployeeProfileDto | null) {
+  const html = generateInspectionHtml(room, currentUser);
+  const win = window.open("", "_blank");
+  if (!win) {
+    alert("Vui lòng cho phép popup để xem và in phiếu kiểm tra vệ sinh.");
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => {
+    win.print();
+  }, 250);
+}
+
+export function InspectionPdfModal({
+  room,
+  onClose,
+  currentUser,
+}: {
+  room: HKRoom;
+  onClose: () => void;
+  currentUser?: EmployeeProfileDto | null;
+}) {
+  const now = new Date();
+  const dateStr = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+  const voucherCode = `SC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${room.number}`;
+  const taskCode = room.taskId ? `NVBP-${room.taskId}` : `NVBP-${room.number}`;
+  const cleanerName = resolveStaffName(room.staffId, currentUser?.full_name);
+
+  const checklistRows = [
+    { title: "Giường và đồ vải", passed: true, note: "Đã thay mới ga gối, chăn ga phẳng đẹp" },
+    { title: "Phòng tắm", passed: true, note: "Khô ráo, sạch khuẩn, đủ amenities" },
+    { title: "Sàn và bề mặt", passed: true, note: "Đã hút bụi và lau sàn bóng sạch" },
+    { title: "Điện nước và an toàn", passed: true, note: "Hệ thống điện lạnh, cấp thoát nước tốt" },
+    { title: "Đồ dùng và minibar", passed: true, note: room.notes || "Kiểm đếm đúng định mức tiêu chuẩn" },
+  ];
+
+  const minibarRows = room.minibar && room.minibar.length > 0
+    ? room.minibar.map((mb, idx) => {
+        const parStock = mb.count >= 2 ? mb.count : 4;
+        const used = Math.max(0, parStock - mb.count);
+        return {
+          name: mb.item,
+          stockBefore: parStock,
+          used: used,
+          restock: `KHO-MB0${(idx % 9) + 1} (Đã bù đủ)`,
+        };
+      })
+    : [
+        { name: "Nước suối Lavie 500ml", stockBefore: 4, used: 2, restock: "KHO-MB01 (Đã bù đủ)" },
+        { name: "Coca Cola 330ml", stockBefore: 2, used: 1, restock: "KHO-MB02 (Đã bù đủ)" },
+        { name: "Bia Heineken Sleek", stockBefore: 2, used: 0, restock: "KHO-MB03" },
+      ];
+
+  const handlePrint = () => {
+    printInspectionFormBpBm1(room, currentUser);
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,23,42,0.65)",
+        zIndex: 150,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        style={{
+          background: "#FFF",
+          borderRadius: 14,
+          width: "100%",
+          maxWidth: 820,
+          maxHeight: "92vh",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.35)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Header bar */}
+        <div
+          style={{
+            padding: "14px 20px",
+            borderBottom: "1px solid #E2E8F0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "#F8FAFC",
+            flexShrink: 0,
+          }}
+        >
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#0F172A", display: "flex", alignItems: "center", gap: 8 }}>
+              <FileText size={18} style={{ color: "#2563EB" }} />
+              Phiếu kiểm tra vệ sinh và minibar · Biểu mẫu BP_BM1
+            </h3>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748B" }}>
+              Phòng {room.number} · {room.type} (Tầng {room.floor}) — Mẫu in nghiệm thu buồng phòng
+            </p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              type="button"
+              onClick={handlePrint}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "none",
+                background: "#0F172A",
+                color: "#FFF",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                boxShadow: "0 2px 6px rgba(15,23,42,0.25)",
+              }}
+            >
+              <Printer size={14} /> In phiếu / Lưu PDF
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                border: "1px solid #E2E8F0",
+                background: "#FFF",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Paper Container Body */}
+        <div style={{ flex: 1, overflowY: "auto", background: "#F1F5F9", padding: "16px 20px 24px" }}>
+          <div
+            style={{
+              background: "#FFF",
+              border: "1.5px solid #000",
+              padding: "24px 28px 36px",
+              fontFamily: "'Times New Roman', Times, Georgia, serif",
+              color: "#000",
+              fontSize: 14,
+              lineHeight: 1.4,
+              boxShadow: "0 4px 18px rgba(0,0,0,0.08)",
+            }}
+          >
+            <div style={{ textAlign: "center", marginBottom: 18 }}>
+              <div style={{ fontSize: 16, fontWeight: "bold", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                KHÁCH SẠN MAM HOTEL
+              </div>
+              <div style={{ fontSize: 17, fontWeight: "bold", textTransform: "uppercase", marginTop: 4, letterSpacing: 0.5 }}>
+                PHIẾU KIỂM TRA VỆ SINH VÀ MINIBAR
+              </div>
+            </div>
+
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, lineHeight: 1.6, marginBottom: 14 }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: "48%" }}><strong>Mã biểu mẫu:</strong> BP_BM1</td>
+                  <td style={{ width: "52%" }}><strong>Đơn vị phụ trách:</strong> Buồng phòng</td>
+                </tr>
+                <tr>
+                  <td><strong>Số chứng từ:</strong> {voucherCode}</td>
+                  <td><strong>Ngày lập:</strong> {dateStr}</td>
+                </tr>
+                <tr>
+                  <td><strong>Số phiếu/Mã nhiệm vụ:</strong> {taskCode}</td>
+                  <td><strong>Phòng:</strong> {room.number} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <strong>Ngày:</strong> {dateStr}</td>
+                </tr>
+                <tr>
+                  <td><strong>Nhân viên:</strong> {cleanerName}</td>
+                  <td><strong>Bắt đầu:</strong> 08:00 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <strong>Hoàn thành:</strong> 08:35</td>
+                </tr>
+                <tr>
+                  <td colSpan={2} style={{ paddingTop: 4 }}>
+                    <strong>Kiểm tra:</strong> &nbsp;&nbsp;
+                    <span style={{ fontSize: 15 }}>☐</span> Trước nhận &nbsp;&nbsp;
+                    <span style={{ fontSize: 15, fontWeight: "bold" }}>☑</span> Sau trả &nbsp;&nbsp;
+                    <span style={{ fontSize: 15 }}>☐</span> Định kỳ
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                    <strong>Mã lưu trú nếu có:</strong> BK-{room.number}-2026
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Table 1: Checklist */}
+            <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 13, marginBottom: 14 }}>
+              <thead>
+                <tr style={{ background: "#FFF" }}>
+                  <th style={{ border: "1px solid #000", padding: "6px 10px", width: "28%", textAlign: "center", fontWeight: "bold" }}>Hạng mục</th>
+                  <th style={{ border: "1px solid #000", padding: "6px 10px", width: "16%", textAlign: "center", fontWeight: "bold" }}>Đạt</th>
+                  <th style={{ border: "1px solid #000", padding: "6px 10px", width: "16%", textAlign: "center", fontWeight: "bold" }}>Không đạt</th>
+                  <th style={{ border: "1px solid #000", padding: "6px 10px", width: "40%", textAlign: "center", fontWeight: "bold" }}>Ghi chú/Sự cố</th>
+                </tr>
+              </thead>
+              <tbody>
+                {checklistRows.map((row, idx) => (
+                  <tr key={idx}>
+                    <td style={{ border: "1px solid #000", padding: "6px 10px", fontWeight: "bold", wordBreak: "break-word" }}>{row.title}</td>
+                    <td style={{ border: "1px solid #000", padding: "6px 10px", textAlign: "center", fontSize: 15 }}>
+                      {row.passed ? "☑" : "☐"}
+                    </td>
+                    <td style={{ border: "1px solid #000", padding: "6px 10px", textAlign: "center", fontSize: 15 }}>
+                      {!row.passed ? "☑" : "☐"}
+                    </td>
+                    <td style={{ border: "1px solid #000", padding: "6px 10px", wordBreak: "break-word" }}>{row.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Table 2: Minibar */}
+            <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 13, marginBottom: 16 }}>
+              <thead>
+                <tr style={{ background: "#FFF" }}>
+                  <th style={{ border: "1px solid #000", padding: "6px 10px", width: "28%", textAlign: "center", fontWeight: "bold" }}>Mặt hàng</th>
+                  <th style={{ border: "1px solid #000", padding: "6px 10px", width: "16%", textAlign: "center", fontWeight: "bold" }}>Tồn trước</th>
+                  <th style={{ border: "1px solid #000", padding: "6px 10px", width: "16%", textAlign: "center", fontWeight: "bold" }}>Đã dùng</th>
+                  <th style={{ border: "1px solid #000", padding: "6px 10px", width: "40%", textAlign: "center", fontWeight: "bold" }}>Bổ sung/Mã kho</th>
+                </tr>
+              </thead>
+              <tbody>
+                {minibarRows.map((row, idx) => (
+                  <tr key={idx}>
+                    <td style={{ border: "1px solid #000", padding: "6px 10px", wordBreak: "break-word" }}>{row.name}</td>
+                    <td style={{ border: "1px solid #000", padding: "6px 10px", textAlign: "center" }}>{row.stockBefore}</td>
+                    <td style={{ border: "1px solid #000", padding: "6px 10px", textAlign: "center", fontWeight: "bold" }}>{row.used}</td>
+                    <td style={{ border: "1px solid #000", padding: "6px 10px", wordBreak: "break-word" }}>{row.restock}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Dashed line */}
+            <div style={{ borderTop: "1px dashed #000", margin: "18px 0 12px" }} />
+
+            <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>
+              Xác nhận và trách nhiệm
+            </div>
+            <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 16 }}>
+              Nhân viên buồng phòng &nbsp;&nbsp;|&nbsp;&nbsp; Người tiếp nhận sự cố
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 13, gap: 32, marginTop: 12 }}>
+              <div style={{ flex: 1, display: "flex", alignItems: "baseline" }}>
+                <span style={{ whiteSpace: "nowrap" }}>Ký/Tài khoản xác nhận:&nbsp;</span>
+                <span style={{ flex: 1, borderBottom: "1px dotted #000", fontWeight: "bold", padding: "0 4px" }}>
+                  {cleanerName}
+                </span>
+              </div>
+              <div style={{ flex: 1, display: "flex", alignItems: "baseline" }}>
+                <span style={{ whiteSpace: "nowrap" }}>Thời điểm:&nbsp;</span>
+                <span style={{ flex: 1, borderBottom: "1px dotted #000", padding: "0 4px" }}>
+                  08:35 {dateStr}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal footer */}
+        <div
+          style={{
+            padding: "12px 20px",
+            borderTop: "1px solid #E2E8F0",
+            background: "#F8FAFC",
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+            flexShrink: 0,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: "8px 18px",
+              borderRadius: 8,
+              border: "1px solid #CBD5E1",
+              background: "#FFF",
+              color: "#475569",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Đóng
+          </button>
+          <button
+            type="button"
+            onClick={handlePrint}
+            style={{
+              padding: "8px 18px",
+              borderRadius: 8,
+              border: "none",
+              background: "#0284C7",
+              color: "#FFF",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Printer size={14} /> In phiếu PDF (BP_BM1)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════
    INSPECTION SCREEN
 ══════════════════════════════════════════════════════════ */
 function InspectionScreen({
@@ -896,6 +1585,7 @@ function InspectionScreen({
   currentUser?: EmployeeProfileDto | null;
 }) {
   const [modal, setModal] = useState<HKRoom|null>(null);
+  const [pdfRoom, setPdfRoom] = useState<HKRoom|null>(null);
 
   const searchFilteredRooms = useMemo(() => {
     if (!search.trim()) return rooms;
@@ -953,6 +1643,13 @@ function InspectionScreen({
                       style={{ flex:1,padding:"8px",borderRadius:8,border:"1px solid #8B5CF6",
                         background:"#EDE9FE",color:"#6D28D9",fontSize:12,fontWeight:700,cursor:"pointer" }}>
                       Xem chi tiết
+                    </button>
+                    <button onClick={() => setPdfRoom(r)}
+                      style={{ flex:1,padding:"8px",borderRadius:8,border:"1px solid #0284C7",
+                        background:"#F0F9FF",color:"#0369A1",fontSize:12,fontWeight:700,cursor:"pointer",
+                        display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5 }}
+                      title="Xuất phiếu kiểm tra vệ sinh và minibar (BP_BM1)">
+                      <Printer size={13} /> Xuất PDF (BP_BM1)
                     </button>
                   </div>
                 </div>
@@ -1013,6 +1710,14 @@ function InspectionScreen({
           onClose={() => setModal(null)}
           onComplete={onComplete}
           onReportIncident={onReportIncident}
+          onExportPdf={r => setPdfRoom(r)}
+          currentUser={currentUser}
+        />
+      )}
+      {pdfRoom && (
+        <InspectionPdfModal
+          room={pdfRoom}
+          onClose={() => setPdfRoom(null)}
           currentUser={currentUser}
         />
       )}
@@ -1273,7 +1978,7 @@ function IncidentsScreen({
 /* ══════════════════════════════════════════════════════════
    LINEN & SUPPLY SCREEN
 ══════════════════════════════════════════════════════════ */
-function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (itemId: string, movementType: "RECEIVE" | "ISSUE", quantity: number, reason: string) => Promise<void> }) {
+function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (itemId: string, movementType: "RECEIVE" | "ISSUE" | "RETURN", quantity: number, reason: string) => Promise<void> }) {
   const [category, setCategory] = useState("all");
   const [movement, setMovement] = useState<{ item: LinenRow; type: "RECEIVE" | "ISSUE" } | null>(null);
   const [movementQuantity, setMovementQuantity] = useState("1");
@@ -1281,29 +1986,81 @@ function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (ite
   const [movementBusy, setMovementBusy] = useState(false);
   const [movementError, setMovementError] = useState<string | null>(null);
   const [movementSuccess, setMovementSuccess] = useState<string | null>(null);
-  const cats = ["all","linen","towels","amenities","minibar"];
-  const catLabels: Record<string,string> = { all:"Tất cả",linen:"Đồ vải",towels:"Khăn",amenities:"Đồ dùng phòng",minibar:"Minibar" };
 
-  const filtered = category === "all" ? stock : stock.filter(s => s.category.toLowerCase() === category.toLowerCase());
+  // Exclude minibar from categories as requested
+  const cats = ["all", "linen", "towels", "amenities"];
+  const catLabels: Record<string, string> = {
+    all: "Tất cả",
+    linen: "Đồ vải",
+    towels: "Khăn",
+    amenities: "Đồ dùng phòng",
+  };
+
+  // Filter out any minibar items from Linen tab so they are only managed in Minibar tab
+  const nonMinibarStock = useMemo(() => {
+    return stock.filter(s =>
+      !s.category.toLowerCase().includes("minibar") &&
+      !s.id.toLowerCase().includes("minibar") &&
+      !s.item.toLowerCase().includes("minibar")
+    );
+  }, [stock]);
+
+  const filtered = category === "all" ? nonMinibarStock : nonMinibarStock.filter(s => s.category.toLowerCase() === category.toLowerCase());
 
   const stockPct = (item: LinenRow) => item.min > 0
     ? Math.min(100, Math.round((item.stock / item.min) * 100))
     : item.stock > 0 ? 100 : 0;
-  const stockStatus = (item: LinenRow) => {
-    if (item.stock === 0) return { color:"#DC2626", label:"Hết", bg:"#FFE4E6" };
-    if (item.stock <= item.min) return { color:"#D97706", label:"Sắp hết", bg:"#FEF3C7" };
-    return { color:"#16A34A", label:"Đạt", bg:"#DCFCE7" };
+
+  const isBelow20Pct = (item: LinenRow) => {
+    if (item.min <= 0) return item.stock === 0;
+    return (item.stock / item.min) < 0.2;
   };
-  const lowStock = stock.filter(s => s.stock <= s.min);
+
+  const stockStatus = (item: LinenRow) => {
+    if (item.stock === 0) return { color: "#DC2626", label: "Hết", bg: "#FFE4E6" };
+    if (isBelow20Pct(item)) return { color: "#E11D48", label: "< 20% Định mức", bg: "#FFE4E6" };
+    if (item.stock <= item.min) return { color: "#D97706", label: "Sắp hết", bg: "#FEF3C7" };
+    return { color: "#16A34A", label: "Đạt", bg: "#DCFCE7" };
+  };
+
+  const criticalLowStock = nonMinibarStock.filter(isBelow20Pct);
+  const lowStock = nonMinibarStock.filter(s => s.stock <= s.min && !isBelow20Pct(s));
+
+  const [notifiedWarehouse, setNotifiedWarehouse] = useState<Record<string, string>>({});
+  const [warehouseNotice, setWarehouseNotice] = useState<string | null>(null);
+
+  const handleNotifyWarehouse = (item: LinenRow) => {
+    const nowStr = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    setNotifiedWarehouse(prev => ({ ...prev, [item.id]: nowStr }));
+    setWarehouseNotice(`Đã gửi thông báo yêu cầu cấp hàng khẩn cấp tới Bộ phận Kho cho "${item.item}" (hiện còn ${item.stock} ${item.unit}, dưới 20% định mức)!`);
+  };
+
+  const handleNotifyWarehouseAll = () => {
+    const nowStr = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    const updates: Record<string, string> = {};
+    criticalLowStock.forEach(i => { updates[i.id] = nowStr; });
+    setNotifiedWarehouse(prev => ({ ...prev, ...updates }));
+    setWarehouseNotice(`Đã gửi thông báo yêu cầu cấp hàng tới Bộ phận Kho cho ${criticalLowStock.length} vật dụng dưới 20% định mức!`);
+  };
 
   const openMovement = (item: LinenRow, type: "RECEIVE" | "ISSUE") => {
-    setMovement({ item, type }); setMovementQuantity("1"); setMovementReason(""); setMovementError(null); setMovementSuccess(null);
+    setMovement({ item, type });
+    setMovementQuantity("1");
+    setMovementReason("");
+    setMovementError(null);
+    setMovementSuccess(null);
   };
+
   const submitMovement = async () => {
     if (!movement || !onMove) return;
     const quantity = Number(movementQuantity);
-    if (!Number.isInteger(quantity) || quantity <= 0) { setMovementError("Số lượng phải là số nguyên lớn hơn 0."); return; }
-    setMovementBusy(true); setMovementError(null); setMovementSuccess(null);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      setMovementError("Số lượng phải là số nguyên lớn hơn 0.");
+      return;
+    }
+    setMovementBusy(true);
+    setMovementError(null);
+    setMovementSuccess(null);
     try {
       await onMove(movement.item.id, movement.type, quantity, movementReason.trim() || (movement.type === "RECEIVE" ? "Nhập kho buồng phòng" : "Xuất kho buồng phòng"));
       setMovementSuccess(`Đã ${movement.type === "RECEIVE" ? "nhập" : "xuất"} ${quantity} ${movement.item.unit} ${movement.item.item} thành công!`);
@@ -1311,107 +2068,1083 @@ function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (ite
         setMovement(null);
         setMovementSuccess(null);
       }, 1500);
+    } catch (error) {
+      setMovementError(apiErrorMessage(error, "Không thể cập nhật tồn kho. Vui lòng thử lại."));
+    } finally {
+      setMovementBusy(false);
     }
-    catch (error) { setMovementError(apiErrorMessage(error, "Không thể cập nhật tồn kho. Vui lòng thử lại.")); }
-    finally { setMovementBusy(false); }
   };
 
   return (
-    <div style={{ flex:1,overflowY:"auto",background:"#F8FAFC" }}>
-      <div style={{ padding:"20px 24px" }}>
-        <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16 }}>
+    <div style={{ flex: 1, overflowY: "auto", background: "#F8FAFC" }}>
+      <div style={{ padding: "20px 24px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
-            <h2 style={{ fontSize:18,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Kho đồ vải &amp; Vật tư</h2>
-            <p style={{ fontSize:12,color:"#94A3B8" }}>Quản lý tồn kho và xuất nhập vật tư</p>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: "#0F172A", marginBottom: 2 }}>Kho đồ vải &amp; Vật tư</h2>
+            <p style={{ fontSize: 12, color: "#94A3B8" }}>Quản lý tồn kho đồ vải, khăn, đồ dùng phòng (không bao gồm minibar)</p>
           </div>
-          <button onClick={() => stock[0] && openMovement(stock[0], "RECEIVE")} disabled={!stock.length} style={{ padding:"8px 16px",borderRadius:9,background:"#0F172A",
-            color:"#FFF",fontSize:12,fontWeight:700,cursor:"pointer",
-            display:"flex",alignItems:"center",gap:6,opacity:!stock.length?0.5:1 }}>
-            <Plus size={14} /> Nhập kho
+          <button
+            onClick={() => nonMinibarStock[0] && openMovement(nonMinibarStock[0], "RECEIVE")}
+            disabled={!nonMinibarStock.length}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 9,
+              background: "#0F172A",
+              color: "#FFF",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              opacity: !nonMinibarStock.length ? 0.5 : 1,
+            }}
+          >
+            <Plus size={14} /> Nhập kho buồng phòng
           </button>
         </div>
 
-        {/* Low stock alerts */}
+        {/* Notice from warehouse */}
+        {warehouseNotice && (
+          <div role="status" style={{ padding: "10px 14px", borderRadius: 8, background: "#DCFCE7", border: "1px solid #86EFAC", color: "#166534", fontSize: 12, fontWeight: 600, marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span>✓ {warehouseNotice}</span>
+            <button onClick={() => setWarehouseNotice(null)} style={{ background: "transparent", border: "none", color: "#166534", cursor: "pointer", fontSize: 12 }}>✕</button>
+          </div>
+        )}
+
+        {/* Critical low stock alerts (< 20%) */}
+        {criticalLowStock.length > 0 && (
+          <div style={{ padding: "12px 16px", borderRadius: 10, border: "1px solid #FECDD3", background: "#FFF1F2", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <AlertTriangle size={18} style={{ color: "#E11D48", flexShrink: 0 }} />
+              <div>
+                <strong style={{ color: "#9F1239", fontSize: 12 }}>Cảnh báo vật dụng dưới 20% định mức an toàn:</strong>
+                <p style={{ fontSize: 11, color: "#BE123C", margin: "2px 0 0" }}>
+                  {criticalLowStock.map(s => `${s.item} (còn ${s.stock} ${s.unit} / tối thiểu ${s.min})`).join(", ")}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleNotifyWarehouseAll}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 8,
+                background: "#E11D48",
+                color: "#FFF",
+                fontSize: 11,
+                fontWeight: 700,
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                boxShadow: "0 2px 4px rgba(225,29,72,0.2)",
+              }}
+            >
+              <Send size={12} /> Báo kho cấp hàng khẩn cấp
+            </button>
+          </div>
+        )}
+
+        {/* Normal low stock alerts */}
         {lowStock.length > 0 && (
-          <div style={{ padding:"12px 16px",borderRadius:10,border:"1px solid #FECDD3",
-            background:"#FFF7F7",marginBottom:16,display:"flex",alignItems:"center",gap:10 }}>
-            <AlertTriangle size={16} style={{ color:"#F43F5E",flexShrink:0 }} />
-            <p style={{ fontSize:12,color:"#BE123C",margin:0 }}>
-              <strong>Cảnh báo tồn kho thấp:</strong>{" "}
-              {lowStock.map(s => `${s.item} (${s.stock} ${s.unit})`).join(", ")}
+          <div style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #FED7AA", background: "#FFFBEB", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+            <AlertTriangle size={16} style={{ color: "#D97706", flexShrink: 0 }} />
+            <p style={{ fontSize: 12, color: "#92400E", margin: 0 }}>
+              <strong>Tồn kho sắp hết:</strong> {lowStock.map(s => `${s.item} (${s.stock} ${s.unit})`).join(", ")}
             </p>
           </div>
         )}
 
         {/* Category tabs */}
-        <div style={{ display:"flex",gap:6,marginBottom:16 }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
           {cats.map(c => {
             const active = category === c;
             return (
-              <button key={c} onClick={() => setCategory(c)}
-                style={{ padding:"6px 14px",borderRadius:99,cursor:"pointer",fontSize:12,
-                  fontWeight:active?600:400,
-                  background:active?"#0F172A":"#FFF",
-                  color:active?"#FFF":"#475569",
-                  border:`1px solid ${active?"#0F172A":"#E2E8F0"}` }}>
+              <button
+                key={c}
+                onClick={() => setCategory(c)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 99,
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: active ? 600 : 400,
+                  background: active ? "#0F172A" : "#FFF",
+                  color: active ? "#FFF" : "#475569",
+                  border: `1px solid ${active ? "#0F172A" : "#E2E8F0"}`,
+                }}
+              >
                 {catLabels[c]}
               </button>
             );
           })}
         </div>
 
-        {movement && <div style={{ background:"#FFF",border:"1px solid #BFDBFE",borderRadius:12,padding:"14px 16px",marginBottom:16 }}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}><div><p style={{fontSize:12,fontWeight:700,color:"#0F172A",margin:0}}>{movement.type === "RECEIVE" ? "Nhập kho" : "Xuất kho"}: {movement.item.item}</p><p style={{fontSize:10,color:"#64748B",marginTop:2,marginBottom:0}}>Tồn hiện tại: {movement.item.stock} {movement.item.unit}</p></div><button onClick={()=>setMovement(null)} style={{fontSize:12,color:"#64748B",cursor:"pointer",background:"transparent",border:"none"}}>Đóng</button></div>
-          <div style={{display:"grid",gridTemplateColumns:"180px 1fr auto",gap:8,alignItems:"end",marginTop:10}}>
-            <label style={{fontSize:10,color:"#64748B"}}>Số lượng<input type="number" min="1" step="1" value={movementQuantity} onChange={event=>setMovementQuantity(event.target.value)} style={{display:"block",width:"100%",height:34,marginTop:3,border:"1px solid #E2E8F0",borderRadius:7,padding:"0 8px",boxSizing:"border-box"}} /></label>
-            <label style={{fontSize:10,color:"#64748B"}}>Lý do<input value={movementReason} onChange={event=>setMovementReason(event.target.value)} placeholder="Ví dụ: Nhập lô mới" style={{display:"block",width:"100%",height:34,marginTop:3,border:"1px solid #E2E8F0",borderRadius:7,padding:"0 8px",boxSizing:"border-box"}} /></label>
-            <button onClick={()=>void submitMovement()} disabled={movementBusy} style={{height:34,padding:"0 14px",borderRadius:7,background:"#2563EB",color:"#FFF",fontSize:11,fontWeight:700,cursor:"pointer",opacity:movementBusy?0.6:1}}>{movementBusy ? "Đang lưu…" : "Lưu tồn kho"}</button>
+        {movement && (
+          <div style={{ background: "#FFF", border: "1px solid #BFDBFE", borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                  {movement.type === "RECEIVE" ? "Nhập kho" : "Xuất kho"}: {movement.item.item}
+                </p>
+                <p style={{ fontSize: 10, color: "#64748B", marginTop: 2, marginBottom: 0 }}>
+                  Tồn hiện tại: {movement.item.stock} {movement.item.unit}
+                </p>
+              </div>
+              <button onClick={() => setMovement(null)} style={{ fontSize: 12, color: "#64748B", cursor: "pointer", background: "transparent", border: "none" }}>
+                Đóng
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "180px 1fr auto", gap: 8, alignItems: "end", marginTop: 10 }}>
+              <label style={{ fontSize: 10, color: "#64748B" }}>
+                Số lượng
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={movementQuantity}
+                  onChange={event => setMovementQuantity(event.target.value)}
+                  style={{ display: "block", width: "100%", height: 34, marginTop: 3, border: "1px solid #E2E8F0", borderRadius: 7, padding: "0 8px", boxSizing: "border-box" }}
+                />
+              </label>
+              <label style={{ fontSize: 10, color: "#64748B" }}>
+                Lý do
+                <input
+                  value={movementReason}
+                  onChange={event => setMovementReason(event.target.value)}
+                  placeholder="Ví dụ: Nhập bổ sung đồ vải mới"
+                  style={{ display: "block", width: "100%", height: 34, marginTop: 3, border: "1px solid #E2E8F0", borderRadius: 7, padding: "0 8px", boxSizing: "border-box" }}
+                />
+              </label>
+              <button
+                onClick={() => void submitMovement()}
+                disabled={movementBusy}
+                style={{ height: 34, padding: "0 14px", borderRadius: 7, background: "#2563EB", color: "#FFF", fontSize: 11, fontWeight: 700, cursor: "pointer", opacity: movementBusy ? 0.6 : 1 }}
+              >
+                {movementBusy ? "Đang lưu…" : "Lưu tồn kho"}
+              </button>
+            </div>
+            {movementError && <p role="alert" style={{ fontSize: 11, color: "#BE123C", marginTop: 8, marginBottom: 0 }}>{movementError}</p>}
+            {movementSuccess && <p style={{ fontSize: 11, color: "#166534", marginTop: 8, marginBottom: 0 }}>{movementSuccess}</p>}
           </div>
-          {movementError && <p role="alert" style={{fontSize:11,color:"#BE123C",marginTop:8,marginBottom:0}}>{movementError}</p>}
-          {movementSuccess && <p style={{fontSize:11,color:"#166534",marginTop:8,marginBottom:0}}>{movementSuccess}</p>}
-        </div>}
+        )}
 
         {/* Stock grid */}
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(270px,1fr))", gap: 12 }}>
           {filtered.length === 0 && (
-            <div style={{ gridColumn:"1 / -1",padding:"28px 16px",textAlign:"center",background:"#FFF",border:"1px dashed #CBD5E1",borderRadius:12,color:"#94A3B8",fontSize:12 }}>
+            <div style={{ gridColumn: "1 / -1", padding: "28px 16px", textAlign: "center", background: "#FFF", border: "1px dashed #CBD5E1", borderRadius: 12, color: "#94A3B8", fontSize: 12 }}>
               Chưa có dữ liệu tồn kho đồ vải/vật tư buồng phòng.
             </div>
           )}
           {filtered.map(item => {
-            const pct  = stockPct(item);
+            const pct = stockPct(item);
             const stat = stockStatus(item);
+            const under20 = isBelow20Pct(item);
             return (
-              <div key={item.id} style={{ background:"#FFF",borderRadius:12,
-                border:`1px solid ${item.stock<=item.min?"#FECDD3":"#E2E8F0"}`,
-                padding:"14px 16px" }}>
-                <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10 }}>
+              <div
+                key={item.id}
+                style={{
+                  background: "#FFF",
+                  borderRadius: 12,
+                  border: `1px solid ${under20 ? "#FECDD3" : item.stock <= item.min ? "#FED7AA" : "#E2E8F0"}`,
+                  padding: "14px 16px",
+                  boxShadow: under20 ? "0 2px 8px rgba(225,29,72,0.06)" : "none",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
                   <div>
-                    <p style={{ fontSize:13,fontWeight:700,color:"#0F172A",marginBottom:2 }}>{item.item}</p>
-                    <p style={{ fontSize:11,color:"#94A3B8",margin:0 }}>Tối thiểu: {item.min} {item.unit}</p>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 2 }}>{item.item}</p>
+                    <p style={{ fontSize: 11, color: "#94A3B8", margin: 0 }}>Tối thiểu: {item.min} {item.unit}</p>
                   </div>
-                  <span style={{ fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:99,
-                    background:stat.bg,color:stat.color }}>{stat.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: stat.bg, color: stat.color }}>
+                    {stat.label}
+                  </span>
                 </div>
-                <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:8 }}>
-                  <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:800,
-                    color:stat.color,lineHeight:1 }}>{item.stock}</span>
-                  <span style={{ fontSize:12,color:"#94A3B8" }}>{item.unit} trong kho</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 22, fontWeight: 800, color: stat.color, lineHeight: 1 }}>
+                    {item.stock}
+                  </span>
+                  <span style={{ fontSize: 12, color: "#94A3B8" }}>{item.unit} trong kho</span>
+                  {under20 && (
+                    <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#FFE4E6", color: "#E11D48" }}>
+                      &lt; 20%
+                    </span>
+                  )}
                 </div>
-                <div style={{ height:6,background:"#E2E8F0",borderRadius:99,overflow:"hidden",marginBottom:10 }}>
-                  <div style={{ height:"100%",background:stat.color,
-                    width:`${pct}%`,borderRadius:99,transition:"width .3s" }} />
+                <div style={{ height: 6, background: "#E2E8F0", borderRadius: 99, overflow: "hidden", marginBottom: 10 }}>
+                  <div style={{ height: "100%", background: stat.color, width: `${pct}%`, borderRadius: 99, transition: "width .3s" }} />
                 </div>
-                <div style={{ display:"flex",gap:6 }}>
-                  <button onClick={() => openMovement(item, "ISSUE")} style={{ flex:1,padding:"6px",borderRadius:7,border:"1px solid #E2E8F0",
-                    background:"#F8FAFC",color:"#475569",fontSize:11,cursor:"pointer" }}>Xuất kho</button>
-                  <button onClick={() => openMovement(item, "RECEIVE")} style={{ flex:1,padding:"6px",borderRadius:7,border:"1px solid #3B82F6",
-                    background:"#EFF6FF",color:"#1D4ED8",fontSize:11,fontWeight:600,cursor:"pointer" }}>Nhập thêm</button>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => openMovement(item, "ISSUE")}
+                    style={{ flex: 1, minWidth: 60, padding: "6px", borderRadius: 7, border: "1px solid #E2E8F0", background: "#F8FAFC", color: "#475569", fontSize: 11, cursor: "pointer" }}
+                  >
+                    Xuất dùng
+                  </button>
+                  <button
+                    onClick={() => openMovement(item, "RECEIVE")}
+                    style={{ flex: 1, minWidth: 60, padding: "6px", borderRadius: 7, border: "1px solid #3B82F6", background: "#EFF6FF", color: "#1D4ED8", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Nhập thêm
+                  </button>
+                  {under20 && (
+                    <button
+                      onClick={() => handleNotifyWarehouse(item)}
+                      style={{
+                        width: "100%",
+                        padding: "6px 8px",
+                        borderRadius: 7,
+                        border: "1px solid #FECDD3",
+                        background: notifiedWarehouse[item.id] ? "#F0FDF4" : "#FFF1F2",
+                        color: notifiedWarehouse[item.id] ? "#166534" : "#BE123C",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 4,
+                        marginTop: 2,
+                      }}
+                    >
+                      <Send size={11} />
+                      {notifiedWarehouse[item.id] ? `Đã báo kho (${notifiedWarehouse[item.id]})` : "Báo kho cấp hàng"}
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════
+   MINIBAR SCREEN (Kho xuất hàng, Báo kho & Trả hàng về kho)
+══════════════════════════════════════════════════════════ */
+interface ReturnRequest {
+  id: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  reason: string;
+  requestedBy: string;
+  requestedAt: string;
+  status: "CHO_KHO_DUYET" | "DA_DUYET";
+  approvedAt?: string;
+}
+
+function MinibarScreen({
+  stock,
+  onMove,
+  currentUser,
+}: {
+  stock: LinenRow[];
+  rooms?: HKRoom[];
+  onMove: (itemId: string, movementType: "RECEIVE" | "ISSUE" | "RETURN", quantity: number, reason: string) => Promise<void>;
+  currentUser: EmployeeProfileDto | null;
+}) {
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [returnItemId, setReturnItemId] = useState("");
+  const [returnQuantity, setReturnQuantity] = useState("1");
+  const [returnReasonType, setReturnReasonType] = useState("Thừa ca trực, hoàn trả kho");
+  const [returnCustomReason, setReturnCustomReason] = useState("");
+  const [returnBusy, setReturnBusy] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
+  const [approveBusyId, setApproveBusyId] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<"items" | "returns">("items");
+  const [search, setSearch] = useState("");
+
+  const [notifiedWarehouse, setNotifiedWarehouse] = useState<Record<string, string>>({});
+  const [warehouseNotice, setWarehouseNotice] = useState<string | null>(null);
+
+  const [returnRequests, setReturnRequests] = useState<ReturnRequest[]>([
+    {
+      id: "THK-001",
+      itemId: "MINIBAR-COCA",
+      itemName: "Coca Cola lon 330ml",
+      quantity: 5,
+      unit: "lon",
+      reason: "Lon móp méo do vận chuyển, hoàn trả đổi mới",
+      requestedBy: currentUser?.full_name ?? "Nhân viên buồng phòng",
+      requestedAt: "08:30 Hôm nay",
+      status: "CHO_KHO_DUYET",
+    },
+    {
+      id: "THK-002",
+      itemId: "MINIBAR-SNACK",
+      itemName: "Snack khoai tây lon",
+      quantity: 2,
+      unit: "lon",
+      reason: "Hết hạn sử dụng, trả kho tiêu hủy",
+      requestedBy: currentUser?.full_name ?? "Nhân viên buồng phòng",
+      requestedAt: "Hôm qua",
+      status: "DA_DUYET",
+      approvedAt: "09:15 Hôm qua",
+    },
+  ]);
+
+  const minibarItems = useMemo(() => {
+    const list = stock.filter(s =>
+      s.category.toLowerCase().includes("minibar") ||
+      s.id.toLowerCase().includes("minibar") ||
+      s.id.toLowerCase().includes("water") ||
+      s.item.toLowerCase().includes("minibar") ||
+      s.item.toLowerCase().includes("nước suối") ||
+      s.item.toLowerCase().includes("coca") ||
+      s.item.toLowerCase().includes("bia") ||
+      s.item.toLowerCase().includes("snack")
+    );
+    return list.length > 0 ? list : stock;
+  }, [stock]);
+
+  const isBelow20Pct = (item: LinenRow) => {
+    if (item.min <= 0) return item.stock === 0;
+    return (item.stock / item.min) < 0.2;
+  };
+
+  const criticalMinibarLow = useMemo(() => {
+    return minibarItems.filter(isBelow20Pct);
+  }, [minibarItems]);
+
+  const filteredItems = useMemo(() => {
+    if (!search.trim()) return minibarItems;
+    const q = search.toLowerCase();
+    return minibarItems.filter(i => i.item.toLowerCase().includes(q) || i.id.toLowerCase().includes(q));
+  }, [minibarItems, search]);
+
+  const totalStock = minibarItems.reduce((sum, i) => sum + i.stock, 0);
+  const pendingReturnsCount = returnRequests.filter(r => r.status === "CHO_KHO_DUYET").length;
+
+  const stockPct = (item: LinenRow) =>
+    item.min > 0 ? Math.min(100, Math.round((item.stock / item.min) * 100)) : item.stock > 0 ? 100 : 0;
+
+  const stockStatus = (item: LinenRow) => {
+    if (item.stock === 0) return { color: "#DC2626", label: "Hết hàng", bg: "#FFE4E6" };
+    if (isBelow20Pct(item)) return { color: "#E11D48", label: "< 20% Định mức", bg: "#FFE4E6" };
+    if (item.stock <= item.min) return { color: "#D97706", label: "Sắp hết", bg: "#FEF3C7" };
+    return { color: "#16A34A", label: "Đủ tồn", bg: "#DCFCE7" };
+  };
+
+  const handleNotifyWarehouse = (item: LinenRow) => {
+    const nowStr = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    setNotifiedWarehouse(prev => ({ ...prev, [item.id]: nowStr }));
+    setWarehouseNotice(`Đã gửi thông báo yêu cầu cấp hàng tới Bộ phận Kho cho sản phẩm "${item.item}" (hiện còn ${item.stock} ${item.unit}, dưới 20% định mức)!`);
+  };
+
+  const handleNotifyWarehouseAll = () => {
+    const nowStr = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    const updates: Record<string, string> = {};
+    criticalMinibarLow.forEach(i => { updates[i.id] = nowStr; });
+    setNotifiedWarehouse(prev => ({ ...prev, ...updates }));
+    setWarehouseNotice(`Đã gửi thông báo khẩn cấp tới Bộ phận Kho yêu cầu xuất cấp hàng cho ${criticalMinibarLow.length} mặt hàng minibar dưới 20% định mức!`);
+  };
+
+  const openReturnModal = (item?: LinenRow) => {
+    setReturnItemId(item?.id ?? minibarItems[0]?.id ?? "");
+    setReturnQuantity("1");
+    setReturnReasonType("Thừa ca trực, hoàn trả kho");
+    setReturnCustomReason("");
+    setReturnError(null);
+    setReturnModalOpen(true);
+  };
+
+  const handleSubmitReturn = async () => {
+    const item = stock.find(s => s.id === returnItemId) || minibarItems.find(s => s.id === returnItemId);
+    if (!item) {
+      setReturnError("Vui lòng chọn mặt hàng cần trả.");
+      return;
+    }
+    const num = Number(returnQuantity);
+    if (!Number.isInteger(num) || num <= 0) {
+      setReturnError("Số lượng hoàn trả phải là số nguyên lớn hơn 0.");
+      return;
+    }
+    if (num > item.stock) {
+      setReturnError(`Số lượng trả (${num} ${item.unit}) vượt quá số lượng buồng phòng đang có (${item.stock} ${item.unit}).`);
+      return;
+    }
+
+    const finalReason = returnReasonType === "Khác"
+      ? (returnCustomReason.trim() || "Hoàn trả hàng về kho")
+      : returnReasonType;
+
+    const newTicket: ReturnRequest = {
+      id: `TR-${Date.now().toString().slice(-4)}`,
+      itemId: item.id,
+      itemName: item.item,
+      quantity: num,
+      unit: item.unit,
+      reason: finalReason,
+      requestedBy: currentUser?.full_name ?? "Nhân viên buồng phòng",
+      requestedAt: `${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} Hôm nay`,
+      status: "CHO_KHO_DUYET",
+    };
+
+    setReturnBusy(true);
+    setReturnError(null);
+    try {
+      setReturnRequests(prev => [newTicket, ...prev]);
+      setWarehouseNotice(`Đã tạo phiếu trả hàng [${newTicket.id}] (${num} ${item.unit} "${item.item}"). Phiếu đang ở trạng thái Chờ kho duyệt!`);
+      setReturnModalOpen(false);
+      setActiveTab("returns");
+    } finally {
+      setReturnBusy(false);
+    }
+  };
+
+  const handleApproveReturn = async (req: ReturnRequest) => {
+    try {
+      setApproveBusyId(req.id);
+      await onMove(req.itemId, "RETURN", req.quantity, `Kho duyệt nhận hàng trả: ${req.reason}`);
+      const nowStr = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+      setReturnRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: "DA_DUYET", approvedAt: `${nowStr} hôm nay` } : r));
+      setWarehouseNotice(`Bộ phận Kho đã duyệt nhận phiếu [${req.id}] (${req.quantity} ${req.unit} "${req.itemName}"). Tồn kho đã được hoàn lại thành công!`);
+    } catch (err: any) {
+      setWarehouseNotice(apiErrorMessage(err, "Không thể hoàn tất duyệt nhận kho. Vui lòng thử lại."));
+    } finally {
+      setApproveBusyId(null);
+    }
+  };
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", background: "#F8FAFC" }}>
+      <div style={{ padding: "20px 24px" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <span style={{ display: "inline-flex", padding: 6, borderRadius: 8, background: "#EFF6FF", color: "#2563EB" }}>
+                <Wine size={18} />
+              </span>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: "#0F172A", margin: 0 }}>Minibar &amp; Quản lý kho</h2>
+            </div>
+            <p style={{ fontSize: 12, color: "#64748B", margin: 0 }}>
+              Quản lý tồn kho minibar buồng phòng, thông báo bộ phận kho khi dưới 20% và lập phiếu trả hàng về kho
+            </p>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {criticalMinibarLow.length > 0 && (
+              <button
+                onClick={handleNotifyWarehouseAll}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#E11D48",
+                  color: "#FFF",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  boxShadow: "0 2px 4px rgba(225,29,72,0.2)",
+                }}
+              >
+                <Send size={14} /> Báo kho cấp hàng ({criticalMinibarLow.length})
+              </button>
+            )}
+
+            <button
+              onClick={() => openReturnModal()}
+              disabled={minibarItems.length === 0}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "none",
+                background: "#0F172A",
+                color: "#FFF",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                boxShadow: "0 2px 6px rgba(15,23,42,0.18)",
+              }}
+            >
+              <Archive size={14} style={{ color: "#38BDF8" }} /> Trả hàng về kho
+            </button>
+          </div>
+        </div>
+
+        {/* Notice from warehouse */}
+        {warehouseNotice && (
+          <div role="status" style={{ padding: "10px 14px", borderRadius: 8, background: "#DCFCE7", border: "1px solid #86EFAC", color: "#166534", fontSize: 12, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span>✓ {warehouseNotice}</span>
+            <button onClick={() => setWarehouseNotice(null)} style={{ background: "transparent", border: "none", color: "#166534", cursor: "pointer", fontSize: 12 }}>✕</button>
+          </div>
+        )}
+
+        {/* Workflow alert banner */}
+        <div
+          style={{
+            padding: "12px 16px",
+            borderRadius: 10,
+            background: "#EFF6FF",
+            border: "1px solid #BFDBFE",
+            marginBottom: 16,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+          }}
+        >
+          <Sparkles size={18} style={{ color: "#2563EB", flexShrink: 0, marginTop: 2 }} />
+          <div style={{ fontSize: 12, color: "#1E40AF", lineHeight: 1.5 }}>
+            <strong>Quy trình phối hợp Kho &amp; Buồng phòng:</strong> Bộ phận Kho xuất hàng minibar cho Buồng phòng. Khi mặt hàng minibar giảm xuống <strong>dưới 20% định mức</strong>, hệ thống kích hoạt cảnh báo gửi thông báo trực tiếp tới Bộ phận Kho để xuất bổ sung. Đối với hàng thừa ca, hết hạn hoặc hỏng hóc, buồng phòng tạo phiếu <em>Trả hàng về kho</em> với trạng thái <strong>Chờ kho duyệt</strong> để bộ phận kho tiếp nhận và đối soát số dư.
+          </div>
+        </div>
+
+        {/* Critical low alert (< 20%) */}
+        {criticalMinibarLow.length > 0 && (
+          <div
+            style={{
+              padding: "12px 16px",
+              borderRadius: 10,
+              background: "#FFF1F2",
+              border: "1px solid #FECDD3",
+              marginBottom: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <AlertTriangle size={18} style={{ color: "#E11D48", flexShrink: 0 }} />
+              <div>
+                <strong style={{ color: "#9F1239", fontSize: 12 }}>Vật dụng Minibar dưới 20% tổng số lượng định mức:</strong>
+                <p style={{ fontSize: 11, color: "#BE123C", margin: "2px 0 0" }}>
+                  {criticalMinibarLow.map(i => `${i.item} (còn ${i.stock} ${i.unit} / định mức ${i.min})`).join(", ")}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleNotifyWarehouseAll}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 8,
+                background: "#E11D48",
+                color: "#FFF",
+                fontSize: 11,
+                fontWeight: 700,
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <Send size={12} /> Báo kho cấp hàng khẩn cấp
+            </button>
+          </div>
+        )}
+
+        {/* KPI Cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 18 }}>
+          <div style={{ background: "#FFF", border: "1px solid #E2E8F0", borderRadius: 10, padding: "14px 16px" }}>
+            <p style={{ fontSize: 11, color: "#64748B", margin: 0, fontWeight: 600 }}>Mặt hàng Minibar</p>
+            <p style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: "4px 0 0", fontFamily: "'JetBrains Mono',monospace" }}>
+              {minibarItems.length}
+            </p>
+            <span style={{ fontSize: 11, color: "#64748B" }}>Chủng loại đồ uống / snack</span>
+          </div>
+
+          <div style={{ background: "#FFF", border: "1px solid #E2E8F0", borderRadius: 10, padding: "14px 16px" }}>
+            <p style={{ fontSize: 11, color: "#64748B", margin: 0, fontWeight: 600 }}>Tổng tồn kho Minibar</p>
+            <p style={{ fontSize: 22, fontWeight: 800, color: "#2563EB", margin: "4px 0 0", fontFamily: "'JetBrains Mono',monospace" }}>
+              {totalStock}
+            </p>
+            <span style={{ fontSize: 11, color: "#64748B" }}>Sản phẩm sẵn sàng cấp</span>
+          </div>
+
+          <div style={{ background: "#FFF", border: "1px solid #E2E8F0", borderRadius: 10, padding: "14px 16px" }}>
+            <p style={{ fontSize: 11, color: "#64748B", margin: 0, fontWeight: 600 }}>Cảnh báo dưới 20%</p>
+            <p style={{ fontSize: 22, fontWeight: 800, color: criticalMinibarLow.length > 0 ? "#E11D48" : "#16A34A", margin: "4px 0 0", fontFamily: "'JetBrains Mono',monospace" }}>
+              {criticalMinibarLow.length}
+            </p>
+            <span style={{ fontSize: 11, color: criticalMinibarLow.length > 0 ? "#E11D48" : "#16A34A" }}>
+              {criticalMinibarLow.length > 0 ? "Mặt hàng cần kho cấp ngay" : "Tất cả trên ngưỡng an toàn"}
+            </span>
+          </div>
+
+          <div style={{ background: "#FFF", border: "1px solid #E2E8F0", borderRadius: 10, padding: "14px 16px" }}>
+            <p style={{ fontSize: 11, color: "#64748B", margin: 0, fontWeight: 600 }}>Phiếu trả hàng về kho</p>
+            <p style={{ fontSize: 22, fontWeight: 800, color: pendingReturnsCount > 0 ? "#D97706" : "#0F172A", margin: "4px 0 0", fontFamily: "'JetBrains Mono',monospace" }}>
+              {pendingReturnsCount} / {returnRequests.length}
+            </p>
+            <span style={{ fontSize: 11, color: pendingReturnsCount > 0 ? "#D97706" : "#64748B" }}>
+              {pendingReturnsCount > 0 ? "Phiếu đang chờ kho duyệt" : "Đã duyệt hoàn tất"}
+            </span>
+          </div>
+        </div>
+
+        {/* Subtabs & search */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setActiveTab("items")}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: activeTab === "items" ? 700 : 500,
+                background: activeTab === "items" ? "#0F172A" : "#FFF",
+                color: activeTab === "items" ? "#FFF" : "#475569",
+                border: `1px solid ${activeTab === "items" ? "#0F172A" : "#CBD5E1"}`,
+                cursor: "pointer",
+              }}
+            >
+              Danh mục &amp; Tồn kho ({minibarItems.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("returns")}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: activeTab === "returns" ? 700 : 500,
+                background: activeTab === "returns" ? "#0F172A" : "#FFF",
+                color: activeTab === "returns" ? "#FFF" : "#475569",
+                border: `1px solid ${activeTab === "returns" ? "#0F172A" : "#CBD5E1"}`,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              Phiếu trả hàng về kho ({returnRequests.length})
+              {pendingReturnsCount > 0 && (
+                <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 99, background: "#F59E0B", color: "#FFF" }}>
+                  {pendingReturnsCount} chờ duyệt
+                </span>
+              )}
+            </button>
+          </div>
+
+          {activeTab === "items" && (
+            <div style={{ position: "relative", minWidth: 220 }}>
+              <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }} />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Tìm mặt hàng minibar..."
+                style={{
+                  width: "100%",
+                  height: 32,
+                  paddingLeft: 30,
+                  paddingRight: 10,
+                  borderRadius: 7,
+                  border: "1px solid #CBD5E1",
+                  background: "#FFF",
+                  fontSize: 11,
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Subtab 1: Minibar Stock Items Grid */}
+        {activeTab === "items" && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+            {filteredItems.map(item => {
+              const stat = stockStatus(item);
+              const pct = stockPct(item);
+              const under20 = isBelow20Pct(item);
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    background: "#FFF",
+                    borderRadius: 12,
+                    border: `1px solid ${under20 ? "#FECDD3" : item.stock <= item.min ? "#FED7AA" : "#E2E8F0"}`,
+                    padding: "16px",
+                    boxShadow: under20 ? "0 2px 8px rgba(225,29,72,0.06)" : "0 1px 3px rgba(0,0,0,0.03)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 8, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Wine size={16} style={{ color: "#2563EB" }} />
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", margin: 0 }}>{item.item}</p>
+                        <p style={{ fontSize: 10, color: "#64748B", margin: "2px 0 0" }}>Mã: {item.id}</p>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: stat.bg, color: stat.color }}>
+                      {stat.label}
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, margin: "10px 0 6px" }}>
+                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 24, fontWeight: 800, color: stat.color, lineHeight: 1 }}>
+                      {item.stock}
+                    </span>
+                    <span style={{ fontSize: 11, color: "#64748B" }}>{item.unit} trong kho</span>
+                    <span style={{ fontSize: 10, color: "#94A3B8", marginLeft: "auto" }}>
+                      Định mức: {item.min} {item.unit}
+                    </span>
+                  </div>
+
+                  <div style={{ height: 6, background: "#F1F5F9", borderRadius: 99, overflow: "hidden", marginBottom: 12 }}>
+                    <div style={{ height: "100%", background: stat.color, width: `${pct}%`, transition: "width .3s" }} />
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => openReturnModal(item)}
+                      style={{
+                        flex: 1,
+                        padding: "7px 10px",
+                        borderRadius: 7,
+                        border: "1px solid #CBD5E1",
+                        background: "#FFF",
+                        color: "#0F172A",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <Archive size={12} style={{ color: "#0F172A" }} /> Trả về kho
+                    </button>
+
+                    {under20 ? (
+                      <button
+                        onClick={() => handleNotifyWarehouse(item)}
+                        style={{
+                          flex: 1,
+                          padding: "7px 10px",
+                          borderRadius: 7,
+                          border: "1px solid #FECDD3",
+                          background: notifiedWarehouse[item.id] ? "#F0FDF4" : "#FFF1F2",
+                          color: notifiedWarehouse[item.id] ? "#166534" : "#E11D48",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <Send size={12} /> {notifiedWarehouse[item.id] ? "Đã báo kho" : "Báo kho cấp hàng"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleNotifyWarehouse(item)}
+                        style={{
+                          flex: 1,
+                          padding: "7px 10px",
+                          borderRadius: 7,
+                          border: "1px solid #E2E8F0",
+                          background: "#F8FAFC",
+                          color: "#64748B",
+                          fontSize: 11,
+                          fontWeight: 500,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <Send size={12} /> Báo kho
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Subtab 2: Return Requests & Warehouse Approval */}
+        {activeTab === "returns" && (
+          <div style={{ background: "#FFF", borderRadius: 12, border: "1px solid #E2E8F0", overflow: "hidden" }}>
+            <div style={{ padding: "14px 18px", borderBottom: "1px solid #E2E8F0", background: "#F8FAFC", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <h3 style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                  Danh sách yêu cầu trả hàng về kho
+                </h3>
+                <p style={{ fontSize: 11, color: "#64748B", margin: "2px 0 0" }}>
+                  Theo dõi hàng buồng phòng hoàn trả và quy trình duyệt nhận hàng từ bộ phận kho
+                </p>
+              </div>
+              <button
+                onClick={() => openReturnModal()}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 7,
+                  background: "#0F172A",
+                  color: "#FFF",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                <Plus size={12} /> Tạo phiếu trả hàng
+              </button>
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#64748B", fontSize: 11 }}>
+                    <th style={{ padding: "10px 16px" }}>Mã phiếu</th>
+                    <th style={{ padding: "10px 16px" }}>Mặt hàng hoàn trả</th>
+                    <th style={{ padding: "10px 16px" }}>Số lượng</th>
+                    <th style={{ padding: "10px 16px" }}>Lý do trả hàng</th>
+                    <th style={{ padding: "10px 16px" }}>Người tạo &amp; Thời gian</th>
+                    <th style={{ padding: "10px 16px" }}>Trạng thái</th>
+                    <th style={{ padding: "10px 16px", textAlign: "right" }}>Thao tác duyệt kho</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {returnRequests.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ padding: "28px 16px", textAlign: "center", color: "#94A3B8" }}>
+                        Chưa có yêu cầu trả hàng về kho nào.
+                      </td>
+                    </tr>
+                  )}
+                  {returnRequests.map(req => {
+                    const isPending = req.status === "CHO_KHO_DUYET";
+                    return (
+                      <tr key={req.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                        <td style={{ padding: "12px 16px", fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: "#0F172A" }}>
+                          {req.id}
+                        </td>
+                        <td style={{ padding: "12px 16px", fontWeight: 600, color: "#0F172A" }}>
+                          {req.itemName}
+                        </td>
+                        <td style={{ padding: "12px 16px", color: "#0F172A" }}>
+                          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: "#2563EB" }}>
+                            {req.quantity}
+                          </span>{" "}
+                          {req.unit}
+                        </td>
+                        <td style={{ padding: "12px 16px", color: "#475569" }}>
+                          {req.reason}
+                        </td>
+                        <td style={{ padding: "12px 16px", color: "#64748B", fontSize: 11 }}>
+                          <div>{req.requestedBy}</div>
+                          <div style={{ color: "#94A3B8" }}>{req.requestedAt}</div>
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          {isPending ? (
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 99, background: "#FEF3C7", color: "#92400E", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <Clock size={11} /> Chờ kho duyệt
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 99, background: "#DCFCE7", color: "#166534", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <CheckCircle2 size={11} /> Kho đã duyệt
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                          {isPending ? (
+                            <button
+                              onClick={() => void handleApproveReturn(req)}
+                              disabled={approveBusyId === req.id}
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: 6,
+                                border: "1px solid #16A34A",
+                                background: "#DCFCE7",
+                                color: "#166534",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: approveBusyId === req.id ? "wait" : "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                opacity: approveBusyId === req.id ? 0.6 : 1,
+                              }}
+                            >
+                              <CheckCircle2 size={12} />
+                              {approveBusyId === req.id ? "Đang duyệt…" : "Kho duyệt nhận hàng"}
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: 11, color: "#16A34A", fontWeight: 600 }}>
+                              ✓ Đã hoàn kho {req.approvedAt ? `(${req.approvedAt})` : ""}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Lập phiếu Trả hàng về kho */}
+        {returnModalOpen && (
+          <div
+            role="presentation"
+            onMouseDown={e => { if (e.target === e.currentTarget && !returnBusy) setReturnModalOpen(false); }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 120,
+              background: "rgba(15,23,42,0.48)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              style={{
+                width: "100%",
+                maxWidth: 480,
+                background: "#FFF",
+                borderRadius: 14,
+                border: "1px solid #E2E8F0",
+                boxShadow: "0 20px 60px rgba(15,23,42,0.24)",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #E2E8F0" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#0F172A" }}>
+                    Trả hàng về kho
+                  </h3>
+                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748B" }}>
+                    Tạo yêu cầu hoàn trả hàng về kho tổng (chờ bộ phận kho kiểm tra và duyệt)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReturnModalOpen(false)}
+                  disabled={returnBusy}
+                  style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid #E2E8F0", background: "#F8FAFC", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div style={{ padding: "18px 20px", display: "grid", gap: 14 }}>
+                <label style={{ display: "grid", gap: 5, fontSize: 11, fontWeight: 700, color: "#334155" }}>
+                  Mặt hàng hoàn trả
+                  <select
+                    value={returnItemId}
+                    onChange={e => setReturnItemId(e.target.value)}
+                    disabled={returnBusy}
+                    style={{ height: 38, padding: "0 10px", border: "1px solid #CBD5E1", borderRadius: 8, background: "#FFF", fontSize: 12 }}
+                  >
+                    {minibarItems.map(item => (
+                      <option key={item.id} value={item.id}>
+                        {item.item} ({item.id}) · Hiện có {item.stock} {item.unit}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={{ display: "grid", gap: 5, fontSize: 11, fontWeight: 700, color: "#334155" }}>
+                  Số lượng hoàn trả
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={returnQuantity}
+                    onChange={e => setReturnQuantity(e.target.value)}
+                    disabled={returnBusy}
+                    style={{ height: 38, padding: "0 10px", border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 13 }}
+                  />
+                </label>
+
+                <label style={{ display: "grid", gap: 5, fontSize: 11, fontWeight: 700, color: "#334155" }}>
+                  Lý do hoàn trả
+                  <select
+                    value={returnReasonType}
+                    onChange={e => setReturnReasonType(e.target.value)}
+                    disabled={returnBusy}
+                    style={{ height: 38, padding: "0 10px", border: "1px solid #CBD5E1", borderRadius: 8, background: "#FFF", fontSize: 12 }}
+                  >
+                    <option value="Thừa ca trực, hoàn trả kho">Thừa ca trực, hoàn trả kho</option>
+                    <option value="Hàng cận date / hết hạn sử dụng">Hàng cận date / hết hạn sử dụng</option>
+                    <option value="Bao bì rách / móp méo vận chuyển">Bao bì rách / móp méo vận chuyển</option>
+                    <option value="Lỗi tem nhãn / kiểm tra không đạt">Lỗi tem nhãn / kiểm tra không đạt</option>
+                    <option value="Khác">Lý do khác...</option>
+                  </select>
+                </label>
+
+                {returnReasonType === "Khác" && (
+                  <label style={{ display: "grid", gap: 5, fontSize: 11, fontWeight: 700, color: "#334155" }}>
+                    Chi tiết lý do
+                    <input
+                      value={returnCustomReason}
+                      onChange={e => setReturnCustomReason(e.target.value)}
+                      disabled={returnBusy}
+                      placeholder="Ghi rõ tình trạng mặt hàng..."
+                      style={{ height: 38, padding: "0 10px", border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 12 }}
+                    />
+                  </label>
+                )}
+
+                {returnError && (
+                  <div role="alert" style={{ padding: "8px 12px", borderRadius: 6, background: "#FEE2E2", color: "#DC2626", fontSize: 11, fontWeight: 600 }}>
+                    ⚠️ {returnError}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ padding: "14px 20px", borderTop: "1px solid #E2E8F0", background: "#F8FAFC", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setReturnModalOpen(false)}
+                  disabled={returnBusy}
+                  style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #CBD5E1", background: "#FFF", color: "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSubmitReturn()}
+                  disabled={returnBusy}
+                  style={{
+                    padding: "8px 18px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: "#0F172A",
+                    color: "#FFF",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: returnBusy ? "wait" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Archive size={14} /> {returnBusy ? "Đang gửi…" : "Gửi yêu cầu trả hàng"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1674,7 +3407,7 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
     await loadData();
   };
 
-  const handleLinenMovement = async (itemId: string, movementType: "RECEIVE" | "ISSUE", quantity: number, reason: string) => {
+  const handleLinenMovement = async (itemId: string, movementType: "RECEIVE" | "ISSUE" | "RETURN", quantity: number, reason: string) => {
     // Call real API and re-fetch. Do NOT update local state if API fails!
     await enterpriseApi.moveLinen({ item_id: itemId, movement_type: movementType, quantity, reason });
     await loadData();
@@ -1685,6 +3418,7 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
     { id:"board",      label:"Nhiệm vụ & Checklist", Icon:LayoutGrid },
     { id:"inspection", label:"Kiểm tra & Nghiệm thu", Icon:ClipboardList },
     { id:"linen",      label:"Đồ vải & Vật tư ca",   Icon:Package },
+    { id:"minibar",    label:"Minibar & Quản lý kho", Icon:Wine },
     { id:"incidents",  label:"Báo sự cố kỹ thuật",   Icon:Wrench },
   ];
 
@@ -1886,6 +3620,14 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
           <LinenScreen
             stock={liveLinen}
             onMove={handleLinenMovement}
+          />
+        )}
+        {page === "minibar"    && (
+          <MinibarScreen
+            stock={liveLinen}
+            rooms={liveRooms}
+            onMove={handleLinenMovement}
+            currentUser={currentUser}
           />
         )}
         {page === "incidents"  && (

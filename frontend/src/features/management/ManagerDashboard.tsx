@@ -23,8 +23,9 @@ import {
   Home, Zap, LayoutGrid, Users, AlertTriangle, BarChart2,
   Search, Bell, ChevronDown, ArrowRight, Sun, CalendarDays,
   Check, X, TrendingUp, ArrowUpRight, LogOut,
-  ConciergeBell, Sparkles, UtensilsCrossed, Wrench,
+  ConciergeBell, Sparkles, UtensilsCrossed, Wrench, Printer,
 } from "lucide-react";
+import { AcceptancePdfModal, AssignmentPdfModal, type AcceptanceFormOptions } from "./HousekeepingForms";
 
 /* ══════════════════════════════════════════════════════════
    TYPES & DATA
@@ -527,7 +528,7 @@ function ReportsScreen({ invoices = [], rooms = [], expenses = [], finance }: { 
 }
 
 function OperationsScreen({
-  rooms, tasks, employees, workOrders, incidents, onNavigateApprovals, onNavigateIncidents, onTaskCreated, onTaskReady,
+  rooms, tasks, employees, workOrders, incidents, onNavigateApprovals, onNavigateIncidents, onTaskCreated, onTaskReady, managerName,
 }: {
   rooms: ApiRoom[];
   tasks: HousekeepingTask[];
@@ -538,11 +539,13 @@ function OperationsScreen({
   onNavigateIncidents: () => void;
   onTaskCreated: (task: HousekeepingTask) => void;
   onTaskReady: (task: HousekeepingTask) => void;
+  managerName?: string;
 }) {
   const actionRooms = rooms.filter(room => room.status === "cleaning" || room.status === "maintenance");
   const [assignees, setAssignees] = useState<Record<string, string>>({});
   const [savingRoom, setSavingRoom] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [selectedAcceptanceRoom, setSelectedAcceptanceRoom] = useState<AcceptanceFormOptions | null>(null);
   const housekeepingEmployees = employees.filter(employee => employee.role === "HOUSEKEEPING"
     && employee.enabled && employee.employment_status === "WORKING");
 
@@ -625,38 +628,83 @@ function OperationsScreen({
           if (blocked) statusText = "Sự cố nghiêm trọng chưa được xác nhận xử lý";
           else if (releaseOrder) statusText = "Checklist và sửa chữa đã nghiệm thu · chờ kỹ thuật mở phòng";
 
-          return <div className="management-operation-row" key={room.id} style={{display:"grid",gridTemplateColumns:"80px 1.2fr 1.5fr minmax(180px,1fr)",gap:12,alignItems:"center",padding:"12px 16px",borderBottom:"1px solid #F1F5F9"}}>
+          return <div className="management-operation-row" key={room.id} style={{display:"grid",gridTemplateColumns:"70px 1fr 1.2fr auto",gap:10,alignItems:"center",padding:"12px 16px",borderBottom:"1px solid #F1F5F9"}}>
             <strong style={{fontSize:15}}>P.{room.name}</strong>
             <span style={{fontSize:12,color:"#475569"}}>{roomTypeLabel(room.room_type_name)} · Tầng {room.floor}</span>
             <span style={{fontSize:11,fontWeight:600,color:room.status==="maintenance"?"#DC2626":"#D97706"}}>{statusText}</span>
-            {blocked ? <button onClick={onNavigateIncidents} style={{height:34,borderRadius:8,border:"1px solid #FECDD3",background:"#FFF1F2",color:"#9F1239",fontSize:12,fontWeight:700}}>Xử lý sự cố</button> : releaseOrder ? <span style={{fontSize:12,color:"#166534"}}>Kỹ thuật thực hiện bước mở phòng</span> : canMarkReady ? (
-              <button disabled={savingRoom === room.id} onClick={() => void updateRoomTask(task)} style={{height:34,borderRadius:8,border:"none",background:"#0F172A",color:"#FFF",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                {savingRoom === room.id ? "Đang lưu…" : "Xác nhận checklist & sẵn sàng"}
+            <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"flex-end",flexWrap:"wrap"}}>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedAcceptanceRoom({
+                    roomNumber: room.name,
+                    roomType: room.room_type_name,
+                    floor: room.floor,
+                    taskId: task?.id,
+                    cleanerName: task?.assignee || undefined,
+                    managerName: managerName || undefined,
+                    hasBlockingIncident: blocked,
+                    isOccupied: room.status === "occupied",
+                    hasIncompleteChecklist: !task?.checklist_complete,
+                  });
+                }}
+                style={{
+                  height: 34,
+                  padding: "0 10px",
+                  borderRadius: 8,
+                  border: "1px solid #0284C7",
+                  background: "#F0F9FF",
+                  color: "#0369A1",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  whiteSpace: "nowrap",
+                }}
+                title="Xuất biên bản nghiệm thu buồng phòng (BP_BM3)"
+              >
+                <Printer size={13} /> BB nghiệm thu (BP_BM3)
               </button>
-            ) : canAssignCleaning ? (
-              <div style={{display:"flex",gap:6}}>
-                <select aria-label={`Nhân viên buồng phòng phòng ${room.name}`} value={assignees[room.id] ?? ""} onChange={event => setAssignees(previous => ({...previous, [room.id]: event.target.value}))} style={{minWidth:0,flex:1,height:34,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 6px",fontSize:11}}>
-                  <option value="">Chọn nhân viên</option>
-                  {housekeepingEmployees.map(employee => <option key={employee.employee_id} value={employee.employee_id}>{employee.full_name}</option>)}
-                </select>
-                <button disabled={!assignees[room.id] || savingRoom === room.id} onClick={() => void assignPostRepairCleaning(room)} style={{height:34,padding:"0 9px",borderRadius:8,border:"none",background:"#0F172A",color:"#FFF",fontSize:10,fontWeight:700,cursor:"pointer",opacity:!assignees[room.id] || savingRoom === room.id ? 0.5 : 1}}>
-                  {savingRoom === room.id ? "Đang giao…" : "Giao checklist"}
+              {blocked ? <button onClick={onNavigateIncidents} style={{height:34,borderRadius:8,border:"1px solid #FECDD3",background:"#FFF1F2",color:"#9F1239",fontSize:12,fontWeight:700}}>Xử lý sự cố</button> : releaseOrder ? <span style={{fontSize:12,color:"#166534"}}>Kỹ thuật thực hiện bước mở phòng</span> : canMarkReady ? (
+                <button disabled={savingRoom === room.id} onClick={() => void updateRoomTask(task)} style={{height:34,borderRadius:8,border:"none",background:"#0F172A",color:"#FFF",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                  {savingRoom === room.id ? "Đang lưu…" : "Xác nhận checklist & sẵn sàng"}
                 </button>
-              </div>
-            ) : waitingAcceptance ? (
-              <button onClick={onNavigateApprovals} style={{height:34,borderRadius:8,border:"1px solid #FED7AA",background:"#FFF7ED",color:"#9A3412",fontSize:11,fontWeight:700,cursor:"pointer"}}>Mở phê duyệt kỹ thuật</button>
-            ) : (
-              <span style={{fontSize:10,color:"#64748B"}}>{room.status === "maintenance" && housekeepingEmployees.length === 0 ? "Chưa có nhân viên buồng phòng hoạt động" : "Đang chờ bộ phận phụ trách"}</span>
-            )}
+              ) : canAssignCleaning ? (
+                <div style={{display:"flex",gap:6}}>
+                  <select aria-label={`Nhân viên buồng phòng phòng ${room.name}`} value={assignees[room.id] ?? ""} onChange={event => setAssignees(previous => ({...previous, [room.id]: event.target.value}))} style={{minWidth:0,flex:1,height:34,border:"1px solid #CBD5E1",borderRadius:7,padding:"0 6px",fontSize:11}}>
+                    <option value="">Chọn nhân viên</option>
+                    {housekeepingEmployees.map(employee => <option key={employee.employee_id} value={employee.employee_id}>{employee.full_name}</option>)}
+                  </select>
+                  <button disabled={!assignees[room.id] || savingRoom === room.id} onClick={() => void assignPostRepairCleaning(room)} style={{height:34,padding:"0 9px",borderRadius:8,border:"none",background:"#0F172A",color:"#FFF",fontSize:10,fontWeight:700,cursor:"pointer",opacity:!assignees[room.id] || savingRoom === room.id ? 0.5 : 1}}>
+                    {savingRoom === room.id ? "Đang giao…" : "Giao checklist"}
+                  </button>
+                </div>
+              ) : waitingAcceptance ? (
+                <button onClick={onNavigateApprovals} style={{height:34,borderRadius:8,border:"1px solid #FED7AA",background:"#FFF7ED",color:"#9A3412",fontSize:11,fontWeight:700,cursor:"pointer"}}>Mở phê duyệt kỹ thuật</button>
+              ) : (
+                <span style={{fontSize:10,color:"#64748B"}}>{room.status === "maintenance" && housekeepingEmployees.length === 0 ? "Chưa có nhân viên buồng phòng hoạt động" : "Đang chờ bộ phận phụ trách"}</span>
+              )}
+            </div>
           </div>;
         })}
         {actionRooms.length === 0 && <p style={{padding:"30px 16px",textAlign:"center",fontSize:12,color:"#64748B"}}>Không có phòng đang chờ vệ sinh hoặc nghiệm thu kỹ thuật.</p>}
       </div>
+
+      {selectedAcceptanceRoom && (
+        <AcceptancePdfModal
+          options={selectedAcceptanceRoom}
+          onClose={() => setSelectedAcceptanceRoom(null)}
+        />
+      )}
     </div>
   );
 }
 
-function StaffOperationsScreen({ employees, tasks, onAdd }: { employees: EmployeeAdmin[]; tasks: HousekeepingTask[]; onAdd: () => void }) {
+function StaffOperationsScreen({ employees, tasks, onAdd, managerName }: { employees: EmployeeAdmin[]; tasks: HousekeepingTask[]; onAdd: () => void; managerName?: string }) {
+  const [showAssignmentModal, setShowAssignmentModal] = useState(false);
+
   return (
     <div style={{flex:1,overflowY:"auto",padding:"20px 24px",display:"grid",gridTemplateColumns:"1.2fr .8fr",gap:16}}>
       <div style={{background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,overflow:"hidden"}}>
@@ -668,12 +716,50 @@ function StaffOperationsScreen({ employees, tasks, onAdd }: { employees: Employe
         </div>)}
       </div>
       <div style={{background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,overflow:"hidden",alignSelf:"start"}}>
-        <div style={{padding:"14px 16px",borderBottom:"1px solid #E2E8F0"}}><strong>Phân công buồng phòng</strong></div>
+        <div style={{padding:"14px 16px",borderBottom:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <strong>Phân công buồng phòng</strong>
+          <button
+            type="button"
+            onClick={() => setShowAssignmentModal(true)}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 7,
+              border: "1px solid #0284C7",
+              background: "#F0F9FF",
+              color: "#0369A1",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+            }}
+            title="Xuất phiếu phân công nhiệm vụ buồng phòng (BP_BM2)"
+          >
+            <Printer size={13} /> In phiếu phân công (BP_BM2)
+          </button>
+        </div>
         {tasks.slice(0,5).map(task=><div key={task.id} style={{padding:"11px 16px",borderBottom:"1px solid #F1F5F9"}}>
           <div style={{display:"flex",justifyContent:"space-between",gap:8}}><strong style={{fontSize:12}}>P.{task.room_id}</strong><span style={{fontSize:10,color:task.blocking_incident?"#DC2626":"#64748B"}}>{task.blocking_incident?"Có sự cố":"Thường"}</span></div>
           <p style={{fontSize:11,color:"#64748B",marginTop:3}}>{task.assignee || "Chưa phân công"} · {new Date(task.updated_at).toLocaleTimeString("vi-VN", {hour:"2-digit",minute:"2-digit"})}</p>
         </div>)}
       </div>
+
+      {showAssignmentModal && (
+        <AssignmentPdfModal
+          options={{
+            managerName: managerName || undefined,
+            items: tasks.slice(0, 10).map(t => ({
+              roomNumber: t.room_id,
+              taskType: t.blocking_incident ? "Xử lý sự cố buồng phòng" : "Dọn phòng tiêu chuẩn",
+              deadline: "11:30",
+              timeRange: `${new Date(t.updated_at).toLocaleTimeString("vi-VN", {hour:"2-digit",minute:"2-digit"})} - 11:30`,
+              status: t.status === "READY" ? "Sẵn sàng" : t.checklist_complete ? "Đã dọn xong" : "Đang dọn",
+            })),
+          }}
+          onClose={() => setShowAssignmentModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1340,8 +1426,9 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
               setLiveTasks(previous => previous.map(item => item.id === task.id ? task : item));
               setRefreshApprovalsCount(value => value + 1);
             }}
+            managerName={currentManager?.name}
           />}
-          {page==="staff"      && <StaffOperationsScreen employees={liveEmployees} tasks={liveTasks} onAdd={() => setShowEmployeeProvision(true)} />}
+          {page==="staff"      && <StaffOperationsScreen employees={liveEmployees} tasks={liveTasks} onAdd={() => setShowEmployeeProvision(true)} managerName={currentManager?.name} />}
           {page==="incidents"  && <IncidentsScreen incidents={liveIncidents} onApproveDispatch={approveAndDispatchIncident} workOrders={liveTechnicalOrders} onResolve={item => {setResolveIncident(item); setResolveNote(""); setResolveError(null);}} />}
         </div>
       </div>

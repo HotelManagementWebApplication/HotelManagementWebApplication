@@ -86,6 +86,7 @@ describe("HousekeepingStation Operational Interface", () => {
   const mockLinen = [
     { id: "l1", name: "Ga trải giường King", unit: "bộ", current_quantity: 45, safety_threshold: 20, service_id: null, active: true, category: "LINEN" },
     { id: "l5", name: "Khăn tắm lớn", unit: "cái", current_quantity: 15, safety_threshold: 40, service_id: null, active: true, category: "TOWELS" },
+    { id: "mb1", name: "Nước suối minibar 330 ml", unit: "chai", current_quantity: 240, safety_threshold: 80, service_id: "MINIBAR", active: true, category: "MINIBAR" },
   ];
 
   beforeEach(() => {
@@ -216,9 +217,16 @@ describe("HousekeepingStation Operational Interface", () => {
     // 3. Linen & Supplies
     const linenNav = screen.getByRole("button", { name: /Đồ vải & Vật tư ca/i });
     fireEvent.click(linenNav);
-    expect(await screen.findByText("Kho đồ vải & Vật tư")).toBeDefined();
+    expect(await screen.findByText(/Kho đồ vải & Vật tư/i)).toBeDefined();
 
-    // 4. Incidents
+    // 4. Minibar
+    const minibarNav = screen.getByRole("button", { name: /Minibar & Quản lý kho/i });
+    fireEvent.click(minibarNav);
+    expect(await screen.findAllByText(/Minibar & Quản lý kho/i)).toBeDefined();
+    expect(screen.getAllByText("Trả hàng về kho")[0]).toBeDefined();
+    expect(screen.getAllByText(/Phiếu trả hàng về kho/i)[0]).toBeDefined();
+
+    // 5. Incidents
     const incidentNav = screen.getByRole("button", { name: /Báo sự cố kỹ thuật/i });
     fireEvent.click(incidentNav);
     expect(await screen.findByText("Quản lý và theo dõi sự cố phòng liên kết với Bộ phận Kỹ thuật")).toBeDefined();
@@ -546,4 +554,130 @@ describe("HousekeepingStation Operational Interface", () => {
       expect(alertSpy).toHaveBeenCalledWith("Không thể bắt đầu dọn phòng. Vui lòng thử lại.");
     });
   });
+
+  it("alerts when supply is under 20% and notifies warehouse department without showing minibar in linen tab", async () => {
+    const mockLinenWithCritical = [
+      { id: "l1", name: "Ga trải giường King", unit: "bộ", current_quantity: 45, safety_threshold: 20, service_id: null, active: true, category: "LINEN" },
+      { id: "l5", name: "Khăn tắm lớn", unit: "cái", current_quantity: 3, safety_threshold: 40, service_id: null, active: true, category: "TOWELS" }, // 3/40 = 7.5% < 20%
+      { id: "mb1", name: "Nước suối minibar 330 ml", unit: "chai", current_quantity: 240, safety_threshold: 80, service_id: "MINIBAR", active: true, category: "MINIBAR" },
+    ];
+    vi.spyOn(enterpriseApi, "linen").mockResolvedValue(mockLinenWithCritical as any);
+
+    render(<HousekeepingStation onBack={onBack} />);
+    expect(await screen.findByText(/101/)).toBeDefined();
+
+    // Navigate to Linen screen
+    const linenNav = screen.getByRole("button", { name: /Đồ vải & Vật tư ca/i });
+    fireEvent.click(linenNav);
+
+    // Verify Minibar category does NOT exist in Linen screen
+    expect(screen.queryByRole("button", { name: /^Minibar$/i })).toBeNull();
+
+    // Verify warning for item under 20% is displayed
+    expect(await screen.findByText(/Cảnh báo vật dụng dưới 20% định mức an toàn:/i)).toBeDefined();
+    expect(screen.getByText(/Khăn tắm lớn \(còn 3 cái \/ tối thiểu 40\)/i)).toBeDefined();
+
+    // Click "Báo kho cấp hàng khẩn cấp"
+    const notifyBtn = screen.getByRole("button", { name: /Báo kho cấp hàng khẩn cấp/i });
+    fireEvent.click(notifyBtn);
+
+    // Verify confirmation message
+    expect(await screen.findByText(/Đã gửi thông báo yêu cầu cấp hàng tới Bộ phận Kho/i)).toBeDefined();
+  });
+
+  it("creates a return-to-warehouse ticket with status Chờ kho duyệt and approves it via Kho duyệt nhận hàng calling RETURN", async () => {
+    const moveSpy = vi.spyOn(enterpriseApi, "moveLinen").mockResolvedValue({} as any);
+
+    render(<HousekeepingStation onBack={onBack} />);
+    expect(await screen.findByText(/101/)).toBeDefined();
+
+    // Navigate to Minibar screen
+    const minibarNav = screen.getByRole("button", { name: /Minibar & Quản lý kho/i });
+    fireEvent.click(minibarNav);
+
+    // Click "Trả hàng về kho" button to open modal
+    const returnBtn = screen.getAllByRole("button", { name: /Trả hàng về kho/i })[0];
+    fireEvent.click(returnBtn);
+
+    // Modal is opened
+    expect(await screen.findByRole("heading", { name: "Trả hàng về kho" })).toBeDefined();
+
+    // Click "Gửi yêu cầu trả hàng"
+    const submitBtn = screen.getByRole("button", { name: /Gửi yêu cầu trả hàng/i });
+    fireEvent.click(submitBtn);
+
+    // Ticket is created and automatically navigated to "Phiếu trả hàng về kho" subtab
+    expect(await screen.findByText(/Phiếu đang ở trạng thái Chờ kho duyệt!/i)).toBeDefined();
+
+    // Verify "Chờ kho duyệt" badge is visible
+    expect(screen.getAllByText(/Chờ kho duyệt/i).length).toBeGreaterThan(0);
+
+    // Click "Kho duyệt nhận hàng"
+    const approveBtn = screen.getAllByRole("button", { name: /Kho duyệt nhận hàng/i })[0];
+    fireEvent.click(approveBtn);
+
+    // Verify enterpriseApi.moveLinen was called with RETURN
+    await waitFor(() => {
+      expect(moveSpy).toHaveBeenCalledWith(expect.objectContaining({
+        movement_type: "RETURN",
+      }));
+    });
+
+    // Verify success banner and status update
+    expect(await screen.findByText(/Bộ phận Kho đã duyệt nhận phiếu/i)).toBeDefined();
+  });
+
+  it("exports inspection and minibar PDF report (BP_BM1) when room is cleaned and awaiting inspection", async () => {
+    // Mock window.open
+    const mockPrint = vi.fn();
+    const mockOpen = vi.fn().mockReturnValue({
+      document: {
+        open: vi.fn(),
+        write: vi.fn(),
+        close: vi.fn(),
+      },
+      focus: vi.fn(),
+      print: mockPrint,
+    });
+    vi.stubGlobal("open", mockOpen);
+
+    render(<HousekeepingStation onBack={onBack} />);
+    expect(await screen.findByText(/101/)).toBeDefined();
+
+    // Navigate to Inspection tab
+    const inspectionNav = screen.getByRole("button", { name: /Kiểm tra & Nghiệm thu/i });
+    fireEvent.click(inspectionNav);
+
+    // Verify room 305 (status: CLEANED -> inspecting) is displayed under "Chờ quản lý kiểm tra"
+    expect(await screen.findByText("305")).toBeDefined();
+
+    // Find and click "Xuất PDF (BP_BM1)" button
+    const exportPdfBtns = screen.getAllByRole("button", { name: /Xuất PDF \(BP_BM1\)/i });
+    expect(exportPdfBtns.length).toBeGreaterThan(0);
+    fireEvent.click(exportPdfBtns[0]);
+
+    // Modal is opened showing Form BP_BM1
+    expect(await screen.findByRole("heading", { name: /Phiếu kiểm tra vệ sinh và minibar · Biểu mẫu BP_BM1/i })).toBeDefined();
+
+    // Verify template fields from the image are present
+    expect(screen.getByText(/KHÁCH SẠN MAM HOTEL/i)).toBeDefined();
+    expect(screen.getAllByText(/PHIẾU KIỂM TRA VỆ SINH VÀ MINIBAR/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Mã biểu mẫu:/i)).toBeDefined();
+    expect(screen.getAllByText(/BP_BM1/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Đơn vị phụ trách:/i)).toBeDefined();
+    expect(screen.getAllByText(/Buồng phòng/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Giường và đồ vải/i)).toBeDefined();
+    expect(screen.getByText(/Phòng tắm/i)).toBeDefined();
+    expect(screen.getByText(/Sàn và bề mặt/i)).toBeDefined();
+    expect(screen.getByText(/Điện nước và an toàn/i)).toBeDefined();
+    expect(screen.getByText(/Đồ dùng và minibar/i)).toBeDefined();
+    expect(screen.getByText(/Xác nhận và trách nhiệm/i)).toBeDefined();
+
+    // Click "In phiếu / Lưu PDF"
+    const printBtns = screen.getAllByRole("button", { name: /In phiếu \/ Lưu PDF|In phiếu PDF \(BP_BM1\)/i });
+    fireEvent.click(printBtns[0]);
+
+    expect(mockOpen).toHaveBeenCalled();
+  });
 });
+
