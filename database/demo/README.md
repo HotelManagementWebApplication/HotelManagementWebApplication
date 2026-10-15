@@ -1,5 +1,24 @@
 # Dựng lại cơ sở dữ liệu minh họa
 
+## Bổ sung mẫu cho tab Kho
+
+Môi trường test riêng của Lê Huy dùng database `QLKS_LeHuy_Local` và các file
+riêng, xem [LEHUY_LOCAL.md](LEHUY_LOCAL.md). Không cần thay đổi database `QLKS`
+đang dùng trước đó.
+
+Sau khi backend đã áp dụng đủ Flyway V1–V6, dừng backend và chạy
+`seed_inventory.sql` để thêm 22 mặt hàng: 4 món ăn, 4 thức uống, 4 đồ gia dụng
+và 10 mặt hàng minibar (nước uống, bia/rượu, snack, chocolate, kẹo, hạt và bánh quy).
+Script chỉ thêm mã chưa có, giữ nguyên dữ liệu và số lượng hiện tại; không reset
+database và không thay đổi schema. Các hàng này dành cho kho nội bộ, không được
+niêm yết trên danh mục công khai. Khởi động lại backend sau khi nạp.
+
+Ví dụ cho SQL Server Express local, chạy từ thư mục gốc repository:
+
+```powershell
+sqlcmd -S 'tcp:localhost,1433' -E -C -d QLKS_LeHuy_Local -b -I -f 65001 -i database/demo/seed_inventory.sql
+```
+
 Chỉ chạy các tập lệnh này theo cách thủ công. Ứng dụng không được xóa hoặc nạp
 dữ liệu vào cơ sở dữ liệu khi khởi động.
 
