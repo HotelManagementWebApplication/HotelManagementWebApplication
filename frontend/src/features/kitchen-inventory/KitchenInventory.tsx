@@ -856,7 +856,7 @@ function TransactionsScreen({ transactions = [], searchQuery }: { transactions?:
 
       {/* Tabs */}
       <div style={{ display:"flex",borderBottom:"2px solid #E2E8F0",marginBottom:16 }}>
-        {([["all","Tất cả"],["import","Nhập kho"],["export","Xuất kho"],["waste","Hao hụt"],["adjustment","Điều chỉnh"]] as [string,string][]).map(([v,l]) => {
+        {([["all","Tất cả"],["import","Nhập kho"],["export","Xuất kho"],["waste","Hao hụt"]] as [string,string][]).map(([v,l]) => {
           const active = txTab === v;
           return (
             <button key={v} onClick={() => setTxTab(v as "all"|TxType)}
