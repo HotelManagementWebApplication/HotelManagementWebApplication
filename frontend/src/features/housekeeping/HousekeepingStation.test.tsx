@@ -276,6 +276,8 @@ describe("HousekeepingStation Operational Interface", () => {
     expect(housekeepingTechnicalApi.updateTask).not.toHaveBeenCalled();
     expect(housekeepingTechnicalApi.addChecklistResult).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("Thay ga trải giường", { exact: true }));
+    expect((screen.getByRole("button", { name: /Cần hoàn thành checklist/i }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByText("Lau sàn phòng tắm", { exact: true }));
     // Complete only after every displayed checklist item is checked.
     const completeBtn = screen.getByRole("button", { name: /Hoàn tất vệ sinh & Bàn giao/i });
     fireEvent.click(completeBtn);
@@ -283,6 +285,43 @@ describe("HousekeepingStation Operational Interface", () => {
     await waitFor(() => {
       expect(housekeepingTechnicalApi.updateTask).toHaveBeenCalledWith(201, { status: "CLEANED" });
     });
+  });
+
+  it("uses active templates and the latest result while keeping unrecorded items incomplete", async () => {
+    vi.mocked(housekeepingTechnicalApi.checklistTemplates).mockResolvedValue([
+      { id: 1, name: "Thay ga trải giường", active: true },
+      { id: 2, name: "Lau sàn phòng tắm", active: true },
+      { id: 3, name: "Mục đã ngừng dùng", active: false },
+    ]);
+    vi.mocked(housekeepingTechnicalApi.checklistResults).mockResolvedValue([
+      { id: 9, task_id: 201, item: "Thay ga trải giường", passed: true, note: null, completed_by: "EMP01", completed_at: "2026-09-20T09:00:00" },
+      { id: 3, task_id: 201, item: "Thay ga trải giường", passed: false, note: null, completed_by: "EMP01", completed_at: "2026-09-20T08:00:00" },
+      { id: 10, task_id: 201, item: "Mục đã ngừng dùng", passed: true, note: null, completed_by: "EMP01", completed_at: "2026-09-20T09:00:00" },
+    ]);
+    render(<HousekeepingStation onBack={onBack} />);
+    fireEvent.click(await screen.findByText("P.201"));
+    expect(await screen.findByText("Lau sàn phòng tắm", { exact: true })).toBeDefined();
+    expect(screen.queryByText("Mục đã ngừng dùng", { exact: true })).toBeNull();
+    expect(screen.getAllByText("Thay ga trải giường", { exact: true })).toHaveLength(1);
+    expect((screen.getByRole("button", { name: /Cần hoàn thành checklist \(1\/2\)/i }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByText("Lau sàn phòng tắm", { exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất vệ sinh & Bàn giao/i }));
+    await waitFor(() => expect(housekeepingTechnicalApi.updateTask).toHaveBeenCalledWith(201, { status: "CLEANED" }));
+    expect(vi.mocked(housekeepingTechnicalApi.addChecklistResult).mock.calls.map(([, body]) => body.item)).toEqual([
+      "Thay ga trải giường", "Lau sàn phòng tắm",
+    ]);
+  });
+
+  it("does not complete a task without an active checklist", async () => {
+    vi.mocked(housekeepingTechnicalApi.checklistTemplates).mockResolvedValue([]);
+    vi.mocked(housekeepingTechnicalApi.checklistResults).mockResolvedValue([]);
+    render(<HousekeepingStation onBack={onBack} />);
+    fireEvent.click(await screen.findByText("P.201"));
+    expect(await screen.findByText("Chưa có hạng mục checklist nào được thiết lập.")).toBeDefined();
+    const button = screen.getByRole("button", { name: /Cần hoàn thành checklist \(0\/0\)/i }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    fireEvent.click(button);
+    expect(housekeepingTechnicalApi.updateTask).not.toHaveBeenCalled();
   });
 
   it("enforces state transition guards: inspecting and ready rooms cannot start or re-complete cleaning", async () => {

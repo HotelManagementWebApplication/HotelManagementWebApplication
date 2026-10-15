@@ -32,18 +32,26 @@ public class EnterpriseExtensionService {
     private static final VietnameseCodeConverters.TechnicalAssetStatusConverter ASSET_STATUS = new VietnameseCodeConverters.TechnicalAssetStatusConverter();
     private static final VietnameseCodeConverters.TechnicalAssetLocationTypeConverter ASSET_LOCATION_TYPE = new VietnameseCodeConverters.TechnicalAssetLocationTypeConverter();
     private final EnterpriseDatabase database;
+    private final com.hospitality.mis.service.governance.AuditService audit;
 
-    public EnterpriseExtensionService(EnterpriseDatabase database) { this.database = database; }
+    public EnterpriseExtensionService(EnterpriseDatabase database,com.hospitality.mis.service.governance.AuditService audit) { this.database = database;this.audit=audit; }
 
     @Transactional(readOnly = true)
     public List<EnterpriseDtos.OtaReconciliationResponse> ota() {
         return database.ota((rs, n) -> new EnterpriseDtos.OtaReconciliationResponse(rs.getLong(1), rs.getString(2), rs.getString(3),
-                rs.getString(4), rs.getBigDecimal(5), rs.getBigDecimal(6), rs.getBigDecimal(7), OTA_STATUS.convertToEntityAttribute(rs.getString(8)),
+                new VietnameseCodeConverters.BookingSourceConverter().convertToEntityAttribute(rs.getString(4)), rs.getBigDecimal(5), rs.getBigDecimal(6), rs.getBigDecimal(7), OTA_STATUS.convertToEntityAttribute(rs.getString(8)),
                 rs.getTimestamp(9).toLocalDateTime()));
     }
 
+    @Transactional
     public EnterpriseDtos.OtaReconciliationResponse updateOtaStatus(long reservationId, String status) {
+        if(!java.util.Set.of("PENDING","MATCHED","DISPUTED").contains(status))
+            throw new DomainException("INVALID_OTA_STATUS","Trạng thái đối soát OTA không hợp lệ");
+        var before=ota().stream().filter(row->row.reservationId().equals(reservationId)).findFirst()
+            .orElseThrow(()->new DomainException("OTA_RESERVATION_NOT_FOUND","Không tìm thấy booking OTA"));
+        if(before.status().equals(status))return before;
         database.updateOta(reservationId,OTA_STATUS.convertToDatabaseColumn(code(status)));
+        audit.record(com.hospitality.mis.middleware.security.SecurityActor.currentActor(),"OTA_RECONCILIATION_UPDATED","OTA_RESERVATION",String.valueOf(reservationId),before.status(),status,null);
         return ota().stream().filter(row -> row.reservationId().equals(reservationId)).findFirst()
                 .orElseThrow(() -> new DomainException("OTA_RESERVATION_NOT_FOUND", "Không tìm thấy booking OTA"));
     }
@@ -53,9 +61,14 @@ public class EnterpriseExtensionService {
         return database.vatInvoices((rs,n)->vat(rs));
     }
 
+    @Transactional
     public EnterpriseDtos.VatInvoiceResponse createVat(EnterpriseDtos.VatInvoiceRequest request, String actor) {
+        String principal=com.hospitality.mis.middleware.security.SecurityActor.requireBoundActor(actor);
+        if("COMPANY".equals(request.customerType())&&(request.taxCode()==null||request.taxCode().isBlank()||request.companyName()==null||request.companyName().isBlank()||request.companyAddress()==null||request.companyAddress().isBlank()))
+            throw new DomainException("VAT_COMPANY_DETAILS_REQUIRED","Hóa đơn doanh nghiệp cần mã số thuế, tên và địa chỉ công ty");
         String number = "VAT-" + LocalDate.now().getYear() + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
-        long id = database.createVat(request,number,VAT_RATE,VAT_CUSTOMER_TYPE.convertToDatabaseColumn(code(request.customerType())),actor);
+        long id = database.createVat(request,number,VAT_RATE,VAT_CUSTOMER_TYPE.convertToDatabaseColumn(code(request.customerType())),principal);
+        audit.record(principal,"VAT_INVOICE_ISSUED","VAT_INVOICE",String.valueOf(id),null,String.valueOf(request.invoiceId()),null);
         return vatInvoices().stream().filter(row -> row.id().equals(id)).findFirst().orElseThrow();
     }
 

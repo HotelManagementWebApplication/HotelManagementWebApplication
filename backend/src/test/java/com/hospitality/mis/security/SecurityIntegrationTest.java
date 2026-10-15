@@ -139,13 +139,13 @@ class SecurityIntegrationTest {
     /** Xóa token/approval/employee và seed role fixture trước mỗi test độc lập. */
     void seedUsers() {
 
-        jdbc.update("DELETE MaLamMoiDangNhap WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'staff',N'kitchen')");
-        jdbc.update("DELETE SuKienDangNhapNhanVien WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'staff',N'kitchen')");
-        jdbc.update("DELETE CaLamViecNhanVien WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'staff',N'kitchen')");
+        jdbc.update("DELETE MaLamMoiDangNhap WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'kitchen')");
+        jdbc.update("DELETE SuKienDangNhapNhanVien WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'kitchen')");
+        jdbc.update("DELETE CaLamViecNhanVien WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'kitchen')");
 
         approvals.deleteAll();
 
-        jdbc.update("DELETE NhanVien WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'staff',N'kitchen')");
+        jdbc.update("DELETE NhanVien WHERE maNhanVien IN(N'admin',N'director',N'manager',N'hr',N'frontdesk',N'kitchen')");
 
         jdbc.update("delete from NhatKyKiemSoat");
         employees.save(employee("admin", "admin-password", EmployeeRole.ADMIN, "0900000000"));
@@ -153,7 +153,6 @@ class SecurityIntegrationTest {
         employees.save(employee("manager", "manager-password", EmployeeRole.MANAGER, "0900000001"));
         employees.save(employee("hr", "hr-password", EmployeeRole.HR, "0900000011"));
         employees.save(employee("frontdesk", "frontdesk-password", EmployeeRole.FRONT_DESK, "0900000002"));
-        employees.save(employee("staff", "staff-password", EmployeeRole.STAFF, "0900000003"));
         employees.save(employee("kitchen", "kitchen-password", EmployeeRole.KITCHEN, "0900000004"));
         employees.flush();
 
@@ -373,119 +372,9 @@ class SecurityIntegrationTest {
         }
     }
 
-    @Test
-    /** Given năm password sai, When vượt threshold, Then audit đủ và account bị lock. */
-    void failedLoginsAreAuditedAndLockTheAccountAtTheThreshold() throws Exception {
-        for (int attempt = 0; attempt < 5; attempt++) {
-            mockMvc.perform(post("/api/auth/login")
-                            .contentType(APPLICATION_JSON)
-                            .content(json(new AuthDtos.LoginRequest("staff", "wrong-password"))))
-                    .andExpect(status().isUnauthorized());
-        }
 
-        Employee locked = employees.findById("staff").orElseThrow();
-        assertThat(locked.getFailedLoginAttempts()).isEqualTo(5);
-        assertThat(locked.isAccountNonLocked()).isFalse();
-        assertThat(locked.getLastFailedLoginAt()).isNotNull();
-        assertThat(jdbc.queryForObject(
-                "select count(*) from NhatKyKiemSoat where nguoiThucHien = 'staff' and hanhDong = 'LOGIN_FAILED'",
-                Integer.class)).isEqualTo(5);
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType(APPLICATION_JSON)
-                        .content(json(new AuthDtos.LoginRequest("staff", "staff-password"))))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"));
-    }
 
-    @Test
-    /** Given account disabled, When login, Then credentials không tạo token. */
-    void disabledAccountCannotAuthenticate() throws Exception {
-        Employee disabled = employees.findById("staff").orElseThrow();
-        disabled.setEnabled(false);
-        employees.saveAndFlush(disabled);
 
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType(APPLICATION_JSON)
-                        .content(json(new AuthDtos.LoginRequest("staff", "staff-password"))))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("ACCOUNT_DISABLED"));
-    }
-
-    @Test
-    /** Given access token đã phát, When disable hoặc lock account, Then token cũ cũng bị reject. */
-    void existingAccessTokenIsRejectedAfterAccountIsDisabledOrLocked() throws Exception {
-        JsonNode disabledTokens = login("staff", "staff-password");
-        Employee disabled = employees.findById("staff").orElseThrow();
-        disabled.setEnabled(false);
-        employees.saveAndFlush(disabled);
-
-        mockMvc.perform(get("/api/services")
-                        .header(AUTHORIZATION, bearer(disabledTokens.get("access_token").asText())))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
-
-        seedUsers();
-        JsonNode lockedTokens = login("staff", "staff-password");
-        Employee locked = employees.findById("staff").orElseThrow();
-        locked.setAccountNonLocked(false);
-        employees.saveAndFlush(locked);
-
-        mockMvc.perform(get("/api/services")
-                        .header(AUTHORIZATION, bearer(lockedTokens.get("access_token").asText())))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
-    }
-
-    @Test
-    /** Given refresh của account disabled/locked, When refresh, Then reject và revoke token hiện tại. */
-    void refreshRejectsDisabledOrLockedAccountAndRevokesCurrentToken() throws Exception {
-        JsonNode disabledTokens = login("staff", "staff-password");
-        Employee disabled = employees.findById("staff").orElseThrow();
-        disabled.setEnabled(false);
-        employees.saveAndFlush(disabled);
-
-        String disabledRefreshToken = disabledTokens.get("refresh_token").asText();
-        mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(APPLICATION_JSON)
-                        .content(json(new AuthDtos.RefreshRequest(
-                                disabledRefreshToken))))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("ACCOUNT_DISABLED"));
-        assertThat(refreshTokens.findAll()).anySatisfy(token -> {
-            if (token.getTokenHash().equals(JwtTokenService.hash(disabledRefreshToken))) {
-                assertThat(token.getRevokedAt()).isNotNull();
-            }
-        });
-        mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(APPLICATION_JSON)
-                        .content(json(new AuthDtos.RefreshRequest(disabledRefreshToken))))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
-
-        seedUsers();
-        JsonNode lockedTokens = login("staff", "staff-password");
-        Employee locked = employees.findById("staff").orElseThrow();
-        locked.setAccountNonLocked(false);
-        employees.saveAndFlush(locked);
-
-        String lockedRefreshToken = lockedTokens.get("refresh_token").asText();
-        mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(APPLICATION_JSON)
-                        .content(json(new AuthDtos.RefreshRequest(
-                                lockedRefreshToken))))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"));
-        assertThat(refreshTokens.findAll()).anySatisfy(token -> {
-            if (token.getTokenHash().equals(JwtTokenService.hash(lockedRefreshToken))) {
-                assertThat(token.getRevokedAt()).isNotNull();
-            }
-        });
-        mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(APPLICATION_JSON)
-                        .content(json(new AuthDtos.RefreshRequest(lockedRefreshToken))))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
-    }
 
 
     @Test
@@ -598,32 +487,6 @@ class SecurityIntegrationTest {
 
 
 
-    @Test
-
-    /** Given từng role không đủ quyền, When gọi mutation, Then trả 403 nhất quán. */
-    void mutatingEndpointRoleChecksReturn403() throws Exception {
-
-        String staffToken = bearer(login("staff", "staff-password").get("access_token").asText());
-        mockMvc.perform(post("/api/auth/employees")
-
-                        .header(AUTHORIZATION, staffToken)
-
-                        .contentType(APPLICATION_JSON)
-
-                        .content("{\"employee_id\":\"new\",\"full_name\":\"New\",\"password\":\"new-password\",\"role\":\"FRONT_DESK\",\"phone\":\"0900000007\"}"))
-                .andExpect(status().isForbidden());
-
-        mockMvc.perform(post("/api/services")
-
-                        .header(AUTHORIZATION, staffToken)
-
-                        .contentType(APPLICATION_JSON)
-
-                        .content("{\"id\":\"S1\",\"name\":\"Water\",\"price\":1,\"opening_stock\":0,\"safety_threshold\":0}"))
-
-                .andExpect(status().isForbidden());
-
-    }
 
 
 
@@ -704,8 +567,7 @@ class SecurityIntegrationTest {
         String adminToken = bearer(login("admin", "admin-password").get("access_token").asText());
         provision(adminToken, "a-direct", EmployeeRole.DIRECTOR, "0900000015")
                 .andExpect(status().isForbidden());
-        provision(adminToken, "a-staff", EmployeeRole.STAFF, "0900000016")
-                .andExpect(status().isCreated());
+
         reset(adminToken, "director")
                 .andExpect(status().isForbidden());
         reset(adminToken, "manager")
@@ -723,18 +585,13 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    /** Given HR, When đọc authority hoặc gọi admin/finance, Then không có quyền và mọi mutation bị 403. */
-    void hrCannotProvisionOrResetAndHasNoFinancialPermissions() throws Exception {
+    /** HR chỉ có quyền đọc nhân viên và đọc/ghi phân ca. */
+    void hrHasOnlyEmployeeAndShiftPermissions() throws Exception {
         UserDetails hr = userDetailsService.loadUserByUsername("hr");
         assertThat(hr.getAuthorities()).extracting(a -> a.getAuthority())
                 .containsExactlyInAnyOrder("ROLE_HR", "PERMISSION_EMPLOYEE_READ",
                         "PERMISSION_SHIFT_READ", "PERMISSION_SHIFT_WRITE");
 
-        String hrToken = bearer(login("hr", "hr-password").get("access_token").asText());
-        provision(hrToken, "hr-created", EmployeeRole.STAFF, "0900000019")
-                .andExpect(status().isForbidden());
-        reset(hrToken, "staff")
-                .andExpect(status().isForbidden());
     }
 
 

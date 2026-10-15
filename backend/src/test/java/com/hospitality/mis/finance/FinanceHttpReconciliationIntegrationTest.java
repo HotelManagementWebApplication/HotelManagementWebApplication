@@ -74,7 +74,7 @@ class FinanceHttpReconciliationIntegrationTest {
         debt.setAmount(new BigDecimal("100")); debt.setSettledAmount(new BigDecimal("25")); debt.setRecordedAt(occurredAt); em.persist(debt);
         em.flush();
 
-        mvc.perform(get("/api/finance/reconciliation").param("from", reportDate.toString()).param("to", reportDate.toString()))
+        mvc.perform(get("/api/finance/reconciliation").param("from", reportDate.toString()).param("to", occurredAt.plusMinutes(5).toLocalDate().toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totals_by_method.CASH").value(80))
                 .andExpect(jsonPath("$.totals_by_method.CARD").value(200))
@@ -94,17 +94,18 @@ class FinanceHttpReconciliationIntegrationTest {
 
         mvc.perform(post("/api/finance/partner-debts/{id}/settle", debt.getId()).contentType(APPLICATION_JSON)
                         .header("Idempotency-Key", "finance-settle-1")
-                        .content("{\"amount\":25,\"note\":\"bank settlement\"}"))
+                        .content("{\"method\":\"BANK_TRANSFER\",\"amount\":25,\"note\":\"bank settlement\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.settled_amount").value(50));
         mvc.perform(post("/api/finance/partner-debts/{id}/settle", debt.getId()).contentType(APPLICATION_JSON)
                         .header("Idempotency-Key", "finance-settle-1")
-                        .content("{\"amount\":25,\"note\":\"bank settlement\"}"))
+                        .content("{\"method\":\"BANK_TRANSFER\",\"amount\":25,\"note\":\"bank settlement\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.settled_amount").value(50));
         mvc.perform(get("/api/finance/partner-debts/{id}/settlements", debt.getId()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].amount").value(25));
         mvc.perform(get("/api/finance/ledger").param("entry_type", "PARTNER_DEBT_SETTLEMENT"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1));
 
+        em.createNativeQuery("INSERT NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) VALUES(N'next',N'Next cashier',N'unused',N'Kế toán',N'0999000201')").executeUpdate();
         mvc.perform(post("/api/finance/cash-handovers").contentType(APPLICATION_JSON)
                         .header("Idempotency-Key", "finance-handover-1")
                         .content("{\"shift_code\":\"SHIFT-REAL\",\"from_actor\":\"accounting\",\"to_actor\":\"next\",\"actual_amount\":75,\"note\":\"counted\"}"))
@@ -119,20 +120,20 @@ class FinanceHttpReconciliationIntegrationTest {
                         .content("{\"shift_code\":\"SHIFT-MISSING\",\"from_actor\":\"accounting\",\"to_actor\":\"next\",\"actual_amount\":1}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post("/api/finance/expenses").contentType(APPLICATION_JSON)
-                        .content("{\"category\":\"Food\",\"description\":\"Lunch\",\"amount\":1}"))
+                        .content("{\"method\":\"BANK_TRANSFER\",\"category\":\"Food\",\"description\":\"Lunch\",\"amount\":1}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post("/api/finance/partner-debts").contentType(APPLICATION_JSON)
                         .content("{\"partner_name\":\"Supplier\",\"reference_code\":\"MISSING-1\",\"amount\":1}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post("/api/finance/partner-debts/1/settle").contentType(APPLICATION_JSON)
-                        .content("{\"amount\":1}"))
+                        .content("{\"method\":\"BANK_TRANSFER\",\"amount\":1}"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     @WithMockUser(username = "accounting", roles = "ACCOUNTING")
     void expenseRetryReplaysAndPayloadMismatchDoesNotCreateAnotherLedgerEntry() throws Exception {
-        String body = "{\"category\":\"Food\",\"description\":\"Lunch\",\"amount\":25}";
+        String body = "{\"method\":\"BANK_TRANSFER\",\"category\":\"Food\",\"description\":\"Lunch\",\"amount\":25}";
         var first = mvc.perform(post("/api/finance/expenses").contentType(APPLICATION_JSON)
                         .header("Idempotency-Key", "expense-retry-1").content(body))
                 .andExpect(status().isOk()).andReturn();
@@ -149,7 +150,7 @@ class FinanceHttpReconciliationIntegrationTest {
 
         mvc.perform(post("/api/finance/expenses").contentType(APPLICATION_JSON)
                         .header("Idempotency-Key", "expense-retry-1")
-                        .content("{\"category\":\"Food\",\"description\":\"Dinner\",\"amount\":25}"))
+                        .content("{\"method\":\"BANK_TRANSFER\",\"category\":\"Food\",\"description\":\"Dinner\",\"amount\":25}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_CONFLICT"));
     }
@@ -167,7 +168,7 @@ class FinanceHttpReconciliationIntegrationTest {
         debt.setAmount(new BigDecimal("100")); debt.setSettledAmount(BigDecimal.ZERO); debt.setRecordedAt(LocalDateTime.now());
         em.persist(debt); em.flush();
         mvc.perform(post("/api/finance/partner-debts/{id}/settle", debt.getId()).contentType(APPLICATION_JSON)
-                        .header("Idempotency-Key", "settle-invalid-1").content("{\"amount\":101}"))
+                        .header("Idempotency-Key", "settle-invalid-1").content("{\"method\":\"BANK_TRANSFER\",\"amount\":101}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("INVALID_DEBT_SETTLEMENT"));
         assertThat(settlements.findByPartnerDebtIdOrderBySettledAtAscIdAsc(debt.getId())).isEmpty();

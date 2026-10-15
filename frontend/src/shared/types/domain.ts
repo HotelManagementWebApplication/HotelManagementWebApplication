@@ -8,7 +8,6 @@ export type RoleId =
   | "director"
   | "admin"
   | "hr"
-  | "staff"
   | "fnb";
 
 export interface Role {

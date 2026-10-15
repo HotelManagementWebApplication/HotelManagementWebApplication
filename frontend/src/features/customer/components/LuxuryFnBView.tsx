@@ -229,7 +229,7 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
             style={{ fontSize: "clamp(1.85rem, 3.8vw, 3.5rem)" }}
           >
             <span className="inline-block whitespace-normal md:whitespace-nowrap">
-              Ẩm Thực &amp; Trải Nghiệm Nghỉ Dưỡng
+              Ẩm Thực &amp; Trải Nghiệm Thượng Lưu
             </span>
             <br />
             <span className="italic font-normal font-display text-[#E8C878] text-[0.72em] block mt-2">
@@ -297,7 +297,7 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
         </section>
       )}
 
-      {/* 3. FEATURED RESTAURANT SHOWCASE (Bố cục bất đối xứng lớn như Trang nghỉ dưỡng) */}
+      {/* 3. FEATURED RESTAURANT SHOWCASE (Bố cục bất đối xứng như trang khách sạn) */}
       {(fnbCategory === "all" || fnbCategory === "fine-dining") && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 pt-14 pb-10">
           <div className="bg-white rounded-3xl border border-[#E7E2D6] overflow-hidden shadow-lg grid grid-cols-1 lg:grid-cols-12 items-stretch">

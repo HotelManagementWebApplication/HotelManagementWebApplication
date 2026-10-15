@@ -41,14 +41,14 @@ describe("kitchen/accounting API contract", () => {
 
   it("uses the current idempotent finance mutation controllers", async () => {
     await kitchenAccountingApi.recordCashHandover({ shift_code: "S-1", from_actor: "e1", to_actor: "e2", actual_amount: 500000, note: "Bàn giao đủ" }, "cash-1");
-    await kitchenAccountingApi.recordExpense({ category: "SUPPLIES", description: "Mua nước", amount: 120000 }, "expense-1");
+    await kitchenAccountingApi.recordExpense({ category: "SUPPLIES", description: "Mua nước", amount: 120000, method: "BANK_TRANSFER" }, "expense-1");
     await kitchenAccountingApi.recordPartnerDebt({ partner_name: "Nhà cung cấp A", reference_code: "PO-1", amount: 900000 }, "debt-1");
-    await kitchenAccountingApi.settlePartnerDebt(7, { amount: 300000, note: "Thanh toán đợt 1" }, "settle-1");
+    await kitchenAccountingApi.settlePartnerDebt(7, { amount: 300000, method: "BANK_TRANSFER", note: "Thanh toán đợt 1" }, "settle-1");
     expect(request.mock.calls).toEqual([
       ["/api/finance/cash-handovers", expect.objectContaining({ method: "POST", body: { shift_code: "S-1", from_actor: "e1", to_actor: "e2", actual_amount: 500000, note: "Bàn giao đủ" }, idempotencyKey: "cash-1" })],
-      ["/api/finance/expenses", expect.objectContaining({ method: "POST", body: { category: "SUPPLIES", description: "Mua nước", amount: 120000 }, idempotencyKey: "expense-1" })],
+      ["/api/finance/expenses", expect.objectContaining({ method: "POST", body: { category: "SUPPLIES", description: "Mua nước", amount: 120000, method: "BANK_TRANSFER" }, idempotencyKey: "expense-1" })],
       ["/api/finance/partner-debts", expect.objectContaining({ method: "POST", body: { partner_name: "Nhà cung cấp A", reference_code: "PO-1", amount: 900000 }, idempotencyKey: "debt-1" })],
-      ["/api/finance/partner-debts/7/settle", expect.objectContaining({ method: "POST", body: { amount: 300000, note: "Thanh toán đợt 1" }, idempotencyKey: "settle-1" })],
+      ["/api/finance/partner-debts/7/settle", expect.objectContaining({ method: "POST", body: { amount: 300000, method: "BANK_TRANSFER", note: "Thanh toán đợt 1" }, idempotencyKey: "settle-1" })],
     ]);
   });
 

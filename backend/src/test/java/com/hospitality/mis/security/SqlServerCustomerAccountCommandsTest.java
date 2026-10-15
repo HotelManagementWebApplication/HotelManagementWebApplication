@@ -73,7 +73,7 @@ class SqlServerCustomerAccountCommandsTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM TaiKhoanKhachHang WHERE soDienThoai LIKE N'090909064%'",Integer.class)).isZero();
     }
     @Test void crossPrincipalPhoneRaceCreatesExactlyOneAccount()throws Exception{
-        var results=concurrent(()->{SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("CST-owner","test","ROLE_DIRECTOR"));try{employees.provision("CST-01","CST Employee","valid-password",EmployeeRole.STAFF,"0909090641",null);return "OK";}finally{SecurityContextHolder.clearContext();}},()->{register("0909090641","CST-01","CST Customer","valid-password");return "OK";});
+        var results=concurrent(()->{SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("CST-owner","test","ROLE_DIRECTOR"));try{employees.provision("CST-01","CST Employee","valid-password",EmployeeRole.FRONT_DESK,"0909090641",null);return "OK";}finally{SecurityContextHolder.clearContext();}},()->{register("0909090641","CST-01","CST Customer","valid-password");return "OK";});
         assertThat(results).containsExactlyInAnyOrder("OK","PHONE_ALREADY_IN_USE");
         assertThat(jdbc.queryForObject("SELECT (SELECT COUNT(*) FROM NhanVien WHERE soDienThoai=N'0909090641')+(SELECT COUNT(*) FROM TaiKhoanKhachHang WHERE soDienThoai=N'0909090641')",Integer.class)).isEqualTo(1);
     }

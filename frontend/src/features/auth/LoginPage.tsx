@@ -38,11 +38,11 @@ const DEMO_ROLES = [
   { label: "Buồng phòng", email: "HOUSEKEEP", desc: "Điều phối buồng phòng" },
   { label: "Kỹ thuật", email: "TECHNICAL", desc: "Kỹ thuật & bảo trì" },
   { label: "Kế toán", email: "ACCOUNTING", desc: "Điều phối kế toán" },
-  { label: "Bếp & Nhà hàng", email: "KITCHEN", desc: "Điều phối nhà hàng & kho" },
+  { label: "Kho và Dịch vụ", email: "KITCHEN", desc: "Điều phối kho và dịch vụ" },
   { label: "Nhân sự", email: "HR", desc: "Điều phối nhân sự" },
-  { label: "Quản trị", email: "ADMIN", desc: "Quản trị hệ thống" },
-  { label: "Nhân viên vận hành", email: "STAFF", desc: "Cổng nhân viên" },
 ];
+
+const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === "true";
 
 export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const [username, setUsername] = useState("");
@@ -62,7 +62,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
       sessionStorage.getItem("pending_booking_category")
     );
     setHasPendingBooking(hasPending);
-    if (hasPending && import.meta.env.DEV) {
+    if (hasPending && SHOW_DEMO_ACCOUNTS) {
       setSelectedRole("Khách hàng");
       setUsername("0901234567");
       setPassword("hotel123");
@@ -385,13 +385,13 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
         {/* 2. Center Editorial Quote Block */}
         <div className="relative z-10 px-8 lg:px-16 my-auto max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-[#D4AF6E]/30 mb-6 text-[#E6CA85] text-[10px] tracking-[0.3em] uppercase font-semibold">
-            <span>KHU NGHỈ DƯỠNG BIỂN CAO CẤP</span>
+            <span>KHÁCH SẠN THƯỢNG LƯU</span>
           </div>
 
           <h2 className="font-display font-light text-white text-3xl sm:text-4xl lg:text-5xl leading-[1.2] tracking-tight mb-6">
             Nơi từng khoảnh khắc{" "}
             <span className="italic text-[#E8C878] font-normal block mt-1">
-              hòa cùng biển trời vô tận.
+              được nâng tầm thành trải nghiệm.
             </span>
           </h2>
 
@@ -402,8 +402,8 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
           </div>
 
           <p className="text-white/80 text-sm lg:text-base font-light leading-relaxed max-w-xl">
-            Không gian kiến trúc trầm ấm bên bờ biển nguyên sơ lộng gió,
-            mở ra kỳ nghỉ an trú tuyệt đối cùng nghệ thuật ẩm thực tinh hoa và các nghi thức dưỡng tâm cổ truyền.
+            Không gian kiến trúc thanh lịch, nội thất tinh tế và dịch vụ tận tâm,
+            mở ra trải nghiệm lưu trú đẳng cấp cùng nghệ thuật ẩm thực tinh hoa và những phút giây thư giãn trọn vẹn.
           </p>
         </div>
 
@@ -411,7 +411,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
         <div className="relative z-10 p-8 lg:p-14 pt-0">
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/15 pt-6 text-[10px] uppercase tracking-[0.25em] text-white/60 font-light">
             <div className="flex items-center gap-6">
-              <span>Biệt thự hướng biển</span>
+              <span>Phòng &amp; Suite sang trọng</span>
               <span>·</span>
               <span>Ẩm thực thượng hạng</span>
               <span>·</span>
@@ -473,8 +473,8 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
             </div>
           )}
 
-          {/* ── DEMO ACCOUNT SELECTOR (Development Only) ── */}
-          {import.meta.env.DEV && (
+          {/* ── DEMO ACCOUNT SELECTOR ── */}
+          {SHOW_DEMO_ACCOUNTS && (
             <div className="mb-5 rounded-2xl bg-white border border-[#E5DDD0] shadow-sm overflow-hidden transition-all duration-300">
               {/* Quick 1-click role chips */}
               <div className="p-3 bg-[#FDFBF7] border-b border-[#F0EBE1] flex items-center justify-between gap-2">

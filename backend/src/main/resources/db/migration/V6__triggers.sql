@@ -1,182 +1,290 @@
 -- V6__triggers.sql
--- Database integrity and business-rule triggers; business commands stay in V5.
--- Contents:
---   trgBienLaiBaoDamTienThu (BienLai)
---   trgThanhToanBaoDamBienLai (GiaoDichThanhToan)
---   trgCaLamViecKhongTrung (CaLamViecNhanVien)
---   trgNhatKyKiemSoatKhongSua (NhatKyKiemSoat)
---   trgYeuCauPheDuyetKhongTuDuyet (YeuCauPheDuyet)
---   trgButToanTaiChinhKhongSua (ButToanTaiChinh)
---   trgLichSuHangThanhVienKhongSua (LichSuHangThanhVien)
---   trgDatDichVuDungKhungGioBuaAn (DatDichVuKhachSan)
---   trgDatDichVuTrongKyLuuTru (DatDichVuKhachSan)
---   trgDatDichVuChiDungKhiDangO (DatDichVuKhachSan)
+-- Mỗi đối tượng có một định nghĩa cuối cùng trong file sở hữu.
+-- SP ở V5 xử lý lệnh nghiệp vụ; trigger ở V6 bảo vệ tính toàn vẹn dữ liệu.
+-- Cách đọc:
+--   inserted chứa các dòng mới; deleted chứa các dòng cũ của cả câu lệnh.
+--   Trigger kiểm tra theo tập dòng, kể cả khi INSERT/UPDATE/DELETE nhiều dòng.
+--   THROW từ chối thao tác vi phạm; quyền, audit và lệnh nghiệp vụ nằm ở V5.
+-- Mục lục:
+--   trgBienLaiBaoDamTienThu
+--   trgThanhToanBaoDamBienLai
+--   trgCaLamViecKhongTrung
+--   trgNhatKyKiemSoatKhongSua
+--   trgYeuCauPheDuyetKhongTuDuyet
+--   trgButToanTaiChinhKhongSua
+--   trgLichSuHangThanhVienKhongSua
+--   trgDatDichVuDungKhungGioBuaAn
+--   trgDatDichVuTrongKyLuuTru
+--   trgDatDichVuChiDungKhiDangO
 
 -- =============================================================================
--- Financial integrity triggers. Procedures own authorization, audit and net
--- refundable/receiptable balances. Triggers guard historical receipt coverage
--- by gross completed collections, including multi-row INSERT/UPDATE/DELETE.
--- A refund never erases the original receipt; deleting or moving its funding
--- payment must not leave an unfunded receipt. No audit side effects here.
+-- trgBienLaiBaoDamTienThu
+-- Chặn tổng biên lai vượt tổng tiền thu hoàn tất theo hóa đơn/phương thức.
+-- Khóa hóa đơn theo mã; kiểm tra toàn bộ nhóm hóa đơn/phương thức được ghi.
+-- Tiền thu ở đây là tổng thu trước khi trừ hoàn tiền; hoàn tiền không xóa biên lai cũ.
 -- =============================================================================
 CREATE TRIGGER dbo.trgBienLaiBaoDamTienThu ON dbo.BienLai
-AFTER INSERT,UPDATE
+AFTER INSERT, UPDATE
 AS
 BEGIN
- SET NOCOUNT ON;
- DECLARE @locked BIGINT;
- SELECT @locked=h.maHoaDon FROM dbo.HoaDon h WITH(UPDLOCK,HOLDLOCK)
- WHERE h.maHoaDon IN(SELECT maHoaDon FROM inserted UNION SELECT maHoaDon FROM deleted)
- ORDER BY h.maHoaDon;
- IF EXISTS(
-  SELECT 1 FROM (SELECT DISTINCT maHoaDon,phuongThuc FROM inserted) affected
-  OUTER APPLY(SELECT SUM(b.soTien) amount FROM dbo.BienLai b
-   WHERE b.maHoaDon=affected.maHoaDon AND b.phuongThuc=affected.phuongThuc) receipts
-  OUTER APPLY(SELECT SUM(p.soTien) amount FROM dbo.GiaoDichThanhToan p
-   WHERE p.maHoaDon=affected.maHoaDon AND p.phuongThuc=affected.phuongThuc
-    AND p.loai=N'Thanh toán' AND p.trangThai=N'Đã hoàn tất') payments
-  WHERE COALESCE(receipts.amount,0)>COALESCE(payments.amount,0))
-  THROW 53601,N'Tổng biên lai vượt tiền đã thu theo hóa đơn và phương thức',1;
-END;
-GO
-
-CREATE TRIGGER dbo.trgThanhToanBaoDamBienLai ON dbo.GiaoDichThanhToan
-AFTER INSERT,UPDATE,DELETE
-AS
-BEGIN
- SET NOCOUNT ON;
- DECLARE @locked BIGINT;
- SELECT @locked=h.maHoaDon FROM dbo.HoaDon h WITH(UPDLOCK,HOLDLOCK)
- WHERE h.maHoaDon IN(SELECT maHoaDon FROM inserted UNION SELECT maHoaDon FROM deleted)
- ORDER BY h.maHoaDon;
- IF EXISTS(
-  SELECT 1 FROM (SELECT maHoaDon,phuongThuc FROM inserted UNION SELECT maHoaDon,phuongThuc FROM deleted) affected
-  OUTER APPLY(SELECT SUM(b.soTien) amount FROM dbo.BienLai b
-   WHERE b.maHoaDon=affected.maHoaDon AND b.phuongThuc=affected.phuongThuc) receipts
-  OUTER APPLY(SELECT SUM(p.soTien) amount FROM dbo.GiaoDichThanhToan p
-   WHERE p.maHoaDon=affected.maHoaDon AND p.phuongThuc=affected.phuongThuc
-    AND p.loai=N'Thanh toán' AND p.trangThai=N'Đã hoàn tất') payments
-  WHERE COALESCE(receipts.amount,0)>COALESCE(payments.amount,0))
-  THROW 53603,N'Không được làm mất giao dịch đã bảo đảm cho biên lai',1;
+    SET NOCOUNT ON;
+    DECLARE @maHoaDonDaKhoa BIGINT;
+    SELECT @maHoaDonDaKhoa = hoaDon.maHoaDon
+    FROM dbo.HoaDon hoaDon WITH (UPDLOCK, HOLDLOCK)
+    WHERE hoaDon.maHoaDon IN (
+        SELECT maHoaDon
+        FROM inserted
+        UNION
+        SELECT maHoaDon
+        FROM deleted
+    )
+    ORDER BY hoaDon.maHoaDon;
+    IF EXISTS (
+        SELECT 1
+        FROM (
+            SELECT DISTINCT maHoaDon,
+                phuongThuc
+            FROM inserted
+        ) nhomHoaDonPhuongThuc
+        OUTER APPLY (
+            SELECT SUM(bienLai.soTien) tongTien
+            FROM dbo.BienLai bienLai
+            WHERE bienLai.maHoaDon = nhomHoaDonPhuongThuc.maHoaDon
+                AND bienLai.phuongThuc = nhomHoaDonPhuongThuc.phuongThuc
+        ) tongBienLai
+        OUTER APPLY (
+            SELECT SUM(giaoDichThu.soTien) tongTien
+            FROM dbo.GiaoDichThanhToan giaoDichThu
+            WHERE giaoDichThu.maHoaDon = nhomHoaDonPhuongThuc.maHoaDon
+                AND giaoDichThu.phuongThuc = nhomHoaDonPhuongThuc.phuongThuc
+                AND giaoDichThu.loai = N'Thanh toán'
+                AND giaoDichThu.trangThai = N'Đã hoàn tất'
+        ) tongTienThu
+        WHERE COALESCE(tongBienLai.tongTien, 0) > COALESCE(tongTienThu.tongTien, 0)
+    )
+        THROW 53601, N'Tổng biên lai vượt tiền đã thu theo hóa đơn và phương thức', 1;
 END;
 GO
 
 -- =============================================================================
--- Shift overlap is a cross-row invariant, not expressible as a row CHECK.
--- INSERT and UPDATE can create an overlap (including reactivating a cancelled
--- shift or moving it to another employee). DELETE only releases capacity and
--- therefore needs no trigger. Adjacent half-open intervals remain valid.
--- Procedures take the same employee lock before changing shifts; this guard
--- also checks every inserted row in a batch. No audit or reset bypass here.
+-- trgThanhToanBaoDamBienLai
+-- Chặn sửa/xóa/chuyển giao dịch làm biên lai cũ không còn tiền thu bảo đảm.
+-- Kiểm tra cả inserted và deleted vì giao dịch có thể đổi hóa đơn/phương thức.
+-- SP V5 kiểm tra quyền, số dư thuần và audit; trigger bảo vệ tiền thu của biên lai cũ.
+-- =============================================================================
+CREATE TRIGGER dbo.trgThanhToanBaoDamBienLai ON dbo.GiaoDichThanhToan
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @maHoaDonDaKhoa BIGINT;
+    SELECT @maHoaDonDaKhoa = hoaDon.maHoaDon
+    FROM dbo.HoaDon hoaDon WITH (UPDLOCK, HOLDLOCK)
+    WHERE hoaDon.maHoaDon IN (
+        SELECT maHoaDon
+        FROM inserted
+        UNION
+        SELECT maHoaDon
+        FROM deleted
+    )
+    ORDER BY hoaDon.maHoaDon;
+    IF EXISTS (
+        SELECT 1
+        FROM (
+            SELECT maHoaDon,
+                phuongThuc
+            FROM inserted
+            UNION
+            SELECT maHoaDon,
+                phuongThuc
+            FROM deleted
+        ) nhomHoaDonPhuongThuc
+        OUTER APPLY (
+            SELECT SUM(bienLai.soTien) tongTien
+            FROM dbo.BienLai bienLai
+            WHERE bienLai.maHoaDon = nhomHoaDonPhuongThuc.maHoaDon
+                AND bienLai.phuongThuc = nhomHoaDonPhuongThuc.phuongThuc
+        ) tongBienLai
+        OUTER APPLY (
+            SELECT SUM(giaoDichThu.soTien) tongTien
+            FROM dbo.GiaoDichThanhToan giaoDichThu
+            WHERE giaoDichThu.maHoaDon = nhomHoaDonPhuongThuc.maHoaDon
+                AND giaoDichThu.phuongThuc = nhomHoaDonPhuongThuc.phuongThuc
+                AND giaoDichThu.loai = N'Thanh toán'
+                AND giaoDichThu.trangThai = N'Đã hoàn tất'
+        ) tongTienThu
+        WHERE COALESCE(tongBienLai.tongTien, 0) > COALESCE(tongTienThu.tongTien, 0)
+    )
+        THROW 53603, N'Không được làm mất giao dịch đã bảo đảm cho biên lai', 1;
+END;
+GO
+
+-- =============================================================================
+-- trgCaLamViecKhongTrung
+-- Chặn ca chưa hủy giao nhau trong lịch của cùng nhân viên.
+-- Khóa nhân viên theo mã, cùng cách với SP phân ca; kiểm tra mọi dòng trong lô.
+-- Hai ca liền kề được phép. DELETE chỉ giải phóng lịch nên không cần trigger.
 -- =============================================================================
 CREATE TRIGGER dbo.trgCaLamViecKhongTrung ON dbo.CaLamViecNhanVien
-AFTER INSERT,UPDATE
+AFTER INSERT, UPDATE
 AS
 BEGIN
- SET NOCOUNT ON;
- DECLARE @locked NVARCHAR(10);
- SELECT @locked=n.maNhanVien FROM dbo.NhanVien n WITH(UPDLOCK,HOLDLOCK)
- WHERE n.maNhanVien IN(SELECT maNhanVien FROM inserted UNION SELECT maNhanVien FROM deleted)
- ORDER BY n.maNhanVien;
- IF EXISTS(SELECT 1 FROM inserted i
-  WHERE i.trangThai<>N'Đã hủy'
-   AND dbo.fnKiemTraTrungCaLamViec(i.maNhanVien,i.thoiDiemBatDau,i.thoiDiemKetThuc,i.maCaLamViecNhanVien)=1)
-  THROW 51004,N'Ca làm việc không được trùng thời gian của cùng nhân viên',1;
+    SET NOCOUNT ON;
+    DECLARE @maNhanVienDaKhoa NVARCHAR(10);
+    SELECT @maNhanVienDaKhoa = nhanVien.maNhanVien
+    FROM dbo.NhanVien nhanVien WITH (UPDLOCK, HOLDLOCK)
+    WHERE nhanVien.maNhanVien IN (
+        SELECT maNhanVien
+        FROM inserted
+        UNION
+        SELECT maNhanVien
+        FROM deleted
+    )
+    ORDER BY nhanVien.maNhanVien;
+    IF EXISTS (
+        SELECT 1
+        FROM inserted caDuocGan
+        WHERE caDuocGan.trangThai <> N'Đã hủy'
+            AND dbo.fnKiemTraTrungCaLamViec(caDuocGan.maNhanVien, caDuocGan.thoiDiemBatDau, caDuocGan.thoiDiemKetThuc, caDuocGan.maCaLamViecNhanVien) = 1
+    )
+        THROW 51004, N'Ca làm việc không được trùng thời gian của cùng nhân viên', 1;
 END;
 GO
 
 -- =============================================================================
--- Governance guards. Audit entries are append-only from the application's
--- perspective: corrections must be new events, never rewrites of old evidence.
--- Demo/test cleanup can still DELETE its own rows; production writers have no
--- direct table permission. Approval decisions additionally keep requester and
--- approver separated even when a caller bypasses the V5 command procedure.
+-- trgNhatKyKiemSoatKhongSua
+-- Chặn sửa sự kiện audit đã ghi; điều chỉnh phải ghi sự kiện mới.
+-- DELETE vẫn dành cho reset demo/test được phép; ứng dụng không được ghi bảng trực tiếp.
 -- =============================================================================
 CREATE TRIGGER dbo.trgNhatKyKiemSoatKhongSua ON dbo.NhatKyKiemSoat
 AFTER UPDATE
 AS
 BEGIN
- SET NOCOUNT ON;
- THROW 53605,N'Nhật ký kiểm soát không được sửa; hãy ghi một sự kiện mới',1;
-END;
-GO
-
-CREATE TRIGGER dbo.trgYeuCauPheDuyetKhongTuDuyet ON dbo.YeuCauPheDuyet
-AFTER INSERT,UPDATE
-AS
-BEGIN
- SET NOCOUNT ON;
- IF EXISTS(SELECT 1 FROM inserted
-  WHERE nguoiPheDuyet IS NOT NULL
-   AND nguoiYeuCau COLLATE Latin1_General_100_BIN2=nguoiPheDuyet COLLATE Latin1_General_100_BIN2
-   AND DATALENGTH(nguoiYeuCau)=DATALENGTH(nguoiPheDuyet))
-  THROW 53606,N'Người yêu cầu không được tự phê duyệt',1;
+    SET NOCOUNT ON;
+    THROW 53605, N'Nhật ký kiểm soát không được sửa; hãy ghi một sự kiện mới', 1;
 END;
 GO
 
 -- =============================================================================
--- Immutable histories. A financial posting or membership-tier transition is
--- corrected by an explicit compensating/new row, never by rewriting evidence.
--- DELETE remains available to the authorized demo/test reset path; production
--- application writers do not receive direct table permissions.
+-- trgYeuCauPheDuyetKhongTuDuyet
+-- Chặn người yêu cầu tự phê duyệt yêu cầu của chính mình.
+-- So sánh nhị phân kèm độ dài để kiểm tra chính xác định danh hai người.
+-- =============================================================================
+CREATE TRIGGER dbo.trgYeuCauPheDuyetKhongTuDuyet ON dbo.YeuCauPheDuyet
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (
+        SELECT 1
+        FROM inserted
+        WHERE nguoiPheDuyet IS NOT NULL
+            AND nguoiYeuCau COLLATE Latin1_General_100_BIN2 = nguoiPheDuyet COLLATE Latin1_General_100_BIN2
+            AND DATALENGTH(nguoiYeuCau) = DATALENGTH(nguoiPheDuyet)
+    )
+        THROW 53606, N'Người yêu cầu không được tự phê duyệt', 1;
+END;
+GO
+
+-- =============================================================================
+-- trgButToanTaiChinhKhongSua
+-- Chặn sửa bút toán đã ghi; điều chỉnh phải tạo bút toán mới.
+-- DELETE vẫn dành cho reset demo/test được phép; ứng dụng không được ghi bảng trực tiếp.
 -- =============================================================================
 CREATE TRIGGER dbo.trgButToanTaiChinhKhongSua ON dbo.ButToanTaiChinh
 AFTER UPDATE
 AS
 BEGIN
- SET NOCOUNT ON;
- THROW 53607,N'Bút toán tài chính không được sửa; hãy tạo bút toán điều chỉnh',1;
+    SET NOCOUNT ON;
+    THROW 53607, N'Bút toán tài chính không được sửa; hãy tạo bút toán điều chỉnh', 1;
 END;
 GO
 
+-- =============================================================================
+-- trgLichSuHangThanhVienKhongSua
+-- Chặn sửa lịch sử hạng thành viên; thay đổi phải ghi dòng lịch sử mới.
+-- DELETE vẫn dành cho reset demo/test được phép; ứng dụng không được ghi bảng trực tiếp.
+-- =============================================================================
 CREATE TRIGGER dbo.trgLichSuHangThanhVienKhongSua ON dbo.LichSuHangThanhVien
 AFTER UPDATE
 AS
 BEGIN
- SET NOCOUNT ON;
- THROW 53608,N'Lịch sử hạng thành viên không được sửa; hãy ghi lần thay đổi mới',1;
+    SET NOCOUNT ON;
+    THROW 53608, N'Lịch sử hạng thành viên không được sửa; hãy ghi lần thay đổi mới', 1;
 END;
 GO
 
 -- =============================================================================
--- Hotel-service booking guards. V5 procedures remain the command boundary;
--- these triggers preserve the same invariants for batch DML and accidental
--- direct writes. Scheduled service uses the half-open stay interval [from,to).
+-- trgDatDichVuDungKhungGioBuaAn
+-- Chặn giờ dùng bữa nằm ngoài khung giờ phục vụ của bữa trưa/bữa tối.
 -- =============================================================================
 CREATE TRIGGER dbo.trgDatDichVuDungKhungGioBuaAn ON dbo.DatDichVuKhachSan
-AFTER INSERT,UPDATE
+AFTER INSERT, UPDATE
 AS
 BEGIN
- SET NOCOUNT ON;
- IF EXISTS(SELECT 1 FROM inserted
-  WHERE (buoiAn=N'Bữa trưa' AND
-         (CAST(thoiDiemDuKien AS TIME)<'11:30:00' OR CAST(thoiDiemDuKien AS TIME)>'14:00:00'))
-     OR (buoiAn=N'Bữa tối' AND
-         (CAST(thoiDiemDuKien AS TIME)<'18:00:00' OR CAST(thoiDiemDuKien AS TIME)>'22:00:00')))
-  THROW 53609,N'Giờ dùng bữa phải nằm trong khung giờ phục vụ đã công bố',1;
+    SET NOCOUNT ON;
+    IF EXISTS (
+        SELECT 1
+        FROM inserted
+        WHERE(
+            buoiAn = N'Bữa trưa'
+            AND (
+                CAST(thoiDiemDuKien AS TIME) < '11:30:00'
+                OR CAST(thoiDiemDuKien AS TIME) > '14:00:00'
+            )
+        )
+            OR (
+                buoiAn = N'Bữa tối'
+                AND (
+                    CAST(thoiDiemDuKien AS TIME) < '18:00:00'
+                    OR CAST(thoiDiemDuKien AS TIME) > '22:00:00'
+                )
+            )
+    )
+        THROW 53609, N'Giờ dùng bữa phải nằm trong khung giờ phục vụ đã công bố', 1;
 END;
 GO
 
+-- =============================================================================
+-- trgDatDichVuTrongKyLuuTru
+-- Chặn giờ dịch vụ nằm ngoài khoảng lưu trú của phòng trong booking.
+-- Bao gồm giờ nhận phòng, không bao gồm giờ trả phòng: [nhận, trả).
+-- =============================================================================
 CREATE TRIGGER dbo.trgDatDichVuTrongKyLuuTru ON dbo.DatDichVuKhachSan
-AFTER INSERT,UPDATE
+AFTER INSERT, UPDATE
 AS
 BEGIN
- SET NOCOUNT ON;
- IF EXISTS(SELECT 1 FROM inserted i
-  JOIN dbo.ChiTietDatPhong c ON c.maPhieuDatPhong=i.maPhieuDatPhong AND c.maPhong=i.maPhong
-  WHERE i.thoiDiemDuKien<c.thoiDiemNhanPhong OR i.thoiDiemDuKien>=c.thoiDiemTraPhong)
-  THROW 53610,N'Thời gian dịch vụ phải nằm trong kỳ lưu trú',1;
+    SET NOCOUNT ON;
+    IF EXISTS (
+        SELECT 1
+        FROM inserted dichVuDat
+        JOIN dbo.ChiTietDatPhong phongDat
+            ON phongDat.maPhieuDatPhong = dichVuDat.maPhieuDatPhong
+            AND phongDat.maPhong = dichVuDat.maPhong
+        WHERE dichVuDat.thoiDiemDuKien < phongDat.thoiDiemNhanPhong
+            OR dichVuDat.thoiDiemDuKien >= phongDat.thoiDiemTraPhong
+    )
+        THROW 53610, N'Thời gian dịch vụ phải nằm trong kỳ lưu trú', 1;
 END;
 GO
 
+-- =============================================================================
+-- trgDatDichVuChiDungKhiDangO
+-- Chỉ cho ghi dịch vụ đã sử dụng khi booking đang ở trạng thái đã nhận phòng.
+-- =============================================================================
 CREATE TRIGGER dbo.trgDatDichVuChiDungKhiDangO ON dbo.DatDichVuKhachSan
-AFTER INSERT,UPDATE
+AFTER INSERT, UPDATE
 AS
 BEGIN
- SET NOCOUNT ON;
- IF EXISTS(SELECT 1 FROM inserted i
-  JOIN dbo.PhieuDatPhong p ON p.maPhieuDatPhong=i.maPhieuDatPhong
-  WHERE i.trangThai=N'Đã sử dụng' AND p.trangThai<>N'Đã nhận phòng')
-  THROW 53611,N'Chỉ được ghi nhận dịch vụ đã sử dụng khi khách đang nhận phòng',1;
+    SET NOCOUNT ON;
+    IF EXISTS (
+        SELECT 1
+        FROM inserted dichVuDat
+        JOIN dbo.PhieuDatPhong phieuDatPhong
+            ON phieuDatPhong.maPhieuDatPhong = dichVuDat.maPhieuDatPhong
+        WHERE dichVuDat.trangThai = N'Đã sử dụng'
+            AND phieuDatPhong.trangThai <> N'Đã nhận phòng'
+    )
+        THROW 53611, N'Chỉ được ghi nhận dịch vụ đã sử dụng khi khách đang nhận phòng', 1;
 END;
 GO

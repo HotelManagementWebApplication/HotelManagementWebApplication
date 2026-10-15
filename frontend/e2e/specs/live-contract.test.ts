@@ -571,24 +571,13 @@ describe("live backend E2E contract proof", () => {
     const provision = await request("/api/auth/employees/auto-provision", {
       method: "POST",
       body: safeJson({
-        full_name: "E2E HR Provision Must Be Blocked", role: "STAFF",
+        full_name: "E2E HR Provision Must Be Blocked", role: "FRONT_DESK",
         phone: "0999888777", email: "hr-provision-blocked@example.invalid", address: "E2E",
       }),
     }, hrToken);
     expectStatus(provision, 403, "HR cannot provision employee accounts");
     const hrShifts = await request("/api/hr/shifts", undefined, hrToken);
     expectStatus(hrShifts, 200, "HR retains HR read access");
-  });
-
-  liveTest("Staff basic read and financial permission ceiling", false, [
-    "E2E_API_BASE_URL", "E2E_STAFF_EMPLOYEE_ID", "E2E_STAFF_PASSWORD",
-  ], async () => {
-    const token = await employeeToken("E2E_STAFF_EMPLOYEE_ID", "E2E_STAFF_PASSWORD", "staff basic read", "STAFF");
-    const rooms = await request("/api/rooms", undefined, token);
-    expectStatus(rooms, 200, "staff basic room read");
-    expect(jsonArray(rooms.body).length).toBeGreaterThan(0);
-    const approvals = await request("/api/governance/approvals", undefined, token);
-    expectStatus(approvals, 403, "staff cannot access approvals");
   });
 
   afterAll(() => {

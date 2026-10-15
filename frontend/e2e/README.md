@@ -36,7 +36,6 @@ production schema containing data that must be preserved.
   `E2E_SQLSERVER_DATABASE`, and `E2E_SQLSERVER_DISPOSABLE=true`.
 - HR/Admin: `E2E_API_BASE_URL`, `E2E_ADMIN_EMPLOYEE_ID`,
   `E2E_ADMIN_PASSWORD`, `E2E_HR_EMPLOYEE_ID`, and `E2E_HR_PASSWORD`.
-- Staff: `E2E_API_BASE_URL`, `E2E_STAFF_EMPLOYEE_ID`, and `E2E_STAFF_PASSWORD`.
 
 The customer flow registers the supplied customer, so its phone and identity
 number must be unused in the disposable schema. Its room ID must identify an
@@ -90,7 +89,7 @@ WHERE vatTuSuDung = 'E2E_FIXTURE_TECHNICAL_ORDER';
 
 `frontend/e2e/specs/live-contract.test.ts` exercises eight live HTTP scenarios
 covering public/customer, front desk, housekeeping/technical/manager, kitchen,
-accounting/director, HR/admin, and staff behavior. It is not a browser-driven UI
+accounting/director and HR/admin behavior. It is not a browser-driven UI
 suite; report it as live HTTP/role E2E, not UI E2E.
 
 The backend uses `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` and listens on port
@@ -177,8 +176,6 @@ $env:E2E_ADMIN_EMPLOYEE_ID = "<real-admin-employee-id>"
 $env:E2E_ADMIN_PASSWORD = "<real-admin-password>"
 $env:E2E_HR_EMPLOYEE_ID = "<real-hr-employee-id>"
 $env:E2E_HR_PASSWORD = "<real-hr-password>"
-$env:E2E_STAFF_EMPLOYEE_ID = "<real-staff-employee-id>"
-$env:E2E_STAFF_PASSWORD = "<real-staff-password>"
 
 npm run test:e2e
 ```

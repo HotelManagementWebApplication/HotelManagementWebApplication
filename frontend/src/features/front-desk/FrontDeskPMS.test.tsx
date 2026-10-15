@@ -8,6 +8,20 @@ import { ApiError } from "../../shared/api/client";
 describe("FrontDeskPMS Reception Interface", () => {
   const onBack = vi.fn();
 
+  it("counts ready rooms from the operational state instead of cleanliness badges", async () => {
+    vi.mocked(frontDeskApi.dashboard).mockResolvedValue({
+      business_date: "2026-10-15", page: 0, size: 10, total_elements: 0, total_pages: 0,
+      current_stays: [], arrivals: [], departures: [], unpaid_deposits: [], invoice_balances: [], incidents: [], room_counts: {},
+      rooms: ["available", "occupied", "reserved", "cleaning", "maintenance", "out_of_service"].map((status, i) => ({
+        room_id: String(101 + i), name: String(101 + i), floor: 1, room_type_id: "CLASSIC",
+        room_type_name: "Classic", daily_price: 1000000, bed_type: "Queen", status,
+      })),
+    });
+    render(<FrontDeskPMS onBack={onBack} />);
+    expect(await screen.findByText("Sẵn sàng: 1", { exact: true })).toBeTruthy();
+    expect(screen.getByText("Đã giữ: 1 · Đang dọn: 1", { exact: true })).toBeTruthy();
+  });
+
   it("creates a booking with the authenticated employee, not the old demo actor", async () => {
     vi.mocked(authApi.employeeProfile).mockResolvedValue({ employee_id: "FRONTDESK", full_name: "Lễ tân thật", role: "FRONT_DESK", permissions: [] });
     const create = vi.spyOn(frontDeskApi, "createReservation").mockResolvedValue({ id: 77 } as any);
@@ -75,6 +89,9 @@ describe("FrontDeskPMS Reception Interface", () => {
     ]);
 
     vi.spyOn(frontDeskApi, "timeline").mockResolvedValue([]);
+    vi.spyOn(frontDeskApi, "serviceBookings").mockResolvedValue([]);
+    vi.spyOn(frontDeskApi, "payments").mockResolvedValue([]);
+    vi.spyOn(frontDeskApi, "receipts").mockResolvedValue([]);
 
     vi.spyOn(frontDeskApi, "reservation").mockResolvedValue({
       id: 1001,

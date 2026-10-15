@@ -92,7 +92,7 @@
   {
     "id": "parking-known-policy",
     "question": "Khách lưu trú có được đỗ xe miễn phí qua đêm không?",
-    "expected_heading": "11. Thông tin MaM Hotel & Resort",
+    "expected_heading": "11. Thông tin MaM Hotel",
     "required_facts": ["đỗ xe miễn phí", "tầng hầm B1"]
   },
   {

@@ -1,7 +1,7 @@
 /** Exact employee roles exposed by the backend EmployeeRole enum. */
 export const EMPLOYEE_ROLES = [
   "MANAGER", "FRONT_DESK", "HOUSEKEEPING", "TECHNICAL", "KITCHEN",
-  "ACCOUNTING", "DIRECTOR", "ADMIN", "HR", "STAFF",
+  "ACCOUNTING", "DIRECTOR", "ADMIN", "HR",
 ] as const;
 export type EmployeeRole = typeof EMPLOYEE_ROLES[number];
 export const EMPLOYEE_ROLE_LABELS: Record<EmployeeRole, string> = {
@@ -9,12 +9,11 @@ export const EMPLOYEE_ROLE_LABELS: Record<EmployeeRole, string> = {
   FRONT_DESK: "Lễ tân",
   HOUSEKEEPING: "Buồng phòng",
   TECHNICAL: "Kỹ thuật",
-  KITCHEN: "Bếp & Nhà hàng",
+  KITCHEN: "Kho và Dịch vụ",
   ACCOUNTING: "Kế toán",
   DIRECTOR: "Giám đốc",
   ADMIN: "Quản trị hệ thống",
   HR: "Nhân sự",
-  STAFF: "Nhân viên",
 };
 export function employeeRoleLabel(role: string | null | undefined): string {
   if (!role) return "";

@@ -26,7 +26,8 @@ public class FinanceService {
     @Transactional
     public FinanceDtos.CashHandoverResponse handover(FinanceDtos.CashHandoverRequest request,String actor,String idempotencyKey){
         validateHandover(request);String principal=SecurityActor.requireBoundActor(actor);String key=IdempotencySupport.requireKey(idempotencyKey);
-        String hash=IdempotencySupport.fingerprint("CASH_HANDOVER|"+request.shiftCode().trim()+"|"+request.fromActor().trim()+"|"+request.toActor().trim()+"|"+money(request.actualAmount())+"|"+text(request.note()));
+        String lines=request.denominations()==null?"":request.denominations().stream().map(line->money(line.denomination())+":"+line.quantity()).sorted().collect(java.util.stream.Collectors.joining(","));
+        String hash=IdempotencySupport.fingerprint("CASH_HANDOVER|"+request.shiftCode().trim()+"|"+request.fromActor().trim()+"|"+request.toActor().trim()+"|"+money(request.actualAmount())+"|"+text(request.note())+"|"+lines);
         return idempotency.execute("finance-cash-handover",key,principal,hash,FinanceDtos.CashHandoverResponse.class,()->{
             if(!principal.equals(request.fromActor().trim()))throw new DomainException("ACTOR_MISMATCH","from_actor phải là actor đã xác thực");
             if(request.denominations()!=null)for(var line:request.denominations())if(line==null||line.denomination()==null||line.denomination().signum()<=0||line.quantity()<=0)throw new DomainException("INVALID_DENOMINATION","Mệnh giá và số lượng tiền phải lớn hơn 0");
@@ -36,7 +37,7 @@ public class FinanceService {
     @Transactional
     public FinanceDtos.ExpenseResponse recordExpense(FinanceDtos.ExpenseRequest request,String actor,String idempotencyKey){
         validateExpense(request);String principal=SecurityActor.requireBoundActor(actor);String key=IdempotencySupport.requireKey(idempotencyKey);
-        String hash=IdempotencySupport.fingerprint("EXPENSE|"+request.category().trim()+"|"+request.description().trim()+"|"+money(request.amount()));
+        String hash=IdempotencySupport.fingerprint("EXPENSE|"+request.category().trim()+"|"+request.description().trim()+"|"+money(request.amount())+"|"+request.method());
         return idempotency.execute("finance-expense",key,principal,hash,FinanceDtos.ExpenseResponse.class,()->database.expense(request,principal,key,LocalDateTime.now(clock)));
     }
     @Transactional
@@ -48,10 +49,12 @@ public class FinanceService {
     @Transactional
     public FinanceDtos.PartnerDebtResponse settleDebt(Long id,FinanceDtos.DebtSettlementRequest request,String actor,String idempotencyKey){
         validateSettlement(id,request);String principal=SecurityActor.requireBoundActor(actor);String key=IdempotencySupport.requireKey(idempotencyKey);
-        String hash=IdempotencySupport.fingerprint("PARTNER_DEBT_SETTLEMENT|"+id+"|"+money(request.amount())+"|"+text(request.note()));
+        String hash=IdempotencySupport.fingerprint("PARTNER_DEBT_SETTLEMENT|"+id+"|"+money(request.amount())+"|"+text(request.note())+"|"+request.method());
         return idempotency.execute("finance-partner-debt-settlement",key,principal,hash,FinanceDtos.PartnerDebtResponse.class,()->database.settle(id,request,principal,key,LocalDateTime.now(clock)));
     }
     @Transactional(readOnly=true) public List<FinanceDtos.CashHandoverResponse> listHandovers(){return database.handovers();}
+    @Transactional(readOnly=true) public FinanceDtos.CashBalanceResponse cashBalance(){return database.cashBalance(SecurityActor.currentActor(),LocalDateTime.now(clock));}
+    @Transactional(readOnly=true) public List<FinanceDtos.CashRecipient> cashRecipients(){return database.cashRecipients(SecurityActor.currentActor());}
     @Transactional(readOnly=true) public List<FinanceDtos.ExpenseResponse> listExpenses(){return database.expenses();}
     @Transactional(readOnly=true) public List<FinanceDtos.PartnerDebtResponse> listDebts(){return database.debts();}
     @Transactional(readOnly=true) public FinanceDtos.PageResponse<FinanceDtos.CashHandoverResponse> pageHandovers(int page,int size){return pageHandovers(null,null,null,null,page,size);}
@@ -86,7 +89,7 @@ public class FinanceService {
         BigDecimal outstandingDebt = database.outstandingDebt();
         if (outstandingDebt == null) outstandingDebt = BigDecimal.ZERO;
         return new FinanceDtos.ReconciliationResponse(start, end, totals, payments, refunds,
-                payments.subtract(refunds), revenue, outstandingDebt, variance,transactions.completedCount(fromAt,toAt),transactions.pendingBankTransfers());
+                payments.subtract(refunds), revenue, outstandingDebt, variance,transactions.completedCount(fromAt,toAt),transactions.outstandingBankTransferBalances());
     }
 
 
@@ -108,6 +111,8 @@ public class FinanceService {
         if (request.fromActor().trim().equals(request.toActor().trim()))
             throw new DomainException("INVALID_HANDOVER_ACTORS", "Người giao và người nhận ca phải khác nhau");
         if (request.denominations() != null && !request.denominations().isEmpty()) {
+            for(var line:request.denominations()) if(line==null||line.denomination()==null||line.denomination().signum()<=0||line.quantity()<=0)
+                throw new DomainException("INVALID_DENOMINATION","Mệnh giá và số lượng tiền phải lớn hơn 0");
             BigDecimal denominationTotal = request.denominations().stream()
                     .filter(line -> line != null && line.denomination() != null && line.quantity() > 0)
                     .map(line -> line.denomination().multiply(BigDecimal.valueOf(line.quantity())))
@@ -117,7 +122,7 @@ public class FinanceService {
         }
     }
     private static void validateExpense(FinanceDtos.ExpenseRequest request) {
-        if (request == null || blank(request.category()) || blank(request.description()) || request.amount() == null)
+        if (request == null || blank(request.category()) || blank(request.description()) || request.amount() == null || request.method() == null)
             throw new DomainException("INVALID_EXPENSE", "Chi phí phải có nhóm, mô tả và số tiền");
         if (request.amount().signum() <= 0)
             throw new DomainException("INVALID_EXPENSE_AMOUNT", "Số tiền chi phí phải lớn hơn không");
@@ -129,7 +134,7 @@ public class FinanceService {
             throw new DomainException("INVALID_PARTNER_DEBT_AMOUNT", "Số tiền công nợ phải lớn hơn không");
     }
     private static void validateSettlement(Long id, FinanceDtos.DebtSettlementRequest request) {
-        if (id == null || request == null || request.amount() == null || request.amount().signum() <= 0)
+        if (id == null || request == null || request.amount() == null || request.amount().signum() <= 0 || request.method() == null)
             throw new DomainException("INVALID_DEBT_SETTLEMENT", "Số tiền tất toán phải lớn hơn không");
     }
     private static void validateDateRange(LocalDate from, LocalDate to) {

@@ -9,7 +9,6 @@ export type View =
   | "maintenance"
   | "accounting"
   | "manager"
-  | "staff"
   | "hr"
   | "admin";
 
@@ -31,7 +30,6 @@ export const staffAccounts: Record<string, StaffAccount> = {
   director: { employeeId: "DIRECTOR", role: "director", view: "manager", label: "Giám đốc" },
   admin: { employeeId: "ADMIN", role: "admin", view: "admin", label: "Quản trị hệ thống" },
   hr: { employeeId: "HR", role: "hr", view: "hr", label: "Nhân sự" },
-  staff: { employeeId: "STAFF", role: "staff", view: "staff", label: "Nhân viên" },
   // Email aliases retained for existing login credentials.
   "frontdesk@hotel.com": { employeeId: "FRONTDESK", role: "reception", view: "frontdesk", label: "Lễ tân" },
   "housekeeping@hotel.com": { employeeId: "HOUSEKEEP", role: "housekeeping", view: "housekeeping", label: "Buồng phòng" },
@@ -42,7 +40,6 @@ export const staffAccounts: Record<string, StaffAccount> = {
   "director@hotel.com": { employeeId: "DIRECTOR", role: "director", view: "manager", label: "Giám đốc" },
   "admin@hotel.com": { employeeId: "ADMIN", role: "admin", view: "admin", label: "Quản trị hệ thống" },
   "hr@hotel.com": { employeeId: "HR", role: "hr", view: "hr", label: "Nhân sự" },
-  "staff@hotel.com": { employeeId: "STAFF", role: "staff", view: "staff", label: "Nhân viên" },
 };
 
 const employeeRoleDestinations: Record<string, Pick<StaffAccount, "role" | "view">> = {
@@ -55,7 +52,6 @@ const employeeRoleDestinations: Record<string, Pick<StaffAccount, "role" | "view
   DIRECTOR: { role: "director", view: "manager" },
   ADMIN: { role: "admin", view: "admin" },
   HR: { role: "hr", view: "hr" },
-  STAFF: { role: "staff", view: "staff" },
 };
 
 export function resolveEmployeeDestination(role: string): Pick<StaffAccount, "role" | "view"> {

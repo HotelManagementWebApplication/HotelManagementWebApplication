@@ -69,7 +69,7 @@ export const RoomDetailPage: React.FC<RoomDetailPageProps> = ({ room, onBack, on
           <span>/</span>
           <span>Vũng Tàu</span>
           <span>/</span>
-          <span>Phòng nghỉ &amp; Biệt thự</span>
+          <span>Phòng &amp; Suite</span>
           <span>/</span>
           <span className="text-[#1C1917] font-semibold">{getRoomFullName(room)}</span>
         </div>

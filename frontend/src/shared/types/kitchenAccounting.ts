@@ -1,6 +1,6 @@
 export type PaymentMethod = "CASH" | "CARD" | "BANK_TRANSFER" | "MOMO" | "OTHER";
 export type PaymentTransactionType = "PAYMENT" | "REFUND";
-export type PaymentTransactionStatus = "PENDING" | "COMPLETED" | "FAILED" | "CANCELLED";
+export type PaymentTransactionStatus = "COMPLETED" | "FAILED" | "VOIDED";
 export type InvoiceStatus = "DA_THANH_TOAN" | "CHUA_THANH_TOAN" | "DU_KIEN";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "CONSUMED";
 export type MovementType = "RECEIVE" | "ISSUE" | "WASTE" | "RETURN" | "ADJUST";
@@ -8,7 +8,7 @@ export type MovementType = "RECEIVE" | "ISSUE" | "WASTE" | "RETURN" | "ADJUST";
 export interface Service {
   id: string; name: string; price: number; unit: string | null;
   category?: string | null; description?: string | null; image_url?: string | null;
-  stock: number; safety_threshold: number; low_stock: boolean;
+  stock: number; safety_threshold: number; low_stock: boolean; active?: boolean;
 }
 export interface RestaurantBooking { id: number; reservation_id: number; room_id: string; service_id: string; service_name: string; scheduled_at: string; quantity: number; free_quantity: number; unit_price: number; amount_due: number; meal_period: string | null; status: "CONFIRMED" | "USED" | "CANCELLED" | string; note: string | null; }
 export interface StockRequest { quantity: number; }
@@ -27,17 +27,19 @@ export interface Payment { id: number; invoice_id: number; amount: number; metho
 export interface LedgerPayment extends Payment { reservation_id: number; service_total: number; }
 export interface PaymentPage extends Page<LedgerPayment> { methodCounts: Partial<Record<PaymentMethod, number>>; }
 export interface Receipt { id: number; receipt_number: string; invoice_id: number; amount: number; method: PaymentMethod; issued_at: string; issued_by: string; }
-export interface Expense { id: number; category: string; description: string; amount: number; paid_by: string; paid_at: string; status: string; }
+export interface Expense { id: number; category: string; description: string; amount: number; paid_by: string; paid_at: string; status: string; method: PaymentMethod | null; }
 export interface PartnerDebt { id: number; partner_name: string; reference_code: string; amount: number; settled_amount: number; status: string; recorded_at: string; }
-export interface DebtSettlement { id: number; partner_debt_id: number; amount: number; settled_by: string; settled_at: string; note: string | null; }
+export interface DebtSettlement { id: number; partner_debt_id: number; amount: number; settled_by: string; settled_at: string; note: string | null; method: PaymentMethod | null; }
 export interface CashDenomination { denomination: number; quantity: number; }
+export interface CashRecipient { employee_id: string; full_name: string; }
+export interface CashBalance { actor_id: string; calculated_at: string; payments: number; refunds: number; received_handovers: number; handed_over_expected: number; cash_expenses: number; cash_debt_settlements: number; expected_amount: number; }
 export interface CashHandover { id: number; shift_code: string; from_actor: string; to_actor: string; expected_amount: number; actual_amount: number; variance: number; handed_over_at: string; note: string | null; denominations: CashDenomination[]; }
 export interface CashHandoverRequest { shift_code: string; from_actor: string; to_actor: string; actual_amount: number; note: string | null; denominations?: CashDenomination[]; }
-export interface ExpenseRequest { category: string; description: string; amount: number; }
+export interface ExpenseRequest { category: string; description: string; amount: number; method: PaymentMethod; }
 export interface PartnerDebtRequest { partner_name: string; reference_code: string; amount: number; }
-export interface DebtSettlementRequest { amount: number; note: string | null; }
+export interface DebtSettlementRequest { amount: number; note: string | null; method: PaymentMethod; }
 export interface LedgerEntry { id: number; entry_type: string; source_type: string; source_id: string; direction: string; amount: number; actor_id: string; occurred_at: string; note: string | null; finalized: boolean; }
-export interface Reconciliation { from_date: string | null; to_date: string | null; totals_by_method: Record<string, number>; total_payments: number; total_refunds: number; net_total: number; recognized_revenue: number; outstanding_partner_debt: number; cash_variance: number; completed_transactions: number; pending_bank_transfers: number; }
+export interface Reconciliation { from_date: string | null; to_date: string | null; totals_by_method: Record<string, number>; total_payments: number; total_refunds: number; net_total: number; recognized_revenue: number; outstanding_partner_debt: number; cash_variance: number; completed_transactions: number; outstanding_bank_transfer_balances: number; }
 
 export interface PaymentQuery { invoice_id?: number; method?: PaymentMethod; type?: PaymentTransactionType; status?: PaymentTransactionStatus; from?: string; to?: string; search?: string; page?: number; size?: number; }
 export interface ReceiptQuery { invoice_id?: number; method?: PaymentMethod; issued_by?: string; from?: string; to?: string; page?: number; size?: number; }

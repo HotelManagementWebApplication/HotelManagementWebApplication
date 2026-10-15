@@ -26,13 +26,16 @@ class SqlServerEnterpriseCommandsTest {
     LocalDate day=LocalDate.of(2036,3,2);
 
     @BeforeEach void seed() {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.TestingAuthenticationToken("ENT01","unused","ROLE_ACCOUNTING"));
         jdbc.update("INSERT NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) VALUES(N'ENT01',N'Enterprise',N'unused',N'Nhân sự',N'0998111122')");
         guest=jdbc.queryForObject("INSERT KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) OUTPUT INSERTED.maKhachLuuTru VALUES(N'Enterprise guest',N'0998111123',N'ENTGUEST')",Long.class);
         reservation=jdbc.queryForObject("INSERT PhieuDatPhong(maKhachLuuTru,nguonDatPhong,doanhThuGopOta,hoaHongOta) OUTPUT INSERTED.maPhieuDatPhong VALUES(?,N'BOOKING_COM',120000,20000)",Long.class,guest);
-        invoice=jdbc.queryForObject("INSERT HoaDon(maPhieuDatPhong,soTienPhaiTra) OUTPUT INSERTED.maHoaDon VALUES(?,100000)",Long.class,reservation);
+        invoice=jdbc.queryForObject("INSERT HoaDon(maPhieuDatPhong,tongTienPhong,soTienPhaiTra,trangThai) OUTPUT INSERTED.maHoaDon VALUES(?,108000,108000,N'Chưa thanh toán')",Long.class,reservation);
         jdbc.update("INSERT MatHangTonKho(maMatHang,ten,danhMuc,donViTinh,soLuongHienTai) VALUES(N'ENT-STOCK',N'Enterprise stock',N'Đồ vải',N'bộ',10)");
     }
     @AfterEach void cleanup() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        jdbc.update("DELETE NhatKyKiemSoat WHERE nguoiThucHien=N'ENT01'");
         jdbc.update("DELETE HoaDonGiaTriGiaTang WHERE maHoaDon=?",invoice);
         jdbc.update("DELETE HoaDon WHERE maHoaDon=?",invoice);
         jdbc.update("DELETE PhieuDatPhong WHERE maPhieuDatPhong=?",reservation);
@@ -62,6 +65,14 @@ class SqlServerEnterpriseCommandsTest {
         assertThat(service.vatInvoices().stream().filter(r->r.id().equals(vat.id())).findFirst().orElseThrow().xmlStatus()).isEqualTo("EXPORTED");
         code(()->service.createVat(vatRequest(),"ENT01"),"VAT_EXISTS");
         code(()->service.exportVatXml(-1),"VAT_NOT_FOUND");
+    }
+    @Test void vatAndOtaUseTotalAfterDiscountBeforeDepositsAndCollections(){
+        jdbc.update("UPDATE HoaDon SET tongTienPhong=216000,tienGiamGia=108000,tienDatCocDaTra=54000 WHERE maHoaDon=?",invoice);
+        jdbc.update("UPDATE PhieuDatPhong SET doanhThuGopOta=0 WHERE maPhieuDatPhong=?",reservation);
+        var row=service.ota().stream().filter(item->item.reservationId().equals(reservation)).findFirst().orElseThrow();
+        assertThat(row.bookingSource()).isEqualTo("BOOKING_COM");assertThat(row.grossRevenue()).isEqualByComparingTo("108000");
+        var vat=service.createVat(vatRequest(),"ENT01");
+        assertThat(vat.taxableAmount()).isEqualByComparingTo("100000");assertThat(vat.totalAmount()).isEqualByComparingTo("108000");
     }
     @Test void concurrentVatCreationHasOneWinnerWithoutPartialInvoice() throws Exception {
         assertThat(race(()-> {service.createVat(vatRequest(),"ENT01");return "SUCCESS";})).containsExactlyInAnyOrder("SUCCESS","VAT_EXISTS");
@@ -110,7 +121,7 @@ class SqlServerEnterpriseCommandsTest {
     private List<String> race(Callable<String> operation)throws Exception {
         var start=new CountDownLatch(1);
         try(var pool=Executors.newFixedThreadPool(2)) {
-            Callable<String> run=()->{start.await();try{return operation.call();}catch(DomainException error){return error.getCode();}};
+            Callable<String> run=()->{start.await();org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.TestingAuthenticationToken("ENT01","unused","ROLE_ACCOUNTING"));try{return operation.call();}catch(DomainException error){return error.getCode();}finally{org.springframework.security.core.context.SecurityContextHolder.clearContext();}};
             var first=pool.submit(run);var second=pool.submit(run);start.countDown();
             return List.of(first.get(30,TimeUnit.SECONDS),second.get(30,TimeUnit.SECONDS));
         }

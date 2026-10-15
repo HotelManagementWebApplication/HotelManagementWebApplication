@@ -23,7 +23,7 @@ class CrossShiftReservationWorkflowTest extends ReservationSqlFixture {
         assertThat(service.get(booking.id()).employeeId()).isEqualTo("HCT-FD");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE nguoiThucHien=N'HCT-NEXT' AND hanhDong=N'RESERVATION_CHECKED_IN'",Integer.class)).isEqualTo(1);
     }
-    @ParameterizedTest @ValueSource(strings={"ACCOUNTING","HOUSEKEEPING","TECHNICAL","STAFF","CUSTOMER","ADMIN","DIRECTOR"})
+    @ParameterizedTest @ValueSource(strings={"ACCOUNTING","HOUSEKEEPING","TECHNICAL","CUSTOMER","ADMIN","DIRECTOR"})
     void creatorRoleDoesNotGrantMutationPermission(String role){
         var booking=create(now,24,false,"HCT-R1");actor("HCT-FD",role);
         assertThatThrownBy(()->service.checkIn(booking.id(),new ReservationDtos.CheckInRequest(now),"HCT-FD",key())).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);

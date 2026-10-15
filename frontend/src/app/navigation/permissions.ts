@@ -383,17 +383,6 @@ export const PERMISSIONS: Record<RoleId, RolePermissions> = {
     },
   },
 
-  /* ── STAFF ─────────────────────────────────── */
-  staff: {
-    ...BASE,
-    pages: ["dashboard", "rooms", "settings"],
-    room: { ...BASE.room, canView: true },
-    reports: { ...BASE.reports, canViewOccupancy: true },
-    lockReasons: {
-      write: "Nhân viên chỉ được xem dữ liệu vận hành cơ bản",
-      finance: "Nhân viên không có quyền truy cập tài chính",
-    },
-  },
 };
 
 /* ── Helpers ─────────────────────────────────── */
@@ -423,6 +412,5 @@ export const ROLE_META: Record<RoleId, { label: string; labelEn: string; color: 
   director:     { label:"Giám đốc",            labelEn:"Giám đốc",    color:"#B8944A", bg:"rgba(184,148,74,0.12)", gr:"linear-gradient(135deg,#78350F,#B8944A)", desc:"Báo cáo toàn bộ, hoàn tiền và phê duyệt giá" },
   admin:        { label:"Quản trị hệ thống",    labelEn:"Quản trị hệ thống",       color:"#334155", bg:"rgba(51,65,85,0.12)", gr:"linear-gradient(135deg,#0F172A,#475569)", desc:"Tài khoản, phân quyền, cấu hình và nhật ký" },
   hr:           { label:"Nhân sự",              labelEn:"Nhân sự",          color:"#EC4899", bg:"rgba(236,72,153,0.12)", gr:"linear-gradient(135deg,#BE185D,#EC4899)", desc:"Hồ sơ nhân viên và phân ca" },
-  staff:        { label:"Nhân viên",            labelEn:"Nhân viên",       color:"#64748B", bg:"rgba(100,116,139,0.12)", gr:"linear-gradient(135deg,#334155,#64748B)", desc:"Xem dữ liệu vận hành cơ bản" },
   fnb:          { label:"Bếp & Nhà hàng",       labelEn:"Bếp & Nhà hàng",  color:"#F59E0B", bg:"rgba(245,158,11,0.12)", gr:"linear-gradient(135deg,#B45309,#F59E0B)", desc:"Điều phối nhà hàng, kho bếp, minibar và giá dịch vụ" },
 };
