@@ -30,6 +30,9 @@ public class ServiceCatalogDatabase {
         command("create",request.id(),request.name(),request.price(),unit,categories.convertToDatabaseColumn(category),trim(request.description()),trim(request.imageUrl()),request.safetyThreshold(),null,null,now);
     }
     public void price(String id,BigDecimal price,String approver,Long approval,LocalDateTime now){command("price",id,null,price,null,null,null,null,null,approver,approval,now);}
+    public void createApprovedCatalog(ServiceDtos.CreateRequest request,boolean warehouse,String actor,Long approval,LocalDateTime now){
+        command(warehouse?"create-stock":"create",request.id(),request.name(),request.price(),request.unit(),categories.convertToDatabaseColumn(request.category()),null,null,0,actor,approval,now);
+    }
     private void command(String command,String id,String name,BigDecimal price,String unit,String category,String description,String image,Integer threshold,String actor,Long approval,LocalDateTime now){
         try{jdbc.update("EXEC dbo.uspLenhDanhMucDichVu ?,?,?,?,?,?,?,?,?,?,?,?",command,id,name,price,unit,category,description,image,threshold,actor,approval,now);}
         catch(DataAccessException error){for(Throwable cause=error;cause!=null;cause=cause.getCause())if(cause instanceof SQLException sql){String code=switch(sql.getErrorCode()){case 53001->"SERVICE_EXISTS";case 53002->"SERVICE_NOT_FOUND";case 52205->"APPROVAL_REQUIRED";default->null;};if(code!=null)throw new DomainException(code,sql.getMessage());}throw error;}

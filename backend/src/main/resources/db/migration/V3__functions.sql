@@ -507,3 +507,50 @@ BEGIN
     END, 2);
 END;
 GO
+
+-- Khả dụng trong [từ, đến): lấy mức chiếm dụng đồng thời lớn nhất, không cộng
+-- các lượt đặt nối tiếp nhau. Giờ/ngày tính giá tách khỏi đơn vị sân/phòng/suất.
+CREATE FUNCTION dbo.fnKhaDungDichVu(@tu DATETIME2(6), @den DATETIME2(6))
+RETURNS TABLE
+AS RETURN (
+    WITH Booking AS (
+        SELECT b.maDichVu,CASE WHEN c.cachTinh=N'Theo ngày' THEN CONVERT(DATETIME2(6),CAST(b.thoiDiemDuKien AS DATE)) ELSE b.thoiDiemDuKien END AS batDau,
+            CASE WHEN c.cachTinh=N'Theo kỳ lưu trú' THEN p.thoiDiemTraPhong
+                WHEN c.cachTinh=N'Theo ngày' THEN DATEADD(DAY,1,CONVERT(DATETIME2(6),CAST(b.thoiDiemDuKien AS DATE)))
+                WHEN c.cachTinh=N'Qua đêm' THEN DATEADD(HOUR,8,DATEADD(DAY,1,CONVERT(DATETIME2(6),CAST(b.thoiDiemDuKien AS DATE))))
+                ELSE DATEADD(MINUTE,CONVERT(INT,CASE
+                    WHEN duration.phut>DATEDIFF_BIG(MINUTE,b.thoiDiemDuKien,p.thoiDiemTraPhong)
+                    THEN DATEDIFF_BIG(MINUTE,b.thoiDiemDuKien,p.thoiDiemTraPhong)
+                    ELSE duration.phut END),b.thoiDiemDuKien) END AS ketThuc,
+            CONVERT(BIGINT,CASE WHEN c.cachTinh=N'Theo thời lượng' THEN 1 ELSE b.soLuong END) AS chiemDung,
+            b.trangThai,c.cachTinh
+        FROM dbo.DatDichVuKhachSan b
+        JOIN dbo.CauHinhLichDichVu c ON c.maDichVu=b.maDichVu
+        JOIN dbo.ChiTietDatPhong p ON p.maPhieuDatPhong=b.maPhieuDatPhong AND p.maPhong=b.maPhong
+        JOIN dbo.PhieuDatPhong r ON r.maPhieuDatPhong=b.maPhieuDatPhong
+        CROSS APPLY (SELECT CONVERT(BIGINT,c.soPhutMoiLuot)*CASE WHEN c.cachTinh=N'Theo thời lượng' THEN b.soLuong ELSE 1 END AS phut) duration
+        WHERE b.trangThai IN (N'Đã xác nhận',N'Đã sử dụng') AND r.trangThai NOT IN (N'Đã hủy',N'Không đến')
+    ), Points AS (
+        SELECT maDichVu,@tu AS diem FROM dbo.CauHinhLichDichVu
+        UNION SELECT maDichVu,batDau FROM Booking WHERE batDau>@tu AND batDau<@den AND ketThuc>@tu AND cachTinh<>N'Theo tồn kho'
+    ), Occupancy AS (
+        SELECT p.maDichVu,p.diem,COALESCE(SUM(b.chiemDung),0) AS daDat
+        FROM Points p LEFT JOIN Booking b ON b.maDichVu=p.maDichVu AND b.batDau<=p.diem AND b.ketThuc>p.diem AND b.cachTinh<>N'Theo tồn kho'
+        GROUP BY p.maDichVu,p.diem
+    ), Peak AS (
+        SELECT maDichVu,MAX(daDat) AS daDat FROM Occupancy GROUP BY maDichVu
+    ), Counts AS (
+        SELECT c.maDichVu,c.donViKhaDung,c.cachTinh,
+            CASE WHEN c.cachTinh=N'Theo tồn kho' THEN d.soLuongTonKho ELSE c.congSuat END AS congSuat,
+            CASE WHEN c.cachTinh=N'Theo tồn kho'
+                THEN COALESCE((SELECT SUM(CONVERT(BIGINT,b.soLuong)) FROM dbo.DatDichVuKhachSan b JOIN dbo.PhieuDatPhong r ON r.maPhieuDatPhong=b.maPhieuDatPhong
+                    WHERE b.maDichVu=c.maDichVu AND b.trangThai=N'Đã xác nhận' AND r.trangThai NOT IN (N'Đã hủy',N'Không đến')),0)
+                ELSE COALESCE(p.daDat,0) END AS daDat
+        FROM dbo.CauHinhLichDichVu c JOIN dbo.DichVu d ON d.maDichVu=c.maDichVu LEFT JOIN Peak p ON p.maDichVu=c.maDichVu
+        WHERE d.dangHoatDong=1 AND @tu<@den
+    )
+    SELECT maDichVu,donViKhaDung,cachTinh,congSuat,daDat,
+        CASE WHEN daDat>=congSuat THEN CONVERT(BIGINT,0) ELSE congSuat-daDat END AS conLai
+    FROM Counts
+);
+GO

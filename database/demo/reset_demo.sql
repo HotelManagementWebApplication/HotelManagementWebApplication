@@ -13,6 +13,9 @@ SET XACT_ABORT ON;
 
 BEGIN TRANSACTION;
 
+DELETE FROM YeuCauTraKho;
+DELETE FROM CauHinhLichDichVu;
+
 -- Một mốc thời gian nghiệp vụ chung cho toàn bộ dữ liệu demo, kể cả SQL Server chạy UTC.
 DECLARE @demoNow DATETIME2(6) = CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATETIME2(6));
 DECLARE @demoToday DATE = CAST(@demoNow AS DATE);

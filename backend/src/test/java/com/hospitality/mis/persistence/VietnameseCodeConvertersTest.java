@@ -12,6 +12,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class VietnameseCodeConvertersTest {
     @Test
+    void stockFoodAndDrinksRoundTripWithoutChangingServiceCategories() {
+        var categories = new VietnameseCodeConverters.ServiceCategoryConverter();
+        assertRoundTrip(categories, "food", "Món ăn");
+        assertRoundTrip(categories, "beverage", "Thức uống");
+        assertRoundTrip(categories, "room-amenity", "Vật dụng phòng");
+        assertRoundTrip(categories, "fine-dining", "Nhà hàng cao cấp");
+        var units = new VietnameseCodeConverters.ServiceUnitConverter();
+        assertRoundTrip(units, "lon", "lon");
+        assertRoundTrip(units, "ly", "ly");
+    }
+    @Test
     void enterpriseCodesRoundTripBetweenVietnameseDatabaseValuesAndStableApiCodes() {
         var rentalType = new VietnameseCodeConverters.RentalTypeConverter();
         var bookingSource = new VietnameseCodeConverters.BookingSourceConverter();

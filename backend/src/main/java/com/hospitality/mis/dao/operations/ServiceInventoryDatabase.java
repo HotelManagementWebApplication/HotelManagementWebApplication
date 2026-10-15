@@ -37,8 +37,21 @@ public class ServiceInventoryDatabase {
         }
     }
     public List<InventoryMovementDtos.Response> list(String id){
-        return jdbc.query("SELECT maBienDongKhoDichVu,maDichVu,loai,soLuong,maNguoiThucHien,thoiDiemPhatSinh,lyDo FROM dbo.vwBienDongKhoDichVu WHERE maDichVu=? ORDER BY thoiDiemPhatSinh DESC,maBienDongKhoDichVu DESC",
-            (r,n)->new InventoryMovementDtos.Response(r.getLong(1),r.getString(2),types.convertToEntityAttribute(r.getString(3)),r.getInt(4),r.getString(5),r.getTimestamp(6).toLocalDateTime(),r.getString(7)),id);
+        return jdbc.query("""
+            WITH movements AS (
+                SELECT *,CAST(CASE WHEN loai IN(N'Xuất kho',N'Hao hụt') THEN -soLuong ELSE soLuong END AS BIGINT) AS signedQuantity
+                FROM dbo.vwBienDongKhoDichVu WHERE maDichVu=?
+            ), running AS (
+                SELECT *,SUM(signedQuantity) OVER(ORDER BY thoiDiemPhatSinh DESC,maBienDongKhoDichVu DESC ROWS UNBOUNDED PRECEDING) AS netToHere
+                FROM movements
+            )
+            SELECT m.maBienDongKhoDichVu,m.maDichVu,m.loai,m.soLuong,m.maNguoiThucHien,m.thoiDiemPhatSinh,m.lyDo,n.hoVaTen,
+                CAST(s.soLuongTonKho AS BIGINT)-m.netToHere AS stockBefore,
+                CAST(s.soLuongTonKho AS BIGINT)-m.netToHere+m.signedQuantity AS stockAfter
+            FROM running m JOIN dbo.vwTonKhoDichVu s ON s.maDichVu=m.maDichVu
+            LEFT JOIN dbo.vwNhanVien n ON n.maNhanVien=m.maNguoiThucHien
+            ORDER BY m.thoiDiemPhatSinh DESC,m.maBienDongKhoDichVu DESC
+            """,(r,n)->new InventoryMovementDtos.Response(r.getLong(1),r.getString(2),types.convertToEntityAttribute(r.getString(3)),r.getInt(4),r.getString(5),r.getTimestamp(6).toLocalDateTime(),r.getString(7),r.getString(8),r.getLong(9),r.getLong(10)),id);
     }
     public int[] totals(String id,LocalDateTime from,LocalDateTime to){
         return jdbc.queryForObject("""

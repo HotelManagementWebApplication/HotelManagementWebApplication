@@ -1327,3 +1327,11 @@ SELECT
     lyDo
 FROM dbo.ChuyenPhong;
 GO
+
+-- Yêu cầu trả kho; phạm vi người gửi được backend kiểm tra theo actor.
+CREATE VIEW dbo.vwYeuCauTraKho
+AS
+SELECT y.maYeuCauTraKho, y.maDichVu, d.ten, d.donViTinh, y.soLuong, y.maPhong,
+    y.nguoiGui, y.lyDo, y.trangThai, y.nguoiDuyet, y.ghiChuDuyet, y.ngayGui, y.ngayDuyet
+FROM dbo.YeuCauTraKho y JOIN dbo.DichVu d ON d.maDichVu = y.maDichVu;
+GO

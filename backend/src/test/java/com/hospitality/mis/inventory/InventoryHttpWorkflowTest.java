@@ -73,19 +73,22 @@ class InventoryHttpWorkflowTest {
         movement("ISSUE", 2, "used", "issue-1");
         movement("ADJUST", -1, "count", "adjust-1");
         movement("WASTE", 1, "damaged", "waste-1");
-        movement("RETURN", 2, "supplier return", "return-1");
+        mvc.perform(post("/api/services/MINI/inventory-movements")
+                        .header("Idempotency-Key", "return-1").contentType(APPLICATION_JSON)
+                        .content("{\"service_id\":\"MINI\",\"type\":\"RETURN\",\"quantity\":2,\"reason\":\"Trả hàng\"}"))
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("RETURN_APPROVAL_REQUIRED"));
 
         mvc.perform(get("/api/services/MINI/inventory-movements/inventory-report"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.received").value(3))
                 .andExpect(jsonPath("$.issued").value(2))
                 .andExpect(jsonPath("$.wasted").value(1))
-                .andExpect(jsonPath("$.returned").value(2))
+                .andExpect(jsonPath("$.returned").value(0))
                 .andExpect(jsonPath("$.adjusted").value(-1))
-                .andExpect(jsonPath("$.net_change").value(1));
+                .andExpect(jsonPath("$.net_change").value(-1));
 
-        assertThat(services.findById("MINI").orElseThrow().getStockQuantity()).isEqualTo(6);
-        assertThat(movements.findByServiceIdOrderByOccurredAtDesc("MINI")).hasSize(5);
+        assertThat(services.findById("MINI").orElseThrow().getStockQuantity()).isEqualTo(4);
+        assertThat(movements.findByServiceIdOrderByOccurredAtDesc("MINI")).hasSize(4);
     }
 
     @Test

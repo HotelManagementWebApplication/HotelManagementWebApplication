@@ -551,6 +551,35 @@ CREATE TABLE CongNoDoiTac (
 -- =============================================================================
 -- Bảng BienDongKhoDichVu
 -- =============================================================================
+-- Buồng phòng gửi trả hàng; chỉ cộng tồn sau khi nhân viên Kho duyệt.
+CREATE TABLE CauHinhLichDichVu (
+    maDichVu NVARCHAR(10) NOT NULL PRIMARY KEY REFERENCES DichVu(maDichVu),
+    congSuat INT NOT NULL CHECK (congSuat > 0),
+    donViKhaDung NVARCHAR(20) NOT NULL,
+    soPhutMoiLuot INT NOT NULL CHECK (soPhutMoiLuot BETWEEN 1 AND 10080),
+    cachTinh NVARCHAR(30) NOT NULL CHECK (cachTinh IN (N'Theo lượt',N'Theo thời lượng',N'Theo kỳ lưu trú',N'Theo tồn kho',N'Theo ngày',N'Qua đêm'))
+);
+
+CREATE TABLE YeuCauTraKho (
+    maYeuCauTraKho BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    maDichVu NVARCHAR(10) NOT NULL REFERENCES DichVu(maDichVu),
+    soLuong INT NOT NULL CHECK (soLuong > 0),
+    maPhong NVARCHAR(10) NULL REFERENCES Phong(maPhong),
+    nguoiGui NVARCHAR(50) NOT NULL,
+    lyDo NVARCHAR(255) NOT NULL,
+    trangThai NVARCHAR(20) NOT NULL DEFAULT N'Chờ duyệt'
+        CHECK (trangThai IN (N'Chờ duyệt', N'Đã duyệt', N'Từ chối')),
+    nguoiDuyet NVARCHAR(50) NULL,
+    ghiChuDuyet NVARCHAR(255) NULL,
+    ngayGui DATETIME2(6) NOT NULL,
+    ngayDuyet DATETIME2(6) NULL,
+    khoaChongTrung NVARCHAR(35) NOT NULL,
+    CONSTRAINT uqYeuCauTraKho UNIQUE (nguoiGui, khoaChongTrung),
+    CONSTRAINT chkYeuCauTraKhoQuyetDinh CHECK (
+        (trangThai = N'Chờ duyệt' AND nguoiDuyet IS NULL AND ngayDuyet IS NULL) OR
+        (trangThai <> N'Chờ duyệt' AND nguoiDuyet IS NOT NULL AND ngayDuyet IS NOT NULL AND nguoiDuyet <> nguoiGui))
+);
+
 CREATE TABLE BienDongKhoDichVu (
     maBienDongKhoDichVu BIGINT IDENTITY(1,1) NOT NULL,
     maDichVu NVARCHAR(10) NOT NULL,
@@ -1127,7 +1156,9 @@ ALTER TABLE DichVu
             N'Giải trí',
             N'Spa',
             N'Đưa đón',
-            N'Vật dụng phòng'
+            N'Vật dụng phòng',
+            N'Món ăn',
+            N'Thức uống'
         )
     );
 ALTER TABLE DichVu
@@ -1145,6 +1176,8 @@ ALTER TABLE DichVu
             N'giờ',
             N'ngày',
             N'chai',
+            N'lon',
+            N'ly',
             N'đơn vị',
             N'cái',
             N'gói',
@@ -1273,6 +1306,7 @@ ALTER TABLE YeuCauPheDuyet
         hanhDong IN (
             N'Kích hoạt loại phòng',
             N'Thay đổi giá dịch vụ',
+            N'Thêm danh mục dịch vụ kho',
             N'Hoàn tiền thanh toán',
             N'Hoàn tiền đặt cọc',
             N'Xóa hóa đơn',

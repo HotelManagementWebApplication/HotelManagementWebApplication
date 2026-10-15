@@ -68,6 +68,8 @@ class SqlServerServiceUnitIntegrationTest {
                 new UnitCase("giờ", "giờ"),
                 new UnitCase("ngày", "ngày"),
                 new UnitCase("chai", "chai"),
+                new UnitCase("lon", "lon"),
+                new UnitCase("ly", "ly"),
                 new UnitCase("đơn vị", "đơn vị"));
 
         int index = 0;
@@ -105,6 +107,25 @@ class SqlServerServiceUnitIntegrationTest {
 
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM DichVu WHERE maDichVu = ?", Integer.class, id)).isZero();
+    }
+
+    @Test
+    @WithMockUser(username = ACTOR, roles = "KITCHEN")
+    void stockCategoriesPassBothApiMappingAndSqlConstraints() throws Exception {
+        String[][] cases = {{"UTFOOD", "food", "Món ăn", "suất"},
+                {"UTDRINK", "beverage", "Thức uống", "ly"},
+                {"UTHOME", "room-amenity", "Vật dụng phòng", "cái"}};
+        for (String[] item : cases) {
+            createdIds.add(item[0]);
+            var request = new ServiceDtos.CreateRequest(item[0], "Mẫu kho " + item[0],
+                    new BigDecimal("1000"), item[3], 0, 0, item[1], null, null);
+            mvc.perform(post("/api/services").contentType(APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsBytes(request)))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.category").value(item[1]));
+            assertThat(jdbc.queryForObject("SELECT danhMuc FROM DichVu WHERE maDichVu=?", String.class, item[0]))
+                    .isEqualTo(item[2]);
+        }
     }
 
     private record UnitCase(String input, String normalizedLabel) {}

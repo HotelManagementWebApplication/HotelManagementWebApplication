@@ -8377,6 +8377,90 @@ GO
 -- Tạo dịch vụ hoặc áp dụng giá đã được phê duyệt và ghi lịch sử giá.
 -- Khóa dịch vụ trước, giống luồng tồn kho; giá và lịch sử theo giao dịch của bên gọi.
 -- =============================================================================
+-- Trả kho: gửi không cộng tồn; duyệt và movement Hoàn kho cùng một transaction.
+CREATE PROCEDURE dbo.uspLenhTraKho
+    @lenh NVARCHAR(20), @id BIGINT, @dichVu NVARCHAR(10), @soLuong INT,
+    @phong NVARCHAR(10), @actor NVARCHAR(50), @lyDo NVARCHAR(255),
+    @khoa NVARCHAR(35), @now DATETIME2(6)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF @lenh NOT IN (N'create', N'approve', N'reject')
+            THROW 53704, N'Lệnh trả kho không hợp lệ', 1;
+        IF @lenh = N'create' AND NOT EXISTS (SELECT 1 FROM dbo.NhanVien WHERE maNhanVien=@actor AND vaiTro=N'Buồng phòng')
+            THROW 53705, N'Chỉ Buồng phòng được gửi trả hàng', 1;
+        IF @lenh <> N'create' AND NOT EXISTS (SELECT 1 FROM dbo.NhanVien WHERE maNhanVien=@actor AND vaiTro=N'Nhà bếp')
+            THROW 53705, N'Chỉ nhân viên Kho được quyết định yêu cầu trả hàng', 1;
+
+        IF @lenh <> N'create'
+            SELECT @dichVu=maDichVu FROM dbo.YeuCauTraKho WHERE maYeuCauTraKho=@id;
+        DECLARE @ton INT, @danhMuc NVARCHAR(50), @nguoiGui NVARCHAR(50), @trangThai NVARCHAR(20);
+        -- Cùng thứ tự khóa service-first với các lệnh tồn kho khác.
+        SELECT @ton=soLuongTonKho, @danhMuc=danhMuc FROM dbo.DichVu WITH (UPDLOCK,HOLDLOCK) WHERE maDichVu=@dichVu;
+        IF @ton IS NULL OR @danhMuc NOT IN (N'Món ăn',N'Thức uống',N'Vật dụng phòng')
+            THROW 53701, N'Chỉ gửi trả mặt hàng kho nội bộ', 1;
+
+        IF @lenh = N'create'
+        BEGIN
+            IF @soLuong IS NULL OR @soLuong < 1 OR NULLIF(LTRIM(RTRIM(@lyDo)),N'') IS NULL OR NULLIF(@khoa,N'') IS NULL
+                THROW 53706, N'Số lượng và lý do trả kho không hợp lệ', 1;
+            IF @phong IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.Phong WHERE maPhong=@phong)
+                THROW 53707, N'Phòng không tồn tại', 1;
+            SELECT @id=maYeuCauTraKho FROM dbo.YeuCauTraKho WITH (UPDLOCK,HOLDLOCK) WHERE nguoiGui=@actor AND khoaChongTrung=@khoa;
+            IF @id IS NOT NULL
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM dbo.YeuCauTraKho WHERE maYeuCauTraKho=@id AND maDichVu=@dichVu AND soLuong=@soLuong
+                    AND ISNULL(maPhong,N'')=ISNULL(@phong,N'') AND lyDo=@lyDo)
+                    THROW 53702, N'Khóa yêu cầu đã dùng với dữ liệu khác', 1;
+            END
+            ELSE
+            BEGIN
+                INSERT dbo.YeuCauTraKho(maDichVu,soLuong,maPhong,nguoiGui,lyDo,ngayGui,khoaChongTrung)
+                VALUES(@dichVu,@soLuong,@phong,@actor,@lyDo,@now,@khoa);
+                SET @id=SCOPE_IDENTITY();
+                INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,lyDo)
+                VALUES(@actor,N'STOCK_RETURN_REQUESTED',N'STOCK_RETURN',CONVERT(NVARCHAR(30),@id),@lyDo);
+            END
+        END
+        ELSE
+        BEGIN
+            SELECT @nguoiGui=nguoiGui,@trangThai=trangThai,@soLuong=soLuong FROM dbo.YeuCauTraKho WITH (UPDLOCK,HOLDLOCK) WHERE maYeuCauTraKho=@id;
+            IF @trangThai IS NULL THROW 53703, N'Không tìm thấy yêu cầu trả kho', 1;
+            IF @nguoiGui=@actor THROW 53705, N'Không được duyệt yêu cầu do chính mình gửi', 1;
+            DECLARE @quyetDinh NVARCHAR(20)=CASE @lenh WHEN N'approve' THEN N'Đã duyệt' ELSE N'Từ chối' END;
+            IF @trangThai NOT IN (N'Chờ duyệt',@quyetDinh) THROW 53704, N'Yêu cầu đã có quyết định khác', 1;
+            IF @trangThai=N'Chờ duyệt'
+            BEGIN
+                IF @lenh=N'reject' AND NULLIF(LTRIM(RTRIM(@lyDo)),N'') IS NULL
+                    THROW 53706, N'Cần ghi lý do từ chối', 1;
+                IF @lenh=N'approve'
+                BEGIN
+                    IF CONVERT(BIGINT,@ton)+@soLuong>2147483647 THROW 53706, N'Tồn kho vượt giới hạn', 1;
+                    DECLARE @inventoryKey NVARCHAR(35)=N'stock-return-'+CONVERT(NVARCHAR(20),@id);
+                    DECLARE @hash NVARCHAR(64)=CONVERT(NVARCHAR(64),HASHBYTES('SHA2_256',@inventoryKey),2);
+                    DECLARE @bucket SMALLINT=CONVERT(SMALLINT,ABS(CONVERT(BIGINT,CHECKSUM(@inventoryKey)))%64);
+                    DECLARE @movementReason NVARCHAR(255)=N'Trả kho #'+CONVERT(NVARCHAR(20),@id)+N' từ '+@nguoiGui;
+                    DECLARE @movementResult TABLE(json NVARCHAR(MAX));
+                    INSERT @movementResult EXEC dbo.uspGhiBienDongKhoDichVu @dichVu,N'Hoàn kho',@soLuong,@actor,@movementReason,@inventoryKey,@hash,@bucket,@now;
+                END
+                UPDATE dbo.YeuCauTraKho SET trangThai=@quyetDinh,nguoiDuyet=@actor,ghiChuDuyet=@lyDo,ngayDuyet=@now WHERE maYeuCauTraKho=@id;
+                INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,lyDo)
+                VALUES(@actor,CASE @lenh WHEN N'approve' THEN N'STOCK_RETURN_APPROVED' ELSE N'STOCK_RETURN_REJECTED' END,N'STOCK_RETURN',CONVERT(NVARCHAR(30),@id),@lyDo);
+            END
+        END
+        COMMIT TRANSACTION;
+        SELECT * FROM dbo.vwYeuCauTraKho WHERE maYeuCauTraKho=@id;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT>0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE PROCEDURE dbo.uspLenhDanhMucDichVu
     @lenh NVARCHAR(20),
     @maDichVu NVARCHAR(MAX),
@@ -8403,7 +8487,7 @@ BEGIN
         WHERE maDichVu = @maDichVu;
 
         -- Tạo bản ghi mới.
-        IF @lenh = N'create'
+        IF @lenh IN (N'create', N'create-stock')
         BEGIN
             IF @daTonTai IS NOT NULL
                 THROW 53001, N'Mã dịch vụ đã tồn tại', 1;
@@ -8429,7 +8513,7 @@ BEGIN
                 @duongDanAnh,
                 0,
                 @nguongTonKho,
-                1
+                CASE WHEN @lenh = N'create-stock' THEN 0 ELSE 1 END
             );
         END
 
