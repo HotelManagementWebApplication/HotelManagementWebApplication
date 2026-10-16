@@ -35,9 +35,37 @@ public class FinanceDatabase {
     private final RowMapper<FinanceDtos.PartnerDebtResponse> debtRows=(r,n)->new FinanceDtos.PartnerDebtResponse(r.getLong(1),r.getString(2),r.getString(3),r.getBigDecimal(4),r.getBigDecimal(5),debtStatuses.convertToEntityAttribute(r.getString(6)),r.getTimestamp(7).toLocalDateTime());
     private final RowMapper<FinanceDtos.LedgerEntryResponse> ledgerRows=(r,n)->new FinanceDtos.LedgerEntryResponse(r.getLong(1),r.getString(2),r.getString(3),r.getString(4),directions.convertToEntityAttribute(r.getString(5)).name(),r.getBigDecimal(6),r.getString(7),r.getTimestamp(8).toLocalDateTime(),r.getString(9),r.getBoolean(10));
     public FinanceDatabase(JdbcTemplate jdbc,ObjectMapper mapper){this.jdbc=jdbc;this.mapper=mapper;}
-    public List<FinanceDtos.CashRecipient> cashRecipients(String actor) {
-        return jdbc.query("SELECT maNhanVien,hoVaTen FROM dbo.vwNhanVien WHERE maNhanVien<>? AND duocKichHoat=1 AND taiKhoanKhongBiKhoa=1 AND trangThaiLamViec=N'Đang làm việc' AND vaiTro IN(N'Lễ tân',N'Kế toán',N'Quản lý',N'Giám đốc',N'Quản trị viên') ORDER BY hoVaTen,maNhanVien",
-                (r,n)->new FinanceDtos.CashRecipient(r.getString(1),r.getString(2)),actor);
+    public List<FinanceDtos.CashRecipient> cashRecipients(String actor, String shift, LocalDateTime now) {
+        // Use the actual roster, including shifts crossing midnight. Never fall back to managers.
+        return jdbc.query("""
+                WITH outgoing AS (
+                    SELECT TOP (1) ca.thoiDiemKetThuc, nv.vaiTro
+                    FROM dbo.vwLichLamViecNhanVien ca
+                    JOIN dbo.vwNhanVien nv ON nv.maNhanVien=ca.maNhanVien
+                    WHERE ca.maNhanVien=? AND ca.maCa=? AND ca.trangThai<>N'Đã hủy'
+                      AND (ca.ngayLamCa=CAST(? AS date)
+                           OR (ca.thoiDiemBatDau<? AND ca.thoiDiemKetThuc>=?))
+                      AND nv.vaiTro IN(N'Kế toán',N'Lễ tân')
+                    ORDER BY CASE WHEN ca.thoiDiemBatDau<=? AND ca.thoiDiemKetThuc>=? THEN 0 ELSE 1 END,
+                             ca.thoiDiemBatDau
+                ), incoming AS (
+                    SELECT ca.maNhanVien,nv.hoVaTen,nv.vaiTro,ca.maCa,ca.thoiDiemBatDau,ca.thoiDiemKetThuc
+                    FROM dbo.vwLichLamViecNhanVien ca
+                    JOIN dbo.vwNhanVien nv ON nv.maNhanVien=ca.maNhanVien
+                    CROSS JOIN outgoing o
+                    WHERE ca.maNhanVien<>? AND ca.thoiDiemBatDau>=o.thoiDiemKetThuc
+                      AND ca.thoiDiemKetThuc>? AND ca.trangThai IN(N'Đã phân công',N'Đã bắt đầu')
+                      AND nv.vaiTro=o.vaiTro AND nv.duocKichHoat=1 AND nv.taiKhoanKhongBiKhoa=1
+                      AND (nv.trangThaiLamViec=N'Đang làm việc' OR
+                           (nv.trangThaiLamViec=N'Đang nghỉ phép' AND
+                            (nv.ngayBatDauNghi>ca.ngayLamCa OR nv.ngayKetThucNghi<ca.ngayLamCa)))
+                )
+                SELECT * FROM incoming
+                WHERE thoiDiemBatDau=(SELECT MIN(thoiDiemBatDau) FROM incoming)
+                ORDER BY hoVaTen,maNhanVien
+                """, (r,n)->new FinanceDtos.CashRecipient(r.getString(1),r.getString(2),r.getString(3),
+                        shifts.convertToEntityAttribute(r.getString(4)),r.getTimestamp(5).toLocalDateTime(),r.getTimestamp(6).toLocalDateTime()),
+                actor,shifts.convertToDatabaseColumn(shift),now,now,now,now,now,actor,now);
     }
     public FinanceDtos.CashBalanceResponse cashBalance(String actor,LocalDateTime now) {
         BigDecimal payments=jdbc.queryForObject("SELECT COALESCE(SUM(soTien),0) FROM dbo.vwGiaoDichThanhToan WHERE maNguoiThucHien=? AND phuongThuc=N'Tiền mặt' AND trangThai=N'Đã hoàn tất' AND loai=N'Thanh toán' AND thoiDiemPhatSinh<=?",BigDecimal.class,actor,now);

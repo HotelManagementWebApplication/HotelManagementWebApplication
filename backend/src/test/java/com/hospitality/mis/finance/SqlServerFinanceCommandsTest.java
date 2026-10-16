@@ -20,15 +20,26 @@ import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest(properties={"spring.datasource.url=${MIGRATION_TEST_DB_URL}","spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}","spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}","spring.flyway.enabled=true","spring.jpa.hibernate.ddl-auto=validate"})
 class SqlServerFinanceCommandsTest {
-    private static final String ACTOR="FIN-cashier";
+    private static final String ACTOR="FIN-cash";
     @Autowired FinanceService service;
+    @Autowired com.hospitality.mis.dao.finance.FinanceDatabase database;
     @Autowired FinancialLedgerService ledger;
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager manager;
+    @Autowired com.hospitality.mis.service.governance.ApprovalService approvals;
+    @Autowired com.hospitality.mis.service.billing.PaymentTransactionService paymentService;
     long invoice;
     @BeforeEach void seed(){
         cleanup();
-        jdbc.update("INSERT NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) VALUES(N'FIN-next',N'Next cashier',N'unused',N'Kế toán',N'0999000101'),(N'FIN-owner',N'Next owner',N'unused',N'Lễ tân',N'0999000102')");
+        jdbc.update("INSERT NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) VALUES(N'FIN-next',N'Next cashier',N'unused',N'Kế toán',N'0999000101'),(N'FIN-owner',N'Next owner',N'unused',N'Kế toán',N'0999000102'),(N'FIN-cash',N'Current cashier',N'unused',N'Kế toán',N'0999000103')");
+        var start=LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).withNano(0);
+        int slot=0;
+        for(String code:List.of("Ca sáng","Ca chiều","SHIFT-0","SHIFT-1","SHIFT-2")){
+            var at=start.plusMinutes(3L*slot++);
+            roster(ACTOR,code,at,at.plusMinutes(1));
+            roster("FIN-next",code,at.plusMinutes(1),at.plusMinutes(2));
+            roster("FIN-owner",code,at.plusMinutes(2),at.plusMinutes(3));
+        }
         long guest=jdbc.queryForObject("INSERT KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) OUTPUT INSERTED.maKhachLuuTru VALUES(N'Finance cutover',N'0909090782',N'FIN-GUEST')",Long.class);
         long reservation=jdbc.queryForObject("INSERT PhieuDatPhong(maKhachLuuTru) OUTPUT INSERTED.maPhieuDatPhong VALUES(?)",Long.class,guest);
         invoice=jdbc.queryForObject("INSERT HoaDon(maPhieuDatPhong) OUTPUT INSERTED.maHoaDon VALUES(?)",Long.class,reservation);
@@ -38,6 +49,7 @@ class SqlServerFinanceCommandsTest {
         jdbc.update("DELETE ButToanTaiChinh WHERE maNguoiThucHien LIKE N'FIN-%' OR maNguon=N'FIN-SYSTEM'");
         jdbc.update("DELETE BanGhiChongTrung WHERE nguoiThucHien LIKE N'FIN-%'");
         jdbc.update("DELETE NhatKyKiemSoat WHERE nguoiThucHien LIKE N'FIN-%'");
+        jdbc.update("DELETE YeuCauPheDuyet WHERE nguoiYeuCau LIKE N'FIN-%'");
         jdbc.update("DELETE KhoanChi WHERE nguoiChiTra LIKE N'FIN-%'");
         jdbc.update("DELETE BanGiaoTienCa WHERE nguoiBanGiao LIKE N'FIN-%'");
         jdbc.update("DELETE ThanhToanCongNoDoiTac WHERE maCongNoDoiTac IN(SELECT maCongNoDoiTac FROM CongNoDoiTac WHERE maThamChieu LIKE N'FIN-%')");
@@ -46,7 +58,29 @@ class SqlServerFinanceCommandsTest {
         jdbc.update("DELETE HoaDon WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE maKhachLuuTru IN(SELECT maKhachLuuTru FROM KhachLuuTru WHERE soDienThoai=N'0909090782'))");
         jdbc.update("DELETE PhieuDatPhong WHERE maKhachLuuTru IN(SELECT maKhachLuuTru FROM KhachLuuTru WHERE soDienThoai=N'0909090782')");
         jdbc.update("DELETE KhachLuuTru WHERE soDienThoai=N'0909090782'");SecurityContextHolder.clearContext();
-        jdbc.update("DELETE NhanVien WHERE maNhanVien IN(N'FIN-next',N'FIN-owner')");
+        jdbc.update("DELETE CaLamViecNhanVien WHERE maNhanVien IN(N'FIN-next',N'FIN-owner',N'FIN-cash')");
+        jdbc.update("DELETE NhanVien WHERE maNhanVien IN(N'FIN-next',N'FIN-owner',N'FIN-cash')");
+    }
+    @Test void recipientsComeFromTheNextRosterAndAreRevalidatedOnSubmit(){
+        var recipients=service.cashRecipients("MORNING");
+        assertThat(recipients).extracting(FinanceDtos.CashRecipient::employeeId).containsExactly("FIN-next");
+        assertThat(recipients.getFirst().role()).isEqualTo("Kế toán");
+        code(()->service.handover(new FinanceDtos.CashHandoverRequest("MORNING",ACTOR,"FIN-owner",money("950000"),null),ACTOR,"FIN-wrong-shift"),"INVALID_HANDOVER_RECIPIENT");
+        jdbc.update("UPDATE CaLamViecNhanVien SET trangThai=N'Đã hủy' WHERE maNhanVien=N'FIN-next'");
+        jdbc.update("UPDATE NhanVien SET vaiTro=N'Giám đốc' WHERE maNhanVien=N'FIN-owner'");
+        assertThat(service.cashRecipients("MORNING")).isEmpty();
+        code(()->service.handover(new FinanceDtos.CashHandoverRequest("MORNING",ACTOR,"FIN-next",money("950000"),null),ACTOR,"FIN-cancelled-shift"),"INVALID_HANDOVER_RECIPIENT");
+        assertThat(service.listHandovers()).isEmpty();
+    }
+    @Test void overnightHandoverFindsTheMorningRosterOnTheFollowingDay(){
+        var day=LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).plusDays(2);
+        var end=day.plusDays(1).atTime(6,0);
+        roster(ACTOR,"Ca đêm",day.atTime(22,0),end);
+        roster("FIN-next","Ca sáng",end,end.plusHours(8));
+        var recipients=database.cashRecipients(ACTOR,"NIGHT",day.plusDays(1).atTime(5,55));
+        assertThat(recipients).extracting(FinanceDtos.CashRecipient::employeeId).containsExactly("FIN-next");
+        assertThat(recipients.getFirst().startsAt()).isEqualTo(end);
+        assertThat(recipients.getFirst().shiftCode()).isEqualTo("MORNING");
     }
     @Test void handoverUsesNetUnhandedCashAndPostsCreditVarianceAndOrderedDenominations(){
         var request=new FinanceDtos.CashHandoverRequest("SHIFT-2",ACTOR,"FIN-next",money("940000"),"counted",List.of(new FinanceDtos.DenominationLine(money("500000"),1),new FinanceDtos.DenominationLine(money("220000"),2)));
@@ -151,7 +185,56 @@ class SqlServerFinanceCommandsTest {
         assertThat(service.listHandovers()).hasSize(2);
         assertThat(service.listHandovers().stream().map(FinanceDtos.CashHandoverResponse::expectedAmount).reduce(BigDecimal.ZERO,BigDecimal::add)).isEqualByComparingTo("950000");
     }
+    @Test void largeExpenseWaitsForDirectorAndConsumesTheExactApprovalOnce(){
+        var request=new FinanceDtos.ExpenseRequest("Maintenance","FIN-large expense",money("11000000"),com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER);
+        code(()->service.recordExpense(request,ACTOR,"FIN-large"),"APPROVAL_REQUIRED");
+        var approval=approvals.request(ACTOR,"BILLING_ADJUSTMENT",com.hospitality.mis.service.governance.ApprovalService.financialTarget("expense","FIN-large"),FinanceService.expenseApprovalPayload(request,"FIN-large"),request.amount(),"Chi bảo trì","FIN-approval");
+        assertThat(service.listExpenses().stream().filter(row->ACTOR.equals(row.paidBy()))).isEmpty();
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("FIN-next","n/a","ROLE_MANAGER"));
+        code(()->approvals.approve(approval.id(),"FIN-next"),"DIRECTOR_APPROVAL_REQUIRED");
+        code(()->approvals.reject(approval.id(),"FIN-next"),"DIRECTOR_APPROVAL_REQUIRED");
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("FIN-owner","n/a","ROLE_DIRECTOR"));
+        approvals.approve(approval.id(),"FIN-owner");actor();
+        var changed=new FinanceDtos.ExpenseRequest("Maintenance","Changed description",request.amount(),request.method());
+        code(()->service.recordExpense(changed,ACTOR,"FIN-large"),"APPROVAL_REQUIRED");
+        var saved=service.recordExpense(request,ACTOR,"FIN-large");
+        assertThat(service.recordExpense(request,ACTOR,"FIN-large").id()).isEqualTo(saved.id());
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM YeuCauPheDuyet WHERE maYeuCauPheDuyet=?",String.class,approval.id())).isEqualTo("Đã sử dụng");
+        assertThat(service.listExpenses().stream().filter(row->ACTOR.equals(row.paidBy()))).hasSize(1);
+    }
+    @Test void tenMillionIsAllowedAndFailedCashExpenseDoesNotConsumeApproval(){
+        service.recordExpense(new FinanceDtos.ExpenseRequest("Supplies","Boundary",money("10000000"),com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER),ACTOR,"FIN-boundary");
+        var request=new FinanceDtos.ExpenseRequest("Supplies","Cash exceeds balance",money("11000000"),com.hospitality.mis.entity.billing.PaymentMethod.CASH);
+        var approval=approvals.request(ACTOR,"BILLING_ADJUSTMENT",com.hospitality.mis.service.governance.ApprovalService.financialTarget("expense","FIN-large-cash"),FinanceService.expenseApprovalPayload(request,"FIN-large-cash"),request.amount(),"Chi tiền mặt","FIN-cash-approval");
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("FIN-owner","n/a","ROLE_DIRECTOR"));
+        approvals.approve(approval.id(),"FIN-owner");actor();
+        code(()->service.recordExpense(request,ACTOR,"FIN-large-cash"),"INSUFFICIENT_CASH_BALANCE");
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM YeuCauPheDuyet WHERE maYeuCauPheDuyet=?",String.class,approval.id())).isEqualTo("Đã phê duyệt");
+    }
+    @Test void largePaymentRequiresDirectorApprovalAndDoesNotCollectTwice(){
+        jdbc.update("UPDATE HoaDon SET tongTienPhong=30000000 WHERE maHoaDon=?",invoice);
+        var request=new com.hospitality.mis.dto.billing.PaymentTransactionDtos.CreateRequest(money("11000000"),com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER,com.hospitality.mis.entity.billing.PaymentTransaction.TransactionType.PAYMENT,"FIN-collection");
+        code(()->paymentService.record(invoice,request,ACTOR,"FIN-payment"),"APPROVAL_REQUIRED");
+        var approval=approvals.request(ACTOR,"BILLING_ADJUSTMENT",com.hospitality.mis.service.governance.ApprovalService.financialTarget("payment","FIN-payment"),request.approvalPayload(invoice,"FIN-payment"),request.amount(),"Thu tiền phòng","FIN-payment-approval");
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("FIN-owner","n/a","ROLE_DIRECTOR"));approvals.approve(approval.id(),"FIN-owner");actor();
+        var saved=paymentService.record(invoice,request,ACTOR,"FIN-payment");
+        assertThat(paymentService.record(invoice,request,ACTOR,"FIN-payment").id()).isEqualTo(saved.id());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM GiaoDichThanhToan WHERE maHoaDon=? AND soTien=11000000",Integer.class,invoice)).isEqualTo(1);
+    }
+    @Test void largeDebtSettlementWaitsForApprovalAndKeepsDebtUnchangedWhenRejected(){
+        var debt=service.recordDebt(new FinanceDtos.PartnerDebtRequest("Supplier","FIN-large-debt",money("20000000")),ACTOR,"FIN-debt-create");
+        var request=new FinanceDtos.DebtSettlementRequest(money("11000000"),"Pay supplier",com.hospitality.mis.entity.billing.PaymentMethod.BANK_TRANSFER);
+        code(()->service.settleDebt(debt.id(),request,ACTOR,"FIN-settlement"),"APPROVAL_REQUIRED");
+        String payload=com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode().put("debt_id",debt.id()).put("note","Pay supplier").put("method","BANK_TRANSFER").put("idempotency_key","FIN-settlement").toString();
+        var approval=approvals.request(ACTOR,"BILLING_ADJUSTMENT",com.hospitality.mis.service.governance.ApprovalService.financialTarget("settlement","FIN-settlement"),payload,request.amount(),"Chi thanh toán nhà cung cấp","FIN-settle-approval");
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("FIN-owner","n/a","ROLE_DIRECTOR"));approvals.reject(approval.id(),"FIN-owner");actor();
+        code(()->service.settleDebt(debt.id(),request,ACTOR,"FIN-settlement"),"APPROVAL_REQUIRED");
+        assertThat(service.debtSettlementHistory(debt.id())).isEmpty();
+    }
     FinanceDtos.PartnerDebtResponse debt(){return service.recordDebt(new FinanceDtos.PartnerDebtRequest("Supplier","FIN-ref",money("1000")),ACTOR,"FIN-debt");}
+    void roster(String employee,String code,LocalDateTime start,LocalDateTime end){
+        jdbc.update("INSERT CaLamViecNhanVien(maNhanVien,ngayLamCa,maCa,thoiDiemBatDau,thoiDiemKetThuc,trangThai,nguoiTao) VALUES(?,?,?,?,?,N'Đã phân công',N'FIN-cash')",employee,start.toLocalDate(),code,start,end);
+    }
     List<String> concurrent(java.util.function.IntFunction<String> command)throws Exception{
         CountDownLatch ready=new CountDownLatch(2),start=new CountDownLatch(1);
         try(var pool=Executors.newFixedThreadPool(2)){

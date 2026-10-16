@@ -17,6 +17,16 @@ import java.util.*;
 
 @Service
 public class ApprovalService {
+    public static final BigDecimal FINANCE_APPROVAL_LIMIT = new BigDecimal("10000000");
+    public static boolean requiresFinancialApproval(BigDecimal amount) {
+        return amount != null && amount.compareTo(FINANCE_APPROVAL_LIMIT) > 0;
+    }
+    // Reuse the persisted financial-adjustment action; namespace isolates these
+    // approvals from invoice adjustments without changing the shared SQL schema.
+    public static String financialTarget(String operation, String key) { return "finance:" + operation + ":" + key; }
+    public static boolean isFinancialVoucher(ApprovalDtos.Response row) {
+        return "BILLING_ADJUSTMENT".equals(row.action()) && row.targetId().startsWith("finance:");
+    }
     private static final Set<String> ACTIONS=Set.of("INVOICE_DELETE","DEPOSIT_REFUND","PRICE_OVERRIDE","PAYMENT_REFUND","BILLING_ADJUSTMENT","ROOM_TYPE_ACTIVATE","SERVICE_PRICE_CHANGE","SERVICE_CATALOG_CREATE");
     private final ApprovalDatabase database;
     private final DurableIdempotencyService idempotency;
@@ -41,6 +51,9 @@ public class ApprovalService {
     @Transactional public ApprovalDtos.Response reject(Long id,String actor,String key){return decide("reject",id,actor,key);}
     private ApprovalDtos.Response decide(String command,Long id,String actor,String key){
         String principal=SecurityActor.requireBoundActor(actor);
+        var existing=database.find(id).orElseThrow(()->error("APPROVAL_NOT_FOUND"));
+        if(isFinancialVoucher(existing) && !director())
+            throw new DomainException("DIRECTOR_APPROVAL_REQUIRED","Chỉ Giám đốc được quyết định khoản thu/chi trên 10 triệu đồng.");
         String hash=IdempotencySupport.fingerprint("APPROVAL_"+command.toUpperCase()+"|"+id);
         return idempotency.executeWithReplay("approval-"+command,key,principal,hash,
             ()->database.command(command,id,principal,null,null,null,null,null,null,null,null,director(),Instant.now(clock)),
@@ -55,6 +68,10 @@ public class ApprovalService {
     }
     @Transactional public List<ApprovalDtos.Response> requestedPaymentRefunds(){
         String actor=SecurityActor.currentActor();database.expire(Instant.now(clock));return database.list(null,actor,"PAYMENT_REFUND");
+    }
+    @Transactional public List<ApprovalDtos.Response> requestedFinancialVouchers(){
+        String actor=SecurityActor.currentActor();database.expire(Instant.now(clock));
+        return database.list(null,actor,"BILLING_ADJUSTMENT").stream().filter(ApprovalService::isFinancialVoucher).toList();
     }
     @Transactional public Page<ApprovalDtos.Response> page(String status,String action,String target,int page,int size){return page(status,action,target,null,null,null,null,page,size);}
     @Transactional public Page<ApprovalDtos.Response> page(String status,String action,String target,String requester,Instant from,Instant to,int page,int size){return page(status,action,target,requester,null,from,to,page,size);}

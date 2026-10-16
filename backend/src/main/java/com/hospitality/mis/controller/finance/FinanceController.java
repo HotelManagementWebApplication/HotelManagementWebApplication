@@ -15,11 +15,17 @@ import org.springframework.web.bind.annotation.*;
 public class FinanceController {
     /** Dịch vụ ghi nhận và tra cứu các sổ liệu tài chính; controller truyền tên người xác thực khi nghiệp vụ yêu cầu. */
     private final FinanceService service;
-    public FinanceController(FinanceService service) { this.service = service; }
+    private final com.hospitality.mis.service.governance.ApprovalService approvals;
+    public FinanceController(FinanceService service,com.hospitality.mis.service.governance.ApprovalService approvals) { this.service = service; this.approvals=approvals; }
+    @GetMapping("/transaction-requests") @PreAuthorize("@departmentAccess.allows(authentication, 'FINANCE_READ')")
+    public java.util.List<com.hospitality.mis.dto.governance.ApprovalDtos.Response> transactionRequests(){
+        return approvals.requestedFinancialVouchers();
+    }
     @GetMapping("/cash-handovers/balance") @PreAuthorize("@departmentAccess.allows(authentication, 'CASH_HANDOVER_WRITE')")
     public FinanceDtos.CashBalanceResponse cashBalance(){return service.cashBalance();}
     @GetMapping("/cash-handovers/recipients") @PreAuthorize("@departmentAccess.allows(authentication, 'CASH_HANDOVER_WRITE')")
-    public java.util.List<FinanceDtos.CashRecipient> cashRecipients(){return service.cashRecipients();}
+    public java.util.List<FinanceDtos.CashRecipient> cashRecipients(
+            @RequestParam(name="shift_code", defaultValue="MORNING") String shift){return service.cashRecipients(shift);}
     /**
      * Ghi nhận bàn giao tiền mặt qua POST /api/finance/cash-handovers.
      * Body được {@code @Valid} kiểm tra, actor lấy từ security context và response là bản ghi bàn giao.

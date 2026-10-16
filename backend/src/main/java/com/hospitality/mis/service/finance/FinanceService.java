@@ -22,7 +22,13 @@ public class FinanceService {
     private final DurableIdempotencyService idempotency;
     private final PaymentReportingDatabase transactions;
     private final Clock clock;
-    public FinanceService(FinanceDatabase database,DurableIdempotencyService idempotency,PaymentReportingDatabase transactions,Clock clock){this.database=database;this.idempotency=idempotency;this.transactions=transactions;this.clock=clock;}
+    private final com.hospitality.mis.service.governance.ApprovalService approvals;
+    public FinanceService(FinanceDatabase database,DurableIdempotencyService idempotency,PaymentReportingDatabase transactions,Clock clock,com.hospitality.mis.service.governance.ApprovalService approvals){this.database=database;this.idempotency=idempotency;this.transactions=transactions;this.clock=clock;this.approvals=approvals;}
+    public static String expenseApprovalPayload(FinanceDtos.ExpenseRequest request,String key){
+        return com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode()
+            .put("category",request.category().trim()).put("description",request.description().trim())
+            .put("method",request.method().name()).put("idempotency_key",key).toString();
+    }
     @Transactional
     public FinanceDtos.CashHandoverResponse handover(FinanceDtos.CashHandoverRequest request,String actor,String idempotencyKey){
         validateHandover(request);String principal=SecurityActor.requireBoundActor(actor);String key=IdempotencySupport.requireKey(idempotencyKey);
@@ -31,14 +37,22 @@ public class FinanceService {
         return idempotency.execute("finance-cash-handover",key,principal,hash,FinanceDtos.CashHandoverResponse.class,()->{
             if(!principal.equals(request.fromActor().trim()))throw new DomainException("ACTOR_MISMATCH","from_actor phải là actor đã xác thực");
             if(request.denominations()!=null)for(var line:request.denominations())if(line==null||line.denomination()==null||line.denomination().signum()<=0||line.quantity()<=0)throw new DomainException("INVALID_DENOMINATION","Mệnh giá và số lượng tiền phải lớn hơn 0");
-            return database.handover(request,principal,key,LocalDateTime.now(clock));
+            LocalDateTime now=LocalDateTime.now(clock);
+            if(database.cashRecipients(principal,request.shiftCode().trim(),now).stream()
+                    .noneMatch(recipient->recipient.employeeId().equals(request.toActor().trim())))
+                throw new DomainException("INVALID_HANDOVER_RECIPIENT","Người nhận phải được phân công ca kế tiếp cùng bộ phận. Hãy tải lại danh sách người nhận.");
+            return database.handover(request,principal,key,now);
         });
     }
     @Transactional
     public FinanceDtos.ExpenseResponse recordExpense(FinanceDtos.ExpenseRequest request,String actor,String idempotencyKey){
         validateExpense(request);String principal=SecurityActor.requireBoundActor(actor);String key=IdempotencySupport.requireKey(idempotencyKey);
         String hash=IdempotencySupport.fingerprint("EXPENSE|"+request.category().trim()+"|"+request.description().trim()+"|"+money(request.amount())+"|"+request.method());
-        return idempotency.execute("finance-expense",key,principal,hash,FinanceDtos.ExpenseResponse.class,()->database.expense(request,principal,key,LocalDateTime.now(clock)));
+        return idempotency.execute("finance-expense",key,principal,hash,FinanceDtos.ExpenseResponse.class,()->{
+            if(com.hospitality.mis.service.governance.ApprovalService.requiresFinancialApproval(request.amount()))
+                approvals.consumeApproved("BILLING_ADJUSTMENT",com.hospitality.mis.service.governance.ApprovalService.financialTarget("expense",key),expenseApprovalPayload(request,key),request.amount(),principal);
+            return database.expense(request,principal,key,LocalDateTime.now(clock));
+        });
     }
     @Transactional
     public FinanceDtos.PartnerDebtResponse recordDebt(FinanceDtos.PartnerDebtRequest request,String actor,String idempotencyKey){
@@ -50,11 +64,20 @@ public class FinanceService {
     public FinanceDtos.PartnerDebtResponse settleDebt(Long id,FinanceDtos.DebtSettlementRequest request,String actor,String idempotencyKey){
         validateSettlement(id,request);String principal=SecurityActor.requireBoundActor(actor);String key=IdempotencySupport.requireKey(idempotencyKey);
         String hash=IdempotencySupport.fingerprint("PARTNER_DEBT_SETTLEMENT|"+id+"|"+money(request.amount())+"|"+text(request.note())+"|"+request.method());
-        return idempotency.execute("finance-partner-debt-settlement",key,principal,hash,FinanceDtos.PartnerDebtResponse.class,()->database.settle(id,request,principal,key,LocalDateTime.now(clock)));
+        return idempotency.execute("finance-partner-debt-settlement",key,principal,hash,FinanceDtos.PartnerDebtResponse.class,()->{
+            if(com.hospitality.mis.service.governance.ApprovalService.requiresFinancialApproval(request.amount())){
+                String payload=com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode().put("debt_id",id).put("note",text(request.note())).put("method",request.method().name()).put("idempotency_key",key).toString();
+                approvals.consumeApproved("BILLING_ADJUSTMENT",com.hospitality.mis.service.governance.ApprovalService.financialTarget("settlement",key),payload,request.amount(),principal);
+            }
+            return database.settle(id,request,principal,key,LocalDateTime.now(clock));
+        });
     }
     @Transactional(readOnly=true) public List<FinanceDtos.CashHandoverResponse> listHandovers(){return database.handovers();}
     @Transactional(readOnly=true) public FinanceDtos.CashBalanceResponse cashBalance(){return database.cashBalance(SecurityActor.currentActor(),LocalDateTime.now(clock));}
-    @Transactional(readOnly=true) public List<FinanceDtos.CashRecipient> cashRecipients(){return database.cashRecipients(SecurityActor.currentActor());}
+    @Transactional(readOnly=true) public List<FinanceDtos.CashRecipient> cashRecipients(String shift){
+        if(shift==null || shift.isBlank())throw new DomainException("INVALID_SHIFT_CODE","Chọn ca cần bàn giao.");
+        return database.cashRecipients(SecurityActor.currentActor(),shift.trim(),LocalDateTime.now(clock));
+    }
     @Transactional(readOnly=true) public List<FinanceDtos.ExpenseResponse> listExpenses(){return database.expenses();}
     @Transactional(readOnly=true) public List<FinanceDtos.PartnerDebtResponse> listDebts(){return database.debts();}
     @Transactional(readOnly=true) public FinanceDtos.PageResponse<FinanceDtos.CashHandoverResponse> pageHandovers(int page,int size){return pageHandovers(null,null,null,null,page,size);}

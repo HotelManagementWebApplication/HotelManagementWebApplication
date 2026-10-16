@@ -48,6 +48,8 @@ public class PaymentTransactionService {
                 Long approval=null;
                 if(request.type()==PaymentTransaction.TransactionType.REFUND)
                     approval=approvals.consumeApproved("PAYMENT_REFUND",String.valueOf(invoiceId),payload,request.amount(),principal).id();
+                else if(ApprovalService.requiresFinancialApproval(request.amount()))
+                    approval=approvals.consumeApproved("BILLING_ADJUSTMENT",ApprovalService.financialTarget("payment",normalized),request.approvalPayload(invoiceId,normalized),request.amount(),principal).id();
                 var saved=database.record(request.type()==PaymentTransaction.TransactionType.PAYMENT?"payment":"refund",invoiceId,request.amount(),request.method(),
                     request.reference(),stored,principal,approval,LocalDateTime.now(clock));
                 audit.record(principal,request.type()==PaymentTransaction.TransactionType.PAYMENT?"PAYMENT_RECORDED":"PAYMENT_REFUNDED",

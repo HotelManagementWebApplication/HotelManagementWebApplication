@@ -5,6 +5,15 @@ import { canActivatePrice, canApprove, kitchenAccountingApi } from "./kitchenAcc
 describe("kitchen/accounting API contract", () => {
   const request = vi.spyOn(apiClient, "request");
   beforeEach(() => { request.mockReset(); request.mockResolvedValue([]); });
+  it("binds large financial approvals to their operation, original payload and retry key",async()=>{
+    await kitchenAccountingApi.requestFinancial("expense",{category:" Supplies ",description:" New stock ",amount:11000000,method:"BANK_TRANSFER"},"KA-expense","KA-approval");
+    const [,options]=request.mock.calls[0];
+    expect(options?.body).toEqual(expect.objectContaining({action:"BILLING_ADJUSTMENT",target_id:"finance:expense:KA-expense",amount:11000000,idempotency_key:"KA-approval",payload:JSON.stringify({category:"Supplies",description:"New stock",method:"BANK_TRANSFER",idempotency_key:"KA-expense"})}));
+    await kitchenAccountingApi.requestFinancial("payment",{amount:12000000,method:"CASH",type:"PAYMENT",reference:null},"KA-payment","KA-payment-approval",42);
+    expect(request.mock.calls[1][1]?.body).toEqual(expect.objectContaining({target_id:"finance:payment:KA-payment",payload:JSON.stringify({invoice_id:42,idempotency_key:"KA-payment",method:"CASH",type:"PAYMENT",reference:""})}));
+    await kitchenAccountingApi.requestFinancial("settlement",{amount:13000000,method:"BANK_TRANSFER",note:null},"KA-debt","KA-debt-approval",18);
+    expect(request.mock.calls[2][1]?.body).toEqual(expect.objectContaining({target_id:"finance:settlement:KA-debt",payload:JSON.stringify({debt_id:18,note:"",method:"BANK_TRANSFER",idempotency_key:"KA-debt"})}));
+  });
 
   it("uses the audited endpoint paths and snake_case query names", async () => {
     request.mockResolvedValue({items:[],page:0,size:20,total_elements:0,total_pages:0,method_counts:{}});

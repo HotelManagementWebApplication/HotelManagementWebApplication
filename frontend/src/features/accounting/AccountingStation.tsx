@@ -3,10 +3,9 @@ import { kitchenAccountingApi } from "../../shared/api/kitchenAccounting";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { authApi } from "../../shared/api/auth";
 import { apiErrorMessage, ApiError } from "../../shared/api/client";
-import { EmployeeProfileDropdown } from "../../shared/components/EmployeeProfileDropdown";
+import { AccountingWorkspace, type AccountingPage } from "./AccountingWorkspace";
 import type { OtaReconciliation, VatInvoice } from "../../shared/types/enterprise";
 import type { CashHandover, LedgerPayment, PaymentMethod, PaymentPage, Reconciliation, PartnerDebt } from "../../shared/types/kitchenAccounting";
-import { employeeRoleLabel } from "../../shared/types/api";
 import type { EmployeeProfileDto } from "../../shared/types/api";
 import { formatDateVi } from "../../shared/utils/localDate";
 import { businessDateValue } from "./accountingLogic";
@@ -17,16 +16,16 @@ import InvoiceOperations from "./InvoiceOperations";
 import { compactActionStyle } from "./accountingUi";
 import { formatVnd, formatVndNumber } from "../../shared/utils/money";
 import {
-  CalendarDays, BarChart2, Search, ChevronDown, Download, Printer,
+  BarChart2, Search, ChevronDown, Download, Printer,
   DollarSign, CreditCard, Building2, RefreshCcw, AlertCircle,
-  ArrowUpRight, ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 
 
 /* ══════════════════════════════════════════════════════════
    TYPES
 ══════════════════════════════════════════════════════════ */
-type MainTab = "handover" | "ledger" | "ota" | "vat" | "debt";
+type MainTab = AccountingPage;
 type LedgerTab = "all" | "cash" | "card" | "vietqr";
 type PayStatus = "paid" | "refunded" | "failed" | "voided";
 interface PaymentLedgerEntry {
@@ -74,7 +73,7 @@ const METHOD_CFG: Record<string,{bg:string;text:string;label:string}> = {
   other:   { bg:"#F1F5F9",text:"#475569",label:"Khác" },
 };
 
-function LedgerPanel({ fillHeight = false, date = businessDateValue(), search = "", refresh = 0 }: { fillHeight?: boolean; date?: string; search?: string; refresh?: number }) {
+function LedgerPanel({ fillHeight = false, date = businessDateValue(), search = "", refresh = 0, onDateChange }: { fillHeight?: boolean; date?: string; search?: string; refresh?: number; onDateChange:(date:string)=>void }) {
   const [lTab, setLTab] = useState<LedgerTab>("all");
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
@@ -87,7 +86,8 @@ function LedgerPanel({ fillHeight = false, date = businessDateValue(), search = 
   const PER_PAGE = 10;
   const currentDateLabel = formatDateVi(date);
   const today = date;
-  useEffect(()=>{setSearchQuery(search);setPage(1);},[search,date]);
+  useEffect(()=>{setSearchQuery(search);setPage(1);},[search]);
+  useEffect(()=>{setPage(1);},[date]);
   const methods: Record<Exclude<LedgerTab, "all">, PaymentMethod> = { cash:"CASH", card:"CARD", vietqr:"BANK_TRANSFER" };
   const method = lTab === "all" ? undefined : methods[lTab];
 
@@ -180,7 +180,7 @@ function LedgerPanel({ fillHeight = false, date = businessDateValue(), search = 
     const url = URL.createObjectURL(new Blob([`\uFEFF${rows.join("\r\n")}`], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `payments-${businessDateValue()}.csv`;
+    link.download = `payments-${date}.csv`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (cause) { setExportError(apiErrorMessage(cause,"Không thể xuất giao dịch CSV.")); }
@@ -188,10 +188,10 @@ function LedgerPanel({ fillHeight = false, date = businessDateValue(), search = 
   };
 
   return (
-    <div style={{ flex:fillHeight?"1 1 100%":"1 1 50%",minWidth:0,minHeight:0,display:"flex",flexDirection:"column",
+    <div className="acct-card acct-ledger" style={{ flex:fillHeight?"1 1 100%":"1 1 50%",minWidth:0,minHeight:0,display:"flex",flexDirection:"column",
       background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden" }}>
       {/* Header */}
-      <div style={{ padding:"16px 18px",borderBottom:"1px solid #E2E8F0",
+      <div className="acct-card-header" style={{ padding:"16px 18px",borderBottom:"1px solid #E2E8F0",
         display:"flex",alignItems:"flex-start",justifyContent:"space-between" }}>
         <div>
           <p style={{ fontSize:14,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Sổ giao dịch thanh toán</p>
@@ -205,7 +205,7 @@ function LedgerPanel({ fillHeight = false, date = businessDateValue(), search = 
       </div>
 
       {/* Search row */}
-      <div style={{ padding:"10px 18px",borderBottom:"1px solid #F1F5F9",
+      <div className="acct-ledger-filters" style={{ padding:"10px 18px",borderBottom:"1px solid #F1F5F9",
         display:"flex",gap:8,alignItems:"center" }}>
         <div style={{ position:"relative",flex:1 }}>
           <Search size={12} style={{ position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
@@ -213,13 +213,8 @@ function LedgerPanel({ fillHeight = false, date = businessDateValue(), search = 
             style={{ width:"100%",height:30,paddingLeft:28,paddingRight:8,borderRadius:7,
               border:"1px solid #E2E8F0",background:"#F8FAFC",fontSize:11,outline:"none",boxSizing:"border-box" }} />
         </div>
-        <div style={{ position:"relative" }}>
-          <select style={{ height:30,padding:"0 22px 0 8px",borderRadius:7,border:"1px solid #E2E8F0",
-            background:"#F8FAFC",fontSize:11,outline:"none",cursor:"pointer",appearance:"none" }}>
-            <option>{currentDateLabel}</option>
-          </select>
-          <ChevronDown size={10} style={{ position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
-        </div>
+        <label className="acct-ledger-date"><span>Ngày giao dịch</span><input aria-label="Ngày tra cứu giao dịch" type="date" value={date} onChange={event=>{if(event.target.value){setPage(1);onDateChange(event.target.value);}}}/></label>
+        <button type="button" style={compactActionStyle} disabled={date===businessDateValue()} onClick={()=>{setPage(1);onDateChange(businessDateValue());}}>Hôm nay</button>
         <div style={{ position:"relative" }}>
           <select aria-label="Phương thức thanh toán" value={lTab} onChange={event => { setLTab(event.target.value as LedgerTab); setPage(1); }} style={{ height:30,padding:"0 22px 0 8px",borderRadius:7,border:"1px solid #E2E8F0",
             background:"#F8FAFC",fontSize:11,outline:"none",cursor:"pointer",appearance:"none" }}>
@@ -253,7 +248,7 @@ function LedgerPanel({ fillHeight = false, date = businessDateValue(), search = 
       {exportError && <div role="alert" style={{padding:"12px 18px",color:"#B91C1C"}}>{exportError}</div>}
       {/* Table */}
       <div style={{ flex:1,overflowY:"auto" }}>
-        <table style={{ width:"100%",borderCollapse:"collapse" }}>
+        <table className="acct-table" style={{ width:"100%",borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:"#F8FAFC" }}>
               {["Mã giao dịch","Mã đặt phòng","Mã hóa đơn","Loại giao dịch","Số tiền","Phương thức","Giờ giao dịch","Trạng thái"].map(h => (
@@ -346,7 +341,7 @@ function VatScreen({ vatData = [], onExportXml, onExportAllXml, date }: {
   const totalVat = vatData.filter(row=>row.status==="issued").reduce((s,r) => s+r.vat, 0);
   const currentDateLabel = formatDateVi(date);
   return (
-    <div style={{ padding:"20px 22px",flex:1,overflowY:"auto" }}>
+    <div className="acct-panel" style={{ padding:"20px 22px",flex:1,overflowY:"auto" }}>
       <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16 }}>
         <div>
           <h2 style={{ fontSize:18,fontWeight:700,color:"#0F172A",marginBottom:2 }}>Hóa đơn &amp; VAT</h2>
@@ -367,7 +362,7 @@ function VatScreen({ vatData = [], onExportXml, onExportAllXml, date }: {
       </div>
 
       {/* Summary */}
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16 }}>
+      <div className="acct-vat-summary" style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16 }}>
         {[
           { label:"Tổng hóa đơn đã phát hành",val:String(vatData.filter(r=>r.status==="issued").length),unit:"hóa đơn" },
           { label:"Hóa đơn chờ phát hành",     val:String(vatData.filter(r=>r.status==="pending").length), unit:"hóa đơn" },
@@ -381,8 +376,8 @@ function VatScreen({ vatData = [], onExportXml, onExportAllXml, date }: {
         ))}
       </div>
 
-      <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden" }}>
-        <table style={{ width:"100%",borderCollapse:"collapse" }}>
+      <div className="acct-table-wrap" style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden" }}>
+        <table className="acct-table" style={{ width:"100%",borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:"#F8FAFC" }}>
               {["Số hóa đơn","Tên khách","Mã hóa đơn","Số tiền","VAT","Thuế suất","Trạng thái","Thao tác"].map(h => (
@@ -484,7 +479,6 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
   const [liveOta, setLiveOta] = useState<OtaReconciliation[]>([]);
   const [liveVat, setLiveVat] = useState<VatInvoice[]>([]);
   const [userProfile, setUserProfile] = useState<EmployeeProfileDto | null>(null);
-  const [topProfileOpen, setTopProfileOpen] = useState(false);
 
   useEffect(() => {
     let active = true;setDataLoading(true);setSummaryError("");setDataError("");setFinanceSummary(null);setRefundCount(null);
@@ -540,153 +534,33 @@ export default function AccountingStation({ onBack }: { onBack: () => void }) {
   };
   const summaryMoney = (value: number | undefined) => value === undefined ? "—" : fmtMoney(value);
   const financeKpis = [
-    { label:"Thu/hoàn ròng ngày chọn", Icon:DollarSign, iconBg:"#DCFCE7",iconColor:"#16A34A",val:summaryMoney(financeSummary?.net_total),sub:financeSummary ? `${financeSummary.completed_transactions} giao dịch hoàn tất` : "Đang tải tổng hợp", subUp:false },
-    { label:"Tiền mặt thu/hoàn ròng ngày chọn", Icon:DollarSign, iconBg:"#DBEAFE",iconColor:"#2563EB",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CASH ?? 0 : undefined), sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
-    { label:"Thanh toán thẻ ròng ngày chọn", Icon:CreditCard, iconBg:"#EDE9FE",iconColor:"#5B21B6",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CARD ?? 0 : undefined),sub:"Theo giao dịch thu và hoàn thực tế", subUp:false },
-    { label:"Doanh thu đã ghi nhận ngày chọn",Icon:BarChart2,iconBg:"#DCFCE7",iconColor:"#15803D",val:summaryMoney(financeSummary?.recognized_revenue),sub:"Theo bút toán doanh thu đã chốt",subUp:false },
-    { label:"Còn phải thu — chuyển khoản",Icon:Building2, iconBg:"#FEF9C3",iconColor:"#92400E",val:summaryMoney(financeSummary?.outstanding_bank_transfer_balances), sub:"Số dư còn phải thu trên hóa đơn chuyển khoản", subUp:false },
-    { label:"Hoàn tiền chờ Giám đốc",  Icon:RefreshCcw,  iconBg:"#FFE4E8",iconColor:"#DC2626",val:refundCount===null?"—":String(refundCount), sub:"Yêu cầu do tôi gửi đang chờ duyệt",subUp:false },
+    { label:"Thu tiền thuần trong ngày", Icon:DollarSign, iconBg:"#EAF2FF",iconColor:"#2563EB",val:summaryMoney(financeSummary?.net_total),sub:financeSummary ? `Tiền thu − tiền hoàn · ${financeSummary.completed_transactions} giao dịch hoàn tất` : "Đang tải tổng hợp", subUp:false },
+    { label:"Thu tiền mặt thuần trong ngày", Icon:DollarSign, iconBg:"#DBEAFE",iconColor:"#2563EB",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CASH ?? 0 : undefined), sub:"Tiền mặt đã thu − tiền mặt đã hoàn", subUp:false },
+    { label:"Thu qua thẻ thuần trong ngày", Icon:CreditCard, iconBg:"#EDE9FE",iconColor:"#5B21B6",val:summaryMoney(financeSummary ? financeSummary.totals_by_method.CARD ?? 0 : undefined),sub:"Tiền thu qua thẻ − tiền hoàn qua thẻ", subUp:false },
+    { label:"Doanh thu ghi nhận trong ngày",Icon:BarChart2,iconBg:"#EAF2FF",iconColor:"#2563EB",val:summaryMoney(financeSummary?.recognized_revenue),sub:"Doanh thu đã ghi nhận, không phải tổng tiền thu",subUp:false },
+    { label:"Phải thu khách hàng qua chuyển khoản",Icon:Building2, iconBg:"#FEF9C3",iconColor:"#92400E",val:summaryMoney(financeSummary?.outstanding_bank_transfer_balances), sub:"Số dư hiện tại · Không giới hạn ngày", subUp:false },
+    { label:"Yêu cầu hoàn tiền chờ phê duyệt",  Icon:RefreshCcw,  iconBg:"#FFE4E8",iconColor:"#DC2626",val:refundCount===null?"—":String(refundCount), sub:"",subUp:false },
   ];
-  const todayLabel = formatDateVi(selectedDate);
-
-  const MAIN_TABS: { id:MainTab; label:string }[] = [
-    { id:"handover", label:"Bàn giao ca & Két tiền" },
-    { id:"ledger",   label:"Sổ thanh toán" },
-    { id:"ota",      label:"Đối soát kênh bán" },
-    { id:"vat",      label:"Hóa đơn & VAT" },
-    { id:"debt",     label:"Công nợ đối tác" },
-  ];
-
   return (
-    <div style={{ display:"flex",flexDirection:"column",height:"100vh",overflow:"hidden",
-      background:"#F8FAFC",fontFamily:"'Inter',system-ui,sans-serif" }}>
-
-      {/* MAIN */}
-      <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0 }}>
-
-        {/* HEADER */}
-        <header style={{ background:"#FFF",borderBottom:"1px solid #E2E8F0",height:52,
-          display:"flex",alignItems:"center",gap:12,padding:"0 22px",flexShrink:0 }}>
-          <div style={{ position:"relative",flex:1,maxWidth:560 }}>
-            <Search size={13} style={{ position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",color:"#94A3B8",pointerEvents:"none" }} />
-              <input value={globalSearch} onChange={event=>{setGlobalSearch(event.target.value);setMainTab(mainTab==="vat"?"vat":"ledger");}} placeholder={mainTab==="vat"?"Tìm hóa đơn theo mã đặt phòng...":"Tra giao dịch: PAY, INV hoặc mã đặt phòng..."}
-              style={{ width:"100%",height:34,paddingLeft:32,paddingRight:42,borderRadius:8,
-                border:"1px solid #E2E8F0",background:"#F8FAFC",fontSize:12,outline:"none",boxSizing:"border-box" }} />
-          </div>
-          <div style={{ flex:1 }} />
-          <button aria-label="Tải lại dữ liệu kế toán" disabled={dataLoading} onClick={refreshData} style={{ width:34,height:34,borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0",
-            display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative" }}>
-            <RefreshCcw size={14} style={{ color:"#475569" }} />
-          </button>
-          <div style={{ position:"relative" }}>
-            <div
-              onClick={()=>setTopProfileOpen(p=>!p)}
-              style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer" }}
-              title="Hồ sơ nhân viên"
-            >
-              <div style={{ width:30,height:30,borderRadius:99,
-                background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:11,fontWeight:700,color:"#FFF" }}>
-                {userProfile?.full_name ? userProfile.full_name.slice(0, 2).toUpperCase() : dataLoading ? "…" : "?"}
-              </div>
-              <div>
-                <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || (dataLoading ? "Đang tải hồ sơ…" : "Không có hồ sơ")}</p>
-                <p style={{ fontSize:10,color:"#94A3B8" }}>{userProfile?.role ? employeeRoleLabel(userProfile.role) : dataLoading ? "Đang tải…" : "—"}</p>
-              </div>
-              <ChevronDown size={12} style={{ color:"#94A3B8" }} />
-            </div>
-            <EmployeeProfileDropdown
-              isOpen={topProfileOpen}
-              onClose={()=>setTopProfileOpen(false)}
-              onLogout={onBack}
-              align="top-right"
-            currentRoleLabel={userProfile?.role ? employeeRoleLabel(userProfile.role) : dataLoading ? "Đang tải…" : "—"}
-              departmentName="Bộ phận Kế toán"
-            />
-          </div>
-        </header>
-
-        {/* SCROLL */}
-        <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}>
-
-          {/* Page title + date */}
-          <div style={{ padding:"18px 22px 0",background:"#FFF",borderBottom:"1px solid #E2E8F0",flexShrink:0 }}>
-            <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14 }}>
-              <div>
-                <h1 style={{ fontSize:22,fontWeight:800,color:"#0F172A",marginBottom:3 }}>Kế toán &amp; Đối soát tài chính</h1>
-                <p style={{ fontSize:13,color:"#64748B" }}>Quản lý hóa đơn, thanh toán, thu chi, bàn giao ca và công nợ</p>
-              </div>
-              <div style={{ display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:9,
-                border:"1px solid #E2E8F0",background:"#FFF",cursor:"pointer" }}>
-                <CalendarDays size={13} style={{ color:"#64748B" }} />
-                <input aria-label="Ngày đối soát" type="date" value={selectedDate} onChange={event=>{if(event.target.value)setSelectedDate(event.target.value);}} style={{fontSize:13,border:0,background:"transparent"}}/>
-              </div>
-            </div>
-
-            {summaryError && <p role="alert" style={{color:"#B91C1C",fontSize:12,marginBottom:10}}>{summaryError}</p>}
-            {dataError && <p role="alert" style={{color:"#B91C1C",fontSize:12,marginBottom:10}}>{dataError} <button type="button" style={compactActionStyle} onClick={refreshData}>Tải lại dữ liệu</button></p>}
-            {dataLoading && <p role="status" style={{fontSize:11,color:"#64748B"}}>Đang cập nhật dữ liệu kế toán…</p>}
-            {/* KPI CARDS */}
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,250px),1fr))",gap:12,marginBottom:14 }}>
-              {financeKpis.map(k => (
-                <div key={k.label} style={{ minWidth:0,background:"#FFF",borderRadius:10,border:"1px solid #E2E8F0",
-                  padding:"13px 16px",display:"flex",alignItems:"center",gap:12,
-                  boxShadow:"0 1px 3px rgba(0,0,0,.04)" }}>
-                  <div style={{ width:40,height:40,borderRadius:10,background:k.iconBg,flexShrink:0,
-                    display:"flex",alignItems:"center",justifyContent:"center" }}>
-                    <k.Icon size={18} style={{ color:k.iconColor }} />
-                  </div>
-                  <div style={{ minWidth:0 }}>
-                    <p style={{ fontSize:10,color:"#64748B",marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{k.label}</p>
-                    <p style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:800,
-                      color:k.label==="Hoàn tiền chờ Giám đốc"?"#DC2626":"#0F172A",lineHeight:1,marginBottom:2 }}>{k.val}</p>
-                    <div style={{ display:"flex",alignItems:"center",gap:3 }}>
-                      {k.subUp && <ArrowUpRight size={10} style={{ color:"#16A34A" }} />}
-                      <span style={{ fontSize:10,color:k.subUp?"#16A34A":"#94A3B8",fontWeight:k.subUp?600:400,overflow:"hidden",textOverflow:"ellipsis" }}>{k.sub}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Main tabs */}
-            <div style={{ display:"flex",gap:0,flexWrap:"wrap" }}>
-              {MAIN_TABS.map(t => {
-                const act = mainTab === t.id;
-                return (
-                  <button key={t.id} onClick={() => setMainTab(t.id)}
-                    style={{ padding:"10px 18px",fontSize:13,fontWeight:act?600:400,cursor:"pointer",
-                      color:act?"#0F172A":"#64748B",background:"transparent",
-                      borderBottom:act?"2px solid #0F172A":"2px solid transparent",
-                      whiteSpace:"nowrap",marginBottom:-1 }}>
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* CONTENT */}
-          {mainTab === "handover" && (
-            <div style={{ flex:1,display:"flex",flexWrap:"wrap",gap:14,padding:"14px 22px",overflow:"auto" }}>
-              <CashHandoverPanel handovers={liveCashHandovers} date={selectedDate} actor={userProfile?.employee_id} onSaved={refreshData} />
-              <LedgerPanel date={selectedDate} search={globalSearch} refresh={refresh} />
-            </div>
-          )}
-          {mainTab === "ledger" && (
-            <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",padding:"14px 22px" }}>
-              <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden",flex:1,display:"flex",flexDirection:"column" }}>
-                <LedgerPanel fillHeight date={selectedDate} search={globalSearch} refresh={refresh} />
-              </div>
-            </div>
-          )}
-          {mainTab === "ota" && <OtaReconciliationScreen rows={liveOta} onUpdated={updated=>{setLiveOta(rows=>rows.map(row=>row.reservation_id===updated.reservation_id?updated:row));}} />}
-          {mainTab === "vat" && <div style={{flex:1,overflowY:"auto"}}><InvoiceOperations vatInvoices={liveVat} onChanged={refreshData} onVatCreated={row=>setLiveVat(rows=>[row,...rows])} refresh={refresh} search={globalSearch}/><VatScreen vatData={liveVatData} date={selectedDate} onExportXml={exportVatXml} onExportAllXml={exportAllVatXml}/></div>}
-          {mainTab === "debt" && <FinanceOperations debts={liveDebts} date={selectedDate} onChanged={refreshData}/>}
-
-        </div>
-      </div>
-    </div>
+    <AccountingWorkspace
+      page={mainTab} onPageChange={setMainTab} profile={userProfile} loading={dataLoading}
+      search={globalSearch} onSearchChange={value=>{setGlobalSearch(value);setMainTab(mainTab==="vat"?"vat":"ledger");}}
+      date={selectedDate} onDateChange={setSelectedDate} onRefresh={refreshData} onLogout={onBack}
+      metrics={financeKpis}
+      alerts={<>
+        {summaryError && <p role="alert">{summaryError}</p>}
+        {dataError && <p role="alert">{dataError} <button type="button" style={compactActionStyle} onClick={refreshData}>Tải lại dữ liệu</button></p>}
+        {dataLoading && <p role="status">Đang cập nhật dữ liệu kế toán…</p>}
+      </>}
+    >
+      {mainTab === "handover" && <div className="acct-overview-grid">
+        <CashHandoverPanel handovers={liveCashHandovers} date={selectedDate} actor={userProfile?.employee_id} actorName={userProfile?.full_name} onSaved={refreshData}/>
+        <LedgerPanel date={selectedDate} onDateChange={setSelectedDate} search={globalSearch} refresh={refresh}/>
+      </div>}
+      {mainTab === "ledger" && <LedgerPanel fillHeight date={selectedDate} onDateChange={setSelectedDate} search={globalSearch} refresh={refresh}/>}
+      {mainTab === "ota" && <OtaReconciliationScreen rows={liveOta} onUpdated={updated=>setLiveOta(rows=>rows.map(row=>row.reservation_id===updated.reservation_id?updated:row))}/>}
+      {mainTab === "vat" && <div className="acct-vat-stack"><InvoiceOperations employee={userProfile} vatInvoices={liveVat} onChanged={refreshData} onVatCreated={row=>setLiveVat(rows=>[row,...rows])} refresh={refresh} search={globalSearch}/><VatScreen vatData={liveVatData} date={selectedDate} onExportXml={exportVatXml} onExportAllXml={exportAllVatXml}/></div>}
+      {mainTab === "debt" && <FinanceOperations employee={userProfile} debts={liveDebts} date={selectedDate} onChanged={refreshData}/>}
+    </AccountingWorkspace>
   );
 }

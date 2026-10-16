@@ -16,7 +16,8 @@ import java.util.List;
 /** DTO cho bàn giao tiền mặt, chi phí và công nợ đối tác của vận hành. */
 public final class FinanceDtos {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record CashRecipient(String employeeId, String fullName) {}
+    public record CashRecipient(String employeeId, String fullName, String role, String shiftCode,
+                                LocalDateTime startsAt, LocalDateTime endsAt) {}
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record CashBalanceResponse(String actorId, LocalDateTime calculatedAt, BigDecimal payments,
                                       BigDecimal refunds, BigDecimal receivedHandovers,

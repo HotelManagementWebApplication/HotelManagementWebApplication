@@ -6,6 +6,11 @@ import com.hospitality.mis.service.billing.BillingService;
 import com.hospitality.mis.service.billing.PaymentTransactionService;
 import com.hospitality.mis.service.billing.ReceiptService;
 import com.hospitality.mis.service.billing.ServiceCatalogService;
+import com.hospitality.mis.service.billing.ServiceCatalogService.CatalogProposalService;
+import com.hospitality.mis.service.billing.ServiceCatalogService.ServiceAvailabilityService;
+import com.hospitality.mis.service.billing.ServiceCatalogService.ServiceConsumptionService;
+import com.hospitality.mis.service.billing.ServiceCatalogService.ServiceScheduleService;
+import com.hospitality.mis.service.operations.InventoryMovementService.StockReturnService;
 import com.hospitality.mis.service.billing.VnpayPaymentService;
 import com.hospitality.mis.service.finance.FinanceService;
 import com.hospitality.mis.service.governance.ApprovalService;
@@ -103,9 +108,14 @@ class DepartmentAuthorizationMatrixTest {
     @MockBean HousekeepingInspectionService mock29;
     @MockBean HotelServiceBookingService mock30;
     @MockBean VnpayPaymentService mock31;
+    @MockBean CatalogProposalService catalogProposals;
+    @MockBean ServiceAvailabilityService availability;
+    @MockBean ServiceConsumptionService consumption;
+    @MockBean ServiceScheduleService schedules;
+    @MockBean StockReturnService stockReturns;
     @MockBean ApprovalAuthorization approvalAuthorization;
     /** Gom các business mock để reset invocation và chứng minh deny không gọi nghiệp vụ. */
-    private List<Object> businessMocks() { return List.of(mock0, mock1, mock2, mock3, mock4, mock5, mock6, mock7, mock8, mock9, mock10, mock11, mock12, mock13, mock14, mock15, mock16, mock17, mock18, mock19, mock20, mock21, mock22, mock23, mock24, mock25, mock26, mock27, mock28, mock29, mock30, mock31); }
+    private List<Object> businessMocks() { return List.of(mock0, mock1, mock2, mock3, mock4, mock5, mock6, mock7, mock8, mock9, mock10, mock11, mock12, mock13, mock14, mock15, mock16, mock17, mock18, mock19, mock20, mock21, mock22, mock23, mock24, mock25, mock26, mock27, mock28, mock29, mock30, mock31, catalogProposals, availability, consumption, schedules, stockReturns); }
 
     /** Stub response tối thiểu để matrix chỉ đo RBAC, không đo business rules. */
     @BeforeEach void responses() {
@@ -241,11 +251,26 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("GET", "/api/services/low-stock", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
             new Endpoint("GET", "/api/services/S1/inventory-movements", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
             new Endpoint("GET", "/api/services/S1/inventory-movements/inventory-report", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
-            new Endpoint("POST", "/api/services/S1/inventory-movements", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{\"service_id\":\"S1\",\"type\":\"RECEIVE\",\"quantity\":1}"),
+            new Endpoint("POST", "/api/services/S1/inventory-movements", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{\"service_id\":\"S1\",\"type\":\"RECEIVE\",\"quantity\":1,\"reason\":\"New delivery\"}"),
             new Endpoint("POST", "/api/services/S1/price/submit", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{\"price\":120,\"reason\":\"Cost update\"}"),
             new Endpoint("POST", "/api/services/S1/price/activate", "ADMIN,DIRECTOR,MANAGER", "{\"price\":120,\"reason\":\"Cost update\"}"),
             new Endpoint("GET", "/api/services/S1/price-history", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
             new Endpoint("GET", "/api/services/price-requests", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{}"),
+            new Endpoint("GET", "/api/services/availability?from=2026-10-01T08:00:00&to=2026-10-01T09:00:00", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
+            new Endpoint("GET", "/api/services/consumption?from=2026-10-01&to=2026-10-07", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{}"),
+            new Endpoint("GET", "/api/services/S1/schedule", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
+            new Endpoint("PUT", "/api/services/S1/schedule", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{\"capacity\":2,\"unit\":\"court\",\"minutes_per_unit\":60,\"mode\":\"TIME_SLOT\",\"consumes_stock\":false,\"reason\":\"Schedule setup\"}"),
+            new Endpoint("GET", "/api/services/catalog-proposals", "KITCHEN", "{}"),
+            new Endpoint("POST", "/api/services/catalog-proposals", "KITCHEN", "{\"kind\":\"WAREHOUSE\",\"id\":\"S1\",\"name\":\"Water\",\"unit\":\"bottle\",\"category\":\"beverage\",\"price\":100,\"reason\":\"New stock\"}"),
+            new Endpoint("GET", "/api/operations/stock-returns", "HOUSEKEEPING,KITCHEN", "{}"),
+            new Endpoint("GET", "/api/operations/stock-returns/catalog", "HOUSEKEEPING,KITCHEN", "{}"),
+            new Endpoint("POST", "/api/operations/stock-returns", "HOUSEKEEPING", "{\"service_id\":\"S1\",\"quantity\":1,\"reason\":\"Unused supplies\"}"),
+            new Endpoint("POST", "/api/operations/stock-returns/1/approve", "KITCHEN", "{}"),
+            new Endpoint("POST", "/api/operations/stock-returns/1/reject", "KITCHEN", "{\"reason\":\"Damaged\"}"),
+            new Endpoint("GET", "/api/finance/cash-handovers/balance", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{}"),
+            new Endpoint("GET", "/api/finance/cash-handovers/recipients?shift_code=MORNING", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{}"),
+            new Endpoint("GET", "/api/finance/refund-requests", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
+            new Endpoint("GET", "/api/finance/transaction-requests", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/operations/restaurant/service-bookings?date=2026-10-01", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{}"),
             new Endpoint("POST", "/api/operations/restaurant/service-bookings/1/use", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{}"),
             new Endpoint("GET", "/api/operations/maintenance/room/101", "ADMIN,DIRECTOR,MANAGER,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
@@ -257,12 +282,12 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("GET", "/api/finance/partner-debts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/partner-debts/1/settlements", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/ledger", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
-            new Endpoint("POST", "/api/finance/partner-debts/1/settle", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"amount\":10}"),
+            new Endpoint("POST", "/api/finance/partner-debts/1/settle", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"amount\":10,\"method\":\"BANK_TRANSFER\"}"),
             new Endpoint("GET", "/api/finance/reconciliation", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/payments", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/receipts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("POST", "/api/finance/cash-handovers", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{\"shift_code\":\"SHIFT\",\"from_actor\":\"actor\",\"to_actor\":\"other\",\"actual_amount\":100}"),
-            new Endpoint("POST", "/api/finance/expenses", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"category\":\"Food\",\"description\":\"Food\",\"amount\":100}"),
+            new Endpoint("POST", "/api/finance/expenses", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"category\":\"Food\",\"description\":\"Food\",\"amount\":100,\"method\":\"BANK_TRANSFER\"}"),
             new Endpoint("POST", "/api/finance/partner-debts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"partner_name\":\"Partner\",\"reference_code\":\"D1\",\"amount\":100}"),
             new Endpoint("GET", "/api/governance/approvals", "ADMIN,DIRECTOR,MANAGER", "{}"),
             new Endpoint("POST", "/api/governance/approvals", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{\"action\":\"PRICE_OVERRIDE\",\"target_id\":\"1\",\"payload\":\"{}\",\"reason\":\"Review\"}"),

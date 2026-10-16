@@ -106,6 +106,13 @@ class FinanceHttpReconciliationIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1));
 
         em.createNativeQuery("INSERT NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) VALUES(N'next',N'Next cashier',N'unused',N'Kế toán',N'0999000201')").executeUpdate();
+        // Handover recipients must have the next roster assignment in the same department.
+        em.createNativeQuery("IF NOT EXISTS(SELECT 1 FROM NhanVien WHERE maNhanVien=N'accounting') INSERT NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) VALUES(N'accounting',N'Test accounting',N'unused',N'Kế toán',N'0999000202'); UPDATE NhanVien SET vaiTro=N'Kế toán' WHERE maNhanVien=N'accounting'").executeUpdate();
+        var shiftStart=LocalDateTime.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).withNano(0);
+        em.createNativeQuery("INSERT CaLamViecNhanVien(maNhanVien,ngayLamCa,maCa,thoiDiemBatDau,thoiDiemKetThuc,trangThai,nguoiTao) VALUES(N'accounting',:day,N'SHIFT-REAL',:start,:end,N'Đã phân công',N'accounting')")
+                .setParameter("day",shiftStart.toLocalDate()).setParameter("start",shiftStart).setParameter("end",shiftStart.plusMinutes(1)).executeUpdate();
+        em.createNativeQuery("INSERT CaLamViecNhanVien(maNhanVien,ngayLamCa,maCa,thoiDiemBatDau,thoiDiemKetThuc,trangThai,nguoiTao) VALUES(N'next',:day,N'SHIFT-REAL',:start,:end,N'Đã phân công',N'accounting')")
+                .setParameter("day",shiftStart.toLocalDate()).setParameter("start",shiftStart.plusMinutes(1)).setParameter("end",shiftStart.plusMinutes(2)).executeUpdate();
         mvc.perform(post("/api/finance/cash-handovers").contentType(APPLICATION_JSON)
                         .header("Idempotency-Key", "finance-handover-1")
                         .content("{\"shift_code\":\"SHIFT-REAL\",\"from_actor\":\"accounting\",\"to_actor\":\"next\",\"actual_amount\":75,\"note\":\"counted\"}"))
