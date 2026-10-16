@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, createContext, useContext } from "react";
 import { hrGovernanceApi } from "../../shared/api/hrGovernance";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
@@ -26,9 +26,18 @@ import {
   ConciergeBell, Sparkles, UtensilsCrossed, Wrench,
 } from "lucide-react";
 
-import { ServicePriceReviewContext, useServicePriceReview } from "./ServicePriceReviewContext";
-import { proposedPrice, priceReviewDetails } from "./servicePriceReview";
+
+
 import type { Service } from "../../shared/types/kitchenAccounting";
+
+// Only price-review cards consume this data; other approval workflows keep their props.
+export const ServicePriceReviewContext = createContext<{
+  services: Service[];
+  employees: EmployeeAdmin[];
+  managerId?: string;
+}>({services:[],employees:[]});
+
+export const useServicePriceReview = () => useContext(ServicePriceReviewContext);
 
 /* ══════════════════════════════════════════════════════════
    TYPES & DATA
@@ -799,10 +808,15 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
             detail = approval.action === "SERVICE_CATALOG_CREATE"
               ? [`${payload.kind === "WAREHOUSE" ? "Kho" : "Dịch vụ"}: ${String(payload.name)} (${String(payload.id)})`, `Đơn vị: ${String(payload.unit)} · Giá: ${fmtVND(Number(payload.price))}`, approval.reason]
               : Object.entries(payload).slice(0, 2).map(([key, item]) => `${key}: ${String(item)}`);
+            if(approval.target_id.startsWith("finance:"))detail=[
+              payload.invoice_id ? `Thu hóa đơn INV-${payload.invoice_id}` : payload.debt_id ? `Thanh toán công nợ #${payload.debt_id}` : `Nhóm chi: ${String(payload.category??"")}`,
+              `Phương thức: ${({CASH:"Tiền mặt",CARD:"Thẻ",BANK_TRANSFER:"Chuyển khoản ngân hàng"} as Record<string,string>)[String(payload.method)]??String(payload.method)}`,
+              String(payload.description??payload.reference??payload.note??approval.reason),
+            ];
           } catch { /* reason remains the visible fallback */ }
           return {
             id: String(approval.id), dept: "Đề xuất nghiệp vụ", deptColor: "#3B82F6", emoji: "✓",
-            title: approvalActionLabel(approval.action), detail: detail.length > 0 ? detail : [approval.reason],
+            title: approval.target_id.startsWith("finance:") ? (!approval.target_id.startsWith("finance:payment:") ? "Duyệt chi tiền trên 10 triệu" : "Duyệt thu tiền trên 10 triệu") : approvalActionLabel(approval.action), detail: approval.target_id.startsWith("finance:") ? [...(detail.length?detail:[approval.reason]), `Số tiền: ${fmtVND(Number(approval.amount))}`, `Người đề nghị: ${approval.requester}`] : detail.length > 0 ? detail : [approval.reason],
             time: approval.requested_at, badge: {HIGH:"Rủi ro cao",MEDIUM:"Trung bình",LOW:"Thấp"}[approval.risk] ?? approval.risk, badgeColor: approval.risk === "HIGH" ? "#DC2626" : "#F59E0B",
             kind: approval.action === "SERVICE_PRICE_CHANGE" ? "service-price" : approval.action.toLowerCase().includes("refund") ? "refund" : approval.action.toLowerCase().includes("technical") ? "technical-release" : "expense",
             rawApproval: approval,
@@ -956,9 +970,10 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
       ? "Đang xác minh tài khoản quản lý."
       : !currentManager?.id ? "Không xác minh được tài khoản quản lý; vui lòng tải lại."
       : approval.rawApproval?.requester === currentManager.id ? "Bạn là người gửi yêu cầu nên không thể tự phê duyệt."
+      : approval.rawApproval?.target_id.startsWith("finance:") && role!=="director" ? "Khoản thu/chi này cần Giám đốc phê duyệt."
       : undefined }));
     return [...authorized, ...leaveApprovals, ...technicalApprovals, ...incidentApprovals];
-  }, [liveApprovals, leaveApprovals, technicalApprovals, incidentApprovals, currentManager?.id, profileLoading]);
+  }, [liveApprovals, leaveApprovals, technicalApprovals, incidentApprovals, currentManager?.id, profileLoading, role]);
 
   const pendingCount = approvalsForRole(role, allApprovals).length;
 
@@ -1400,4 +1415,33 @@ export default function ManagerDashboard({ role, onBack }: { role: ManagerRole; 
     </div>
     </ServicePriceReviewContext.Provider>
   );
+}
+
+
+type PriceApproval = { amount?: number | null; payload: string; target_id: string; requester: string; reason: string; expires_at?: string | null };
+
+export function proposedPrice(approval: { amount?: number | null; payload: string }): number | null {
+  let value: unknown = approval.amount;
+  if (value === null || value === undefined) {
+    try {
+      const payload: unknown = JSON.parse(approval.payload);
+      value = typeof payload === "object" && payload !== null ? (payload as { price?: unknown }).price : payload;
+    } catch { return null; }
+  }
+  if (value === "" || value === null || value === undefined || typeof value === "boolean") return null;
+  const price = Number(value);
+  return Number.isFinite(price) && price >= 0 ? price : null;
+}
+
+export function priceReviewDetails(approval: PriceApproval, services: Service[], employees: { employee_id: string; full_name: string }[]): string[] {
+  const service = services.find(item => item.id === approval.target_id);
+  const employee = employees.find(item => item.employee_id === approval.requester);
+  const price = proposedPrice(approval);
+  return [
+    `${service?.name ?? approval.target_id} (${approval.target_id})`,
+    `Giá hiện tại: ${service ? formatVnd(service.price) : "Chưa tải được"} · Giá đề xuất: ${price === null ? "Không hợp lệ" : formatVnd(price)}`,
+    `Người đề nghị: ${employee?.full_name ?? approval.requester} (${approval.requester})`,
+    `Lý do: ${approval.reason}`,
+    `Hạn xử lý: ${approval.expires_at ? new Date(approval.expires_at).toLocaleString("vi-VN") : "Không giới hạn"}`,
+  ];
 }

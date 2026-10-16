@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import StockReturnsPanel from "../stock-returns/StockReturnsPanel";
+import { StockReturnsPanel } from "../kitchen-inventory/KitchenInventory";
 import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { authApi } from "../../shared/api/auth";

@@ -31,7 +31,7 @@ export interface Expense { id: number; category: string; description: string; am
 export interface PartnerDebt { id: number; partner_name: string; reference_code: string; amount: number; settled_amount: number; status: string; recorded_at: string; }
 export interface DebtSettlement { id: number; partner_debt_id: number; amount: number; settled_by: string; settled_at: string; note: string | null; method: PaymentMethod | null; }
 export interface CashDenomination { denomination: number; quantity: number; }
-export interface CashRecipient { employee_id: string; full_name: string; }
+export interface CashRecipient { employee_id: string; full_name: string; role: string; shift_code: string; starts_at: string; ends_at: string; }
 export interface CashBalance { actor_id: string; calculated_at: string; payments: number; refunds: number; received_handovers: number; handed_over_expected: number; cash_expenses: number; cash_debt_settlements: number; expected_amount: number; }
 export interface CashHandover { id: number; shift_code: string; from_actor: string; to_actor: string; expected_amount: number; actual_amount: number; variance: number; handed_over_at: string; note: string | null; denominations: CashDenomination[]; }
 export interface CashHandoverRequest { shift_code: string; from_actor: string; to_actor: string; actual_amount: number; note: string | null; denominations?: CashDenomination[]; }
@@ -45,3 +45,33 @@ export interface PaymentQuery { invoice_id?: number; method?: PaymentMethod; typ
 export interface ReceiptQuery { invoice_id?: number; method?: PaymentMethod; issued_by?: string; from?: string; to?: string; page?: number; size?: number; }
 export interface PaymentCreateRequest { amount: number; method: PaymentMethod; type: PaymentTransactionType; reference?: string | null; }
 export interface LedgerQuery { entry_type?: string; from?: string; to?: string; page?: number; size?: number; }
+
+
+// Kho / Dịch vụ: lịch, khả dụng, đề xuất và trả kho.
+export type ScheduleMode="DURATION"|"UNITS"|"STAY"|"DAILY"|"OVERNIGHT"|"STOCK";
+
+export interface ServiceSchedule { service_id:string;capacity:number|null;unit:string|null;minutes_per_unit:number|null;mode:ScheduleMode|null;consumes_stock:boolean; }
+
+export interface ScheduleRequest { capacity:number;unit:string;minutes_per_unit:number;mode:ScheduleMode;consumes_stock:boolean;reason:string; }
+
+export interface ServiceConsumption { id:string;service_id:string;occurred_at:string;quantity:number;free_quantity:number;unit_price:number;amount_due:number; }
+
+export interface ServiceAvailability { service_id:string;unit:string;capacity:number;booked:number;available:number;mode:"DURATION"|"UNITS"|"STAY"|"STOCK"|"DAILY"|"OVERNIGHT";consumes_stock?:boolean; }
+
+export interface CatalogProposal {
+  kind: "SERVICE" | "WAREHOUSE";
+  id: string;
+  name: string;
+  unit: string;
+  category: string;
+  price: number;
+  reason: string;
+}
+
+export interface StockReturn {
+  id:number; service_id:string; service_name:string; unit:string; quantity:number;
+  room_id:string|null; requester:string; reason:string; status:"PENDING"|"APPROVED"|"REJECTED";
+  approver:string|null; decision_reason:string|null; requested_at:string; decided_at:string|null;
+}
+
+export interface StockReturnRequest { service_id:string; quantity:number; room_id:string|null; reason:string; }

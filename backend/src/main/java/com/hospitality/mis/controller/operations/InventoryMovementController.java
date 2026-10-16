@@ -1,12 +1,15 @@
 package com.hospitality.mis.controller.operations;
 
+import com.hospitality.mis.dto.billing.ServiceDtos;
 import com.hospitality.mis.dto.operations.InventoryMovementDtos;
+import com.hospitality.mis.dto.operations.InventoryMovementDtos.StockReturnDtos;
 import com.hospitality.mis.middleware.security.SecurityActor;
 import com.hospitality.mis.service.operations.InventoryMovementService;
+import com.hospitality.mis.service.operations.InventoryMovementService.StockReturnService;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
 
 /**
  * Tra cứu và ghi nhận các biến động tồn kho của một dịch vụ.
@@ -44,4 +47,23 @@ public class InventoryMovementController {
         throw new com.hospitality.mis.common.exception.DomainException("SERVICE_PATH_MISMATCH", "service_id must match the URL");
     }
     return service.record(request, SecurityActor.currentActor(), idempotencyKey); }
+
+
+    // StockReturnController
+    @RestController
+    @RequestMapping("/api/operations/stock-returns")
+    public static class StockReturnController {
+        private final StockReturnService service;
+        public StockReturnController(StockReturnService service){this.service=service;}
+        @GetMapping @PreAuthorize("hasAnyRole('HOUSEKEEPING','KITCHEN')")
+        public List<StockReturnDtos.Response> list(){return service.list();}
+        @GetMapping("/catalog") @PreAuthorize("hasAnyRole('HOUSEKEEPING','KITCHEN')")
+        public List<ServiceDtos.Response> catalog(){return service.catalog();}
+        @PostMapping @PreAuthorize("hasRole('HOUSEKEEPING')")
+        public StockReturnDtos.Response create(@Valid @RequestBody StockReturnDtos.CreateRequest request,@RequestHeader("Idempotency-Key") String key){return service.create(request,key);}
+        @PostMapping("/{id}/approve") @PreAuthorize("hasRole('KITCHEN')")
+        public StockReturnDtos.Response approve(@PathVariable long id,@Valid @RequestBody StockReturnDtos.DecisionRequest request){return service.decide(id,true,request.reason());}
+        @PostMapping("/{id}/reject") @PreAuthorize("hasRole('KITCHEN')")
+        public StockReturnDtos.Response reject(@PathVariable long id,@Valid @RequestBody StockReturnDtos.DecisionRequest request){return service.decide(id,false,request.reason());}
+    }
 }

@@ -55,8 +55,15 @@ export const kitchenAccountingApi = {
   settlements: (id: number) => apiClient.request<DebtSettlement[]>(`/api/finance/partner-debts/${id}/settlements`),
   cashHandovers: () => apiClient.request<CashHandover[]>("/api/finance/cash-handovers"),
   cashBalance: () => apiClient.request<import("../types/kitchenAccounting").CashBalance>("/api/finance/cash-handovers/balance"),
-  cashRecipients: () => apiClient.request<import("../types/kitchenAccounting").CashRecipient[]>("/api/finance/cash-handovers/recipients"),
+  cashRecipients: (shiftCode: string) => apiClient.request<import("../types/kitchenAccounting").CashRecipient[]>(`/api/finance/cash-handovers/recipients${query({shift_code:shiftCode})}`),
   refundRequests: () => apiClient.request<Approval[]>("/api/finance/refund-requests"),
+  financialRequests: () => apiClient.request<Approval[]>("/api/finance/transaction-requests"),
+  requestFinancial: (operation:"expense"|"payment"|"settlement",body:ExpenseRequest|PaymentCreateRequest|DebtSettlementRequest,transactionKey:string,requestKey:string,invoiceId?:number) => apiClient.request<Approval>("/api/governance/approvals",{method:"POST",body:{
+    action:"BILLING_ADJUSTMENT",target_id:`finance:${operation}:${requiredKey(transactionKey)}`,amount:body.amount,
+    reason:(operation==="settlement"?`Chi thanh toán công nợ #${invoiceId}: ${(body as DebtSettlementRequest).note??""}`:operation==="expense"?`Chi tiền: ${(body as ExpenseRequest).description}`:`Thu tiền hóa đơn INV-${invoiceId}: ${(body as PaymentCreateRequest).reference??""}`).slice(0,500),
+    payload:operation==="settlement"?JSON.stringify({debt_id:invoiceId,note:(body as DebtSettlementRequest).note??"",method:body.method,idempotency_key:transactionKey}):operation==="expense"?JSON.stringify({category:(body as ExpenseRequest).category.trim(),description:(body as ExpenseRequest).description.trim(),method:body.method,idempotency_key:transactionKey}):JSON.stringify({invoice_id:invoiceId,idempotency_key:transactionKey,method:body.method,type:"PAYMENT",reference:(body as PaymentCreateRequest).reference??""}),
+    idempotency_key:requiredKey(requestKey),
+  }}),
   requestRefund: (invoiceId: number, body: PaymentCreateRequest, paymentKey: string, requestKey: string) => apiClient.request<Approval>("/api/governance/approvals", { method: "POST", body: {
     action: "PAYMENT_REFUND", target_id: String(invoiceId), amount: body.amount, reason: body.reference,
     payload: JSON.stringify({ invoice_id: invoiceId, idempotency_key: requiredKey(paymentKey), method: body.method, type: "REFUND", reference: body.reference ?? "" }),
@@ -79,3 +86,32 @@ export const canActivatePrice = (approval: Pick<Approval, "status" | "requester"
 export const toRows = <T>(value: T[] | Page<T> | undefined): T[] => Array.isArray(value) ? value : value?.items ?? [];
 export const newPaymentIdempotencyKey = key;
 export const newKitchenIdempotencyKey = key;
+
+
+// Kho / Dịch vụ: cùng một API client và cùng nguồn kiểu dữ liệu.
+import type { ScheduleMode, ServiceSchedule, ScheduleRequest, ServiceConsumption, ServiceAvailability, CatalogProposal, StockReturn, StockReturnRequest } from "../types/kitchenAccounting";
+export type { ScheduleMode, ServiceSchedule, ScheduleRequest, ServiceConsumption, ServiceAvailability, CatalogProposal, StockReturn, StockReturnRequest } from "../types/kitchenAccounting";
+export const serviceScheduleApi={
+  get:(id:string)=>apiClient.request<ServiceSchedule>(`/api/services/${encodeURIComponent(id)}/schedule`),
+  save:(id:string,body:ScheduleRequest)=>apiClient.request<ServiceSchedule>(`/api/services/${encodeURIComponent(id)}/schedule`,{method:"PUT",body}),
+};
+export const serviceConsumptionApi={
+  list:(from:string,to:string)=>apiClient.request<ServiceConsumption[]>(`/api/services/consumption?${new URLSearchParams({from,to})}`),
+};
+
+export const serviceAvailabilityApi={
+  list:(from:string,to:string)=>apiClient.request<ServiceAvailability[]>(`/api/services/availability?${new URLSearchParams({from,to})}`),
+};
+
+export const catalogProposalsApi = {
+  list: () => apiClient.request<Approval[]>("/api/services/catalog-proposals"),
+  submit: (body: CatalogProposal, key: string) => apiClient.request<Approval>("/api/services/catalog-proposals", { method:"POST", body, idempotencyKey:key }),
+};
+
+const stockReturnsBase="/api/operations/stock-returns";
+export const stockReturnsApi={
+  list:()=>apiClient.request<StockReturn[]>(stockReturnsBase),
+  catalog:()=>apiClient.request<Service[]>(`${stockReturnsBase}/catalog`),
+  create:(body:StockReturnRequest,key:string)=>apiClient.request<StockReturn>(stockReturnsBase,{method:"POST",body,idempotencyKey:key}),
+  decide:(id:number,approve:boolean,reason:string)=>apiClient.request<StockReturn>(`${stockReturnsBase}/${id}/${approve?"approve":"reject"}`,{method:"POST",body:{reason}}),
+};

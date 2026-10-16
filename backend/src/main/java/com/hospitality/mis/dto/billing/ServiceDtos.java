@@ -2,19 +2,13 @@ package com.hospitality.mis.dto.billing;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
-
-
+import jakarta.validation.constraints.*;
 import jakarta.validation.constraints.NotBlank;
-
 import jakarta.validation.constraints.NotNull;
-
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-
-
 
 /** DTO quản lý dịch vụ bán thêm và tồn kho; JSON dùng tên trường snake_case. */
 public final class ServiceDtos {
@@ -88,4 +82,43 @@ public final class ServiceDtos {
                            boolean lowStock,
                            boolean active) {}
 
+
+
+    // CatalogProposalDtos
+    public static final class CatalogProposalDtos {
+        private CatalogProposalDtos() {}
+        @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+        public record Request(
+            @NotBlank @Pattern(regexp="SERVICE|WAREHOUSE") String kind,
+            @NotBlank @Pattern(regexp="[A-Z0-9]{1,10}") String id,
+            @NotBlank @Size(max=100) String name,
+            @NotBlank String unit,
+            @NotBlank String category,
+            @NotNull @DecimalMin("0") @Digits(integer=8,fraction=2) BigDecimal price,
+            @NotBlank @Size(max=300) String reason) {}
+    }
+
+    // ServiceAvailabilityDtos
+    public static final class ServiceAvailabilityDtos {
+        private ServiceAvailabilityDtos(){}
+        @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+        public record Response(String serviceId,String unit,int capacity,long booked,long available,String mode,boolean consumesStock){}
+    }
+
+    // ServiceConsumptionDto
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record ServiceConsumptionDto(String id,String serviceId,LocalDateTime occurredAt,int quantity,
+            int freeQuantity,BigDecimal unitPrice,BigDecimal amountDue) {}
+
+    // ServiceScheduleDtos
+    public static final class ServiceScheduleDtos {
+        private ServiceScheduleDtos() {}
+        @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+        public record Request(@Min(1) int capacity, @NotBlank @Size(max=20) String unit,
+                @Min(1) @Max(10080) int minutesPerUnit, @NotBlank String mode,
+                @NotNull Boolean consumesStock, @NotBlank @Size(max=255) String reason) {}
+        @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+        public record Response(String serviceId, Integer capacity, String unit, Integer minutesPerUnit,
+                String mode, boolean consumesStock) {}
+    }
 }

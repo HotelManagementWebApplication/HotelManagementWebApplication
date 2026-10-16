@@ -1,39 +1,33 @@
 package com.hospitality.mis.controller.billing;
+
+import com.hospitality.mis.dto.billing.ServiceDtos.CatalogProposalDtos;
+import com.hospitality.mis.dto.billing.ServiceDtos.ServiceAvailabilityDtos;
+import com.hospitality.mis.dto.billing.ServiceDtos.ServiceConsumptionDto;
 import com.hospitality.mis.dto.billing.ServiceDtos;
-
-
-
-
-import com.hospitality.mis.service.billing.ServiceCatalogService;
-
+import com.hospitality.mis.dto.billing.ServiceDtos.ServiceScheduleDtos;
+import com.hospitality.mis.dto.governance.ApprovalDtos;
 import com.hospitality.mis.middleware.security.SecurityActor;
-
+import com.hospitality.mis.service.billing.ServiceCatalogService.CatalogProposalService;
+import com.hospitality.mis.service.billing.ServiceCatalogService.ServiceAvailabilityService;
+import com.hospitality.mis.service.billing.ServiceCatalogService;
+import com.hospitality.mis.service.billing.ServiceCatalogService.ServiceConsumptionService;
+import com.hospitality.mis.service.billing.ServiceCatalogService.ServiceScheduleService;
 import jakarta.validation.Valid;
-
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
-
 import org.springframework.security.access.prepost.PreAuthorize;
-
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.GetMapping;
-
 import org.springframework.web.bind.annotation.PathVariable;
-
 import org.springframework.web.bind.annotation.PostMapping;
-
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
-
 import org.springframework.web.bind.annotation.RequestMapping;
-
 import org.springframework.web.bind.annotation.ResponseStatus;
-
 import org.springframework.web.bind.annotation.RestController;
-
-
-
-import java.util.List;
-
-
 
 /**
  * Quản lý danh mục dịch vụ khách sạn và lượng tồn kho của từng dịch vụ.
@@ -143,4 +137,50 @@ public class ServiceController {
         return service.priceRequestsFor(SecurityActor.currentActor());
     }
 
+
+
+    // CatalogProposalController
+    @RestController
+    @RequestMapping("/api/services/catalog-proposals")
+    @PreAuthorize("hasRole('KITCHEN') and @departmentAccess.allows(authentication, 'SERVICE_PRICE_REQUEST')")
+    public static class CatalogProposalController {
+        private final CatalogProposalService service;
+        public CatalogProposalController(CatalogProposalService service){this.service=service;}
+        @PostMapping public ApprovalDtos.Response submit(@Valid @RequestBody CatalogProposalDtos.Request request,@RequestHeader("Idempotency-Key") String key){return service.submit(request,SecurityActor.currentActor(),key);}
+        @GetMapping public List<ApprovalDtos.Response> mine(){return service.mine(SecurityActor.currentActor());}
+    }
+
+    // ServiceAvailabilityController
+    @RestController
+    @RequestMapping("/api/services/availability")
+    public static class ServiceAvailabilityController {
+        private final ServiceAvailabilityService service;
+        public ServiceAvailabilityController(ServiceAvailabilityService service){this.service=service;}
+        @GetMapping @PreAuthorize("@departmentAccess.allows(authentication, 'SERVICE_READ')")
+        public List<ServiceAvailabilityDtos.Response> list(
+            @RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE_TIME) LocalDateTime to){return service.list(from,to);}
+    }
+
+    // ServiceConsumptionController
+    @RestController
+    @RequestMapping("/api/services/consumption")
+    public static class ServiceConsumptionController {
+        private final ServiceConsumptionService service;
+        public ServiceConsumptionController(ServiceConsumptionService service) { this.service=service; }
+        @GetMapping @PreAuthorize("hasAnyRole('KITCHEN','MANAGER','DIRECTOR','ADMIN') and @departmentAccess.allows(authentication, 'INVENTORY_READ')")
+        public List<ServiceConsumptionDto> list(@RequestParam LocalDate from,@RequestParam LocalDate to) { return service.list(from,to); }
+    }
+
+    // ServiceScheduleController
+    @RestController
+    @RequestMapping("/api/services/{id}/schedule")
+    public static class ServiceScheduleController {
+        private final ServiceScheduleService service;
+        public ServiceScheduleController(ServiceScheduleService service) { this.service=service; }
+        @GetMapping @PreAuthorize("@departmentAccess.allows(authentication, 'SERVICE_READ')")
+        public ServiceScheduleDtos.Response get(@PathVariable String id) { return service.get(id); }
+        @PutMapping @PreAuthorize("hasAnyRole('KITCHEN','MANAGER','DIRECTOR','ADMIN') and @departmentAccess.allows(authentication, 'INVENTORY_WRITE')")
+        public ServiceScheduleDtos.Response save(@PathVariable String id,@Valid @RequestBody ServiceScheduleDtos.Request request) { return service.save(id,request); }
+    }
 }

@@ -1,33 +1,16 @@
-import { ServiceScheduleDialog } from "./ServiceScheduleDialog";
-import { ServiceCoordination } from "./ServiceCoordination";
 import { useEffect, useState, useMemo, useRef } from "react";
-import ConsumptionReports from "./ConsumptionReports";
-import StockReturnsPanel from "../stock-returns/StockReturnsPanel";
-import ProposalDialog from "./ProposalDialog";
-import StockNotifications, { type StockActivity } from "./StockNotifications";
-import StockVoucherDialog from "./StockVoucherDialog";
-import type { VoucherMovement } from "./stockVoucher";
-import { catalogProposalsApi, type CatalogProposal } from "../../shared/api/catalogProposals";
-import { serviceAvailabilityApi, type ServiceAvailability } from "../../shared/api/serviceAvailability";
-import { kitchenAccountingApi, newKitchenIdempotencyKey } from "../../shared/api/kitchenAccounting";
+
+import { catalogProposalsApi, type CatalogProposal, serviceAvailabilityApi, type ServiceAvailability, kitchenAccountingApi, newKitchenIdempotencyKey, type ServiceConsumption, serviceConsumptionApi, serviceScheduleApi, stockReturnsApi, type StockReturn, type ScheduleMode } from "../../shared/api/kitchenAccounting";
 import { authApi } from "../../shared/api/auth";
 import { ApiError, apiErrorMessage } from "../../shared/api/client";
 import { EmployeeProfileDropdown } from "../../shared/components/EmployeeProfileDropdown";
-import type { Approval, MovementType, Service, InventoryMovement, RestaurantBooking } from "../../shared/types/kitchenAccounting";
-import { employeeRoleLabel } from "../../shared/types/api";
-import type { EmployeeProfileDto } from "../../shared/types/api";
-import { localDateValue } from "../../shared/utils/localDate";
+import { type Approval, type MovementType, type Service, type InventoryMovement, type RestaurantBooking } from "../../shared/types/kitchenAccounting";
+import { employeeRoleLabel, type EmployeeProfileDto } from "../../shared/types/api";
+import { formatDateVi, localDateValue, parseApiDate } from "../../shared/utils/localDate";
 import { formatVnd } from "../../shared/utils/money";
-import {
-  Package, ArrowLeftRight, Tag, BarChart2,
-  Search, ChevronDown, Plus,
-  AlertTriangle, ShoppingCart, FileText,
-  MoreVertical, ArrowUpRight, ArrowDownRight, LogOut,
-  CheckSquare, Calendar, Upload, TrendingUp, Download,
-  Clock, CheckCircle2, X, Send,
-  Utensils, RefreshCw, SlidersHorizontal, Eye, Zap,
-} from "lucide-react";
+import { Package, ArrowLeftRight, Tag, BarChart2, Search, ChevronDown, Plus, AlertTriangle, ShoppingCart, FileText, MoreVertical, ArrowUpRight, ArrowDownRight, LogOut, CheckSquare, Calendar, Upload, TrendingUp, Download, Clock, CheckCircle2, X, Send, Utensils, RefreshCw, SlidersHorizontal, Eye, Zap, BarChart3, BedDouble, BriefcaseBusiness, CalendarDays, Car, CircleHelp, Dumbbell, Flower2, PieChart, Shirt, ArrowRight, Check, FolderPlus, ArrowDownToLine, ArrowUpFromLine, Bell, RotateCcw, Trash2, Files, Printer } from "lucide-react";
 
+/* KitchenInventory.tsx — màn hình chính */
 /* ══════════════════════════════════════════════════════════
    TYPES
 ══════════════════════════════════════════════════════════ */
@@ -1548,7 +1531,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
     globalThis.setTimeout(() => setMovementNotice(null), 6000);
   };
 
-  return (
+  return (<><style>{kitchenInventoryStyles}</style>{(
     <div style={{ display:"flex",height:"100vh",overflow:"hidden",
       background:"#F8FAFC",fontFamily:"'Inter',system-ui,sans-serif" }}>
 
@@ -1734,5 +1717,611 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
       {scheduleItem && <ServiceScheduleDialog item={scheduleItem} onClose={()=>setScheduleItem(null)} onSaved={()=>setInventoryRefreshKey(key=>key+1)}/>}
       {movementDialog && <InventoryMovementModal items={catalogItems} initialServiceId={movementDialog.serviceId} initialType={movementDialog.type} initialReason={movementDialog.reason} onClose={() => setMovementDialog(null)} onSubmit={handleInventoryMovement} />}
     </div>
+  )}</>);
+}
+
+
+/* consumptionReport.ts — chức năng Kho / Dịch vụ */
+export interface ReportItem {
+  id:string;name:string;category:string;categoryLabel:string;unit:string;
+  price:number;stock:number;reorder:number;isStock:boolean;
+}
+export interface ReportMovement {
+  id:string;serviceId:string;movementType:MovementType;qty:number;occurredAt:string;
+  stockBefore?:number|null;stockAfter?:number|null;
+}
+export interface ConsumptionRow {
+  item:ReportItem;quantity:number;amount:number;endingStock:number|null;
+}
+export type ReportTab="services"|"stock";
+
+function endingStock(item:ReportItem,movements:ReportMovement[],end:string):number|null {
+  const sorted=movements.filter(row=>row.serviceId===item.id).sort((a,b)=>Date.parse(b.occurredAt)-Date.parse(a.occurredAt)||Number(b.id)-Number(a.id));
+  const previous=sorted.find(row=>localDateValue(parseApiDate(row.occurredAt))<=end);
+  if(previous?.stockAfter!=null)return previous.stockAfter;
+  const next=sorted.filter(row=>localDateValue(parseApiDate(row.occurredAt))>end).at(-1);
+  if(next?.stockBefore!=null)return next.stockBefore;
+  return end===localDateValue()?item.stock:null;
+}
+
+export function buildConsumptionReport(items:ReportItem[],movements:ReportMovement[],end:string,usages:ServiceConsumption[],from?:string) {
+  const endDate=parseApiDate(end);const startDate=from?parseApiDate(from):new Date(endDate);if(!from)startDate.setDate(startDate.getDate()-6);
+  const start=localDateValue(startDate);
+  const dayCount=Math.round((Date.UTC(endDate.getFullYear(),endDate.getMonth(),endDate.getDate())-Date.UTC(startDate.getFullYear(),startDate.getMonth(),startDate.getDate()))/86400000)+1;
+  const days=Array.from({length:Math.max(1,dayCount)},(_,index)=>{
+    const date=new Date(startDate);date.setDate(date.getDate()+index);
+    return {key:localDateValue(date),label:date.toLocaleDateString("vi-VN",{day:"2-digit",month:"2-digit"}),services:0,stock:0};
+  });
+  const itemById=new Map(items.map(item=>[item.id,item]));
+  const byDay=new Map(days.map(day=>[day.key,day]));
+  const totals=new Map<string,ConsumptionRow>();
+  let issueCount=0;
+  movements.forEach(movement=>{
+    const day=byDay.get(localDateValue(parseApiDate(movement.occurredAt)));
+    const item=itemById.get(movement.serviceId);
+    if(!day||!item||!item.isStock||movement.movementType!=="ISSUE")return;
+    issueCount++;
+    const quantity=Math.abs(movement.qty);const amount=quantity*item.price;
+    day[item.isStock?"stock":"services"]+=amount;
+    const row=totals.get(item.id)??{item,quantity:0,amount:0,endingStock:null};
+    row.quantity+=quantity;row.amount+=amount;totals.set(item.id,row);
+  });
+  usages.forEach(usage=>{
+    const day=byDay.get(localDateValue(parseApiDate(usage.occurred_at)));
+    const item=itemById.get(usage.service_id);
+    if(!day||!item||item.isStock)return;
+    issueCount++;
+    day.services+=usage.amount_due;
+    const row=totals.get(item.id)??{item,quantity:0,amount:0,endingStock:null};
+    row.quantity+=usage.quantity;row.amount+=usage.amount_due;totals.set(item.id,row);
+  });
+  const rows=[...totals.values()].map(row=>({...row,endingStock:row.item.isStock?endingStock(row.item,movements,end):null}))
+    .sort((a,b)=>b.amount-a.amount||a.item.name.localeCompare(b.item.name,"vi"));
+  const services=rows.filter(row=>!row.item.isStock);const stock=rows.filter(row=>row.item.isStock);
+  const summarizeGroups=(rows:ConsumptionRow[])=>{
+    const total=rows.reduce((sum,row)=>sum+row.amount,0);
+    const grouped=new Map<string,{category:string;label:string;amount:number}>();
+    rows.forEach(row=>{
+      const group=grouped.get(row.item.category)??{category:row.item.category,label:row.item.categoryLabel,amount:0};
+      group.amount+=row.amount;grouped.set(row.item.category,group);
+    });
+    return [...grouped.values()].sort((a,b)=>b.amount-a.amount).map(group=>({...group,percent:total>0?group.amount/total*100:0}));
+  };
+  const serviceAmount=services.reduce((total,row)=>total+row.amount,0);
+  const groups=summarizeGroups(services),stockGroups=summarizeGroups(stock);
+  return {start,end,days,services,stock,groups,stockGroups,serviceAmount,issueCount};
+}
+
+export function consumptionCsv(rows:ConsumptionRow[],tab:ReportTab,start:string,end:string):string {
+  const cell=(value:string|number)=>`"${String(value).replace(/^[=+@-]/,"'$&").replaceAll('"','""')}"`;
+  const header=["Từ ngày","Đến ngày","Mã hàng","Tên mặt hàng","ĐVT",tab==="stock"?"SL xuất kho":"SL sử dụng","Đơn giá tham chiếu","Thành tiền",...(tab==="stock"?["Tồn cuối"]:[])];
+  const data=rows.map(row=>[start,end,row.item.id,row.item.name,row.item.unit,row.quantity,row.item.price,row.amount,...(tab==="stock"?[row.endingStock??""]:[])]);
+  return "\uFEFF"+[header,...data].map(row=>row.map(cell).join(",")).join("\r\n");
+}
+
+
+/* stockVoucher.ts — chức năng Kho / Dịch vụ */
+export interface VoucherMovement {
+  id:string;serviceId:string;itemName:string;unit:string;unitPrice:number;
+  movementType:MovementType;qty:number;occurredAt:string;staffName?:string;
+  stockBefore?:number|null;stockAfter?:number|null;note?:string;
+}
+export interface VoucherDetails { sender:string;receiver:string;source:string;destination:string;reference:string }
+export const movementLabels:Record<MovementType,string>={RECEIVE:"Nhập kho",ISSUE:"Xuất kho",WASTE:"Hao hụt",RETURN:"Trả lại kho",ADJUST:"Điều chỉnh"};
+const escape=(value:unknown)=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]!));
+const number=(value:number|null|undefined)=>value==null?"—":value.toLocaleString("vi-VN");
+export const isOutgoing=(movement:VoucherMovement)=>movement.qty<0;
+export function defaultVoucherDetails(movement:VoucherMovement):VoucherDetails {
+  const outgoing=isOutgoing(movement);
+  return {sender:outgoing?movement.staffName??"":"",receiver:outgoing?"":movement.staffName??"",source:outgoing?"Kho và Dịch vụ":"",destination:outgoing?"":"Kho và Dịch vụ",reference:""};
+}
+
+export function voucherBody(movement:VoucherMovement,details:VoucherDetails) {
+  const time=new Date(movement.occurredAt);
+  return `<article class="stock-voucher-sheet">
+    <header><strong>MaM HOTEL</strong><h1>PHIẾU BIẾN ĐỘNG KHO</h1></header>
+    <div class="voucher-meta"><p><b>Đơn vị phụ trách:</b> Kho và Dịch vụ</p><p><b>Số phiếu:</b> BDK-${escape(movement.id)} <span><b>Ngày lập:</b> ${escape(time.toLocaleDateString("vi-VN"))}</span></p>
+    <p><b>Thời điểm ghi nhận:</b> ${escape(time.toLocaleString("vi-VN"))}</p><p><b>Người thực hiện:</b> ${escape(movement.staffName||"Chưa có thông tin họ tên")}</p>
+    <p><b>Loại biến động:</b> ${escape(movementLabels[movement.movementType])}</p><p><b>Vị trí nguồn:</b> ${escape(details.source)||"........................................"} <span><b>Vị trí đích:</b> ${escape(details.destination)||"........................................"}</span></p>
+    <p><b>Chứng từ liên quan:</b> ${escape(details.reference)||"............................................................................"}</p><p><b>Lý do:</b> ${escape(movement.note)||"........................................................................................"}</p></div>
+    <table><thead><tr><th>Mã / Tên hàng</th><th>ĐVT</th><th>SL biến động</th><th>Đơn giá tham chiếu (đ)</th><th>Tồn trước</th><th>Tồn sau</th></tr></thead><tbody>
+    <tr><td>${escape(movement.serviceId)}<br/>${escape(movement.itemName)}</td><td>${escape(movement.unit)}</td><td>${movement.qty>0?"+":""}${escape(number(movement.qty))}</td><td>${escape(number(movement.unitPrice))}</td><td>${escape(number(movement.stockBefore))}</td><td>${escape(number(movement.stockAfter))}</td></tr>
+    ${Array.from({length:3},()=>"<tr class=\"voucher-blank\"><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td></tr>").join("")}</tbody></table>
+    <p class="voucher-price-note">Đơn giá tham chiếu theo danh mục tại thời điểm xuất phiếu.</p>
+    <section class="voucher-confirmation"><h2>Xác nhận và trách nhiệm</h2><div class="voucher-signatures"><div><strong>Người xuất / Giao</strong><em>(Ký, ghi rõ họ tên)</em><p>${escape(details.sender)}</p></div><div><strong>Người nhập / Nhận</strong><em>(Ký, ghi rõ họ tên)</em><p>${escape(details.receiver)}</p></div></div><p>Thời điểm xác nhận: ........................................................................................</p></section>
+  </article>`;
+}
+
+export const voucherPrintStyles=`
+@page{size:A4 portrait;margin:18mm}*{box-sizing:border-box}body{margin:0;color:#000;background:#fff;font-family:"Times New Roman",serif;font-size:12pt}.stock-voucher-sheet{width:100%;line-height:1.5}.stock-voucher-sheet header{text-align:center;margin-bottom:16px}.stock-voucher-sheet h1{font-size:16pt;margin:4px 0 0;font-weight:bold}.voucher-meta p{margin:5px 0;overflow-wrap:anywhere}.voucher-meta span{margin-left:30px}.stock-voucher-sheet table{width:100%;border-collapse:collapse;margin-top:16px;table-layout:fixed}.stock-voucher-sheet th,.stock-voucher-sheet td{border:1px solid #000;padding:7px 5px;text-align:center;overflow-wrap:anywhere}.stock-voucher-sheet th:first-child{width:29%}.stock-voucher-sheet th:nth-child(2){width:9%}.stock-voucher-sheet th:nth-child(4){width:20%}.stock-voucher-sheet td:first-child{text-align:left}.voucher-blank{height:32px}.voucher-price-note{font-size:10pt;font-style:italic}.voucher-confirmation{border:1px solid #000;padding:12px;margin-top:22px;break-inside:avoid}.voucher-confirmation h2{font-size:12pt;margin:0 0 8px}.voucher-signatures{display:grid;grid-template-columns:1fr 1fr;text-align:center;gap:20px}.voucher-signatures strong,.voucher-signatures em{display:block}.voucher-signatures em{font-size:11pt}.voucher-signatures p{margin:85px 0 10px;min-height:22px;font-weight:bold}.voucher-confirmation>p{font-size:11pt;margin-top:18px}.stock-voucher-sheet table tr{break-inside:avoid}
+`;
+
+export function printStockVouchers(movements:VoucherMovement[],detailsById:Record<string,VoucherDetails>) {
+  if(movements.length===0)return;
+  document.getElementById("stock-voucher-print-frame")?.remove();
+  const frame=document.createElement("iframe");
+  frame.id="stock-voucher-print-frame";frame.title="In phiếu biến động kho";frame.setAttribute("aria-hidden","true");
+  Object.assign(frame.style,{position:"fixed",width:"0",height:"0",border:"0",bottom:"0",left:"0"});
+  frame.onload=()=>{frame.contentWindow?.addEventListener("afterprint",()=>frame.remove(),{once:true});frame.contentWindow?.focus();frame.contentWindow?.print();};
+  frame.srcdoc=`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Phiếu biến động kho${movements.length===1?` BDK-${escape(movements[0].id)}`:""}</title><style>${voucherPrintStyles}.stock-voucher-sheet{break-after:page}.stock-voucher-sheet:last-child{break-after:auto}</style></head><body>${movements.map(movement=>voucherBody(movement,detailsById[movement.id]??defaultVoucherDetails(movement))).join("")}</body></html>`;
+  document.body.appendChild(frame);
+}
+
+
+/* ConsumptionReports.tsx — chức năng Kho / Dịch vụ */
+type TrendDay=ReturnType<typeof buildConsumptionReport>["days"][number];
+const colors=["#1D4ED8","#3B82F6","#60A5FA","#93C5FD","#2563EB","#7DD3FC"];
+const groupIcons:Record<string,typeof Package>={inroom:BedDouble,"fine-dining":Utensils,laundry:Shirt,business:BriefcaseBusiness,spa:Flower2,transport:Car,recreation:Dumbbell};
+const quantity=(value:number)=>value.toLocaleString("vi-VN");
+
+function ConsumptionTrend({days,issueCount}:{days:TrendDay[];issueCount:number}) {
+  const [focused,setFocused]=useState<number|null>(null);
+  const max=Math.max(...days.flatMap(day=>[day.services,day.stock]))||1000000;
+  const rough=max/4;const magnitude=10**Math.floor(Math.log10(rough));const ratio=rough/magnitude;
+  const step=(ratio<=1?1:ratio<=2?2:ratio<=5?5:10)*magnitude;const ceiling=step*4;
+  const width=720;
+  const labelEvery=Math.max(1,Math.ceil(days.length/8));
+  const hitWidth=Math.min(68,(width-127)/Math.max(1,days.length-1));
+  const left=103,right=width-24,top=34,bottom=210;
+  const x=(index:number)=>days.length===1?(left+right)/2:left+(right-left)*index/(days.length-1);
+  const y=(value:number)=>bottom-(bottom-top)*value/ceiling;
+  const points=(key:"services"|"stock")=>days.map((day,index)=>`${x(index)},${y(day[key])}`).join(" ");
+  const area=(key:"services"|"stock")=>`M ${left},${bottom} L ${days.map((day,index)=>`${x(index)},${y(day[key])}`).join(" L ")} L ${right},${bottom} Z`;
+  const hasValue=days.some(day=>day.services>0||day.stock>0);
+  return <div className="ki-report-chart-scroll"><svg viewBox={`0 0 ${width} 251`} style={{minWidth:width}} className="ki-report-chart" role="img" aria-label={`Xu hướng giá trị tiêu thụ ${days.length} ngày`}>
+    <defs><linearGradient id="ki-report-service-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3B82F6" stopOpacity=".2"/><stop offset="100%" stopColor="#3B82F6" stopOpacity=".025"/></linearGradient><linearGradient id="ki-report-stock-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#60A5FA" stopOpacity=".12"/><stop offset="100%" stopColor="#60A5FA" stopOpacity=".025"/></linearGradient></defs>
+    {Array.from({length:5},(_,index)=>{const value=ceiling-index*step;return <g key={index}><line x1={left} x2={right} y1={y(value)} y2={y(value)} stroke="#E9EEF0"/><text x={left-12} y={y(value)+4} textAnchor="end" className="ki-report-axis">{formatVnd(value)}</text></g>;})}
+    {days.map((day,index)=><g key={day.key}><line x1={x(index)} x2={x(index)} y1={top} y2={bottom} stroke="#F0F3F4"/>{(index%labelEvery===0||index===days.length-1)&&<text x={x(index)} y={239} textAnchor="middle" className="ki-report-axis">{day.label}</text>}</g>)}
+    <path d={area("services")} fill="url(#ki-report-service-fill)"/><path d={area("stock")} fill="url(#ki-report-stock-fill)"/>
+    <polyline points={points("services")} fill="none" stroke="#1D4ED8" strokeWidth="2.5" strokeLinejoin="round"/><polyline points={points("stock")} fill="none" stroke="#60A5FA" strokeWidth="2.5" strokeLinejoin="round"/>
+    {days.map((day,index)=>{const close=Math.abs(y(day.services)-y(day.stock))<26;return <g key={day.key} tabIndex={0} role="img" aria-label={`${day.label}: dịch vụ ${formatVnd(day.services)}, xuất kho ${formatVnd(day.stock)}`} onMouseEnter={()=>setFocused(index)} onMouseLeave={()=>setFocused(null)} onFocus={()=>setFocused(index)} onBlur={()=>setFocused(null)}>
+      <title>{day.label}: Dịch vụ {formatVnd(day.services)}; Xuất kho {formatVnd(day.stock)}</title>
+      <rect x={x(index)-hitWidth/2} y={top} width={hitWidth} height={bottom-top} fill="transparent"/>
+      {(["services","stock"] as const).map(key=>{const upper=day[key]>=day[key==="services"?"stock":"services"];const offset=close&&!upper?16:-12;return <g key={key}><circle cx={x(index)} cy={y(day[key])} r={focused===index?5:4} fill={key==="services"?"#1D4ED8":"#60A5FA"}/>{hasValue&&(focused===index||day[key]>0&&(index%labelEvery===0||index===days.length-1))&&<text x={x(index)} y={y(day[key])+offset+(close&&day.services===day.stock&&key==="stock"?28:0)} textAnchor="middle" className="ki-report-value">{quantity(day[key])}</text>}</g>;})}
+    </g>;})}
+    {!hasValue&&<text x={(left+right)/2} y="116" textAnchor="middle" className="ki-report-empty-chart">{issueCount===0?"Chưa có lượt sử dụng hoặc phiếu xuất dùng trong kỳ này":"Các lượt trong kỳ có giá trị bằng 0"}</text>}
+  </svg></div>;
+}
+
+export function ConsumptionReports({items,transactions}:{items:ReportItem[];transactions:ReportMovement[]}) {
+  const [endDate,setEndDate]=useState(()=>localDateValue());
+  const [startDate,setStartDate]=useState(()=>{const date=parseApiDate(localDateValue());date.setDate(date.getDate()-6);return localDateValue(date);});
+  const rangeError=startDate>endDate?"Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.":null;
+  const [tab,setTab]=useState<ReportTab>("stock");
+  const [usages,setUsages]=useState<ServiceConsumption[]>([]);
+  const [usageError,setUsageError]=useState<string|null>(null);
+  const [usageLoading,setUsageLoading]=useState(true);
+  const [retry,setRetry]=useState(0);
+  useEffect(()=>{let active=true;setUsages([]);setUsageError(null);setUsageLoading(true);
+    if(rangeError){setUsageLoading(false);return()=>{active=false;};}
+    // Reuse the API's 31-day contract through consecutive, non-overlapping windows.
+    const load=async()=>{
+      const rows:ServiceConsumption[]=[];let cursor=startDate;
+      while(cursor<=endDate&&active){
+        const end=parseApiDate(cursor);end.setDate(end.getDate()+30);
+        const until=localDateValue(end)<endDate?localDateValue(end):endDate;
+        rows.push(...await serviceConsumptionApi.list(cursor,until));
+        if(until===endDate)break;
+        const next=parseApiDate(until);next.setDate(next.getDate()+1);cursor=localDateValue(next);
+      }
+      return rows;
+    };
+    load().then(rows=>{if(active)setUsages(rows);})
+      .catch(error=>{if(active)setUsageError(apiErrorMessage(error,"Không tải được các lượt sử dụng dịch vụ."));})
+      .finally(()=>{if(active)setUsageLoading(false);});
+    return()=>{active=false;};},[startDate,endDate,rangeError,retry]);
+  const report=useMemo(()=>buildConsumptionReport(items,transactions,endDate,usages,rangeError?endDate:startDate),[items,transactions,startDate,endDate,usages,rangeError]);
+  const rows=tab==="stock"?report.stock:report.services;
+  const groups=tab==="stock"?report.stockGroups:report.groups;
+  const total=rows.reduce((sum,row)=>sum+row.amount,0);
+  const download=()=>{
+    const url=URL.createObjectURL(new Blob([consumptionCsv(rows,tab,report.start,report.end)],{type:"text/csv;charset=utf-8"}));
+    const anchor=document.createElement("a");anchor.href=url;anchor.download=`bao-cao-${tab==="stock"?"xuat-kho":"dich-vu"}-${report.start}-${report.end}.csv`;anchor.click();URL.revokeObjectURL(url);
+  };
+  return <div className="ki-consumption-reports">
+    <div className="ki-report-page-header"><div><h2>Báo cáo tiêu thụ</h2><p>Theo dõi dịch vụ và xuất kho trong {report.days.length} ngày · {formatDateVi(startDate)} – {formatDateVi(endDate)}</p></div><div className="ki-report-page-actions"><label><span>Từ ngày</span><CalendarDays size={15}/><input aria-label="Từ ngày báo cáo" type="date" value={startDate} onChange={event=>{if(event.target.value)setStartDate(event.target.value);}}/></label><label><span>Đến ngày</span><CalendarDays size={15}/><input aria-label="Đến ngày báo cáo" type="date" value={endDate} onChange={event=>{if(event.target.value)setEndDate(event.target.value);}}/></label><button type="button" onClick={download} disabled={Boolean(rangeError)||tab==="services"&&(usageLoading||Boolean(usageError))}><Download size={15}/>Xuất báo cáo</button></div></div>
+    {rangeError&&<p role="alert">{rangeError}</p>}
+    {!rangeError&&<>
+    {usageError&&<p role="alert">{usageError} <button onClick={()=>setRetry(value=>value+1)}>Tải lại</button></p>}
+    {usageLoading&&<p role="status">Đang tải lượt sử dụng dịch vụ…</p>}
+    <div className="ki-report-overview">
+      <section className="ki-report-card ki-report-trend" aria-labelledby="consumption-trend-title"><header><h3 id="consumption-trend-title"><BarChart3 size={20}/>Xu hướng tiêu thụ</h3><div className="ki-report-legend"><span><i/>Giá trị dịch vụ</span><span><i/>Giá trị xuất kho</span></div></header><ConsumptionTrend days={report.days} issueCount={report.issueCount}/><p className="ki-report-reference-note"><CircleHelp size={12}/>Dịch vụ: giá đã ghi nhận, trừ phần miễn phí. Xuất kho: đơn giá danh mục hiện tại.</p></section>
+      <section className="ki-report-card ki-report-groups" aria-labelledby="service-groups-title"><header><h3 id="service-groups-title"><PieChart size={21}/>{tab==="stock"?"Giá trị xuất kho theo nhóm hàng":"Tiêu thụ theo nhóm dịch vụ"}</h3></header><div className="ki-report-group-list">{groups.map((group,index)=>{const Icon=groupIcons[group.category]??Package;const color=colors[index%colors.length];return <div key={group.category} className="ki-report-group"><span className="ki-report-group-icon" style={{color}}><Icon size={20}/></span><div><div className="ki-report-group-label"><strong>{group.label}</strong><span>{quantity(Number(group.percent.toFixed(1)))}%</span><b>{formatVnd(group.amount)}</b></div><div className="ki-report-progress" role="progressbar" aria-label={group.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Number(group.percent.toFixed(1))}><span style={{width:`${group.percent}%`,background:color}}/></div></div></div>;})}{groups.length===0&&<div className="ki-report-empty"><PieChart size={30}/><p>{tab==="stock"?"Chưa có xuất kho trong kỳ đã chọn.":"Chưa có tiêu thụ dịch vụ trong kỳ đã chọn."}</p></div>}</div></section>
+    </div>
+    <section className="ki-report-card ki-report-details" aria-labelledby="consumption-details-title"><header><h3 id="consumption-details-title"><Package size={20}/>Chi tiết tiêu thụ</h3><div className="ki-report-tabs" role="tablist" aria-label="Loại chi tiết tiêu thụ"><button id="report-services-tab" role="tab" aria-selected={tab==="services"} aria-controls="report-consumption-table" onClick={()=>setTab("services")}>Dịch vụ</button><button id="report-stock-tab" role="tab" aria-selected={tab==="stock"} aria-controls="report-consumption-table" onClick={()=>setTab("stock")}>Xuất kho</button></div></header>
+      <div id="report-consumption-table" role="tabpanel" aria-labelledby={tab==="stock"?"report-stock-tab":"report-services-tab"} className="ki-report-table-scroll"><table><thead><tr>{["#","Mã hàng",tab==="stock"?"Tên mặt hàng":"Tên dịch vụ","ĐVT",tab==="stock"?"SL xuất kho":"SL sử dụng","Đơn giá tham chiếu","Thành tiền",...(tab==="stock"?["Tồn cuối"]:[])].map(title=><th key={title}>{title}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={row.item.id}><td>{index+1}</td><td className="ki-report-sku">{row.item.id}</td><td>{row.item.name}</td><td>{row.item.unit}</td><td>{quantity(row.quantity)}</td><td>{formatVnd(row.item.price)}</td><td>{formatVnd(row.amount)}</td>{tab==="stock"&&<td><span className={row.endingStock===0?"ki-report-no-stock":row.endingStock!=null&&row.endingStock<=row.item.reorder?"ki-report-low-stock":""}>{row.endingStock==null?"—":quantity(row.endingStock)}</span></td>}</tr>)}{rows.length===0&&<tr><td colSpan={tab==="stock"?8:7} className="ki-report-empty-cell">{tab==="stock"?"Chưa có giao dịch xuất kho trong kỳ đã chọn.":"Chưa có dịch vụ sử dụng trong kỳ đã chọn."}</td></tr>}</tbody></table></div>
+      <footer><span>Hiển thị {rows.length} {tab==="stock"?"mặt hàng":"dịch vụ"} · {formatDateVi(report.start)} – {formatDateVi(report.end)}</span><span>{tab==="stock"?"Tổng giá trị tham chiếu:":"Tổng giá trị dịch vụ đã dùng:"} <strong>{formatVnd(total)}</strong></span></footer>
+    </section>
+    </>}
+  </div>;
+}
+
+
+/* ServiceCoordination.tsx — chức năng Kho / Dịch vụ */
+export function ServiceCoordination({ bookings, items, date, loading, error, busyId, searchQuery, onDateChange, onRefresh, onMarkUsed }: {
+  bookings: RestaurantBooking[];
+  items: { id: string; category: string; unit: string }[];
+  date: string;
+  loading: boolean;
+  error: string | null;
+  busyId: number | null;
+  searchQuery: string;
+  onDateChange: (date: string) => void;
+  onRefresh: () => void;
+  onMarkUsed: (booking: RestaurantBooking) => void;
+}) {
+  const [category, setCategory] = useState("");
+  const categories = [...new Set(bookings.map(booking => items.find(item => item.id === booking.service_id)?.category).filter((value): value is string => Boolean(value)))];
+  const visibleBookings = bookings.filter(booking => !category || items.find(item => item.id === booking.service_id)?.category === category).filter(booking => !searchQuery.trim()
+    || `${booking.room_id} ${booking.reservation_id} ${booking.service_name} ${booking.note ?? ""}`.toLowerCase().includes(searchQuery.trim().toLowerCase()));
+  const confirmed = visibleBookings.filter(booking => booking.status === "CONFIRMED").length;
+  const used = visibleBookings.filter(booking => booking.status === "USED").length;
+  const cancelled = visibleBookings.filter(booking => booking.status === "CANCELLED").length;
+  const mealLabel = (value: string | null) => value === "LUNCH" ? "Bữa trưa" : value === "DINNER" ? "Bữa tối" : "";
+  return (
+    <div style={{ flex:1,overflowY:"auto",padding:"20px 24px",background:"#F8FAFC" }}>
+      <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,marginBottom:18,flexWrap:"wrap" }}>
+        <div><p style={{ fontSize:11,color:"#D97706",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em" }}>Vận hành dịch vụ</p><h2 style={{ fontSize:22,fontWeight:800,color:"#0F172A",marginTop:3 }}>Điều phối dịch vụ</h2></div>
+        <div style={{ display:"flex",gap:8,alignItems:"center" }}><input type="date" value={date} onChange={event => onDateChange(event.target.value)} style={{ height:36,border:"1px solid #CBD5E1",borderRadius:8,padding:"0 10px",fontSize:12,background:"#FFF" }} /><button onClick={onRefresh} disabled={loading} style={{ height:36,padding:"0 13px",display:"flex",alignItems:"center",gap:6,border:"1px solid #CBD5E1",borderRadius:8,background:"#FFF",fontSize:12,fontWeight:600,cursor:loading?"wait":"pointer" }}><RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Làm mới</button></div>
+      </div>
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:12,marginBottom:16 }}>
+        {[["Đã đặt",confirmed,"#FEF3C7","#92400E"],["Đã sử dụng",used,"#DCFCE7","#166534"],["Đã hủy",cancelled,"#F1F5F9","#475569"]].map(([label,value,bg,color]) => <div key={String(label)} style={{ background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,padding:15 }}><p style={{ fontSize:11,color:"#64748B" }}>{label}</p><div style={{ display:"flex",alignItems:"center",gap:8,marginTop:6 }}><strong style={{ fontSize:24,color:String(color) }}>{value}</strong><span style={{ fontSize:10,fontWeight:700,color:String(color),background:String(bg),padding:"2px 7px",borderRadius:99 }}>đơn</span></div></div>)}
+      </div>
+      <label style={{display:"block",fontSize:12,marginBottom:16}}>Nhóm dịch vụ <select aria-label="Nhóm dịch vụ" value={category} onChange={event => setCategory(event.target.value)} style={{marginLeft:8,padding:8,border:"1px solid #CBD5E1",borderRadius:8,background:"white"}}><option value="">Tất cả nhóm</option>{categories.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+      {error && <div role="alert" style={{ marginBottom:14,padding:"10px 12px",borderRadius:9,background:"#FFF1F2",border:"1px solid #FECDD3",color:"#BE123C",fontSize:12 }}>{error}</div>}
+      <div style={{ background:"#FFF",border:"1px solid #E2E8F0",borderRadius:12,overflow:"hidden" }}>
+        <div style={{ overflowX:"auto" }}><table style={{ width:"100%",borderCollapse:"collapse",minWidth:780 }}><thead><tr style={{ background:"#F8FAFC" }}>{["Giờ phục vụ","Phòng / Booking","Dịch vụ","Số lượng","Ghi chú","Trạng thái","Thao tác"].map(label => <th key={label} style={{ padding:"10px 13px",textAlign:"left",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:"0.05em" }}>{label}</th>)}</tr></thead><tbody>
+          {visibleBookings.map(booking => { const due = new Date(booking.scheduled_at).getTime() <= Date.now(); const canUse = booking.status === "CONFIRMED" && due; return <tr key={booking.id} style={{ borderTop:"1px solid #F1F5F9" }}><td style={{ padding:"12px 13px",fontSize:12,fontWeight:700,color:"#0F172A" }}>{new Date(booking.scheduled_at).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})}<p style={{ marginTop:2,fontSize:10,color:"#64748B",fontWeight:500 }}>{mealLabel(booking.meal_period)}</p></td><td style={{ padding:"12px 13px",fontSize:12,color:"#334155" }}><strong>Phòng {booking.room_id}</strong><p style={{ marginTop:2,fontSize:10,color:"#94A3B8" }}>BK-{booking.reservation_id}</p></td><td style={{ padding:"12px 13px",fontSize:12,color:"#334155" }}>{booking.service_name}</td><td style={{ padding:"12px 13px",fontSize:13,fontWeight:700,color:"#0F172A" }}>{booking.quantity} {items.find(item => item.id === booking.service_id)?.unit ?? ""}<p style={{ marginTop:2,fontSize:10,color:"#64748B",fontWeight:400 }}>miễn phí {booking.free_quantity}</p></td><td style={{ padding:"12px 13px",fontSize:11,color:"#64748B",maxWidth:220 }}>{booking.note || "—"}</td><td style={{ padding:"12px 13px" }}><span style={{ fontSize:10,fontWeight:700,borderRadius:99,padding:"3px 8px",background:booking.status==="USED"?"#DCFCE7":booking.status==="CANCELLED"?"#F1F5F9":"#FEF3C7",color:booking.status==="USED"?"#166534":booking.status==="CANCELLED"?"#475569":"#92400E" }}>{booking.status === "USED" ? "Đã sử dụng" : booking.status === "CANCELLED" ? "Đã hủy" : "Đã đặt"}</span></td><td style={{ padding:"12px 13px" }}><button onClick={() => onMarkUsed(booking)} disabled={!canUse || busyId === booking.id} title={!due && booking.status === "CONFIRMED" ? "Chưa đến giờ phục vụ" : undefined} style={{ border:0,borderRadius:7,padding:"7px 10px",background:canUse?"#0F172A":"#E2E8F0",color:canUse?"#FFF":"#94A3B8",fontSize:11,fontWeight:700,cursor:canUse?"pointer":"not-allowed" }}>{busyId === booking.id ? "Đang lưu…" : booking.status === "USED" ? "Đã sử dụng" : "Xác nhận sử dụng"}</button></td></tr>; })}
+          {!loading && visibleBookings.length === 0 && <tr><td colSpan={7} style={{ padding:38,textAlign:"center",fontSize:12,color:"#64748B" }}>{bookings.length === 0 ? "Không có lịch dịch vụ trong ngày đã chọn." : "Không tìm thấy lịch dịch vụ khớp với từ khóa."}</td></tr>}
+          {loading && <tr><td colSpan={7} style={{ padding:38,textAlign:"center",fontSize:12,color:"#64748B" }}>Đang tải lịch dịch vụ…</td></tr>}
+        </tbody></table></div>
+      </div>
+    </div>
   );
 }
+
+
+/* ServiceScheduleDialog.tsx — chức năng Kho / Dịch vụ */
+export function ServiceScheduleDialog({item,onClose,onSaved}:{item:{id:string;name:string;unit?:string};onClose:()=>void;onSaved:()=>void}) {
+  const dialog=useRef<HTMLDialogElement>(null);
+  const [capacity,setCapacity]=useState("");const [unit,setUnit]=useState("");const [minutes,setMinutes]=useState("");
+  const [mode,setMode]=useState<ScheduleMode>("UNITS");const [consume,setConsume]=useState(false);const [reason,setReason]=useState("");
+  const [loading,setLoading]=useState(true);const [loaded,setLoaded]=useState(false);const [saving,setSaving]=useState(false);const [error,setError]=useState<string|null>(null);
+  useEffect(()=>{dialog.current?.showModal();let active=true;
+    serviceScheduleApi.get(item.id).then(row=>{if(!active)return;setCapacity(row.capacity==null?"":String(row.capacity));setUnit(row.unit??"");setMinutes(row.minutes_per_unit==null?"":String(row.minutes_per_unit));setMode(row.mode??"UNITS");setConsume(row.consumes_stock);setLoaded(true);})
+      .catch(error=>{if(active)setError(apiErrorMessage(error,"Không tải được cấu hình dịch vụ."));}).finally(()=>{if(active)setLoading(false);});
+    return()=>{active=false;};},[item.id]);
+  const submit=async(event:React.FormEvent)=>{event.preventDefault();if(loading||saving)return;setSaving(true);setError(null);
+    try{await serviceScheduleApi.save(item.id,{capacity:Number(capacity),unit:unit.trim(),minutes_per_unit:Number(minutes),mode,consumes_stock:mode==="STOCK"||consume,reason:reason.trim()});onSaved();onClose();}
+    catch(error){setError(apiErrorMessage(error,"Không lưu được cấu hình dịch vụ."));}finally{setSaving(false);}};
+  const inputStyle={width:"100%",padding:10,border:"1px solid #CBD5E1",borderRadius:8,marginTop:5,fontSize:14};
+  const count=Number(capacity)>0?Number(capacity).toLocaleString("vi-VN"):"…";
+  const countUnit=unit.trim()||"chỗ";
+  const duration=Number(minutes)>0 ? Number(minutes)%1440===0 ? `${Number(minutes)/1440} ngày`
+    : Number(minutes)%60===0 ? `${Number(minutes)/60} giờ` : `${minutes} phút` : "…";
+  const summary=mode==="STOCK" ? "Số lượng khách có thể đặt được tính từ hàng còn trong kho, sau khi trừ các đơn đang giữ hàng."
+    : mode==="DAILY" ? `Nhận tối đa ${count} ${countUnit} trong một ngày.`
+    : mode==="STAY" ? `Có ${count} ${countUnit}. Khách đặt sẽ giữ đến lúc trả phòng.`
+    : mode==="OVERNIGHT" ? `Nhận tối đa ${count} ${countUnit} cùng lúc. Mỗi lượt giữ đến 08:00 sáng hôm sau.`
+    : mode==="DURATION" ? `Có ${count} ${countUnit} phục vụ cùng lúc. Mỗi ${item.unit||"đơn vị tính tiền"} khách đặt sẽ giữ 1 ${countUnit} trong ${duration}.`
+    : `Nhận tối đa ${count} ${countUnit} cùng lúc. Mỗi lượt đặt giữ chỗ trong ${duration}.`;
+  return <dialog ref={dialog} onCancel={event=>{if(saving)event.preventDefault();else onClose();}} aria-labelledby="schedule-title" style={{width:"min(560px,94vw)",border:0,borderRadius:16,padding:24,color:"#0F172A"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><h2 id="schedule-title" style={{fontSize:20,fontWeight:700}}>Thiết lập số lượng phục vụ</h2><button onClick={onClose} disabled={saving} aria-label="Đóng"><X size={20}/></button></div>
+    <p style={{margin:"8px 0 16px",color:"#64748B"}}>{item.name} ({item.id})</p>
+    {error&&<p role="alert" style={{color:"#B91C1C",marginBottom:12}}>{error}</p>}
+    {loading?<p>Đang tải cấu hình…</p>:!loaded?<button onClick={onClose}>Đóng và thử lại</button>:<form onSubmit={event=>void submit(event)} style={{display:"grid",gap:14,fontSize:14}}>
+      <label>Cách nhận đặt dịch vụ<select style={inputStyle} value={mode} onChange={e=>{const next=e.target.value as ScheduleMode;setMode(next);if(next==="STOCK")setConsume(true);}}>
+        <option value="DURATION">Giữ chỗ theo số giờ/ngày khách đặt</option><option value="UNITS">Giữ chỗ trong một khoảng thời gian</option><option value="STAY">Giữ đến khi khách trả phòng</option><option value="DAILY">Giới hạn số lượng trong ngày</option><option value="OVERNIGHT">Giữ đến 08:00 sáng hôm sau</option><option value="STOCK">Nhận đặt theo hàng còn trong kho</option></select></label>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}><label>Số lượng phục vụ tối đa<input required type="number" min="1" max="2147483647" step="1" value={capacity} onChange={e=>setCapacity(e.target.value)} style={inputStyle}/></label><label>Đơn vị (suất, sân, phòng…)<input required maxLength={20} placeholder="Ví dụ: suất" value={unit} onChange={e=>setUnit(e.target.value)} style={inputStyle}/></label></div>
+      <label>{mode==="DURATION"?`Thời gian cho 1 ${item.unit||"đơn vị tính tiền"} (phút)`:"Thời gian giữ chỗ mỗi lượt (phút)"}<input required type="number" min="1" max="10080" step="1" value={minutes} onChange={e=>setMinutes(e.target.value)} style={inputStyle}/></label>
+      <div style={{padding:12,borderRadius:8,background:"#EFF6FF",color:"#1E40AF",lineHeight:1.6}}><strong>Với thiết lập này:</strong><p style={{marginTop:4}}>{summary}</p></div>
+      <label style={{display:"flex",gap:8,alignItems:"center"}}><input type="checkbox" checked={mode==="STOCK"||consume} disabled={mode==="STOCK"} onChange={e=>setConsume(e.target.checked)}/>Trừ hàng trong kho khi xác nhận khách đã dùng</label>
+      <p style={{color:"#64748B",fontSize:12,marginTop:-6,lineHeight:1.6}}>{mode==="STOCK"||consume?"Bật cho suất ăn, đồ uống hoặc hàng dùng hết. Số có thể đặt còn phụ thuộc lượng hàng trong kho.":"Không trừ kho. Sân, phòng hoặc xe có thể phục vụ lượt tiếp theo sau khi hết thời gian giữ chỗ."}</p>
+      <label>Lý do thay đổi<textarea required maxLength={255} value={reason} onChange={e=>setReason(e.target.value)} style={inputStyle}/></label>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:10}}><button type="button" disabled={saving} onClick={onClose}>Hủy bỏ</button><button disabled={saving||!reason.trim()} style={{padding:"9px 16px",background:"#2563EB",color:"white",borderRadius:8}}>{saving?"Đang lưu…":"Lưu cấu hình"}</button></div>
+    </form>}
+  </dialog>;
+}
+
+
+/* ProposalDialog.tsx — chức năng Kho / Dịch vụ */
+type Item = { id:string;name:string;price:number;category:string;active:boolean };
+const goods = new Set(["food","beverage","room-amenity","Minibar Beverage","Minibar Snack","Kitchen Dry","Kitchen Fresh"]);
+const serviceCategories = [["business","Dịch vụ doanh nghiệp"],["inroom","Dịch vụ tại phòng"],["recreation","Giải trí"],["fine-dining","Nhà hàng"],["spa","Spa"],["transport","Vận chuyển"],["laundry","Giặt ủi"],["other","Khác"]];
+const stockCategories = [["food","Món ăn"],["beverage","Thức uống"],["room-amenity","Đồ gia dụng"]];
+const units = ["giờ","ngày","lần","suất","món","đêm","lượt","chuyến","khách","khách/ngày","bộ","chai","lon","ly","đơn vị","cái","gói","cuộn","tuýp"];
+
+export function ProposalDialog({items,onClose,onPrice,onCatalog}:{
+  items:Item[];onClose:()=>void;
+  onPrice:(item:Item,price:number,reason:string)=>Promise<void>;
+  onCatalog:(body:CatalogProposal)=>Promise<void>;
+}) {
+  const ref=useRef<HTMLDialogElement>(null);
+  const [step,setStep]=useState<"choose"|"price"|"catalog">("choose");
+  const [type,setType]=useState<"price"|"catalog">("price");
+  const [kind,setKind]=useState<"SERVICE"|"WAREHOUSE">("SERVICE");
+  const [serviceId,setServiceId]=useState("");
+  const [name,setName]=useState("");const [sku,setSku]=useState("");
+  const [unit,setUnit]=useState("giờ");const [category,setCategory]=useState("business");
+  const [price,setPrice]=useState("");const [reason,setReason]=useState("");
+  const [saving,setSaving]=useState(false);const [error,setError]=useState("");
+  useEffect(()=>{ref.current?.showModal();},[]);
+  const available=items.filter(item=>kind==="WAREHOUSE"?goods.has(item.category):!goods.has(item.category)&&item.active);
+  const selected=available.find(item=>item.id===serviceId)??available[0];
+  const amount=Number(price);const delta=selected?amount-selected.price:0;
+  const valid=price.trim()!==""&&Number.isFinite(amount)&&amount>=0&&amount<=99999999.99&&reason.trim().length>0
+    &&(step==="price"?Boolean(selected)&&amount!==selected?.price:Boolean(name.trim())&&/^[A-Z0-9]{1,10}$/.test(sku));
+  const changeKind=(next:"SERVICE"|"WAREHOUSE")=>{setKind(next);setServiceId("");setCategory(next==="SERVICE"?"business":"food");setUnit(next==="SERVICE"?"giờ":"cái");};
+  const submit=async(event:React.FormEvent)=>{
+    event.preventDefault();if(!valid||saving)return;setSaving(true);setError("");
+    try {
+      if(step==="price"&&selected)await onPrice(selected,amount,reason.trim());
+      else await onCatalog({kind,id:sku,name:name.trim(),unit,category,price:amount,reason:reason.trim()});
+      onClose();
+    }catch(err){setError(err instanceof Error?err.message:"Không thể gửi đề xuất. Vui lòng thử lại.");}
+    finally{setSaving(false);}
+  };
+  return <dialog ref={ref} className="ki-proposal" aria-labelledby="proposal-title" onCancel={event=>{event.preventDefault();if(!saving)onClose();}}>
+    <form onSubmit={submit}>
+      <header><div>{step!=="choose"&&<span className="ki-proposal-icon">{step==="price"?<Tag size={24}/>:<FolderPlus size={24}/>}</span>}<div>
+        <h2 id="proposal-title">{step==="choose"?"Tạo yêu cầu đề xuất mới":step==="price"?"Đề xuất giá dịch vụ / mặt hàng":"Đề xuất thêm danh mục / mặt hàng mới"}</h2>
+        <p>{step==="choose"?"Vui lòng chọn loại đề xuất bạn muốn tạo:":step==="price"?"Điền thông tin thay đổi giá và gửi quản lý phê duyệt.":"Điền thông tin danh mục mới và gửi quản lý phê duyệt."}</p>
+      </div></div><button type="button" aria-label="Đóng đề xuất" className="ki-proposal-close" disabled={saving} onClick={onClose}><X size={20}/></button></header>
+      <section>
+        {step==="choose"?<div className="ki-proposal-choices">
+          {([{id:"price",title:"Đề xuất giá dịch vụ / mặt hàng",desc:"Thay đổi đơn giá hiện tại cho các dịch vụ hoặc mặt hàng có sẵn.",Icon:Tag},{id:"catalog",title:"Đề xuất thêm danh mục / mặt hàng mới",desc:"Thêm một dịch vụ hoặc mặt hàng vào danh mục kho mới.",Icon:FolderPlus}] as const).map(option=><button type="button" key={option.id} aria-pressed={type===option.id} className={type===option.id?"selected":""} onClick={()=>setType(option.id)}><span className="ki-choice-top"><span className="ki-proposal-icon"><option.Icon size={26}/></span><span className="ki-choice-check">{type===option.id&&<Check size={17}/>}</span></span><strong>{option.title}</strong><p>{option.desc}</p></button>)}
+        </div>:<>
+          <fieldset><legend>Loại danh mục</legend><div className="ki-proposal-kind">{([ ["SERVICE","Dịch vụ",Tag],["WAREHOUSE",step==="price"?"Mặt hàng":"Danh mục kho",Package] ] as const).map(([value,label,Icon])=><button type="button" key={value} aria-pressed={kind===value} className={kind===value?"selected":""} onClick={()=>changeKind(value)}><Icon size={20}/>{label}</button>)}</div></fieldset>
+          {step==="price"?<label>Chọn {kind==="SERVICE"?"dịch vụ":"mặt hàng"}<select value={selected?.id??""} onChange={event=>setServiceId(event.target.value)}><option value="" disabled>Chọn trong danh mục</option>{available.map(item=><option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}</select></label>:<>
+            <label>Tên {kind==="SERVICE"?"dịch vụ":"mặt hàng"}<input maxLength={100} value={name} onChange={event=>setName(event.target.value)} placeholder={kind==="SERVICE"?"Nhập tên dịch vụ mới":"Nhập tên mặt hàng mới"}/></label>
+            <div className="ki-proposal-grid"><label>Mã danh mục (SKU)<input maxLength={10} value={sku} onChange={event=>setSku(event.target.value.toUpperCase())} placeholder="Ví dụ: SPAFOOT" pattern="[A-Z0-9]{1,10}"/></label><label>Phân loại<select value={category} onChange={event=>setCategory(event.target.value)}>{(kind==="SERVICE"?serviceCategories:stockCategories).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label></div>
+          </>}
+          <div className="ki-proposal-grid">
+            {step==="price"?<label>Giá hiện tại<input readOnly value={selected?formatVnd(selected.price):"—"}/></label>:<label>Đơn vị tính<select value={unit} onChange={event=>setUnit(event.target.value)}>{units.map(value=><option key={value}>{value}</option>)}</select></label>}
+            <label><span className="ki-price-label">Giá đề xuất {step==="price"&&price!==""&&selected&&<small>{delta>0?"+":""}{formatVnd(delta)}{selected.price>0?` · ${delta>0?"+":""}${(delta/selected.price*100).toFixed(1)}%`:""}</small>}</span><input type="number" min="0" max="99999999.99" step="any" value={price} onChange={event=>setPrice(event.target.value)} placeholder="VND"/></label>
+          </div>
+          <label><span className="ki-price-label">Lý do <small>{reason.length}/300</small></span><textarea maxLength={300} value={reason} onChange={event=>setReason(event.target.value)} placeholder={step==="price"?"Nêu rõ lý do thay đổi":"Nêu rõ lý do cần thêm mới"}/></label>
+          <p className="ki-proposal-note"><Clock size={18}/>{step==="price"?"Giá mới chỉ được áp dụng sau khi quản lý phê duyệt.":"Mục mới chỉ được tạo sau khi quản lý phê duyệt. Hàng trong Kho được quản lý nội bộ."}</p>
+        </>}
+        {error&&<p role="alert" className="ki-proposal-error">{error}</p>}
+      </section>
+      <footer>{step!=="choose"&&<button type="button" disabled={saving} onClick={()=>{setStep("choose");setError("");}}>Quay lại</button>}<button type="button" disabled={saving} onClick={onClose}>Hủy bỏ</button>{step==="choose"?<button type="button" className="primary" onClick={()=>setStep(type)}>Tiếp tục <ArrowRight size={18}/></button>:<button type="submit" className="primary" disabled={!valid||saving}><Send size={17}/>{saving?"Đang gửi…":"Gửi quản lý phê duyệt"}</button>}</footer>
+    </form>
+  </dialog>;
+}
+
+
+/* StockNotifications.tsx — chức năng Kho / Dịch vụ */
+export interface StockActivity {
+  id: string;
+  name: string;
+  sku: string;
+  occurredAt: string;
+  qty: number;
+  staff: string;
+  movementType: MovementType;
+}
+
+const types = {
+  RECEIVE: { filter:"Nhập", label:"Nhập kho", tone:"green", Icon:ArrowDownToLine },
+  ISSUE: { filter:"Xuất", label:"Xuất kho", tone:"blue", Icon:ArrowUpFromLine },
+  WASTE: { filter:"Hao hụt", label:"Hao hụt", tone:"red", Icon:Trash2 },
+  RETURN: { filter:"Trả kho", label:"Trả lại kho", tone:"green", Icon:RotateCcw },
+  ADJUST: { filter:"Điều chỉnh", label:"Điều chỉnh", tone:"slate", Icon:SlidersHorizontal },
+} as const;
+
+const dateKey = (date:Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+function dayLabel(date:Date) {
+  const today=new Date();const yesterday=new Date(today.getFullYear(),today.getMonth(),today.getDate()-1);
+  const label=dateKey(date)===dateKey(today)?"Hôm nay":dateKey(date)===dateKey(yesterday)?"Hôm qua":date.toLocaleDateString("vi-VN",{weekday:"long"});
+  const short=date.toLocaleDateString("vi-VN",{day:"2-digit",month:"2-digit",...(date.getFullYear()!==today.getFullYear()?{year:"numeric" as const}:{})});
+  return `${label} · ${short}`;
+}
+
+export function StockNotifications({usage,onSeeAll}:{usage:StockActivity[];onSeeAll:()=>void}) {
+  const [open,setOpen]=useState(false);
+  const [filter,setFilter]=useState<"all"|MovementType>("all");
+  const containerRef=useRef<HTMLDivElement>(null);
+  const triggerRef=useRef<HTMLButtonElement>(null);
+  const closeRef=useRef<HTMLButtonElement>(null);
+  const close=()=>{setOpen(false);triggerRef.current?.focus();};
+  useEffect(()=>{
+    if(!open)return;
+    closeRef.current?.focus();
+    const outside=(event:PointerEvent)=>{if(!containerRef.current?.contains(event.target as Node))setOpen(false);};
+    const escape=(event:KeyboardEvent)=>{if(event.key==="Escape"){setOpen(false);triggerRef.current?.focus();}};
+    document.addEventListener("pointerdown",outside);document.addEventListener("keydown",escape);
+    return ()=>{document.removeEventListener("pointerdown",outside);document.removeEventListener("keydown",escape);};
+  },[open]);
+  const sorted=[...usage].sort((a,b)=>Date.parse(b.occurredAt)-Date.parse(a.occurredAt));
+  const rows=sorted.filter(activity=>filter==="all"||activity.movementType===filter);
+  const groups=new Map<string,{date:Date;rows:StockActivity[]}>();
+  rows.forEach(activity=>{
+    const date=new Date(activity.occurredAt);const key=dateKey(date);
+    if(!groups.has(key))groups.set(key,{date,rows:[]});
+    groups.get(key)!.rows.push(activity);
+  });
+  const filterTypes:MovementType[]=["RECEIVE","ISSUE","WASTE",...(["RETURN","ADJUST"] as const).filter(type=>usage.some(row=>row.movementType===type))];
+  return <div ref={containerRef} className="ki-stock-notifications">
+    <button ref={triggerRef} type="button" aria-label="Thông báo biến động kho" aria-haspopup="dialog" aria-expanded={open} aria-controls={open?"stock-notifications":undefined} className={`ki-stock-bell${open?" is-open":""}`} onClick={()=>{setFilter("all");setOpen(value=>!value);}}>
+      <Bell size={19}/>{usage.length>0&&<span className="ki-stock-count" aria-hidden="true">{usage.length}</span>}
+    </button>
+    {open&&<>
+      <div className="ki-stock-backdrop" aria-hidden="true" onPointerDown={close}/>
+      <div id="stock-notifications" className="ki-stock-popover" role="dialog" aria-label="Thông báo biến động kho">
+        <header className="ki-stock-heading"><div><h2>Thông báo kho</h2><p className="ki-stock-subtitle">Biến động tồn kho gần đây</p></div><button ref={closeRef} type="button" aria-label="Đóng thông báo kho" className="ki-stock-close" onClick={close}><X size={17}/></button></header>
+        <p className="ki-stock-description">Các lần nhập, xuất và điều chỉnh gần nhất của danh mục đang xem.</p>
+        <div className="ki-stock-filters" role="group" aria-label="Lọc loại biến động">
+          <button type="button" aria-pressed={filter==="all"} onClick={()=>setFilter("all")}>Tất cả <span>{usage.length}</span></button>
+          {filterTypes.map(type=><button type="button" key={type} aria-pressed={filter===type} onClick={()=>setFilter(type)}>{types[type].filter} <span>{usage.filter(row=>row.movementType===type).length}</span></button>)}
+        </div>
+        <div className="ki-stock-list">
+          {[...groups].map(([key,group])=><section key={key} className="ki-stock-day" aria-label={dayLabel(group.date)}>
+            <h3>{dayLabel(group.date)}</h3>
+            {group.rows.map(activity=>{
+              const cfg=types[activity.movementType];const Icon=cfg.Icon;
+              return <article className="ki-stock-activity" key={activity.id}>
+                <span className={`ki-stock-icon ${cfg.tone}`} aria-hidden="true"><Icon size={19}/></span>
+                <div className="ki-stock-item"><h4 title={activity.name}>{activity.name}</h4><div className="ki-stock-meta"><span className="ki-stock-sku">{activity.sku}</span><span title={activity.staff}>{activity.staff}</span><span aria-hidden="true">·</span><time dateTime={activity.occurredAt}>{new Date(activity.occurredAt).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit",hour12:false})}</time></div></div>
+                <div className="ki-stock-amount"><strong className={activity.qty<0?"negative":activity.qty>0?"positive":"neutral"}>{activity.qty>0?"+":""}{activity.qty.toLocaleString("vi-VN")}</strong><span className={`ki-stock-type ${cfg.tone}`}>{cfg.label}</span></div>
+              </article>;
+            })}
+          </section>)}
+          {rows.length===0&&<div className="ki-stock-empty"><Package size={28}/><p>{usage.length===0?"Chưa có biến động kho.":"Chưa có biến động thuộc loại này."}</p></div>}
+        </div>
+        <footer className="ki-stock-footer"><button type="button" onClick={()=>{close();onSeeAll();}}>Xem tất cả biến động <ArrowRight size={16}/></button></footer>
+      </div>
+    </>}
+  </div>;
+}
+
+
+/* StockVoucherDialog.tsx — chức năng Kho / Dịch vụ */
+export function StockVoucherDialog({movements,onClose}:{movements:VoucherMovement[];onClose:()=>void}) {
+  const ref=useRef<HTMLDialogElement>(null);
+  const [step,setStep]=useState<"choose"|"preview">("choose");
+  const [mode,setMode]=useState<"all"|"single">("single");
+  const [id,setId]=useState(movements[0]?.id??"");
+  const [detailsById,setDetailsById]=useState<Record<string,VoucherDetails>>({});
+  const selected=movements.find(row=>row.id===id);
+  const details=selected?(detailsById[id]??defaultVoucherDetails(selected)):{sender:"",receiver:"",source:"",destination:"",reference:""};
+  const update=(field:keyof VoucherDetails,value:string)=>setDetailsById(previous=>({...previous,[id]:{...details,[field]:value}}));
+  useEffect(()=>{ref.current?.showModal();},[]);
+  return <dialog ref={ref} className={`ki-voucher-dialog${step==="choose"?" ki-voucher-select-mode":""}`} aria-labelledby="voucher-dialog-title" onCancel={event=>{event.preventDefault();onClose();}}>
+    <header><div><h2 id="voucher-dialog-title">Xuất phiếu biến động kho</h2><p>{step==="choose"?"Vui lòng chọn cách xuất phiếu bạn muốn thực hiện:":mode==="all"?`Xuất ${movements.length} phiếu theo danh sách đang lọc. Mỗi biến động một phiếu riêng.`:"Chọn biến động đã ghi nhận, kiểm tra thông tin và in hoặc lưu PDF."}</p></div><button type="button" aria-label="Đóng xuất phiếu" onClick={onClose}><X size={20}/></button></header>
+    {step==="choose"?<section className="ki-voucher-choices">
+      {([{value:"all",title:"Xuất tất cả biến động",description:`Xuất ${movements.length} biến động trong danh sách đang lọc. Mỗi biến động có phiếu và phần ký riêng.`,Icon:Files},{value:"single",title:"Xuất riêng từng biến động",description:"Chọn một biến động cụ thể để xem, bổ sung thông tin và xuất phiếu.",Icon:FileText}] as const).map(choice=><button type="button" key={choice.value} aria-pressed={mode===choice.value} onClick={()=>setMode(choice.value)}><span className="ki-voucher-choice-top"><span className="ki-voucher-choice-icon"><choice.Icon size={28}/></span><span className="ki-voucher-choice-check">{mode===choice.value&&<Check size={17}/>}</span></span><strong>{choice.title}</strong><p>{choice.description}</p></button>)}
+    </section>:<>
+      <section className="ki-voucher-controls">
+        <label>{mode==="all"?"Xem trước / bổ sung thông tin từng phiếu":"Chọn biến động"}<select value={id} onChange={event=>setId(event.target.value)}>{movements.map(row=><option key={row.id} value={row.id}>BDK-{row.id} · {movementLabels[row.movementType]} · {row.itemName} · {new Date(row.occurredAt).toLocaleString("vi-VN")}</option>)}</select></label>
+        {selected&&<><div className="ki-voucher-fields">
+          <label>Người xuất / Giao<input maxLength={100} value={details.sender} readOnly={isOutgoing(selected)&&Boolean(selected.staffName)} onChange={event=>update("sender",event.target.value)} placeholder="Họ tên bên giao"/></label>
+          <label>Người nhập / Nhận<input maxLength={100} value={details.receiver} readOnly={!isOutgoing(selected)&&Boolean(selected.staffName)} onChange={event=>update("receiver",event.target.value)} placeholder="Họ tên bên nhận"/></label>
+          <label>Vị trí nguồn<input maxLength={150} value={details.source} onChange={event=>update("source",event.target.value)}/></label>
+          <label>Vị trí đích<input maxLength={150} value={details.destination} onChange={event=>update("destination",event.target.value)}/></label>
+        </div><label>Chứng từ liên quan (tùy chọn)<input maxLength={150} value={details.reference} onChange={event=>update("reference",event.target.value)}/></label>
+        <p>Tên người thực hiện lấy từ giao dịch đã lưu. Thông tin bổ sung dùng trên bản in này; chỗ ký để người giao và người nhận ký thực tế.</p></>}
+      </section>
+      {selected?<div className="ki-voucher-preview" dangerouslySetInnerHTML={{__html:voucherBody(selected,details)}}/>:<p>Không có biến động để xuất phiếu.</p>}
+    </>}
+    <footer>{step==="preview"&&<button type="button" onClick={()=>setStep("choose")}>Quay lại</button>}<button type="button" onClick={onClose}>Hủy bỏ</button>{step==="choose"?<button type="button" className="primary" disabled={movements.length===0} onClick={()=>setStep("preview")}>Tiếp tục <ArrowRight size={17}/></button>:<button type="button" className="primary" disabled={!selected} onClick={()=>{if(selected)printStockVouchers(mode==="all"?movements:[selected],detailsById);}}><Printer size={16}/>{mode==="all"?`In / Lưu PDF ${movements.length} phiếu`:"In / Lưu PDF"}</button>}</footer>
+  </dialog>;
+}
+
+const kitchenInventoryStyles = String.raw`
+/* consumptionReports.css */
+.ki-report-page-actions{flex-wrap:wrap}.ki-report-page-actions label>span{font-size:11px;white-space:nowrap;color:#64748b}.ki-report-chart-scroll{max-width:100%;overflow-x:auto}
+.ki-consumption-reports{flex:1;min-height:0;overflow-y:auto;padding:20px 24px 28px;background:#f8fafc;color:#0f172a;font-family:inherit}.ki-report-page-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px}.ki-report-page-header h2{font-size:19px;font-weight:700;margin:0 0 6px}.ki-report-page-header p{margin:0;font-size:12px;color:#64748b;line-height:1.6}.ki-report-page-actions{display:flex;gap:10px;align-items:center}.ki-report-page-actions label,.ki-report-page-actions>button{display:flex;align-items:center;gap:8px;border:1px solid #e2e8f0;border-radius:8px;background:white;color:#475569;padding:9px 12px;font-size:12px}.ki-report-page-actions input{border:0;background:transparent;outline:0;color:#475569;font-size:12px;font-family:inherit;min-width:0}.ki-report-page-actions>button{font-family:inherit;cursor:pointer;font-weight:500}.ki-report-overview{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(310px,1fr);gap:16px;margin-bottom:16px;align-items:stretch}.ki-report-card{background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 2px 5px #0f172a03;min-width:0}.ki-report-card>header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 20px}.ki-report-card h3{display:flex;align-items:center;gap:12px;font-size:14px;font-weight:700;line-height:1.4;margin:0;color:#0f172a}.ki-report-card h3 svg{color:#1d4ed8;flex-shrink:0}.ki-report-legend{display:flex;gap:20px;flex-wrap:wrap;font-size:10px;color:#64748b}.ki-report-legend span{display:flex;align-items:center;gap:7px;white-space:nowrap}.ki-report-legend i{width:9px;height:9px;border-radius:50%;background:#1d4ed8}.ki-report-legend span:nth-child(2) i{background:#60a5fa}.ki-report-chart-scroll{overflow-x:auto;padding:0 12px 0 0}.ki-report-chart{display:block;width:100%;min-width:600px;outline:0}.ki-report-axis{fill:#64748b;font-size:10px;font-family:inherit}.ki-report-value{fill:#0f172a;font-size:10px;font-weight:600;font-family:inherit}.ki-report-empty-chart{fill:#64748b;font-size:12px;font-family:inherit}.ki-report-chart g[tabindex]:focus-visible{outline:none}.ki-report-chart g[tabindex]:focus-visible circle{stroke:#0f172a;stroke-width:2}.ki-report-reference-note{display:flex;align-items:center;gap:6px;font-size:10px;color:#94a3b8;margin:0;padding:0 20px 14px;line-height:1.5}.ki-report-groups>header{border-bottom:1px solid #f1f5f9}.ki-report-group-list{padding:0 20px 5px;max-height:310px;overflow-y:auto;scrollbar-width:thin}.ki-report-group{display:flex;gap:14px;align-items:center;padding:19px 0;border-bottom:1px solid #f1f5f9}.ki-report-group:last-child{border-bottom:0}.ki-report-group-icon{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:34px;height:34px;border-radius:50%;background:#eff6ff}.ki-report-group>div{flex:1;min-width:0}.ki-report-group-label{display:flex;align-items:center;gap:12px;font-size:11px;line-height:1.5;margin-bottom:9px}.ki-report-group-label strong{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ki-report-group-label span{font-weight:600;color:#334155;white-space:nowrap}.ki-report-group-label b{font-weight:600;color:#1e293b;white-space:nowrap}.ki-report-progress{height:11px;border-radius:99px;background:#edf0f2;overflow:hidden}.ki-report-progress span{display:block;height:100%;border-radius:99px;min-width:0}.ki-report-empty{padding:42px 12px;display:flex;flex-direction:column;align-items:center;gap:12px;color:#94a3b8;text-align:center}.ki-report-empty p{font-size:12px;color:#64748b;line-height:1.6;margin:0}.ki-report-details>header{border-bottom:1px solid #e2e8f0;padding:12px 20px;flex-wrap:wrap}.ki-report-tabs{display:flex;border:1px solid #dbeafe;border-radius:7px;overflow:hidden;background:#f8fafc}.ki-report-tabs button{border:0;background:transparent;color:#475569;padding:8px 22px;font-size:11px;font-weight:500;font-family:inherit;cursor:pointer}.ki-report-tabs button[aria-selected=true]{background:#1d4ed8;color:white;box-shadow:0 2px 5px #1d4ed826}.ki-report-table-scroll{overflow-x:auto}.ki-report-details table{width:100%;min-width:760px;border-collapse:collapse;text-align:left;font-size:12px}.ki-report-details th{padding:12px 16px;font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.02em;background:#f8fafc;white-space:nowrap}.ki-report-details td{padding:14px 16px;border-top:1px solid #eef2f6;color:#334155;line-height:1.5}.ki-report-details td:nth-child(3){font-weight:500;color:#0f172a;min-width:170px}.ki-report-details th:nth-child(n+5),.ki-report-details td:nth-child(n+5){text-align:right;white-space:nowrap}.ki-report-details th:last-child,.ki-report-details td:last-child{text-align:center}.ki-report-details tr:hover td{background:#f8faff}.ki-report-sku{font-size:11px;font-weight:600;white-space:nowrap}.ki-report-low-stock,.ki-report-no-stock{display:inline-flex;align-items:center;justify-content:center;min-width:42px;padding:2px 10px;border-radius:99px;background:#fff1d6;color:#b45309;font-size:11px}.ki-report-no-stock{background:#fff1f2;color:#be123c}.ki-report-details .ki-report-empty-cell{padding:34px;text-align:center;color:#94a3b8;font-size:12px}.ki-report-details>footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid #edf2f7;padding:12px 16px;font-size:10px;line-height:1.6;color:#94a3b8}.ki-report-details>footer strong{color:#1d4ed8;font-weight:600}.ki-consumption-reports button:focus-visible{outline:2px solid #3b82f6;outline-offset:2px}.ki-report-page-actions label:focus-within{outline:2px solid #3b82f6;outline-offset:2px}
+@media(max-width:1250px){.ki-report-overview{grid-template-columns:minmax(0,1fr)}.ki-report-trend>header{flex-wrap:wrap}.ki-report-group-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px;max-height:none}.ki-report-group-label{gap:8px}.ki-report-chart{max-height:300px}.ki-report-empty{grid-column:1/-1}.ki-report-group{padding:16px 0}}
+@media(max-width:700px){.ki-consumption-reports{padding:16px 12px}.ki-report-card>header{padding:14px}.ki-report-page-actions{width:100%;flex-wrap:wrap}.ki-report-legend{gap:12px}.ki-report-group-list{display:block;padding:0 14px}.ki-report-group-label{font-size:11px}.ki-report-details>header{gap:14px}.ki-report-tabs button{padding:8px 18px}.ki-report-group-icon{width:30px;height:30px}.ki-report-group{gap:10px}}
+
+/* proposalDialog.css */
+.ki-proposal{padding:0;border:0;border-radius:20px;width:min(680px,calc(100vw - 32px));max-height:calc(100dvh - 32px);margin:auto;color:#0f172a;box-shadow:0 24px 80px #0f172a33;font-family:inherit;overflow:auto}
+.ki-proposal::backdrop{background:#0f172a80;backdrop-filter:blur(3px)}
+.ki-proposal *{box-sizing:border-box}.ki-proposal button,.ki-proposal input,.ki-proposal select,.ki-proposal textarea{font-family:inherit;font-size:13px}
+.ki-proposal header{display:flex;justify-content:space-between;gap:16px;padding:28px 28px 12px}.ki-proposal header>div{display:flex;gap:16px;align-items:center}.ki-proposal h2{font-size:21px;font-weight:700;margin:0 0 8px;line-height:1.35}.ki-proposal p{font-size:13px;line-height:1.6;color:#64748b;margin:0}.ki-proposal-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:52px;height:52px;border-radius:16px;background:#2563eb;color:white}
+.ki-proposal button{cursor:pointer}.ki-proposal button:disabled{cursor:default;opacity:.55}.ki-proposal .ki-proposal-close{display:flex;align-items:center;justify-content:center;border:0;background:#f1f5f9;color:#64748b;border-radius:50%;width:36px;height:36px;flex-shrink:0}.ki-proposal section{padding:20px 28px 28px;display:flex;flex-direction:column;gap:20px}
+.ki-proposal-choices{display:grid;grid-template-columns:1fr 1fr;gap:16px}.ki-proposal-choices>button{background:white;border:1px solid #e2e8f0;border-radius:18px;padding:22px;text-align:left;color:#0f172a}.ki-proposal-choices>button.selected{border-color:#2563eb;background:#f5f8ff;box-shadow:0 0 0 4px #2563eb15}.ki-proposal-choices strong{display:block;font-size:17px;line-height:1.5;margin:20px 0 10px}.ki-choice-top{display:flex;align-items:center;justify-content:space-between}.ki-choice-check{width:26px;height:26px;border:1px solid #cbd5e1;border-radius:50%;display:flex;align-items:center;justify-content:center}.selected .ki-choice-check{background:#2563eb;color:white;border-color:#2563eb}.ki-proposal-choices>button:not(.selected) .ki-proposal-icon{background:#f1f5f9;color:#475569}
+.ki-proposal fieldset{margin:0;padding:0;border:0}.ki-proposal legend,.ki-proposal label{font-size:13px;font-weight:600;color:#475569}.ki-proposal legend{margin-bottom:10px}.ki-proposal label{display:flex;flex-direction:column;gap:9px;min-width:0}.ki-proposal-kind{display:flex;gap:8px;background:#f1f5f9;border-radius:12px;padding:5px}.ki-proposal-kind button{flex:1;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid transparent;border-radius:9px;background:transparent;color:#64748b;padding:11px;font-weight:600}.ki-proposal-kind button.selected{background:white;color:#2563eb;border-color:#bfdbfe;box-shadow:0 2px 3px #0f172a0d}
+.ki-proposal input,.ki-proposal select,.ki-proposal textarea{width:100%;border:1px solid #dbe2ed;border-radius:10px;padding:12px;color:#0f172a;background:white;outline:none;font-weight:400;min-width:0}.ki-proposal input:focus,.ki-proposal select:focus,.ki-proposal textarea:focus{border-color:#2563eb;box-shadow:0 0 0 2px #2563eb15}.ki-proposal input[readonly]{background:#f8fafc;color:#64748b}.ki-proposal textarea{resize:vertical;min-height:100px}.ki-proposal-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.ki-price-label{display:flex;justify-content:space-between;gap:8px;align-items:center;min-height:20px}.ki-price-label small{font-size:11px;color:#64748b;font-weight:400}.ki-proposal .ki-proposal-note{display:flex;align-items:center;gap:12px;border:1px solid #dbeafe;background:#f5f8ff;border-radius:12px;padding:13px;font-size:12px}.ki-proposal-note svg{color:#2563eb;flex-shrink:0}.ki-proposal .ki-proposal-error{color:#be123c;background:#fff1f2;padding:12px;border-radius:10px}
+.ki-proposal footer{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;background:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 28px}.ki-proposal footer button{display:flex;align-items:center;justify-content:center;gap:8px;padding:11px 18px;border:1px solid #dbe2ed;border-radius:10px;background:white;color:#475569;font-weight:600}.ki-proposal footer .primary{background:#2563eb;border-color:#2563eb;color:white}.ki-proposal button:focus-visible{outline:2px solid #2563eb;outline-offset:3px}
+@media(max-width:560px){.ki-proposal header{padding:20px 18px 8px}.ki-proposal section{padding:16px 18px 20px}.ki-proposal h2{font-size:18px}.ki-proposal-choices,.ki-proposal-grid{grid-template-columns:1fr}.ki-proposal-choices>button{padding:16px}.ki-proposal-choices strong{margin-top:12px}.ki-proposal footer{padding:16px 18px}}
+
+/* stockNotifications.css */
+.ki-stock-notifications{position:relative;flex-shrink:0;font-family:inherit}.ki-stock-notifications button{font-family:inherit;cursor:pointer}.ki-stock-bell{position:relative;display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:1px solid #e2e8f0;border-radius:11px;background:#f8fafc;color:#475569}.ki-stock-bell.is-open{border-color:#bfdbfe;background:#eff6ff;color:#2563eb}.ki-stock-count{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border:2px solid white;border-radius:20px;background:#2563eb;color:white;display:flex;align-items:center;justify-content:center;padding:0 3px;font-size:10px;font-weight:700}
+.ki-stock-backdrop{position:fixed;inset:52px 0 0;background:#0f172a2b;z-index:79}.ki-stock-popover{position:fixed;top:64px;right:22px;width:min(440px,calc(100vw - 24px));max-height:calc(100dvh - 80px);display:flex;flex-direction:column;background:white;border:1px solid #e2e8f0;border-radius:20px;box-shadow:0 16px 48px #0f172a2b;overflow:hidden;z-index:80;color:#0f172a}.ki-stock-popover *{box-sizing:border-box}.ki-stock-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:22px 22px 0;flex-shrink:0}.ki-stock-heading h2{margin:0 0 3px;font-size:18px;font-weight:700;line-height:1.35}.ki-stock-popover .ki-stock-subtitle{margin:0;font-size:12px;color:#2563eb;line-height:1.5}.ki-stock-close{width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:0;border-radius:50%;background:#f1f5f9;color:#64748b}.ki-stock-description{margin:10px 22px 12px;font-size:12px;color:#64748b;line-height:1.6;flex-shrink:0}
+.ki-stock-filters{display:flex;gap:8px;flex-wrap:wrap;padding:0 22px 16px;border-bottom:1px solid #f1f5f9;flex-shrink:0}.ki-stock-filters button{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid #e2e8f0;border-radius:99px;background:white;color:#475569;font-size:12px;line-height:1.4;white-space:nowrap}.ki-stock-filters button span{font-size:10px;color:#94a3b8}.ki-stock-filters button[aria-pressed=true]{background:#0f172a;border-color:#0f172a;color:white;font-weight:700}.ki-stock-filters button[aria-pressed=true] span{color:#cbd5e1}
+.ki-stock-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#d7dee9 transparent;max-height:440px;padding:4px 0 12px}.ki-stock-day h3{font-size:11px;font-weight:600;letter-spacing:.025em;color:#64748b;margin:16px 22px 8px;line-height:1.5}.ki-stock-activity{display:flex;align-items:center;gap:14px;padding:12px 22px}.ki-stock-activity:hover{background:#f8fafc}.ki-stock-icon{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:13px;flex-shrink:0}.ki-stock-item{flex:1;min-width:0}.ki-stock-item h4{font-size:12px;font-weight:600;line-height:1.5;color:#0f172a;margin:0 0 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ki-stock-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:10px;color:#64748b;line-height:1.5}.ki-stock-sku{padding:1px 5px;background:#f1f5f9;border-radius:4px;letter-spacing:.04em;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis}.ki-stock-amount{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}.ki-stock-amount strong{font-family:inherit;font-size:15px;font-weight:700;line-height:1.4}.ki-stock-amount .positive{color:#059669}.ki-stock-amount .negative{color:#dc2626}.ki-stock-amount .neutral{color:#64748b}.ki-stock-type{padding:2px 8px;border-radius:99px;font-size:10px;line-height:1.4;font-weight:600;white-space:nowrap}.ki-stock-popover .green{color:#059669;background:#ecfdf5}.ki-stock-popover .blue{color:#2563eb;background:#eff6ff}.ki-stock-popover .red{color:#dc2626;background:#fff1f2}.ki-stock-popover .slate{color:#64748b;background:#f1f5f9}
+.ki-stock-empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px 22px;color:#94a3b8}.ki-stock-empty p{font-size:12px;line-height:1.6;margin:0}.ki-stock-footer{padding:14px 22px 18px;border-top:1px solid #f1f5f9;background:white;flex-shrink:0}.ki-stock-footer button{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:12px;padding:12px;background:#f5f8ff;color:#2563eb;font-size:13px;font-weight:600}.ki-stock-notifications button:focus-visible{outline:2px solid #2563eb;outline-offset:3px}
+@media(max-width:480px){.ki-stock-popover{right:12px}.ki-stock-activity{gap:10px;padding-left:16px;padding-right:16px}.ki-stock-heading{padding:18px 16px 0}.ki-stock-description{margin-left:16px;margin-right:16px}.ki-stock-filters{padding-left:16px;padding-right:16px;gap:6px}.ki-stock-filters button{padding:6px 10px}.ki-stock-day h3{margin-left:16px}.ki-stock-footer{padding-left:16px;padding-right:16px}.ki-stock-icon{width:36px;height:36px}}
+
+/* stockVoucher.css */
+.ki-voucher-dialog{padding:0;border:0;border-radius:16px;width:min(900px,calc(100vw - 32px));max-height:calc(100dvh - 32px);margin:auto;overflow:auto;background:white;color:#0f172a;font-family:inherit;box-shadow:0 24px 80px #0f172a33}.ki-voucher-dialog::backdrop{background:#0f172a80}.ki-voucher-dialog>header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:20px 24px;border-bottom:1px solid #e2e8f0}.ki-voucher-dialog h2{margin:0;font-size:18px;font-weight:700}.ki-voucher-dialog>header p,.ki-voucher-controls>p{font-size:12px;color:#64748b;line-height:1.6;margin:6px 0 0}.ki-voucher-dialog>header button{border:0;border-radius:50%;padding:7px;display:flex;background:#f1f5f9;color:#64748b;cursor:pointer}.ki-voucher-controls{padding:18px 24px;display:flex;flex-direction:column;gap:14px}.ki-voucher-controls label{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:600;color:#475569}.ki-voucher-controls select,.ki-voucher-controls input{font-family:inherit;font-size:12px;border:1px solid #cbd5e1;border-radius:8px;padding:10px;color:#0f172a;background:white;width:100%;min-width:0;box-sizing:border-box}.ki-voucher-controls input[readonly]{background:#f1f5f9;color:#475569}.ki-voucher-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}.ki-voucher-preview{background:#e2e8f0;padding:24px;overflow:auto}.ki-voucher-preview .stock-voucher-sheet{padding:32px;background:#fff;color:#000;max-width:740px;margin:auto;font-family:"Times New Roman",serif;font-size:13px;line-height:1.5;min-width:570px;box-sizing:border-box}.ki-voucher-preview .stock-voucher-sheet>header{text-align:center;margin-bottom:16px}.ki-voucher-preview h1{font-size:19px;font-weight:700;margin:4px 0 0}.ki-voucher-preview .voucher-meta p{margin:5px 0;overflow-wrap:anywhere}.ki-voucher-preview .voucher-meta span{margin-left:25px}.ki-voucher-preview table{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:16px}.ki-voucher-preview th,.ki-voucher-preview td{border:1px solid #000;padding:7px 5px;text-align:center;overflow-wrap:anywhere}.ki-voucher-preview th:first-child{width:29%}.ki-voucher-preview th:nth-child(2){width:9%}.ki-voucher-preview th:nth-child(4){width:20%}.ki-voucher-preview td:first-child{text-align:left}.ki-voucher-preview .voucher-blank{height:30px}.ki-voucher-preview .voucher-price-note{font-size:11px;font-style:italic}.ki-voucher-preview .voucher-confirmation{border:1px solid #000;padding:12px;margin-top:20px}.ki-voucher-preview .voucher-confirmation h2{font-size:13px;font-weight:700;margin:0 0 8px}.ki-voucher-preview .voucher-signatures{display:grid;grid-template-columns:1fr 1fr;text-align:center;gap:20px}.ki-voucher-preview .voucher-signatures strong,.ki-voucher-preview .voucher-signatures em{display:block}.ki-voucher-preview .voucher-signatures p{margin:70px 0 10px;min-height:20px;font-weight:700}.ki-voucher-preview .voucher-confirmation>p{font-size:12px;margin-top:18px}.ki-voucher-dialog>footer{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:10px;background:white;border-top:1px solid #e2e8f0;padding:16px 24px}.ki-voucher-dialog>footer button{display:flex;align-items:center;gap:8px;padding:10px 16px;border:1px solid #cbd5e1;border-radius:8px;background:white;color:#475569;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}.ki-voucher-dialog>footer button.primary{background:#0f172a;color:white;border-color:#0f172a}.ki-voucher-dialog>footer button:disabled{opacity:.5;cursor:default}.ki-voucher-dialog button:focus-visible,.ki-voucher-dialog input:focus-visible,.ki-voucher-dialog select:focus-visible{outline:2px solid #2563eb;outline-offset:2px}@media(max-width:600px){.ki-voucher-fields{grid-template-columns:1fr}.ki-voucher-dialog>header,.ki-voucher-controls{padding:16px}.ki-voucher-preview{padding:12px}}
+
+.ki-voucher-select-mode{width:min(680px,calc(100vw - 32px));border-radius:22px}.ki-voucher-select-mode>header{border:0;padding:28px 28px 12px}.ki-voucher-select-mode>header h2{font-size:24px}.ki-voucher-select-mode>header p{font-size:14px;margin-top:10px}.ki-voucher-select-mode>header button{padding:10px}.ki-voucher-choices{padding:24px 28px 32px;display:grid;grid-template-columns:1fr 1fr;gap:18px}.ki-voucher-choices>button{padding:24px 20px;border:1px solid #e2e8f0;background:white;border-radius:20px;color:#0f172a;text-align:left;font-family:inherit;cursor:pointer}.ki-voucher-choices>button[aria-pressed=true]{background:#f5f8ff;border-color:#2563eb;box-shadow:0 0 0 4px #2563eb15}.ki-voucher-choice-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}.ki-voucher-choice-icon{display:flex;align-items:center;justify-content:center;width:56px;height:56px;background:#f1f5f9;color:#475569;border-radius:17px}.ki-voucher-choice-check{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid #cbd5e1;border-radius:50%}.ki-voucher-choices>button[aria-pressed=true] .ki-voucher-choice-icon,.ki-voucher-choices>button[aria-pressed=true] .ki-voucher-choice-check{background:#2563eb;color:white;border-color:#2563eb}.ki-voucher-choices strong{display:block;font-size:18px;font-weight:700;line-height:1.5}.ki-voucher-choices p{font-size:14px;line-height:1.6;margin:12px 0 0;color:#64748b}.ki-voucher-dialog>footer{background:#f8fafc}.ki-voucher-dialog>footer button.primary{background:#2563eb;border-color:#2563eb}.ki-voucher-select-mode>footer{padding:20px 28px}.ki-voucher-select-mode>footer button{border-radius:12px;padding:12px 20px;font-size:14px}@media(max-width:540px){.ki-voucher-choices{grid-template-columns:1fr;padding:16px 20px 24px}.ki-voucher-choice-top{margin-bottom:16px}.ki-voucher-select-mode>header{padding:22px 20px 10px}.ki-voucher-select-mode>header h2{font-size:21px}}
+
+`;
+
+
+// Gửi và duyệt trả kho: dùng chung cùng một triển khai cho Kho và Buồng phòng.
+const statusLabels={PENDING:"Chờ duyệt",APPROVED:"Đã duyệt",REJECTED:"Từ chối"};
+export function StockReturnsPanel({ warehouse=false, onChanged }: { warehouse?:boolean; onChanged?:()=>void }) {
+  const [rows,setRows]=useState<StockReturn[]>([]),[items,setItems]=useState<Service[]>([]);
+  const [loading,setLoading]=useState(true),[refresh,setRefresh]=useState(0),[busy,setBusy]=useState(false);
+  const [error,setError]=useState(""),[notice,setNotice]=useState("");
+  const [serviceId,setServiceId]=useState(""),[quantity,setQuantity]=useState("1"),[room,setRoom]=useState(""),[reason,setReason]=useState("");
+  const [filter,setFilter]=useState(warehouse?"PENDING":"ALL");
+  const [decision,setDecision]=useState<{row:StockReturn;approve:boolean}|null>(null);
+  const retry=useRef<{signature:string;key:string}|null>(null);
+  useEffect(()=>{
+    let active=true;setLoading(true);setError("");
+    Promise.all([stockReturnsApi.list(),warehouse?Promise.resolve([]):stockReturnsApi.catalog()])
+      .then(([requests,catalog])=>{if(active){setRows(requests);setItems(catalog);setServiceId(current=>catalog.some(item=>item.id===current)?current:catalog[0]?.id??"");}})
+      .catch(cause=>{if(active)setError(apiErrorMessage(cause,"Không thể tải yêu cầu trả kho."));})
+      .finally(()=>{if(active)setLoading(false);});
+    return ()=>{active=false;};
+  },[warehouse,refresh]);
+  const create=async(event:React.FormEvent)=>{
+    event.preventDefault();if(busy)return;setError("");setNotice("");
+    const number=Number(quantity);
+    if(!serviceId||!Number.isSafeInteger(number)||number<1||!reason.trim()){setError("Chọn mặt hàng, nhập số lượng nguyên dương và lý do trả hàng.");return;}
+    const body={service_id:serviceId,quantity:number,room_id:room.trim()||null,reason:reason.trim()};
+    const signature=JSON.stringify(body);
+    if(retry.current?.signature!==signature)retry.current={signature,key:newKitchenIdempotencyKey()};
+    setBusy(true);
+    try{
+      const result=await stockReturnsApi.create(body,retry.current.key);
+      setRows(current=>[result,...current.filter(row=>row.id!==result.id)]);retry.current=null;
+      setQuantity("1");setRoom("");setReason("");setNotice("Đã gửi yêu cầu. Tồn kho chỉ tăng khi nhân viên Kho duyệt.");
+    }catch(cause){setError(apiErrorMessage(cause,"Không thể gửi yêu cầu trả kho."));}finally{setBusy(false);}
+  };
+  const decide=async(note:string)=>{
+    if(!decision||busy)return;setBusy(true);setError("");setNotice("");
+    try{
+      const result=await stockReturnsApi.decide(decision.row.id,decision.approve,note);
+      setRows(current=>current.map(row=>row.id===result.id?result:row));setDecision(null);
+      setNotice(result.status==="APPROVED"?"Đã duyệt trả hàng và cộng tồn kho.":"Đã từ chối yêu cầu; tồn kho không thay đổi.");onChanged?.();
+    }catch(cause){setError(apiErrorMessage(cause,"Không thể quyết định yêu cầu trả kho."));throw cause;}finally{setBusy(false);}
+  };
+  const visible=rows.filter(row=>filter==="ALL"||row.status===filter);
+  return (<><style>{stockReturnsStyles}</style>{<section className="stock-returns">
+    <header><div><h2>{warehouse?"Duyệt trả kho":"Trả hàng về Kho"}</h2><p>{warehouse?"Kiểm đếm hàng nhận lại từ Buồng phòng trước khi cộng tồn.":"Gửi các mặt hàng còn dùng được về Kho. Yêu cầu cần được Kho duyệt trước khi nhập lại tồn."}</p></div>
+      <button type="button" disabled={loading||busy} onClick={()=>setRefresh(value=>value+1)}>Tải lại</button></header>
+    {error&&<p role="alert" className="stock-returns-error">{error}</p>}
+    {notice&&<p role="status" className="stock-returns-notice">{notice}</p>}
+    {!warehouse&&<form className="stock-returns-form" onSubmit={event=>void create(event)}>
+      <label>Mặt hàng trả<select required value={serviceId} disabled={loading||busy} onChange={event=>setServiceId(event.target.value)}>
+        {!items.length&&<option value="">Chưa có mặt hàng</option>}{items.map(item=><option key={item.id} value={item.id}>{item.name} ({item.id}) · {item.unit}</option>)}
+      </select></label>
+      <label>Số lượng trả<input required type="number" min="1" max="2147483647" step="1" value={quantity} onChange={event=>setQuantity(event.target.value)} disabled={busy}/></label>
+      <label>Phòng trả (tùy chọn)<input value={room} maxLength={10} onChange={event=>setRoom(event.target.value)} disabled={busy} placeholder="Ví dụ: 502"/></label>
+      <label className="stock-returns-wide">Lý do trả hàng<textarea required maxLength={255} value={reason} onChange={event=>setReason(event.target.value)} disabled={busy} placeholder="Ví dụ: Đồ dùng còn nguyên, chưa sử dụng"/></label>
+      <button type="submit" className="stock-returns-primary" disabled={loading||busy||!items.length}>{busy?"Đang gửi…":"Gửi yêu cầu trả kho"}</button>
+    </form>}
+    <div className="stock-returns-filters" aria-label="Trạng thái trả kho">
+      {(["ALL","PENDING","APPROVED","REJECTED"] as const).map(status=><button type="button" key={status} aria-pressed={filter===status} onClick={()=>setFilter(status)}>{status==="ALL"?"Tất cả":statusLabels[status]} ({rows.filter(row=>status==="ALL"||row.status===status).length})</button>)}
+    </div>
+    {loading?<p>Đang tải yêu cầu…</p>:<div className="stock-returns-table"><table><thead><tr>{["Mã / Thời điểm","Mặt hàng","Số lượng","Phòng","Người gửi / Lý do","Trạng thái","Quyết định"].map(label=><th key={label}>{label}</th>)}</tr></thead>
+      <tbody>{visible.map(row=><tr key={row.id}><td>TK-{row.id}<small>{new Date(row.requested_at).toLocaleString("vi-VN")}</small></td><td>{row.service_name}<small>{row.service_id}</small></td><td>{row.quantity} {row.unit}</td><td>{row.room_id||"—"}</td><td>{row.requester}<small>{row.reason}</small></td>
+        <td><span className={`stock-returns-status ${row.status.toLowerCase()}`}>{statusLabels[row.status]}</span></td>
+        <td>{warehouse&&row.status==="PENDING"?<div className="stock-returns-actions"><button type="button" disabled={busy} onClick={()=>setDecision({row,approve:true})}>Duyệt nhập lại kho</button><button type="button" disabled={busy} onClick={()=>setDecision({row,approve:false})}>Từ chối</button></div>:<>{row.approver||"Chờ Kho kiểm đếm"}<small>{row.decision_reason}</small></>}</td>
+      </tr>)}{!visible.length&&<tr><td colSpan={7}>Chưa có yêu cầu trả kho ở trạng thái này.</td></tr>}</tbody></table></div>}
+    {decision&&<ReturnDecisionDialog value={decision} busy={busy} onClose={()=>{if(!busy)setDecision(null);}} onConfirm={decide}/>}
+  </section>}</>);
+}
+
+function ReturnDecisionDialog({value,busy,onClose,onConfirm}:{value:{row:StockReturn;approve:boolean};busy:boolean;onClose:()=>void;onConfirm:(reason:string)=>Promise<void>}){
+  const ref=useRef<HTMLDialogElement>(null);const [reason,setReason]=useState("");const [error,setError]=useState("");
+  useEffect(()=>{const dialog=ref.current!;dialog.showModal();return()=>dialog.close();},[]);
+  return <dialog className="stock-return-decision" ref={ref} aria-label={value.approve?"Duyệt nhập lại kho":"Từ chối trả kho"} onCancel={event=>{event.preventDefault();onClose();}}>
+    <form onSubmit={async event=>{event.preventDefault();try{await onConfirm(reason.trim());}catch(cause){setError(apiErrorMessage(cause,"Không thể lưu quyết định."));}}}>
+      <h3>{value.approve?"Xác nhận đã kiểm đếm hàng trả":"Từ chối yêu cầu trả hàng"}</h3>
+      <p>{value.row.service_name} · <strong>{value.row.quantity} {value.row.unit}</strong></p>
+      <p>{value.approve?"Sau khi duyệt, số hàng này sẽ được cộng lại vào tồn kho.":"Tồn kho sẽ được giữ nguyên khi từ chối."}</p>
+      <label>{value.approve?"Ghi chú kiểm đếm (tùy chọn)":"Lý do từ chối"}<textarea required={!value.approve} maxLength={255} disabled={busy} value={reason} onChange={event=>setReason(event.target.value)}/></label>
+      {error&&<p role="alert">{error}</p>}
+      <footer><button type="button" disabled={busy} onClick={onClose}>Hủy</button><button type="submit" disabled={busy}>{busy?"Đang lưu…":value.approve?"Xác nhận duyệt":"Xác nhận từ chối"}</button></footer>
+    </form>
+  </dialog>;
+}
+const stockReturnsStyles=".stock-returns { flex: 1; min-width: 0; overflow: auto; padding: 22px; background: #f8fafc; color: #0f172a; font-size: 13px; }\n.stock-returns header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }\n.stock-returns h2 { font-size: 20px; font-weight: 750; margin: 0 0 6px; }\n.stock-returns p { margin: 6px 0 12px; color: #64748b; }\n.stock-returns button, .stock-return-decision button { border: 1px solid #cbd5e1; border-radius: 7px; padding: 8px 12px; background: #fff; color: #334155; cursor: pointer; font: inherit; white-space: nowrap; }\n.stock-returns button:disabled, .stock-return-decision button:disabled { opacity: .5; cursor: not-allowed; }\n.stock-returns .stock-returns-primary, .stock-returns-filters button[aria-pressed=true] { background: #0f172a; color: #fff; border-color: #0f172a; }\n.stock-returns-form { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; padding: 18px; margin-bottom: 18px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }\n.stock-returns label, .stock-return-decision label { display: grid; gap: 6px; font-size: 12px; font-weight: 600; }\n.stock-returns input, .stock-returns select, .stock-returns textarea, .stock-return-decision textarea { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; background: #fff; color: #0f172a; }\n.stock-returns textarea, .stock-return-decision textarea { min-height: 72px; resize: vertical; }\n.stock-returns-wide { grid-column: 1 / -1; }\n.stock-returns-form button { justify-self: start; }\n.stock-returns-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }\n.stock-returns-table { overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; }\n.stock-returns table { width: 100%; border-collapse: collapse; }\n.stock-returns th, .stock-returns td { padding: 12px; text-align: left; border-bottom: 1px solid #f1f5f9; vertical-align: top; }\n.stock-returns th { background: #f1f5f9; color: #64748b; white-space: nowrap; font-size: 11px; }\n.stock-returns small { display: block; color: #64748b; font-size: 11px; margin-top: 5px; max-width: 260px; overflow-wrap: anywhere; }\n.stock-returns-actions { display: flex; gap: 6px; flex-wrap: wrap; }\n.stock-returns-status { display: inline-block; padding: 4px 8px; border-radius: 20px; white-space: nowrap; font-size: 11px; }\n.stock-returns-status.pending { color: #92400e; background: #fef3c7; }\n.stock-returns-status.approved { color: #166534; background: #dcfce7; }\n.stock-returns-status.rejected { color: #9f1239; background: #ffe4e6; }\n.stock-returns .stock-returns-error, .stock-return-decision p[role=alert] { color: #b91c1c; background: #fff1f2; padding: 12px; border-radius: 8px; }\n.stock-returns .stock-returns-notice { color: #166534; background: #f0fdf4; padding: 12px; border-radius: 8px; }\n.stock-return-decision { position: fixed; inset: 0; margin: auto; padding: 22px; width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; box-sizing: border-box; border: 1px solid #e2e8f0; border-radius: 12px; color: #0f172a; }\n.stock-return-decision::backdrop { background: #0f172a80; }\n.stock-return-decision h3 { font-size: 17px; font-weight: 700; margin-bottom: 12px; }\n.stock-return-decision p { font-size: 13px; margin: 10px 0; }\n.stock-return-decision footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }\n.stock-return-decision button[type=submit] { background: #0f172a; color: #fff; }\n@media(max-width:700px) { .stock-returns-form { grid-template-columns: 1fr; } }\n";

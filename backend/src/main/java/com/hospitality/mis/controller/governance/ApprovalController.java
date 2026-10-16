@@ -1,4 +1,5 @@
 package com.hospitality.mis.controller.governance;
+import com.hospitality.mis.service.billing.ServiceCatalogService.CatalogProposalService;
 
 import com.hospitality.mis.dto.governance.ApprovalDtos;
 import com.hospitality.mis.middleware.security.SecurityActor;
@@ -29,9 +30,9 @@ class ApprovalController {
     /** Dịch vụ tạo, truy vấn và chuyển trạng thái yêu cầu phê duyệt. */
     private final ApprovalService service;
     private final RoomTypeCatalogService roomTypes;
-    private final com.hospitality.mis.service.billing.CatalogProposalService catalogProposals;
+    private final com.hospitality.mis.service.billing.ServiceCatalogService.CatalogProposalService catalogProposals;
 
-    ApprovalController(ApprovalService service, RoomTypeCatalogService roomTypes, com.hospitality.mis.service.billing.CatalogProposalService catalogProposals) {
+    ApprovalController(ApprovalService service, RoomTypeCatalogService roomTypes, com.hospitality.mis.service.billing.ServiceCatalogService.CatalogProposalService catalogProposals) {
         this.service = service;
         this.roomTypes = roomTypes;
         this.catalogProposals = catalogProposals;

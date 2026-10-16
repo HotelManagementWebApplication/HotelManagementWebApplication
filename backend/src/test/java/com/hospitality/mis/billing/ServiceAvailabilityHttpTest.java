@@ -1,6 +1,6 @@
 package com.hospitality.mis.billing;
-import com.hospitality.mis.dto.billing.ServiceAvailabilityDtos;
-import com.hospitality.mis.service.billing.ServiceAvailabilityService;
+import com.hospitality.mis.dto.billing.ServiceDtos.ServiceAvailabilityDtos;
+import com.hospitality.mis.service.billing.ServiceCatalogService.ServiceAvailabilityService;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
