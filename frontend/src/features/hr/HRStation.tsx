@@ -902,7 +902,7 @@ export default function HRStation({ onBack }: Props) {
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="font-serif text-xl font-bold text-gray-900">Phân công buồng phòng</h2>
+          <h2 className="font-sans text-xl font-bold text-gray-900">Phân công buồng phòng</h2>
           <p className="mt-1 text-xs text-gray-500">Ca đang diễn ra · {todayLabel}</p>
         </div>
         <span className="text-xs text-gray-500">{housekeepingRooms.length} phòng sẵn sàng</span>
@@ -1224,7 +1224,7 @@ export default function HRStation({ onBack }: Props) {
       <div className="lg:col-span-8 xl:col-span-9 bg-white rounded-2xl border border-gray-100 shadow-xs p-5 flex flex-col">
         {/* Table Top Controls */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h2 className="text-base font-bold text-gray-900 font-serif">
+          <h2 className="text-base font-bold text-gray-900 font-sans">
             Lịch trực theo tuần
           </h2>
 
