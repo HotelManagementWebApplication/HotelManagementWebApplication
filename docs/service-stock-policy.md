@@ -36,7 +36,7 @@ PUT dành cho Kho/Quản lý/Giám đốc/Admin theo quyền tồn kho. Khi còn
 chỗ, hệ thống từ chối đổi cấu hình để không diễn giải lại dữ liệu đặt đang có.
 Lưu lại cùng cấu hình là thao tác lặp an toàn, không tạo thêm audit.
 
-Không chạy `seed_service_schedule.sql` để áp công suất demo lên database dev.
+Không chạy `seed_lehuy_demo.sql` để áp công suất demo lên database dev.
 Script đó chỉ là số mẫu; nhóm cần nhập và xác nhận số liệu thật qua giao diện.
 Không tự bù các số tồn tài nguyên đã bị trừ trước đây: số cũ được giữ nguyên để
 truy vết, còn khả dụng tài nguyên dùng công suất và lịch thực tế.

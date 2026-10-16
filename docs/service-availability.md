@@ -14,7 +14,7 @@ Lượt Đã hủy và booking phòng đã hủy/không đến không chiếm t�
 ## Cấu hình demo
 
 Cấu hình nằm trong `CauHinhLichDichVu`, được nạp từ
-`database/demo/seed_service_schedule.sql`. Công suất là **số mẫu để kiểm thử**,
+`database/demo/seed_lehuy_demo.sql`. Công suất là **số mẫu để kiểm thử**,
 cần thống nhất số thực tế của khách sạn trước khi dùng chung.
 
 | Nhóm | Đơn vị khả dụng | Cách tính lượt đặt |
@@ -55,6 +55,6 @@ Dịch vụ, nút Cấu hình nhập công suất thực tế và bật/tắt tr
 Xem [quy tắc dữ liệu và hướng dẫn tích hợp](service-stock-policy.md). Báo cáo dịch
 vụ lấy lượt đã dùng, không lấy phiếu xuất kho để đếm số lần dùng sân/phòng.
 
-`seed_service_schedule_bookings.sql` tạo 5 lượt mẫu cho database riêng của Lê Huy,
+`seed_lehuy_demo.sql` tạo 5 lượt mẫu cho database riêng của Lê Huy,
 không chạy trên database chung. Ngày nạp mẫu, chọn 10:00–11:00 để thấy một sân
 cầu lông đang bận, phòng họp đã được giữ, tour đã đặt 4 suất và massage đã đặt 2 suất.

@@ -3,28 +3,26 @@
 Database: **QLKS_LeHuy_Local**, trên SQL Server Express local cổng 1433.
 Kết nối bằng Windows Authentication. Không đổi hoặc reset `QLKS` hiện tại.
 
-Các file riêng:
+Toàn bộ dữ liệu test bổ sung nằm trong **một file mới `seed_lehuy_demo.sql`**:
 
-- `seed_inventory.sql`: thêm 4 món ăn, 4 thức uống, 4 đồ gia dụng và 10 mặt hàng minibar theo mã chưa có;
-  không xóa, cập nhật hoặc nhân đôi hàng đã có. Chạy được nhiều lần.
-- `seed_lehuy_local.sql`: nạp dữ liệu demo chung và hàng mẫu riêng vào database
-  `QLKS_LeHuy_Local` **rỗng**. Từ chối chạy trên database khác hoặc khi đã có dữ liệu.
-- `run_lehuy_local.ps1`: chạy backend với database riêng, không tự nạp hoặc xóa dữ liệu.
-- `seed_service_schedule.sql`: công suất và đơn vị tài nguyên cho 20 dịch vụ;
-  bổ sung giá mẫu cho đồ dùng đang có giá 0, giữ nguyên giá đã nhập.
-- `seed_service_schedule_bookings.sql`: 5 lượt đặt mẫu chỉ dành cho database riêng,
-  để thử bộ lọc thời gian; không nạp trên database chung.
+- Danh mục dịch vụ, đồ dùng phòng và 22 mặt hàng món ăn / thức uống / đồ gia dụng / minibar theo mã chưa có.
+- Công suất, đơn vị và chính sách tiêu hao cho 20 dịch vụ chưa có cấu hình.
+- Giá demo cho đồ dùng còn giá 0; giữ nguyên giá người dùng đã nhập.
+- Tối đa 5 lượt đặt mẫu nếu booking 1 / phòng 501 đang ở và thời gian mẫu thuộc kỳ lưu trú.
+- Hai tài khoản nhận bàn giao Kế toán và lịch phân ca hôm nay cùng hai ngày kế tiếp.
 
-Từ thư mục gốc repository, sau khi Flyway đã tạo đủ bảng và backend đã dừng:
+Script chỉ chạy trên `QLKS_LeHuy_Local` đã có schema V1–V6 và tài khoản demo
+`KITCHEN`, `ACCOUNTING`. Không dùng để khởi tạo database rỗng, không xóa dữ liệu,
+không gọi `reset_demo.sql`, không tạo/sửa bảng, view hay stored procedure. Các bản
+ghi đã có được giữ nguyên; chạy lại không nhân đôi dữ liệu. Toàn bộ phần nạp nằm
+trong một transaction, lỗi sẽ rollback. Không nạp lên dev hoặc database dùng chung.
 
-```powershell
-sqlcmd -S 'tcp:localhost,1433' -E -C -d QLKS_LeHuy_Local -b -I -f 65001 -i database/demo/seed_lehuy_local.sql
-```
+`run_lehuy_local.ps1` chỉ chạy backend, không tự nạp/xóa dữ liệu.
 
-Nếu database riêng đã có dữ liệu và chỉ cần bổ sung mặt hàng:
+Từ thư mục gốc repository:
 
 ```powershell
-sqlcmd -S 'tcp:localhost,1433' -E -C -d QLKS_LeHuy_Local -b -I -f 65001 -i database/demo/seed_inventory.sql
+sqlcmd -S 'tcp:localhost,1433' -E -C -d QLKS_LeHuy_Local -b -I -f 65001 -i database/demo/seed_lehuy_demo.sql
 ```
 
 Chạy backend và frontend trong hai terminal:

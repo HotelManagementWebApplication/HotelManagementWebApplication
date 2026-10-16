@@ -6,17 +6,16 @@ Môi trường test riêng của Lê Huy dùng database `QLKS_LeHuy_Local` và c
 riêng, xem [LEHUY_LOCAL.md](LEHUY_LOCAL.md). Không cần thay đổi database `QLKS`
 đang dùng trước đó.
 
-Sau khi backend đã áp dụng đủ Flyway V1–V6, dừng backend và chạy
-`seed_inventory.sql` để thêm 22 mặt hàng: 4 món ăn, 4 thức uống, 4 đồ gia dụng
-và 10 mặt hàng minibar (nước uống, bia/rượu, snack, chocolate, kẹo, hạt và bánh quy).
-Script chỉ thêm mã chưa có, giữ nguyên dữ liệu và số lượng hiện tại; không reset
-database và không thay đổi schema. Các hàng này dành cho kho nội bộ, không được
-niêm yết trên danh mục công khai. Khởi động lại backend sau khi nạp.
+File mới `seed_lehuy_demo.sql` gom toàn bộ mẫu riêng: danh mục dịch vụ, 22 mặt
+hàng Kho, cấu hình công suất, lượt đặt mẫu và lịch bàn giao Kế toán. Script dùng
+schema và các tài khoản demo hiện có, không gọi `reset_demo.sql` và không thay
+đổi schema. Không ghi đè giá/tồn đã nhập; chỉ bổ sung giá cho đồ dùng còn giá 0.
+Xem điều kiện và phạm vi cụ thể trong [LEHUY_LOCAL.md](LEHUY_LOCAL.md).
 
 Ví dụ cho SQL Server Express local, chạy từ thư mục gốc repository:
 
 ```powershell
-sqlcmd -S 'tcp:localhost,1433' -E -C -d QLKS_LeHuy_Local -b -I -f 65001 -i database/demo/seed_inventory.sql
+sqlcmd -S 'tcp:localhost,1433' -E -C -d QLKS_LeHuy_Local -b -I -f 65001 -i database/demo/seed_lehuy_demo.sql
 ```
 
 Chỉ chạy các tập lệnh này theo cách thủ công. Ứng dụng không được xóa hoặc nạp
