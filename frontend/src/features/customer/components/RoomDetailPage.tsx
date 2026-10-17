@@ -67,9 +67,9 @@ export const RoomDetailPage: React.FC<RoomDetailPageProps> = ({ room, onBack, on
           <span>/</span>
           <span>MaM Hotel</span>
           <span>/</span>
-          <span>Hội An</span>
+          <span>Vũng Tàu</span>
           <span>/</span>
-          <span>Phòng nghỉ &amp; Biệt thự</span>
+          <span>Phòng &amp; Suite</span>
           <span>/</span>
           <span className="text-[#1C1917] font-semibold">{getRoomFullName(room)}</span>
         </div>
@@ -77,7 +77,7 @@ export const RoomDetailPage: React.FC<RoomDetailPageProps> = ({ room, onBack, on
         <div className="flex items-center gap-4 text-xs">
           <span className="text-emerald-600 font-medium flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Phòng sẵn sàng đón tiếp
+            {room.availableForBooking === true ? "Còn phòng theo lịch đã chọn" : room.availableForBooking === false ? "Hết phòng theo lịch đã chọn" : "Chọn lịch để kiểm tra phòng trống"}
           </span>
         </div>
       </div>
@@ -236,11 +236,11 @@ export const RoomDetailPage: React.FC<RoomDetailPageProps> = ({ room, onBack, on
 
           <div className="p-6 bg-[#FAF6EE] rounded-2xl border border-[#E7DECD]">
             <div className="flex items-center text-xs font-semibold uppercase tracking-wider text-[#8C6D37] mb-2">
-              <span>Chính sách kỳ nghỉ chánh niệm</span>
+              <span>Chính sách lưu trú</span>
             </div>
             <p className="text-xs text-[#57534E] leading-relaxed">
-              Nhận phòng từ 14:00 · Trả phòng trước 12:00. Miễn phí hủy phòng trước 48 giờ.
-              Đã bao gồm bữa sáng dinh dưỡng tự chọn tại nhà hàng ven biển và gói trị liệu Nam Y hàng ngày.
+              Giờ nhận và trả phòng theo lịch đã xác nhận trong booking. Hủy miễn phí nếu gửi yêu cầu hơn 48 giờ trước giờ nhận phòng; trong vòng 48 giờ, kể cả đúng mốc 48 giờ, tiền đặt cọc không được hoàn.
+              Khách thuê theo gói ngày-đêm được 1 suất bữa sáng mỗi ngày cho mỗi khách; khách thuê theo giờ không có quyền lợi miễn phí này.
             </p>
           </div>
         </div>
@@ -281,9 +281,11 @@ export const RoomDetailPage: React.FC<RoomDetailPageProps> = ({ room, onBack, on
           <button
             type="button"
             onClick={() => onBook(room)}
-            className="w-full py-4 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs uppercase tracking-[0.2em] font-semibold transition-colors duration-200 cursor-pointer text-center rounded-xl shadow-md mb-3"
+            disabled={room.availableForBooking === false}
+            title={room.availableForBooking === false ? "Phòng không còn trống trong khoảng thời gian đã chọn" : undefined}
+            className="w-full py-4 bg-[#1C1917] hover:bg-[#8C6D37] disabled:bg-[#D6D3D1] disabled:text-[#78716C] disabled:cursor-not-allowed text-white text-xs uppercase tracking-[0.2em] font-semibold transition-colors duration-200 cursor-pointer text-center rounded-xl shadow-md mb-3"
           >
-            ĐẶT PHÒNG NÀY NGAY
+            {room.availableForBooking === false ? "HẾT PHÒNG TRONG THỜI GIAN ĐÃ CHỌN" : "ĐẶT PHÒNG NÀY NGAY"}
           </button>
 
           <p className="text-[11px] text-center text-[#A8A29E] leading-normal">

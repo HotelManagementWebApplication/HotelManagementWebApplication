@@ -10,10 +10,10 @@ import type { CustomerReservation, HotelServiceBooking, HotelServiceBookingReque
 import {
   Search, MapPin, Calendar, Users, Star, Wifi, Coffee, Car, Dumbbell,
   ChevronLeft, ChevronRight, ChevronDown, X, Heart, BedDouble, Maximize2, Eye,
-  CheckCircle, ArrowLeft, Phone, Mail, Globe, Shield, Waves, Utensils, User
+  CheckCircle, ArrowLeft, Phone, Mail, Shield, Waves, Utensils, User
 } from "lucide-react";
 
-// Newly created luxury retreat components
+// Customer-facing luxury hotel components
 import { LuxuryHero } from "./components/LuxuryHero";
 import { AmenitiesMosaic } from "./components/AmenitiesMosaic";
 import { CuratedServicesSection } from "./components/CuratedServicesSection";
@@ -22,7 +22,10 @@ import { RoomDetailPage } from "./components/RoomDetailPage";
 import { LuxuryBookingModal } from "./components/LuxuryBookingModal";
 import { LuxuryFnBView, type FnbService } from "./components/LuxuryFnBView";
 import { CustomerProfileDropdown } from "./components/CustomerProfileDropdown";
+import ServicePaymentResultPage from "./components/ServicePaymentResultPage";
+import { VnpayPaymentResultPage } from "./components/VnpayPaymentResultPage";
 import { localDateValue } from "../../shared/utils/localDate";
+import { getRoomFullName } from "./roomProfiles";
 
 interface CustomerPortalProps {
   onBack: () => void;
@@ -40,8 +43,8 @@ const dateInputValue = (offsetDays: number) => {
 
 const displayRoomType = (value: string): Room["type"] => {
   const normalized = value.toLowerCase();
-  if (normalized.includes("vip")) return "VIP Suite";
-  if (normalized.includes("suite") || normalized.includes("gia đình") || normalized.includes("gia dinh")) return "Suite";
+  if (normalized === "vip") return "VIP Suite";
+  if (normalized === "sut") return "Suite";
   if (normalized.includes("superior") || normalized.includes("sup")) return "Superior";
   if (normalized.includes("deluxe") || normalized.includes("dlx")) return "Deluxe";
   return "Standard";
@@ -63,7 +66,7 @@ const mapPublicRoom = (room: PublicRoomSummary | PublicRoomAvailability | Public
     id: room.room_id,
     number: room.room_name,
     floor: room.floor,
-    type: displayRoomType(room.room_type_name),
+    type: displayRoomType(room.room_type_code),
     roomTypeCode: room.room_type_code,
     roomTypeName: room.room_type_name,
     marketingName: room.marketing_name || undefined,
@@ -71,6 +74,7 @@ const mapPublicRoom = (room: PublicRoomSummary | PublicRoomAvailability | Public
     pricePerNight: room.daily_price,
     pricePerHour: room.hourly_price,
     status: displayRoomStatus(status, available),
+    availableForBooking: available,
     cleanStatus: status === "cleaning" ? "in-progress" : "clean",
     view: room.view || "—",
     beds: room.bed_type || "—",
@@ -91,6 +95,13 @@ const serviceTagColor: Record<string, string> = {
   transport: "#3B82F6", laundry: "#3B82F6", recreation: "#F97316", business: "#B8944A",
 };
 
+interface CustomerBookingIdentity {
+  fullName: string;
+  phone: string;
+  identityNumber: string;
+  email: string;
+}
+
 
 
 export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthenticated }: CustomerPortalProps) {
@@ -99,6 +110,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [customerDisplayName, setCustomerDisplayName] = useState<string>("");
+  const [customerBookingIdentity, setCustomerBookingIdentity] = useState<CustomerBookingIdentity | null>(null);
   const [bookingConfirmation, setBookingConfirmation] = useState<{
     code: string;
     reservationId: number;
@@ -113,20 +125,29 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
     depositAmount: number;
     paymentCode: string;
     paymentStatus: string;
+    expiresAt: string;
+    paymentMethod: "vnpay";
   } | null>(null);
 
   // Sync customer display name
   useEffect(() => {
     if (!isAuthenticated) {
       setCustomerDisplayName("");
+      setCustomerBookingIdentity(null);
       return;
     }
 
     authApi.customerProfile()
-      .then((p) => {
+      .then(p => {
         if (p?.guest?.full_name) setCustomerDisplayName(p.guest.full_name);
+        setCustomerBookingIdentity({
+          fullName: p.guest.full_name,
+          phone: p.account.phone || p.guest.phone,
+          identityNumber: p.guest.identity_number,
+          email: p.guest.email || "",
+        });
       })
-      .catch(() => {});
+      .catch(() => setCustomerBookingIdentity(null));
   }, [isAuthenticated]);
 
   // Search Dates & Guests
@@ -218,6 +239,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             subtitle: service.unit ? `${service.name} · ${service.unit}` : service.name,
             price: service.price,
             unit: service.unit,
+            durationMinutes:service.duration_minutes,
             desc: service.description ?? "",
             img: service.image_url || "",
             tag: service.price === 0 ? "Chưa niêm yết" : service.unit || "Dịch vụ",
@@ -283,13 +305,31 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
       .catch(err => console.warn("Backend room detail query failed:", err));
   };
 
-  const handleOpenBooking = (room: Room) => {
+  const handleOpenBooking = async (room: Room) => {
     if (!isAuthenticated) {
       sessionStorage.setItem("pending_booking_room_id", room.id);
       onLogin();
       return;
     }
-    setSelectedRoom(room);
+    if (!checkIn || !checkOut || new Date(checkIn) >= new Date(checkOut)) {
+      window.alert("Ngày trả phòng phải sau ngày nhận phòng.");
+      return;
+    }
+    try {
+      const result = await publicApi.availability(`${checkIn}T14:00:00`, `${checkOut}T12:00:00`, undefined, 0, 100);
+      const matchingRoom = result.find((candidate) => candidate.room_id === room.id);
+      if (matchingRoom && !matchingRoom.available) {
+        setRoomList(result.map(mapPublicRoom));
+        window.alert(`Phòng ${room.number} không còn trống trong khoảng thời gian đã chọn.`);
+        return;
+      }
+      setSelectedRoom(matchingRoom ? mapPublicRoom(matchingRoom) : room);
+    } catch (error) {
+      // Availability is a guardrail; the reservation API remains the final authority
+      // for concurrent bookings, so keep the booking flow usable if this read fails.
+      console.warn("Availability pre-check failed:", error);
+      setSelectedRoom(room);
+    }
     setBookingModalOpen(true);
   };
 
@@ -325,6 +365,15 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
     }
   }, [isAuthenticated, roomList, serviceList]);
 
+  const [bookingNow, setBookingNow] = useState(Date.now());
+  useEffect(() => {
+    if (!bookingConfirmation) return;
+    setBookingNow(Date.now());
+    const timer = window.setInterval(() => setBookingNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [bookingConfirmation]);
+  const bookingExpired = Boolean(bookingConfirmation?.expiresAt && Date.parse(bookingConfirmation.expiresAt) <= bookingNow);
+
   const handleConfirmBooking = async (bookingData: {
     room: Room;
     mode: "night" | "hour";
@@ -333,11 +382,8 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
     hourlyCheckIn?: string;
     hourlyCheckOut?: string;
     guests: number;
-    guestName: string;
-    guestId: string;
-    phone: string;
     email: string;
-    paymentMethod: "cash" | "card" | "transfer";
+    paymentMethod: "vnpay";
   }) => {
     if (!isAuthenticated) {
       sessionStorage.setItem("pending_booking_room_id", bookingData.room.id);
@@ -369,6 +415,8 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             guest_count: bookingData.guests,
           }],
           idempotency_key: `book-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          payment_method: "VNPAY",
+          confirmation_email: bookingData.email.trim() || undefined,
       });
 
       if (!res?.id) throw new Error("Không thể hoàn tất đặt phòng. Vui lòng thử lại.");
@@ -383,13 +431,25 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         hourlyCheckIn: bookingData.hourlyCheckIn,
         hourlyCheckOut: bookingData.hourlyCheckOut,
         guests: bookingData.guests,
-        total: calculatedTotal,
+        total: Number(res.total_amount ?? calculatedTotal),
         depositAmount: Number(res.deposit_amount ?? 0),
         paymentCode: res.deposit_payment?.payment_code ?? "",
         paymentStatus: res.deposit_payment?.status ?? "PENDING",
+        expiresAt: res.deposit_payment.expires_at,
+        paymentMethod: bookingData.paymentMethod,
       });
       setBookingModalOpen(false);
       setIsDetailView(false);
+      if (bookingData.paymentMethod === "vnpay") {
+        try {
+          const checkout = await customerApi.createVnpayCheckout(res.id);
+          window.location.assign(checkout.payment_url);
+          return;
+        } catch (paymentError) {
+          window.alert(apiErrorMessage(paymentError,
+            "Booking đã được tạo nhưng chưa thể mở VNPay. Bạn có thể bấm Thanh toán qua VNPay để thử lại."));
+        }
+      }
     } catch (e) {
       console.warn("Reservation submit failed:", e);
       if (
@@ -401,7 +461,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         onLogin();
         return;
       }
-      window.alert("Không thể tạo đặt phòng. Vui lòng thử lại.");
+      window.alert(apiErrorMessage(e, "Không thể tạo đặt phòng. Vui lòng thử lại."));
     } finally {
       setBookingLoading(false);
     }
@@ -419,7 +479,8 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         serviceRequestRef.current = { body, key: `service-${crypto.randomUUID()}` };
       }
       const result = await customerApi.bookService(request, serviceRequestRef.current.key);
-      serviceRequestRef.current = null;
+      if(result.status==="PENDING_PAYMENT"){const checkout=await customerApi.payService(result.id);window.location.assign(checkout.payment_url);}
+      serviceRequestRef.current=null;
       return result;
     } catch (error) {
       if (
@@ -430,13 +491,28 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         onLogin();
         return null;
       }
-      window.alert(apiErrorMessage(error, "Không thể đặt dịch vụ. Vui lòng kiểm tra booking và thời gian sử dụng."));
-      return null;
+      throw error;
     }
   };
 
   const loadServiceBookings = useCallback((reservationId: number) => customerApi.serviceBookings(reservationId), []);
   const cancelServiceBooking = useCallback((bookingId: number) => customerApi.cancelServiceBooking(bookingId), []);
+
+  const openVnpayCheckout = useCallback(async (reservationId: number) => {
+    try {
+      const checkout = await customerApi.createVnpayCheckout(reservationId);
+      window.location.assign(checkout.payment_url);
+    } catch (error) {
+      window.alert(apiErrorMessage(error, "Không thể mở cổng thanh toán VNPay."));
+    }
+  }, []);
+
+  if (window.location.pathname === "/payment/vnpay-result" && new URLSearchParams(window.location.search).has("service_booking_id")) {
+    return <ServicePaymentResultPage onBack={()=>window.location.assign("/")} />;
+  }
+  if (window.location.pathname === "/payment/vnpay-result") {
+    return <VnpayPaymentResultPage isAuthenticated={isAuthenticated} onLogin={onLogin} />;
+  }
 
   // 1. Success confirmation screen
   if (bookingConfirmation) {
@@ -451,16 +527,15 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             Đã tạo yêu cầu đặt phòng
           </span>
           <h2 className="font-display text-3xl sm:text-4xl text-[#1C1917] mt-1 mb-3">
-            Hân hạnh Đón tiếp Quý khách
+            {bookingExpired ? "Yêu cầu đã hết hạn" : "Chờ thanh toán tiền cọc"}
           </h2>
           <p className="text-sm text-[#78716C] mb-8 font-light">
-            Đặt phòng đã được tạo và đang chờ thanh toán tiền cọc.
-            Sau khi cổng thanh toán xác nhận cọc, booking mới xuất hiện trong danh sách “Khách đến hôm nay” của lễ tân.
+            {bookingExpired ? "Phòng không còn được giữ. Vui lòng kiểm tra lại phòng trước khi đặt yêu cầu mới." : "Phòng được giữ tạm 10 phút để hoàn tất cọc qua VNPay. Chỉ xác nhận đặt phòng sau khi thanh toán thành công."}
           </p>
 
           <div className="bg-[#FAF8F5] rounded-2xl p-6 mb-8 text-left border border-[#E7E2D6] space-y-3">
             <div className="flex justify-between items-center pb-3 border-b border-[#E2DDD4]">
-              <span className="text-xs uppercase tracking-wider text-[#78716C]">Mã xác nhận:</span>
+              <span className="text-xs uppercase tracking-wider text-[#78716C]">Mã yêu cầu:</span>
               <span className="font-mono text-base font-bold text-[#8C6D37]">
                 {bookingConfirmation.code}
               </span>
@@ -468,9 +543,10 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             <div className="flex justify-between items-center text-sm">
               <span className="text-[#78716C]">Trạng thái booking:</span>
               <span className="font-semibold text-amber-700">
-                Chờ thanh toán cọc ({bookingConfirmation.paymentStatus})
+                {bookingExpired ? "Hết hạn nộp cọc" : "Chờ thanh toán cọc"}
               </span>
             </div>
+            <div className="flex justify-between items-center text-sm"><span className="text-[#78716C]">Hạn nộp cọc:</span><strong>{new Date(bookingConfirmation.expiresAt).toLocaleString("vi-VN")}</strong></div>
             <div className="flex justify-between items-center text-sm">
               <span className="text-[#78716C]">Mã thanh toán cọc:</span>
               <span className="font-mono font-semibold text-[#1C1917]">
@@ -486,7 +562,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             <div className="flex justify-between items-center text-sm">
               <span className="text-[#78716C]">Không gian:</span>
               <span className="font-semibold text-[#1C1917]">
-                Phòng {bookingConfirmation.room.number} – {bookingConfirmation.room.type}
+                {getRoomFullName(bookingConfirmation.room)}
               </span>
             </div>
             <div className="flex justify-between items-center text-sm">
@@ -512,10 +588,10 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           </div>
 
           <button
-            onClick={() => setBookingConfirmation(null)}
+            onClick={() => bookingExpired ? setBookingConfirmation(null) : void openVnpayCheckout(bookingConfirmation.reservationId)}
             className="w-full py-4 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs uppercase tracking-[0.2em] font-semibold transition-all duration-300 rounded-xl shadow-md cursor-pointer"
           >
-            Quay về Trang chủ
+            {bookingExpired ? "Chọn phòng lại" : "Thanh toán qua VNPay"}
           </button>
         </div>
       </div>
@@ -577,14 +653,17 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
                     setPortalView("fnb");
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
+                  onPayReservation={(reservationId) => void openVnpayCheckout(reservationId)}
                 />
               </div>
             )}
             <button
               onClick={() => handleOpenBooking(selectedRoom)}
-              className="px-5 py-2.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-[#1C1917] hover:bg-[#8C6D37] text-white transition cursor-pointer"
+              disabled={selectedRoom.availableForBooking === false}
+              title={selectedRoom.availableForBooking === false ? "Phòng không còn trống trong khoảng thời gian đã chọn" : undefined}
+              className="px-5 py-2.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-[#1C1917] hover:bg-[#8C6D37] disabled:bg-[#D6D3D1] disabled:text-[#78716C] disabled:cursor-not-allowed text-white transition cursor-pointer"
             >
-              Đặt phòng này
+              {selectedRoom.availableForBooking === false ? "Hết phòng" : "Đặt phòng này"}
             </button>
           </div>
         </nav>
@@ -607,6 +686,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           onConfirm={handleConfirmBooking}
           loading={bookingLoading}
           isAuthenticated={isAuthenticated}
+          customerIdentity={customerBookingIdentity ?? undefined}
           onLogin={onLogin}
         />
       </div>
@@ -652,7 +732,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             <img src="/hotel_logo.png" alt="MaM Hotel Logo" className="w-8 h-auto object-contain drop-shadow" />
             <div>
               <span className="font-display text-xl leading-none text-[#0D1117] tracking-tight block">MaM Hotel</span>
-              <span className="text-[10px] uppercase tracking-[0.25em] text-[#8C6D37] font-semibold block mt-0.5">Beach Hotel &amp; Spa</span>
+              <span className="text-[10px] uppercase tracking-[0.25em] text-[#8C6D37] font-semibold block mt-0.5">Luxury Hotel &amp; Spa</span>
             </div>
           </div>
         </div>
@@ -671,7 +751,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
                 : "text-[#57534E] hover:text-[#1C1917]"
             }`}
           >
-            Nghỉ dưỡng
+            Khách sạn
           </button>
           <button
             onClick={() => {
@@ -685,7 +765,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
                 : "text-[#57534E] hover:text-[#1C1917]"
             }`}
           >
-            Phòng &amp; Biệt thự
+            Phòng &amp; Suite
           </button>
           <button
             onClick={() => {
@@ -739,6 +819,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
                     setPortalView("fnb");
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
+                  onPayReservation={(reservationId) => void openVnpayCheckout(reservationId)}
                 />
               </div>
 
@@ -856,6 +937,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           onConfirm={handleConfirmBooking}
           loading={bookingLoading}
           isAuthenticated={isAuthenticated}
+          customerIdentity={customerBookingIdentity ?? undefined}
           onLogin={onLogin}
         />
       )}
@@ -891,14 +973,14 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             <img src="/hotel_logo.png" alt="MaM Hotel" className="w-10 h-auto object-contain drop-shadow" />
             <div>
               <p className="font-display text-xl text-white">MaM Hotel</p>
-              <p className="text-xs text-[#D4AF6E] tracking-widest uppercase">Hội An, Việt Nam</p>
+              <p className="text-xs text-[#D4AF6E] tracking-widest uppercase">Vũng Tàu, Việt Nam</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-white/60">
+            <span className="flex items-center gap-1.5"><MapPin size={13} className="text-[#D4AF6E]" /> Số 1 VVN, Vũng Tàu</span>
             <span className="flex items-center gap-1.5"><Phone size={13} className="text-[#D4AF6E]" /> Hotline: 1900 6789</span>
-          <span className="flex items-center gap-1.5"><Mail size={13} className="text-[#D4AF6E]" /> retreat@mamresort.vn</span>
-            <span className="flex items-center gap-1.5"><Globe size={13} className="text-[#D4AF6E]" /> www.mamresort.vn</span>
+            <a href="mailto:mam@hotel.com" className="flex items-center gap-1.5"><Mail size={13} className="text-[#D4AF6E]" /> mam@hotel.com</a>
           </div>
 
           <p className="text-xs text-white/40">

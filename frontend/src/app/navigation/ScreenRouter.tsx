@@ -10,7 +10,7 @@ import AccountingStation from "../../features/accounting/AccountingStation";
 import ManagerDashboard from "../../features/management/ManagerDashboard";
 import HRStation from "../../features/hr/HRStation";
 import AdminStation from "../../features/admin/AdminStation";
-import StaffPortal from "../../features/staff-portal/StaffPortal";
+import { CustomerChatWidget } from "../../features/customer/components/CustomerChatWidget";
 
 interface ScreenRouterProps {
   view: View;
@@ -38,16 +38,18 @@ export function ScreenRouter({
   if (view === "maintenance") return <MaintenanceStation onBack={onLogout} />;
   if (view === "accounting") return <AccountingStation onBack={onLogout} />;
   if (view === "manager") return <ManagerDashboard role={role === "director" ? "director" : "manager"} onBack={onLogout} />;
-  if (view === "hr" || (view === "staff" && role === "hr")) return <HRStation onBack={onLogout} />;
-  if (view === "admin" || (view === "staff" && role === "admin")) return <AdminStation onBack={onLogout} />;
-  if (view === "staff") return <StaffPortal role={role} onBack={onLogout} />;
+  if (view === "hr") return <HRStation onBack={onLogout} />;
+  if (view === "admin") return <AdminStation onBack={onLogout} />;
 
   return (
-    <CustomerPortal
-      onBack={onCustomerBack}
-      onLogin={onOpenLogin}
-      onLogout={onLogout}
-      isAuthenticated={customerAuthenticated}
-    />
+    <>
+      <CustomerPortal
+        onBack={onCustomerBack}
+        onLogin={onOpenLogin}
+        onLogout={onLogout}
+        isAuthenticated={customerAuthenticated}
+      />
+      <CustomerChatWidget />
+    </>
   );
 }

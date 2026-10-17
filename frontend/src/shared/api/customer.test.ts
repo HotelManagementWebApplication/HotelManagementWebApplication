@@ -7,10 +7,10 @@ afterEach(() => vi.restoreAllMocks());
 describe("customer ownership contract", () => {
   it("posts the exact registration and booking payload, including idempotency key", async () => {
     const request = vi.spyOn(apiClient, "request").mockResolvedValue({ id: 42 });
-    const body = { rental_type: "PACKAGE" as const, rooms: [{ room_id: "R201", expected_check_in: "2031-01-10T14:00:00", expected_check_out: "2031-01-11T12:00:00" }], idempotency_key: "booking-1" };
+    const body = { rental_type: "PACKAGE" as const, rooms: [{ room_id: "R201", expected_check_in: "2031-01-10T14:00:00", expected_check_out: "2031-01-11T12:00:00" }], idempotency_key: "booking-1", payment_method: "VNPAY" as const };
     await customerApi.register({ phone: "0900000201", password: "customer-password", full_name: "Online Guest", identity_number: "ID0900000201" });
     await customerApi.createReservation(body);
-    expect(request).toHaveBeenNthCalledWith(1, "/api/auth/customers/register", { method: "POST", body: { phone: "0900000201", password: "customer-password", full_name: "Online Guest", identity_number: "ID0900000201" } });
+    expect(request).toHaveBeenNthCalledWith(1, "/api/auth/customers/register", { method: "POST", body: { phone: "0900000201", password: "customer-password", full_name: "Online Guest", identity_number: "ID0900000201" }, skipAuth: true });
     expect(request).toHaveBeenNthCalledWith(2, "/api/customer/reservations", { method: "POST", body, idempotencyKey: "booking-1" });
   });
 
@@ -21,11 +21,14 @@ describe("customer ownership contract", () => {
     await customerApi.reservation(42);
     await customerApi.depositPayment(42);
     await customerApi.cancelReservation(42, "Đổi kế hoạch", "customer-cancel-42");
+    const change = { type: "EXTEND" as const, new_check_in: "2031-01-11T12:00:00", new_check_out: "2031-01-13T12:00:00" };
+    await customerApi.changeReservationStay(42, change, "customer-change-42");
     expect(request).toHaveBeenNthCalledWith(1, "/api/auth/customers/me");
     expect(request).toHaveBeenNthCalledWith(2, "/api/customer/reservations");
-    expect(request).toHaveBeenNthCalledWith(3, "/api/customer/reservations/42");
+    expect(request).toHaveBeenNthCalledWith(3, "/api/customer/reservations/42", undefined);
     expect(request).toHaveBeenNthCalledWith(4, "/api/customer/reservations/42/deposit-payment");
     expect(request).toHaveBeenNthCalledWith(5, "/api/customer/reservations/42/cancel", { method: "POST", body: { reason: "Đổi kế hoạch" }, idempotencyKey: "customer-cancel-42" });
+    expect(request).toHaveBeenNthCalledWith(6, "/api/customer/reservations/42/stay-change", { method: "POST", body: change, idempotencyKey: "customer-change-42" });
   });
 
   it("routes hotel service booking, listing and cancellation through the customer's booking", async () => {
@@ -42,6 +45,15 @@ describe("customer ownership contract", () => {
   it("surfaces ownership errors from the backend instead of manufacturing a result", async () => {
     vi.spyOn(apiClient, "request").mockRejectedValue(new ApiError(403, { code: "FORBIDDEN" }));
     await expect(customerApi.reservation(999)).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+  });
+
+  it("forwards cancellation signals for payment-result reads",async()=>{
+    const request=vi.spyOn(apiClient,"request").mockResolvedValue({});
+    const controller=new AbortController();
+    await customerApi.reservation(42,controller.signal);
+    await customerApi.latestVnpayPayment(42,controller.signal);
+    expect(request).toHaveBeenNthCalledWith(1,"/api/customer/reservations/42",{signal:controller.signal});
+    expect(request).toHaveBeenNthCalledWith(2,"/api/customer/reservations/42/vnpay-payments/latest",{signal:controller.signal});
   });
 
   it("rejects invalid reservation IDs before making a request", async () => {

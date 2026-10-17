@@ -22,11 +22,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:roomapi;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 @AutoConfigureMockMvc
 /** Kiểm tra room HTTP contract, status transition, availability validation và role boundary. */
@@ -115,7 +115,7 @@ class RoomApiContractTest {
     }
 
     @Test
-    @WithMockUser(username = "staff", roles = "STAFF")
+    @WithMockUser(username = "housekeeping", roles = "HOUSEKEEPING")
     /** Given status không thuộc enum, When search, Then trả INVALID_ROOM_STATUS. */
     void invalidRoomStatusIsRejectedByTheRoomContract() throws Exception {
         mockMvc.perform(get("/api/rooms").param("status", "NOT_A_STATUS"))
@@ -124,7 +124,7 @@ class RoomApiContractTest {
     }
 
     @Test
-    @WithMockUser(username = "staff", roles = "STAFF")
+    @WithMockUser(username = "housekeeping", roles = "HOUSEKEEPING")
     /** Given legacy room code, When search, Then hard-cut rejects it without a compatibility read. */
     void legacyRoomStatusCodeIsRejectedByTheRoomContract() throws Exception {
         mockMvc.perform(get("/api/rooms").param("status", "SAN_SANG"))

@@ -356,10 +356,6 @@ then verifies the test passes.
 
 This separation ensures the test is written without knowledge of the fix, making it more robust.
 
-## See Also
-
-For JavaScript/TypeScript testing patterns illustrating these principles — Jest, React Testing Library, Supertest, Playwright — see `../../references/testing-patterns.md`. The principles transfer to any ecosystem; the syntax and tools there are JS/TS-specific.
-
 ## Common Rationalizations
 
 | Rationalization | Reality |

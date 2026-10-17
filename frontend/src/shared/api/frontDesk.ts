@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { CashHandover, CashHandoverCreate, CheckInRequest, CheckOutRequest, Dashboard, EquipmentIncident, EquipmentIncidentCreate, Guest, GuestCreate, HotelServiceBooking, Invoice, MembershipHistoryEntry, Page, Payment, PaymentCreate, Receipt, ReceiptCreate, Reservation, ReservationCreate, ReservationUpdate, RoomAvailability, RoomEquipment, RoomSummary, RoomTransfer, RoomTransferCreate, ServiceCatalogItem, TimelineEvent } from "../types/frontDesk";
+import type { CashHandover, CashHandoverCreate, CheckInRequest, CheckOutRequest, Dashboard, EquipmentIncident, EquipmentIncidentCreate, Guest, GuestCreate, HotelServiceBooking, Invoice, MembershipHistoryEntry, Page, Payment, PaymentCreate, Receipt, ReceiptCreate, Reservation, ReservationCreate, RoomAvailability, RoomEquipment, RoomSummary, RoomTransfer, RoomTransferCreate, ServiceCatalogItem, TimelineEvent } from "../types/frontDesk";
 
 const key = (): string => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const requireIdempotencyKey = (idempotencyKey: string) => {
@@ -17,6 +17,7 @@ const query = (params: Record<string, unknown>) => {
 export const membershipHistoryPath = (guestId: number) => `/api/guests/${guestId}/membership-history`;
 
 export const frontDeskApi = {
+  depositWarnings: () => apiClient.request<{id:number;topic:string;payload:string}[]>("/api/governance/notifications/outbox?role=FRONT_DESK"),
   dashboard: (params: { date?: string; q?: string; status?: string; page?: number; size?: number } = {}) => apiClient.request<Dashboard>(`/api/front-desk/dashboard${query(params)}`),
   guests: (q?: string) => apiClient.request<Guest[]>(`/api/guests${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   guest: (id: number) => apiClient.request<Guest>(`/api/guests/${id}`),
@@ -24,14 +25,12 @@ export const frontDeskApi = {
   createGuest: (body: GuestCreate) => apiClient.request<Guest>("/api/guests", { method: "POST", body }),
   reservations: (params: { status?: string; guest_id?: number; page?: number; size?: number } = {}) => apiClient.request<Page<Reservation>>(`/api/reservations${query(params)}`),
   reservation: (id: number) => apiClient.request<Reservation>(`/api/reservations/${id}`),
-  createReservation: (body: ReservationCreate) => apiClient.request<Reservation>("/api/reservations", { method: "POST", body, idempotencyKey: key() }),
-  confirm: (id: number, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/confirm`, undefined, "POST", idempotencyKey),
-  updateReservation: (id: number, body: ReservationUpdate, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}`, body, "PATCH", idempotencyKey),
+  createReservation: (body: ReservationCreate) => apiClient.request<Reservation>("/api/reservations", { method: "POST", body, idempotencyKey: body.idempotency_key ?? key() }),
+  receiveDeposit: (id: number, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/receive-deposit`, undefined, "POST", idempotencyKey),
   cancel: (id: number, reason: string, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/cancel`, { reason }, "POST", idempotencyKey),
   noShow: (id: number, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/no-show`, undefined, "POST", idempotencyKey),
   checkIn: (id: number, body: CheckInRequest = {}, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/check-in`, body, "POST", idempotencyKey),
   checkOut: (id: number, body: CheckOutRequest, idempotencyKey?: string) => mutate<Invoice>(`/api/reservations/${id}/check-out`, body, "POST", idempotencyKey),
-  extend: (id: number, new_expected_check_out: string, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/extend`, { new_expected_check_out }, "POST", idempotencyKey),
   transfer: (id: number, body: RoomTransferCreate, idempotencyKey?: string) => mutate<RoomTransfer>(`/api/operations/reservations/${id}/room-transfers`, body, "POST", idempotencyKey),
   roomAvailability: (from: string, to: string) => apiClient.request<RoomAvailability[]>(`/api/rooms/availability${query({ from, to })}`),
   addService: (id: number, body: { service_id: string; quantity: number; used_at?: string; room_id?: string; meal_period?: "LUNCH" | "DINNER" }, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/services`, body, "POST", idempotencyKey),

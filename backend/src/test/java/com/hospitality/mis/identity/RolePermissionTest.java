@@ -5,6 +5,7 @@ import com.hospitality.mis.entity.identity.Permission;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Bảo vệ ma trận permission và trần quản trị employee của từng role. */
 class RolePermissionTest {
@@ -18,7 +19,6 @@ class RolePermissionTest {
                 .contains(Permission.RESERVATION_WRITE, Permission.PAYMENT_WRITE, Permission.CASH_HANDOVER_WRITE)
                 .doesNotContain(Permission.EMPLOYEE_PROVISION, Permission.APPROVAL_APPROVE,
                         Permission.FINANCE_READ, Permission.FINANCE_WRITE);
-        assertThat(EmployeeRole.STAFF.permissions()).contains(Permission.RESERVATION_READ);
         assertThat(EmployeeRole.KITCHEN.permissions())
                 .contains(Permission.SERVICE_READ, Permission.SERVICE_WRITE,
                         Permission.INVENTORY_READ, Permission.INVENTORY_WRITE,
@@ -42,6 +42,12 @@ class RolePermissionTest {
         assertThat(EmployeeRole.MANAGER.canManage(EmployeeRole.ACCOUNTING)).isTrue();
         assertThat(EmployeeRole.MANAGER.canManage(EmployeeRole.ADMIN)).isFalse();
         assertThat(EmployeeRole.MANAGER.canManage(EmployeeRole.DIRECTOR)).isFalse();
-        assertThat(EmployeeRole.HR.canManage(EmployeeRole.STAFF)).isFalse();
+        assertThat(EmployeeRole.HR.canManage(EmployeeRole.FRONT_DESK)).isFalse();
+    }
+
+    @Test
+    void removedGenericStaffRoleCannotBeResolved() {
+        assertThatThrownBy(() -> EmployeeRole.valueOf("STAFF"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

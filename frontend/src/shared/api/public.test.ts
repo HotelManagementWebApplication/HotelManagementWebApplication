@@ -11,10 +11,10 @@ describe("public customer read contract", () => {
     await publicApi.room("R/101");
     await publicApi.availability("2031-01-10T14:00:00", "2031-01-11T12:00:00", "STD");
     await publicApi.services();
-    expect(request).toHaveBeenNthCalledWith(1, "/api/public/rooms");
-    expect(request).toHaveBeenNthCalledWith(2, "/api/public/rooms/R%2F101");
-    expect(request).toHaveBeenNthCalledWith(3, "/api/public/rooms/availability?from=2031-01-10T14%3A00%3A00&to=2031-01-11T12%3A00%3A00&type=STD");
-    expect(request).toHaveBeenNthCalledWith(4, "/api/public/services");
+    expect(request).toHaveBeenNthCalledWith(1, "/api/public/rooms", { skipAuth: true });
+    expect(request).toHaveBeenNthCalledWith(2, "/api/public/rooms/R%2F101", { skipAuth: true });
+    expect(request).toHaveBeenNthCalledWith(3, "/api/public/rooms/availability?from=2031-01-10T14%3A00%3A00&to=2031-01-11T12%3A00%3A00&type=STD", { skipAuth: true });
+    expect(request).toHaveBeenNthCalledWith(4, "/api/public/services", { skipAuth: true });
   });
 
   it("rejects a blank room ID before making a request", async () => {

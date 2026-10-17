@@ -8,12 +8,14 @@ export default defineConfig({
     environment: "happy-dom",
     globals: true,
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    setupFiles: ["./src/test/setup.ts"],
   },
   server: {
     port: 5173,
     proxy: {
       "/api": "http://localhost:8080",
       "/media": "http://localhost:8080",
+      "/agent-api": "http://localhost:8090",
     },
   }
 });

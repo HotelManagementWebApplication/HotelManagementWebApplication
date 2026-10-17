@@ -23,8 +23,6 @@ class VietnameseCodeConvertersTest {
         var vatCustomer = new VietnameseCodeConverters.VatCustomerTypeConverter();
         var vatStatus = new VietnameseCodeConverters.VatInvoiceStatusConverter();
         var vatXmlStatus = new VietnameseCodeConverters.VatXmlStatusConverter();
-        var stockCategory = new VietnameseCodeConverters.StockCategoryConverter();
-        var stockMovement = new VietnameseCodeConverters.StockMovementTypeConverter();
         var assetStatus = new VietnameseCodeConverters.TechnicalAssetStatusConverter();
         var assetLocation = new VietnameseCodeConverters.TechnicalAssetLocationTypeConverter();
         var priority = new VietnameseCodeConverters.PriorityConverter();
@@ -44,8 +42,6 @@ class VietnameseCodeConvertersTest {
         assertRoundTrip(vatCustomer, "COMPANY", "Doanh nghiệp");
         assertRoundTrip(vatStatus, "ISSUED", "Đã phát hành");
         assertRoundTrip(vatXmlStatus, "EXPORTED", "Đã xuất");
-        assertRoundTrip(stockCategory, "LINEN", "Đồ vải");
-        assertRoundTrip(stockMovement, "RECEIVE", "Nhập kho");
         assertRoundTrip(assetStatus, "MAINTENANCE_NEEDED", "Cần bảo trì");
         assertRoundTrip(assetLocation, "BUILDING", "Tòa nhà");
         assertRoundTrip(priority, "HIGH", "Cao");
@@ -83,8 +79,6 @@ class VietnameseCodeConvertersTest {
                 new VietnameseCodeConverters.LeaveTypeConverter(),
                 new VietnameseCodeConverters.ApprovalStatusConverter(),
                 new VietnameseCodeConverters.LeaveStatusConverter(),
-                new VietnameseCodeConverters.StockCategoryConverter(),
-                new VietnameseCodeConverters.StockMovementTypeConverter(),
                 new VietnameseCodeConverters.TechnicalAssetStatusConverter(),
                 new VietnameseCodeConverters.TechnicalAssetLocationTypeConverter(),
                 new VietnameseCodeConverters.PriorityConverter(),

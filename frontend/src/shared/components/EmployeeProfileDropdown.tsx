@@ -24,6 +24,7 @@ export interface EmployeeProfileDropdownProps {
   onClose: () => void;
   onLogout: () => void;
   currentRoleLabel?: string;
+  roleLabelOverride?: string;
   departmentName?: string;
   align?: "top-right" | "bottom-left" | "bottom-right" | "right";
 }
@@ -84,12 +85,6 @@ const ROLE_INFO_MAP: Record<string, { label: string; department: string; gradien
     department: "Bộ phận Nhân sự",
     gradient: "from-[#BE185D] to-[#EC4899]",
     badge: "bg-pink-50 text-pink-700 border-pink-200",
-  },
-  STAFF: {
-    label: "Nhân viên Vận hành",
-    department: "Bộ phận Vận hành",
-    gradient: "from-[#334155] to-[#475569]",
-    badge: "bg-slate-50 text-slate-700 border-slate-200",
   },
 };
 
@@ -185,6 +180,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
   onClose,
   onLogout,
   currentRoleLabel,
+  roleLabelOverride,
   departmentName,
   align = "top-right",
 }) => {
@@ -240,7 +236,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
 
   if (!isOpen) return null;
 
-  const roleKey = profile?.role || "STAFF";
+  const roleKey = profile?.role || "";
   const roleMeta = ROLE_INFO_MAP[roleKey] ?? {
     label: currentRoleLabel || "Nhân viên",
     department: departmentName || "MaM Hotel",
@@ -249,7 +245,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
   };
 
   const displayName = profile?.full_name || currentRoleLabel || "Nhân viên";
-  const displayRole = roleMeta.label;
+  const displayRole = roleLabelOverride || roleMeta.label;
   const displayDepartment = departmentName || roleMeta.department;
   const displayInitials = displayName
     .split(" ")
@@ -307,7 +303,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
       ref={dropdownRef}
       role="dialog"
       aria-label="Cửa sổ thông tin nhân viên"
-      className={`absolute ${alignmentClass} w-[340px] sm:w-[380px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden flex flex-col text-[#0F172A] animate-in fade-in zoom-in-95 duration-150`}
+      className={`absolute ${alignmentClass} w-[340px] max-w-[calc(100vw-24px)] sm:w-[380px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden flex flex-col text-[#0F172A] animate-in fade-in zoom-in-95 duration-150`}
       style={{
         boxShadow: "0 20px 45px -10px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08)",
       }}
@@ -327,7 +323,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
                   {displayName}
                 </p>
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-white/90 border border-white/20 shrink-0">
-                  {profile?.employee_id || "STAFF"}
+                  {profile?.employee_id || "—"}
                 </span>
               </div>
               <p className="text-xs text-white/70 flex items-center gap-1.5 mt-0.5 truncate">
@@ -410,7 +406,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
                   <BadgeCheck size={12} className="text-slate-400" /> Mã nhân viên
                 </span>
                 <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
-                  {profile?.employee_id || "STAFF"}
+                  {profile?.employee_id || "—"}
                 </span>
               </div>
 

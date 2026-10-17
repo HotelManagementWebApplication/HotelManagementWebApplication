@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.hospitality.mis.entity.reservation.ReservationStatus;
 import com.hospitality.mis.entity.reservation.CancellationOutcome;
+import com.hospitality.mis.entity.reservation.CustomerPaymentMethod;
+import com.hospitality.mis.entity.reservation.DepositPaymentStatus;
 import jakarta.validation.Valid;
 
 import jakarta.validation.constraints.NotBlank;
@@ -85,11 +87,17 @@ public final class ReservationDtos {
                                 @NotEmpty @Valid List<RoomStay> rooms,
                                 /** Khóa tùy chọn chống tạo trùng khi client retry. */
                                 String idempotencyKey,
-                                /** Nguồn đặt phòng: DIRECT, BOOKING_COM, AGODA, EXPEDIA, AIRBNB... */
-                                String bookingSource) {
+                                /** Nguồn đặt phòng chuẩn; không nhận mã tự đặt của frontend. */
+                                @jakarta.validation.constraints.Pattern(regexp = "DIRECT|BOOKING_COM|AGODA|EXPEDIA|AIRBNB", message = "Nguồn đặt phòng không hợp lệ") String bookingSource,
+                                /** Lễ tân đã thực thu cọc tại quầy ngay khi tạo đặt phòng. */
+                                boolean depositCollected) {
         public CreateRequest(Long guestId, String employeeId, BigDecimal deposit, RentalType rentalType,
                              List<RoomStay> rooms, String idempotencyKey) {
-            this(guestId, employeeId, deposit, rentalType, rooms, idempotencyKey, "DIRECT");
+            this(guestId, employeeId, deposit, rentalType, rooms, idempotencyKey, "DIRECT", false);
+        }
+        public CreateRequest(Long guestId, String employeeId, BigDecimal deposit, RentalType rentalType,
+                             List<RoomStay> rooms, String idempotencyKey, String bookingSource) {
+            this(guestId, employeeId, deposit, rentalType, rooms, idempotencyKey, bookingSource, false);
         }
     }
 
@@ -162,25 +170,11 @@ public final class ReservationDtos {
                            String cancellationReason, CancellationOutcome cancellationOutcome,
                            String bookingSource, BigDecimal otaGrossRevenue, BigDecimal otaCommission,
                            BigDecimal otaNetRevenue, String otaReconciliationStatus,
-                           List<ServiceUsageLine> serviceUsages) {
+                           List<ServiceUsageLine> serviceUsages,
+                           CustomerPaymentMethod customerPaymentMethod,
+                           DepositPaymentStatus depositPaymentStatus, LocalDateTime depositPaymentExpiresAt) {
         public Response {
             serviceUsages = serviceUsages == null ? List.of() : List.copyOf(serviceUsages);
-        }
-        /** Constructor dùng khi response chưa có thông tin hủy. */
-        public Response(Long id, Long guestId, String employeeId, ReservationStatus status, RentalType rentalType,
-                        BigDecimal deposit, LocalDateTime bookedAt, LocalDateTime actualCheckIn,
-                        LocalDateTime actualCheckOut, List<RoomLine> rooms) {
-            this(id, guestId, employeeId, status, rentalType, deposit, bookedAt, actualCheckIn,
-                    actualCheckOut, rooms, null, null, "DIRECT", BigDecimal.ZERO, BigDecimal.ZERO,
-                    BigDecimal.ZERO, "NOT_APPLICABLE", List.of());
-        }
-        public Response(Long id, Long guestId, String employeeId, ReservationStatus status, RentalType rentalType,
-                        BigDecimal deposit, LocalDateTime bookedAt, LocalDateTime actualCheckIn,
-                        LocalDateTime actualCheckOut, List<RoomLine> rooms, String cancellationReason,
-                        CancellationOutcome cancellationOutcome) {
-            this(id, guestId, employeeId, status, rentalType, deposit, bookedAt, actualCheckIn, actualCheckOut,
-                    rooms, cancellationReason, cancellationOutcome, "DIRECT", BigDecimal.ZERO, BigDecimal.ZERO,
-                    BigDecimal.ZERO, "NOT_APPLICABLE", List.of());
         }
     }
 

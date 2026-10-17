@@ -29,6 +29,15 @@ describe("LoginPage Authentication Error Handling", () => {
     expect(onLogin).not.toHaveBeenCalled();
   });
 
+  it("does not advertise removed staff or administrator accounts in the demo selector", () => {
+    render(<LoginPage onLogin={onLogin} onBack={onBack} />);
+
+    fireEvent.click(screen.getByTitle(/xem tất cả/i));
+
+    expect(screen.queryByText("Nhân viên vận hành")).toBeNull();
+    expect(screen.queryByText("Quản trị")).toBeNull();
+  });
+
   it("shows 'Tài khoản không hợp lệ' when username format is invalid", async () => {
     render(<LoginPage onLogin={onLogin} onBack={onBack} />);
 

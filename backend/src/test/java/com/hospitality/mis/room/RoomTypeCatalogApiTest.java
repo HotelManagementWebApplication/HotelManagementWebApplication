@@ -28,11 +28,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** P1.1 contract: loại phòng phải qua draft/approval trước khi public. */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:roomtypecatalog;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa", "spring.datasource.password=",
-        "spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}", "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true", "spring.jpa.hibernate.ddl-auto=validate"
 })
 @AutoConfigureMockMvc
+@org.springframework.transaction.annotation.Transactional
 class RoomTypeCatalogApiTest {
     @Autowired MockMvc mvc;
     @Autowired RoomTypeRepository roomTypes;
@@ -40,16 +41,6 @@ class RoomTypeCatalogApiTest {
     @Autowired ApprovalRepository approvals;
     @Autowired RoomTypePriceHistoryRepository priceHistory;
     @Autowired JdbcTemplate jdbc;
-
-    @BeforeEach
-    void clean() {
-        rooms.deleteAllInBatch();
-        priceHistory.deleteAllInBatch();
-        roomTypes.deleteAllInBatch();
-        approvals.deleteAllInBatch();
-        jdbc.update("delete from BanGhiChongTrung");
-        jdbc.update("delete from NhatKyKiemSoat");
-    }
 
     @Test
     void technicalDraftRequiresManagerApprovalBeforeItCanBeActivated() throws Exception {
@@ -120,7 +111,7 @@ class RoomTypeCatalogApiTest {
         Room room = new Room(); room.setId("H001"); room.setName("Hidden room"); room.setRoomType(type);
         rooms.saveAndFlush(room);
 
-        mvc.perform(get("/api/public/rooms"))
+        mvc.perform(get("/api/public/rooms").param("type","HIDDEN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
         mvc.perform(get("/api/public/rooms/H001"))

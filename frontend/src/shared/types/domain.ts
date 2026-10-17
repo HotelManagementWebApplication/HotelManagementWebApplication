@@ -8,7 +8,6 @@ export type RoleId =
   | "director"
   | "admin"
   | "hr"
-  | "staff"
   | "fnb";
 
 export interface Role {
@@ -36,6 +35,8 @@ export interface Room {
   pricePerNight: number;
   pricePerHour: number;
   status: RoomStatus;
+  /** Có kết quả kiểm tra theo khoảng ngày đang tìm hay chưa. */
+  availableForBooking?: boolean;
   cleanStatus: CleanStatus;
   guestName?: string;
   checkIn?: string;

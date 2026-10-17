@@ -70,7 +70,7 @@ giữ `code` và `details`, không gom 400/401/403/409/422/429 thành một thô
 
 Controller kiểm tra capability `Permission` từ role trong JWT. Các role canonical
 là `ADMIN`, `DIRECTOR`, `MANAGER`, `FRONT_DESK`, `HOUSEKEEPING`, `TECHNICAL`,
-`KITCHEN`, `ACCOUNTING`, `HR`, `STAFF`.
+`KITCHEN`, `ACCOUNTING`, `HR`.
 
 - `ADMIN`, `DIRECTOR`, `MANAGER` được khởi tạo với toàn bộ `Permission`; riêng
   `ADMIN` và `DIRECTOR` bị loại `RESERVATION_CREATE`, `RESERVATION_WRITE`,
@@ -87,7 +87,7 @@ là `ADMIN`, `DIRECTOR`, `MANAGER`, `FRONT_DESK`, `HOUSEKEEPING`, `TECHNICAL`,
 - `TECHNICAL`: room/catalog/admin, equipment, reservation read, maintenance,
   technical work order read/write/release, incident handoff, notification read.
 - `KITCHEN`: service read/write, inventory read/write, service-price request.
-- `HR`: employee read, shift read/write. `STAFF`: room read, reservation read.
+- `HR`: employee read, shift read/write.
 
 Các capability kiểm tra thêm vai trò/phạm vi: approver phải khác requester;
 refund approval chỉ `DIRECTOR`; activation room/service cần role được phép;
@@ -153,10 +153,11 @@ permissions từ client.
 | `GET /api/public/rooms/availability` | Query bắt buộc `from`, `to`; tùy chọn `type`, `page`, `size` | Public; availability cùng metadata catalog và ảnh riêng theo phòng, `Cache-Control: no-store` |
 | `GET /api/public/services` | Query `page` default 0, `size` default 20 | Public; DTO gồm `category`, `description`, `image_url`; cache 30s |
 | `POST /api/public/payment-callbacks/deposit` | Body `provider_event_id`, `payment_code`, `amount`, `reference`, `status`; header `X-Payment-Signature` | Public provider route; HMAC hợp lệ mới được nhận |
-| `POST /api/customer/reservations` | Body `rental_type`, `rooms[]`, `idempotency_key`; room item `room_id`, `expected_check_in`, `expected_check_out`, `guest_count` | `CUSTOMER`; 201, tối đa 3 phòng, guest lấy từ JWT |
+| `POST /api/customer/reservations` | Body `rental_type`, `payment_method` = `VNPAY`, `rooms[]`, `idempotency_key`; room item `room_id`, `expected_check_in`, `expected_check_out`, `guest_count` | `CUSTOMER`; 201 `PENDING_PAYMENT`; hạn cọc theo `customer-policy.md` §5; room count follows `customer-policy.md` §3, guest lấy từ JWT |
 | `GET /api/customer/reservations` | Không body | `CUSTOMER`; chỉ booking của customer |
 | `GET /api/customer/reservations/{id}` | Path `id` | `CUSTOMER`; ownership enforced |
 | `GET /api/customer/reservations/{id}/deposit-payment` | Path `id` | `CUSTOMER`; payment instruction của chính booking |
+| `POST /api/customer/reservations/{id}/stay-change` | Body `type` (`EXTEND` hoặc `RESCHEDULE`), `new_check_in`, `new_check_out`; header bắt buộc `Idempotency-Key` | `CUSTOMER`; trước check-in hơn 48 giờ, phòng trống/sẵn sàng; `EXTEND` nối đúng checkout cũ và chờ cọc bổ sung, `RESCHEDULE` giữ nguyên số đêm |
 | `POST /api/customer/service-bookings` | Body `reservation_id`, `room_id`, `service_id`, `scheduled_at`, `quantity`, tùy chọn `meal_period`, `note`; header `Idempotency-Key` | `CUSTOMER`; 201, booking phòng đã xác nhận cọc; không cho khách ngoài hay đặt trước hồ bơi |
 | `GET /api/customer/service-bookings` | Query `reservation_id` | `CUSTOMER`; chỉ dịch vụ của booking thuộc tài khoản |
 | `POST /api/customer/service-bookings/{id}/cancel` | Path `id` | `CUSTOMER`; chỉ hủy dịch vụ chưa dùng của chính mình |
@@ -204,16 +205,14 @@ nhận.
 | Method và path | Query/body/header | Capability |
 |---|---|---|
 | `GET /api/front-desk/dashboard` | Query `date`, `q`, `status`, `page` default 0, `size` default 20 | `FRONT_DESK_DASHBOARD` |
-| `POST /api/reservations` | Body `guest_id`, `employee_id`, `deposit`, `rental_type`, `rooms[]`, optional `idempotency_key`; room `room_id`, `expected_check_in`, `expected_check_out`, `guest_count`; header optional | `RESERVATION_CREATE`; 201 |
+| `POST /api/reservations` | Body `guest_id`, `employee_id`, `rental_type`, `rooms[]`, optional `deposit` (số tiền dự kiến, không phải xác nhận đã nhận), `idempotency_key`; room `room_id`, `expected_check_in`, `expected_check_out`, `guest_count`; header optional | `RESERVATION_CREATE`; 201 `PENDING_PAYMENT`, tiền cọc do server tính; chưa ghi giao dịch tiền |
 | `GET /api/reservations` | Query `status`, `guest_id`, `page` default 0, `size` default 20 | `RESERVATION_READ`; page response |
 | `GET /api/reservations/{id}` | Path `id` | `RESERVATION_READ`; scope actor trừ global-read role |
-| `POST /api/reservations/{id}/confirm` | Không body; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE`; `DRAFT → CONFIRMED` |
-| `PATCH /api/reservations/{id}` | Body `rooms[]`, `deposit`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
+| `POST /api/reservations/{id}/receive-deposit` | Không body; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE`; `PENDING_PAYMENT → DEPOSIT_PAID`; chỉ nộp cọc tiền mặt tại quầy còn hạn; tạo giao dịch, biên lai và audit một lần trong cùng transaction |
 | `POST /api/reservations/{id}/check-in` | Body tùy chọn `at`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
 | `POST /api/reservations/{id}/check-out` | Body `at`, `payment_method`; header bắt buộc `Idempotency-Key` | `RESERVATION_CHECKOUT`; trả invoice |
 | `POST /api/reservations/{id}/cancel` | Body `reason`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
 | `POST /api/reservations/{id}/no-show` | Không body; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
-| `POST /api/reservations/{id}/extend` | Body `new_expected_check_out`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
 | `POST /api/reservations/{id}/services` | Body `service_id`, `quantity`, `used_at`, `room_id`, `meal_period` nếu là MaM Restaurant; header bắt buộc `Idempotency-Key` | `RESERVATION_SERVICE_WRITE`; ghi dịch vụ đã dùng, áp dụng hạn mức miễn phí |
 | `GET /api/reservations/{id}/service-bookings` | Path `id` | `RESERVATION_SERVICE_WRITE`; danh sách dịch vụ khách đặt trước |
 | `POST /api/reservations/{id}/service-bookings/{bookingId}/use` | Path `id`, `bookingId` | `RESERVATION_SERVICE_WRITE`; chỉ xác nhận `USED` khi booking đã `CHECKED_IN` |
@@ -317,11 +316,10 @@ generic PATCH. Create/update/accept/release đều yêu cầu `Idempotency-Key` 
 | Method và path | Query/body/header | Capability |
 |---|---|---|
 | `GET /api/services` | Không body | `SERVICE_READ` |
-| `POST /api/services` | Body `id`, `name`, `price`, `unit`, `opening_stock`, `safety_threshold`, tùy chọn `category`, `description`, `image_url` | `SERVICE_WRITE`; 201 |
-| `POST /api/services/{id}/stock` | Body `quantity`; header bắt buộc `Idempotency-Key` | `INVENTORY_WRITE`; RECEIVE movement |
+| `POST /api/services/{id}/stock` | Body `quantity`; header bắt buộc `Idempotency-Key` | KITCHEN/MANAGER/ADMIN/DIRECTOR; RECEIVE movement |
 | `GET /api/services/low-stock` | Không body | `INVENTORY_READ` |
 | `GET /api/services/{serviceId}/inventory-movements` | Path `serviceId` | `INVENTORY_READ` |
-| `POST /api/services/{serviceId}/inventory-movements` | Body `service_id`, `type`, `quantity`, `reason`; header bắt buộc `Idempotency-Key` | `INVENTORY_WRITE`; `service_id` phải khớp path |
+| `POST /api/services/{serviceId}/inventory-movements` | Body `service_id`, `type`, `quantity`, `reason`; header bắt buộc `Idempotency-Key` | KITCHEN/MANAGER/ADMIN/DIRECTOR; `service_id` phải khớp path; RETURN qua hàng đợi duyệt |
 | `GET /api/services/{serviceId}/inventory-movements/inventory-report` | Query `from`, `to` | `INVENTORY_READ` |
 | `POST /api/services/{id}/price/submit` | Body `price`, `reason`; header bắt buộc `Idempotency-Key` | `SERVICE_PRICE_REQUEST`; tạo approval |
 | `POST /api/services/{id}/price/activate` | Body `price`, `reason`; header bắt buộc `Idempotency-Key` | `SERVICE_PRICE_ACTIVATE`; consume approval exact payload và durable replay |
@@ -334,7 +332,7 @@ generic PATCH. Create/update/accept/release đều yêu cầu `Idempotency-Key` 
 | `GET /api/governance/audit` | Query `action`, `entity_type`, `entity_id`, `correlation_key`, `from`, `to`, `page`, `size` | `AUDIT_READ` |
 | `GET /api/governance/notifications/outbox` | Query `role` | `NOTIFICATION_READ`; role bị giới hạn theo JWT |
 | `POST /api/governance/notifications/outbox/{id}/delivered` | Không body | `NOTIFICATION_WRITE` |
-| `POST /api/finance/cash-handovers` | Body `shift_code`, `from_actor`, `to_actor`, `actual_amount`, `note`; header bắt buộc `Idempotency-Key` | `CASH_HANDOVER_WRITE`; `from_actor` phải trùng actor JWT; backend tính `expected_amount` và `variance` (FRONT_DESK chỉ có capability bàn giao, không có quyền đọc/sửa sổ tài chính) |
+| `POST /api/finance/cash-handovers` | Body `shift_code`, `from_actor`, `to_actor`, `actual_amount`, `note`; header bắt buộc `Idempotency-Key` | FRONT_DESK; `from_actor` phải trùng actor JWT; backend tính `expected_amount` và `variance` (FRONT_DESK chỉ có capability bàn giao, không có quyền đọc/sửa sổ tài chính) |
 | `POST /api/finance/expenses` | Body `category`, `description`, `amount` (>0); header bắt buộc `Idempotency-Key` | `FINANCE_WRITE`; `paid_by` lấy từ actor JWT |
 | `POST /api/finance/partner-debts` | Body `partner_name`, `reference_code`, `amount` (>0); header bắt buộc `Idempotency-Key` | `FINANCE_WRITE`; `reference_code` phải duy nhất |
 | `GET /api/finance/cash-handovers` | Query hiện bind `shiftCode`, `actor`, `from`, `to`, `page`, `size` | `FINANCE_READ` |
@@ -344,13 +342,24 @@ generic PATCH. Create/update/accept/release đều yêu cầu `Idempotency-Key` 
 | `GET /api/finance/partner-debts/{id}/settlements` | Path `id` | `FINANCE_READ` |
 | `GET /api/finance/ledger` | Query `entry_type`, `from`, `to`, `page` default 0, `size` default 20 | `FINANCE_READ` |
 | `GET /api/finance/reconciliation` | Query `from`, `to` | `FINANCE_READ` |
-| `GET /api/finance/payments` | Query `invoice_id`, `method`, `type`, `status`, `from`, `to`, `page`, `size` | `FINANCE_READ` |
+| `GET /api/finance/payments` | Query `invoice_id`, `method`, `type`, `status`, `from`, `to`, `search`, `page`, `size` | `FINANCE_READ` |
 | `GET /api/finance/receipts` | Query `invoice_id`, `method`, `issued_by`, `from`, `to`, `page`, `size` | `FINANCE_READ` |
 | `GET /api/hr/shifts` | Query hiện bind `date`, `to`, `employeeId` | `SHIFT_READ` |
 | `GET /api/hr/shifts/coverage` | Query `date`, `shiftCode`, `minimum_staff` | `SHIFT_READ` |
 | `POST /api/hr/shifts` | Body `employee_id`, `shift_date`, `shift_code`, `starts_at`, `ends_at` | `SHIFT_WRITE`; actor được ghi nhận bởi service, không có idempotency header |
 | `PATCH /api/hr/shifts/{id}/status` | Body `status` | `SHIFT_WRITE` |
 | `PUT /api/hr/shifts/{id}` | Body `shift_date`, `shift_code`, `starts_at`, `ends_at` | `SHIFT_WRITE` |
+
+`GET /api/finance/payments` phân trang tại SQL Server: `page` bắt đầu từ 0,
+`size` mặc định 20 và tối đa 100; trả `items`, `page`, `size`,
+`total_elements`, `total_pages`, `method_counts`. Mỗi item có thêm
+`reservation_id` và `service_total` để bảng kế toán không phải tải toàn bộ
+hóa đơn. `search` là chuỗi tìm kiếm literal tối đa 200 ký tự, áp dụng trước
+phân trang trên mã giao dịch/hóa đơn/booking, tham chiếu, phương thức và mô tả.
+`method_counts` dùng cùng phạm vi ngày/tìm kiếm nhưng không bị lọc bởi `method`.
+Kết quả sắp theo thời điểm giảm dần, rồi ID giảm dần. `reconciliation` có thêm
+`completed_transactions` của khoảng ngày đã chọn và `pending_bank_transfers`
+trên toàn bộ hóa đơn còn chờ, không giới hạn ở trang dữ liệu đang xem.
 
 `unit` của dịch vụ là nhãn hiển thị dạng chuỗi, không phải enum hoặc mã API ổn
 định. Giá trị bỏ trống được chuẩn hóa thành `lần`. Các bí danh đầu vào cũ
@@ -440,7 +449,7 @@ SQL Server 2022 thật, không bỏ qua acceptance test:
 1. Khởi động SQL Server 2022 bằng `docker-compose.yml` hoặc CI service, với
    `MIGRATION_TEST_DB_URL`, `MIGRATION_TEST_DB_USERNAME`,
    `MIGRATION_TEST_DB_PASSWORD` trỏ tới schema sạch.
-2. Chạy Flyway thật với canonical demo baseline `V1` trên database rỗng;
+2. Chạy toàn bộ chuỗi Flyway migration, bắt đầu từ baseline `V1`, trên database rỗng;
    `spring.flyway.enabled=true`.
 3. Chạy ứng dụng/test với `spring.jpa.hibernate.ddl-auto=validate` (không
    `create`, `create-drop` hay `update`). `application.yml` production đã đặt
@@ -470,3 +479,32 @@ ghi “tests/build pass” cho thay đổi tương lai nếu chưa có log của
   thêm retry hoặc approval semantics cho chúng. Ngược lại, các finance mutation
   hiện có (`cash-handovers`, `expenses`, `partner-debts`, `settle`) đều bắt buộc
   `Idempotency-Key` và bind actor/payload theo mô tả ở trên.
+
+
+### Tích hợp các nhánh fix (17/10/2026)
+
+- `GET /api/services/availability`: Kho xem hiện tại (mặc định); trả `service_id`,
+  `unit`, `capacity`, `booked`, `available`, `duration_minutes`, `resource`,
+  `resource_source_id`. Khách đặt được kiểm tra tại cùng nguồn SQL; không thêm
+  lịch hoặc duyệt đặt dịch vụ ở Kho. Giặt nhanh/tiêu chuẩn dùng chung nguồn máy.
+- `PUT /api/services/{id}/capacity`: KITCHEN gửi `capacity`, `minutes`, `reason`.
+  Sức chứa áp dụng cả nhóm tài nguyên dùng chung; thời lượng áp dụng riêng gói.
+  Không giảm xuống thấp hơn số đang được giữ, không diễn giải lại đơn đã đặt.
+- `POST /api/customer/service-bookings/{id}/payment`: chính chủ CUSTOMER lấy URL
+  VNPay. `GET` cùng path đọc trạng thái. Đơn có `ends_at`, `payment_expires_at`,
+  `paid_amount`, `payment_reference`, `payment_response`; thời hạn giữ 10 phút.
+  Callback ký hợp lệ kiểm tra tham chiếu, số tiền, hết hạn và chống ghi thu lặp.
+  Callback muộn chỉ ghi nhận để đối soát, không chiếm lại chỗ đã trả ra.
+- `GET /api/operations/stock-requests[/catalog]`: HOUSEKEEPING đọc yêu cầu của mình
+  và hàng hóa; KITCHEN đọc hàng đợi. `POST /api/operations/stock-requests` nhận
+  `kind` (`ISSUE`, `RETURN`, `DAMAGE`), `service_id`, `quantity`, `room_id` tùy chọn,
+  `reason` và `Idempotency-Key`. Chỉ HOUSEKEEPING được tạo.
+- `POST /api/operations/stock-requests/{id}/approve` hoặc `/reject`: KITCHEN xử lý,
+  body `reason` (bắt buộc khi từ chối). Cấp/trả ghi biến động đúng một lần; báo
+  hỏng chỉ ghi tiếp nhận, không tăng tồn. Người gửi không tự duyệt.
+- Danh mục mới qua `/api/services/catalog-proposals` và approval; bỏ API tạo trực tiếp.
+- `POST /api/finance/cash-handovers`: chỉ FRONT_DESK gửi kiểm đếm và chọn kế toán.
+  `POST /api/finance/cash-handovers/{id}/confirm`: chỉ ACCOUNTING nhận được chỉ
+  định xác nhận; trả `confirmed_by`, `confirmed_at`, lặp lại không thêm audit.
+- `GET /api/operations/housekeeping/assignments`: management đọc nhân sự
+  đang trực; giao việc từ màn hình Manager. HR không được giao nhiệm vụ buồng phòng.

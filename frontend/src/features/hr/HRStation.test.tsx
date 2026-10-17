@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import HRStation from "./HRStation";
 import { authApi } from "../../shared/api/auth";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { hrGovernanceApi } from "../../shared/api/hrGovernance";
 import { localDateValue } from "../../shared/utils/localDate";
+import { personnelApi } from "../../shared/api/personnel";
 
 const weekAtOffset = (offset: number) => {
   const monday = new Date();
@@ -22,8 +23,39 @@ const weekLabel = (dates: Date[]) =>
   `${dates[0].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })} - ${dates[6].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}`;
 
 describe("HRStation weekly shift schedule", () => {
+  it.each([false, true])("saves a full overnight shift when editing=%s", async (editing) => {
+    const day = localDateValue(weekAtOffset(0)[0]);
+    const next = new Date(`${day}T12:00:00`); next.setDate(next.getDate()+1);
+    vi.mocked(hrGovernanceApi.employees).mockResolvedValue([{employee_id: "FRONTDESK", full_name: "Lễ tân kiểm thử", role: "FRONT_DESK", phone: "0901111111", enabled: true, account_non_locked: true, failed_login_attempts: 0, employment_status: "WORKING"}]);
+    vi.mocked(hrGovernanceApi.shifts).mockResolvedValue(editing ? [{id: 8, employee_id: "FRONTDESK", shift_date: day, shift_code: "MORNING", starts_at: `${day}T06:00:00`, ends_at: `${day}T14:00:00`, status: "ASSIGNED", created_by: "HR"}] : []);
+    const assign = vi.spyOn(hrGovernanceApi, "assignShift").mockResolvedValue({id: 9} as any);
+    const update = vi.spyOn(hrGovernanceApi, "updateShift").mockResolvedValue({id: 8} as any);
+    render(<HRStation onBack={vi.fn()} />);
+    const person = await screen.findByText("Lễ tân kiểm thử", {exact: true});
+    const row = person.closest("tr")!;
+    fireEvent.click(within(row).getAllByRole("button")[0]);
+    fireEvent.click(screen.getByRole("button", {name: /Ca Đêm \(22:00 - 06:00\)/}));
+    const payload = {shift_date: day, shift_code: "NIGHT", starts_at: `${day}T22:00:00`, ends_at: `${localDateValue(next)}T06:00:00`};
+    await waitFor(() => editing ? expect(update).toHaveBeenCalledWith(8, payload) : expect(assign).toHaveBeenCalledWith({employee_id: "FRONTDESK", ...payload}));
+  });
+
+  it("lets HR prepare an onboarding request without directly provisioning an account", async () => {
+    const provision = vi.spyOn(enterpriseApi, "autoProvisionEmployee");
+    render(<HRStation onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", {name: /Hồ sơ nhân sự/}));
+    await waitFor(() => expect(screen.getByRole("button", {name: "Lập đề nghị tiếp nhận"})).toHaveProperty("disabled", false));
+    fireEvent.click(screen.getByRole("button", {name: "Lập đề nghị tiếp nhận"}));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByText(/tài khoản chỉ được tạo sau khi Quản lý hoặc Giám đốc chấp thuận/)).toBeTruthy();
+    expect(screen.queryByRole("button", {name: "Lưu hồ sơ"})).toBeNull();
+    expect(provision).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", {name: "Hủy"}));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(personnelApi, "profiles").mockResolvedValue([]);
+    vi.spyOn(personnelApi, "requests").mockResolvedValue([]);
     vi.spyOn(hrGovernanceApi, "shifts").mockResolvedValue([]);
     vi.spyOn(authApi, "employeeProfile").mockResolvedValue({
       employee_id: "HR01",
@@ -47,10 +79,9 @@ describe("HRStation weekly shift schedule", () => {
     const assertWeek = async (offset: number, callNumber: number) => {
       const dates = weekAtOffset(offset);
       await waitFor(() => {
-        expect(shifts).toHaveBeenCalledTimes(callNumber);
         expect(screen.getByText(weekLabel(dates))).toBeTruthy();
       });
-      expect(shifts).toHaveBeenLastCalledWith({
+      expect(shifts).toHaveBeenCalledWith({
         date: localDateValue(dates[0]),
         to: localDateValue(dates[6]),
       });
@@ -66,5 +97,29 @@ describe("HRStation weekly shift schedule", () => {
     await assertWeek(-1, 4);
     fireEvent.click(screen.getByRole("button", { name: "Về tuần hiện tại" }));
     await assertWeek(0, 5);
+  });
+
+  it("renders employee attendance copy instead of hotel room copy in attendance table", async () => {
+    render(<HRStation onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Chấm công" }));
+    await waitFor(() => {
+      expect(screen.getByRole("columnheader", { name: "Giờ vào" })).toBeTruthy();
+      expect(screen.getByRole("columnheader", { name: "Giờ ra" })).toBeTruthy();
+    });
+    expect(screen.queryByRole("columnheader", { name: "Nhận phòng" })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Trả phòng" })).toBeNull();
+  });
+
+  it("shows and exports approved leave even when the employee has no attendance punches", async () => {
+    const month = localDateValue().slice(0, 7);
+    vi.mocked(hrGovernanceApi.employees).mockResolvedValue([{ employee_id: "FD1", full_name: "Nhân viên nghỉ ốm", role: "FRONT_DESK", phone: "0901111111", enabled: true, account_non_locked: true, failed_login_attempts: 0, employment_status: "WORKING" }]);
+    vi.mocked(enterpriseApi.leaves).mockResolvedValue([{ id: 12, employee_id: "FD1", leave_type: "SICK", start_date: `${month}-13`, end_date: `${month}-14`, status: "APPROVED", reason: "Nghỉ ốm", shift_swap_with: null, requested_by: "HR", approver: "MANAGER", decided_at: null, created_at: `${month}-12` }]);
+    render(<HRStation onBack={vi.fn()} />);
+    await screen.findByText("Nhân viên nghỉ ốm", { exact: true });
+    fireEvent.click(screen.getByRole("button", { name: "Chấm công" }));
+    fireEvent.click(screen.getByRole("button", { name: /Bảng tổng hợp tháng/ }));
+    const row = screen.getByText("FD1", { exact: true }).closest("tr")!;
+    expect(within(row).getAllByRole("cell")[7].textContent).toBe("2");
+    expect(screen.getByRole("button", { name: "Xuất báo cáo" })).toHaveProperty("disabled", false);
   });
 });

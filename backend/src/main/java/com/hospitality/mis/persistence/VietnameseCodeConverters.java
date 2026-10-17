@@ -89,18 +89,6 @@ public final class VietnameseCodeConverters {
         @Override public String convertToDatabaseColumn(String value) { return mapping.convertToDatabaseColumn(value); }
         @Override public String convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
     }
-    @Converter public static final class StockCategoryConverter implements AttributeConverter<String, String> {
-        private final CodeMapping mapping = new CodeMapping(Map.of(
-                "LINEN", "Đồ vải", "TOWELS", "Khăn", "AMENITIES", "Đồ dùng", "MINIBAR", "Minibar", "GENERAL", "Khác"));
-        @Override public String convertToDatabaseColumn(String value) { return mapping.convertToDatabaseColumn(value); }
-        @Override public String convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
-    }
-    @Converter public static final class StockMovementTypeConverter implements AttributeConverter<String, String> {
-        private final CodeMapping mapping = new CodeMapping(Map.of(
-                "RECEIVE", "Nhập kho", "RETURN", "Hoàn kho", "ISSUE", "Xuất kho", "WASTE", "Hao hụt", "ADJUST", "Điều chỉnh"));
-        @Override public String convertToDatabaseColumn(String value) { return mapping.convertToDatabaseColumn(value); }
-        @Override public String convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
-    }
     @Converter public static final class TechnicalAssetStatusConverter implements AttributeConverter<String, String> {
         private final CodeMapping mapping = new CodeMapping(Map.of(
                 "GOOD", "Tốt", "MAINTENANCE_NEEDED", "Cần bảo trì", "REPAIRING", "Đang sửa chữa", "OUT_OF_SERVICE", "Ngừng sử dụng"));
@@ -140,21 +128,24 @@ public final class VietnameseCodeConverters {
                 Map.entry("MANAGER", "Quản lý"), Map.entry("FRONT_DESK", "Lễ tân"),
                 Map.entry("ACCOUNTING", "Kế toán"), Map.entry("HOUSEKEEPING", "Buồng phòng"),
                 Map.entry("TECHNICAL", "Kỹ thuật"), Map.entry("KITCHEN", "Nhà bếp"),
-                Map.entry("STAFF", "Nhân viên"), Map.entry("HR", "Nhân sự"))); }
+                Map.entry("HR", "Nhân sự"))); }
         @Override public String convertToDatabaseColumn(String value) { return mapping.convertToDatabaseColumn(value); }
         @Override public String convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
     }
 
     @Converter public static final class ServiceCategoryConverter implements AttributeConverter<String, String> {
-        private final CodeMapping mapping = new CodeMapping(Map.of(
-                "business", "Dịch vụ doanh nghiệp",
-                "fine-dining", "Nhà hàng cao cấp",
-                "inroom", "Dịch vụ tại phòng",
-                "laundry", "Giặt ủi",
-                "other", "Khác",
-                "recreation", "Giải trí",
-                "spa", "Spa",
-                "transport", "Đưa đón"));
+        private final CodeMapping mapping = new CodeMapping(Map.ofEntries(
+                Map.entry("business", "Dịch vụ doanh nghiệp"),
+                Map.entry("fine-dining", "Nhà hàng cao cấp"),
+                Map.entry("inroom", "Dịch vụ tại phòng"),
+                Map.entry("laundry", "Giặt ủi"),
+                Map.entry("other", "Khác"),
+                Map.entry("recreation", "Giải trí"),
+                Map.entry("room-amenity", "Vật dụng phòng"),
+                Map.entry("spa", "Spa"),
+                Map.entry("transport", "Đưa đón"),
+                Map.entry("food", "Món ăn"),
+                Map.entry("beverage", "Thức uống")));
         @Override public String convertToDatabaseColumn(String value) { return mapping.convertToDatabaseColumn(value); }
         @Override public String convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
     }
@@ -166,12 +157,17 @@ public final class VietnameseCodeConverters {
      * không cam kết trả lại đúng bí danh mà người gọi đã gửi.
      */
     @Converter public static final class ServiceUnitConverter implements AttributeConverter<String, String> {
-        private static final Map<String, String> API_ALIASES = Map.of(
-                "BOTTLE", "chai", "CHAI", "chai", "UNIT", "đơn vị",
-                "TIME", "lần", "LẦN", "lần", "set", "bộ", "SET", "bộ");
+        private static final Map<String, String> API_ALIASES = Map.ofEntries(
+                Map.entry("BOTTLE", "chai"), Map.entry("CHAI", "chai"),
+                Map.entry("UNIT", "đơn vị"), Map.entry("TIME", "lần"),
+                Map.entry("LẦN", "lần"), Map.entry("set", "bộ"),
+                Map.entry("SET", "bộ"), Map.entry("PCS", "cái"),
+                Map.entry("piece", "cái"), Map.entry("Pack", "gói"),
+                Map.entry("PACK", "gói"), Map.entry("Roll", "cuộn"),
+                Map.entry("ROLL", "cuộn"));
         private static final java.util.Set<String> DATABASE_VALUES = java.util.Set.of(
                 "bộ", "lần", "suất", "món", "đêm", "lượt", "chuyến", "khách",
-                "khách/ngày", "giờ", "ngày", "chai", "đơn vị");
+                "khách/ngày", "giờ", "ngày", "chai", "lon", "ly", "kg", "đơn vị", "cái", "gói", "cuộn", "tuýp");
 
         @Override public String convertToDatabaseColumn(String value) {
             if (value == null) return null;
@@ -215,6 +211,7 @@ public final class VietnameseCodeConverters {
         private final CodeMapping mapping = new CodeMapping(Map.of(
                 "ROOM_TYPE_ACTIVATE", "Kích hoạt loại phòng",
                 "SERVICE_PRICE_CHANGE", "Thay đổi giá dịch vụ",
+                "SERVICE_CATALOG_CREATE", "Thêm danh mục dịch vụ kho",
                 "PAYMENT_REFUND", "Hoàn tiền thanh toán",
                 "DEPOSIT_REFUND", "Hoàn tiền đặt cọc",
                 "INVOICE_DELETE", "Xóa hóa đơn",

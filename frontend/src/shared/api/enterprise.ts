@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { AttendanceInput, AttendanceRecord, LeaveRequest, LeaveRequestInput, OtaReconciliation, StockItem, StockMovementInput, TechnicalAsset, TechnicalAssetInput, VatInvoice, VatInvoiceRequest } from "../types/enterprise";
+import type { AttendanceInput, AttendanceRecord, LeaveRequest, LeaveRequestInput, OtaReconciliation, TechnicalAsset, TechnicalAssetInput, VatInvoice, VatInvoiceRequest } from "../types/enterprise";
 
 export const enterpriseApi = {
   ota: () => apiClient.request<OtaReconciliation[]>("/api/finance/ota-reconciliation"),
@@ -18,8 +18,6 @@ export const enterpriseApi = {
   createLeave: (body: LeaveRequestInput) => apiClient.request<LeaveRequest>("/api/hr/leave-requests", { method: "POST", body }),
   approveLeave: (id: number) => apiClient.request<LeaveRequest>(`/api/hr/leave-requests/${id}/approve`, { method: "POST" }),
   rejectLeave: (id: number) => apiClient.request<LeaveRequest>(`/api/hr/leave-requests/${id}/reject`, { method: "POST" }),
-  linen: () => apiClient.request<StockItem[]>("/api/operations/linen"),
-  moveLinen: (body: StockMovementInput) => apiClient.request<StockItem>("/api/operations/linen/movements", { method: "POST", body }),
   assets: () => apiClient.request<TechnicalAsset[]>("/api/operations/assets"),
   createAsset: (body: TechnicalAssetInput) => apiClient.request<TechnicalAsset>("/api/operations/assets", { method: "POST", body }),
   updateAssetStatus: (id: string, status: string) => apiClient.request<TechnicalAsset>(`/api/operations/assets/${encodeURIComponent(id)}/status`, { method: "PATCH", body: { status } }),

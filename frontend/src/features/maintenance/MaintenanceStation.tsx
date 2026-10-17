@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
-import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
+import { housekeepingTechnicalApi, housekeepingTechnicalMutationKey } from "../../shared/api/housekeepingTechnical";
+import { apiErrorMessage } from "../../shared/api/client";
 import { enterpriseApi } from "../../shared/api/enterprise";
 import { authApi } from "../../shared/api/auth";
 import { normalizeVietnameseText } from "../../shared/utils/encoding";
@@ -768,6 +769,10 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
   const [resultModalOrder, setResultModalOrder] = useState<WorkOrder | null>(null);
   const [resultNoteInput, setResultNoteInput]   = useState("");
   const [resultModalError, setResultModalError] = useState<string | null>(null);
+  const [releaseModalOrder, setReleaseModalOrder] = useState<WorkOrder | null>(null);
+  const [releaseKey, setReleaseKey] = useState<string | null>(null);
+  const [releaseSaving, setReleaseSaving] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
 
   // Loading and error states for work orders & rooms
   const [loadingData, setLoadingData]           = useState(true);
@@ -790,7 +795,7 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
     const areaTypeDisplay = r?.room_type_name ? `${r.room_type_name} · Tầng ${r.floor}` : "Khu vực kỹ thuật phòng";
 
     // Tab classification based on backend data
-    const isRoomTicket = Boolean(r || workOrder.room_id.startsWith("R"));
+    const isRoomTicket = Boolean(r || workOrder.room_id.startsWith("R") || /^\d+$/.test(workOrder.room_id));
     const isPreventive = (workOrder.materials || "").toLowerCase().includes("định kỳ") ||
                          (workOrder.materials || "").toLowerCase().includes("bảo dưỡng");
     const tabs: TicketTab[] = ["all"];
@@ -887,6 +892,13 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     loadData();
+    const handleFocus = () => loadData();
+    window.addEventListener("focus", handleFocus);
+    const interval = setInterval(loadData, 10000);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      clearInterval(interval);
+    };
   }, []);
 
   // Handle create work order
@@ -971,14 +983,25 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const handleReleaseRoom = async (order: WorkOrder) => {
-    if (!window.confirm(`Xác nhận mở khóa phòng ${order.roomId} trên hệ thống khách sạn để đón khách?`)) return;
+  const handleReleaseRoom = (order: WorkOrder) => {
+    setReleaseModalOrder(order);
+    setReleaseKey(housekeepingTechnicalMutationKey());
+    setReleaseError(null);
+  };
+
+  const confirmReleaseRoom = async () => {
+    if (!releaseModalOrder || !releaseKey || releaseSaving) return;
+    const order = releaseModalOrder;
+    setReleaseSaving(true); setReleaseError(null);
     try {
-      const released = await housekeepingTechnicalApi.release(order.rawId);
+      const released = await housekeepingTechnicalApi.release(order.rawId, { idempotencyKey: releaseKey });
       const mapped = mapWorkOrder(released);
       setOrders(prev => prev.map(o => o.rawId === order.rawId ? mapped : o));
+      setReleaseModalOrder(null); setReleaseKey(null);
     } catch (err) {
-      window.alert("Không thể mở khóa phòng. Vui lòng thử lại.");
+      setReleaseError(apiErrorMessage(err, "Không thể mở khóa phòng. Vui lòng thử lại."));
+    } finally {
+      setReleaseSaving(false);
     }
   };
 
@@ -1028,7 +1051,7 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
 
   // Dynamic KPI calculations based on live backend data
   const activeCount       = orders.filter(o => o.status !== "ROOM_RELEASED").length;
-  const criticalCount     = orders.filter(o => (o.priority === "urgent" || o.priority === "critical") && o.status !== "ROOM_RELEASED").length;
+  const criticalCount     = orders.filter(o => (o.priority === "urgent" || o.priority === "critical") && o.status !== "COMPLETED" && o.status !== "ROOM_RELEASED").length;
   const waitingAccCount   = orders.filter(o => o.status === "WAITING_ACCEPTANCE").length;
   const completedCount    = orders.filter(o => o.status === "COMPLETED" || o.status === "ROOM_RELEASED").length;
 
@@ -1495,6 +1518,12 @@ export default function MaintenanceStation({ onBack }: { onBack: () => void }) {
       )}
 
       {/* ── MODAL: BÁO HOÀN THÀNH (NHẬP RESULT NOTE) ── */}
+      {releaseModalOrder && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"><div role="dialog" aria-modal="true" aria-labelledby="release-room-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h2 id="release-room-title" className="text-lg font-bold text-slate-900">Mở khóa phòng {releaseModalOrder.roomId}</h2>
+        <p className="mt-3 text-sm leading-6 text-slate-600">Xác nhận bàn giao phòng sau khi phiếu sửa chữa đã nghiệm thu, checklist đã hoàn tất và các sự cố nghiêm trọng đã được xử lý.</p>
+        {releaseError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{releaseError}</p>}
+        <div className="mt-5 flex justify-end gap-2"><button disabled={releaseSaving} onClick={()=>setReleaseModalOrder(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold">Hủy</button><button disabled={releaseSaving} onClick={()=>void confirmReleaseRoom()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{releaseSaving ? "Đang mở…" : "Xác nhận mở phòng"}</button></div>
+      </div></div>}
       {resultModalOrder && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
           <div style={{ width: 440, background: "#FFF", borderRadius: 12, padding: 22, boxShadow: "0 10px 25px rgba(0,0,0,0.15)" }}>

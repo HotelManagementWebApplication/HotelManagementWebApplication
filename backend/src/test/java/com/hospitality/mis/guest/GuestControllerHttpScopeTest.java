@@ -21,11 +21,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:guestcontrollerscope;MODE=MSSQLServer;DB_CLOSE_DELAY=-1",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
+        "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
+        "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
+        "spring.flyway.enabled=true",
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 @AutoConfigureMockMvc
 /** Kiểm tra scope đọc guest qua HTTP với service mock, tách RBAC khỏi nghiệp vụ guest. */
@@ -69,9 +69,9 @@ class GuestControllerHttpScopeTest {
                 .andExpect(jsonPath("$[0].id").value(7));
     }
 
-    /** Given staff không thuộc nhóm guest reader, When đọc, Then bị 403. */
+    /** Given housekeeping không thuộc nhóm guest reader, When đọc, Then bị 403. */
     @Test
-    @WithMockUser(username = "staff", roles = "STAFF")
+    @WithMockUser(username = "housekeeping", roles = "HOUSEKEEPING")
     void unauthorizedGuestRoleReturnsStableForbiddenError() throws Exception {
         mockMvc.perform(get("/api/guests/{id}", 7L))
                 .andExpect(status().isForbidden())

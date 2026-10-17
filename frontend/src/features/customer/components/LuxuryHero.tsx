@@ -56,7 +56,7 @@ export const LuxuryHero: React.FC<LuxuryHeroProps> = ({ onScrollToRooms }) => {
       {/* Center Cinematic Typography */}
       <div className="relative z-10 max-w-5xl mx-auto px-6 text-center my-auto py-12">
         <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 mb-6 text-[#E6CA85] text-xs tracking-[0.3em] uppercase font-semibold">
-          <span>MaM Hotel &amp; Luxury Retreat</span>
+          <span>MaM Hotel &amp; Spa</span>
         </div>
 
         <h1
@@ -66,7 +66,7 @@ export const LuxuryHero: React.FC<LuxuryHeroProps> = ({ onScrollToRooms }) => {
           Trải nghiệm xa hoa đỉnh cao
           <br />
           <span className="italic font-normal font-display text-[#E8C878]">
-            tuyệt tác nghỉ dưỡng thượng lưu
+            dấu ấn lưu trú thượng lưu
           </span>
         </h1>
       </div>
@@ -79,7 +79,7 @@ export const LuxuryHero: React.FC<LuxuryHeroProps> = ({ onScrollToRooms }) => {
           className="group flex flex-col items-center gap-2 text-white/80 hover:text-white transition cursor-pointer"
         >
           <span className="text-[11px] uppercase tracking-[0.25em] font-medium text-[#E6CA85]">
-            Khám phá Không gian Nghỉ dưỡng
+            Khám phá Phòng &amp; Suite
           </span>
           <div className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center group-hover:border-[#E6CA85] group-hover:scale-110 transition duration-300 bg-black/20 backdrop-blur-sm">
             <ChevronDown size={16} className="text-[#E6CA85] animate-bounce" />

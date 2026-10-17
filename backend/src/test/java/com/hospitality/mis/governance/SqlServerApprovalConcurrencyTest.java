@@ -38,7 +38,7 @@ class SqlServerApprovalConcurrencyTest {
         cleanup();
         authenticate("kitchen", "KITCHEN");
         approvalId = approvalService.request("kitchen", "SERVICE_PRICE_CHANGE", "SQLSERVER-SERVICE",
-                "150000.00", new BigDecimal("150000.00"), "SQL Server approval", "sqlserver-approval-1").getId();
+                "150000.00", new BigDecimal("150000.00"), "SQL Server approval", "sqlserver-approval-1").id();
         authenticate("manager", "MANAGER");
         approvalService.approve(approvalId, "manager");
     }

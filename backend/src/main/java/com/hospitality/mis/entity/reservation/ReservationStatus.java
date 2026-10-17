@@ -6,6 +6,9 @@ public enum ReservationStatus {
     /** Bản nháp chưa xác nhận. */
     DRAFT,
 
+    /** Phòng được giữ tạm tới hạn nộp cọc; chưa có khoản tiền thực thu. */
+    PENDING_PAYMENT,
+
     /** Đã thu tiền đặt cọc. */
     DEPOSIT_PAID,
 
@@ -27,7 +30,8 @@ public enum ReservationStatus {
     /** Kiểm tra trạng thái đích có hợp lệ trong vòng đời hiện tại hay không. */
     public boolean canTransitionTo(ReservationStatus next) {
         return switch (this) {
-            case DRAFT -> next == CONFIRMED || next == DEPOSIT_PAID || next == CANCELLED;
+            case DRAFT -> next == PENDING_PAYMENT || next == CANCELLED;
+            case PENDING_PAYMENT -> next == DEPOSIT_PAID || next == CANCELLED;
             case DEPOSIT_PAID, CONFIRMED -> next == CHECKED_IN || next == CANCELLED || next == NO_SHOW;
             case CHECKED_IN -> next == CHECKED_OUT;
             case CHECKED_OUT, CANCELLED, NO_SHOW -> false;

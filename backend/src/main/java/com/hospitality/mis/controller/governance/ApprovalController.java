@@ -29,10 +29,12 @@ class ApprovalController {
     /** Dịch vụ tạo, truy vấn và chuyển trạng thái yêu cầu phê duyệt. */
     private final ApprovalService service;
     private final RoomTypeCatalogService roomTypes;
+    private final com.hospitality.mis.service.billing.CatalogProposalService catalogProposals;
 
-    ApprovalController(ApprovalService service, RoomTypeCatalogService roomTypes) {
+    ApprovalController(ApprovalService service, RoomTypeCatalogService roomTypes, com.hospitality.mis.service.billing.CatalogProposalService catalogProposals) {
         this.service = service;
         this.roomTypes = roomTypes;
+        this.catalogProposals = catalogProposals;
     }
 
 
@@ -45,8 +47,10 @@ class ApprovalController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("@departmentAccess.allows(authentication, 'APPROVAL_REQUEST')")
     public ApprovalDtos.Response request(@RequestBody @Valid ApprovalDtos.Request request) {
-        return ApprovalDtos.Response.from(service.request(SecurityActor.currentActor(), request.action(),
-                request.targetId(), request.payload(), request.amount(), request.reason(), request.idempotencyKey()));
+        if ("SERVICE_CATALOG_CREATE".equals(request.action()))
+            throw new com.hospitality.mis.common.exception.DomainException("CATALOG_PROPOSAL_ENDPOINT_REQUIRED","Gửi đề xuất danh mục qua chức năng Kho và Dịch vụ");
+        return service.request(SecurityActor.currentActor(), request.action(),
+                request.targetId(), request.payload(), request.amount(), request.reason(), request.idempotencyKey());
     }
 
 
@@ -61,8 +65,8 @@ class ApprovalController {
     public ApprovalDtos.Response approve(@PathVariable Long id,
             @RequestHeader(value = "Idempotency-Key", required = false) String key) {
         String actor = SecurityActor.currentActor();
-        return ApprovalDtos.Response.from(key == null || key.isBlank()
-                ? service.approve(id, actor) : service.approve(id, actor, key));
+        if ("SERVICE_CATALOG_CREATE".equals(service.findRequired(id).action())) return catalogProposals.approve(id, actor, key);
+        return key == null || key.isBlank() ? service.approve(id,actor) : service.approve(id,actor,key);
     }
 
 
@@ -77,8 +81,8 @@ class ApprovalController {
     public ApprovalDtos.Response reject(@PathVariable Long id,
             @RequestHeader(value = "Idempotency-Key", required = false) String key) {
         String actor = SecurityActor.currentActor();
-        ApprovalDtos.Response response = ApprovalDtos.Response.from(key == null || key.isBlank()
-                ? service.reject(id, actor) : service.reject(id, actor, key));
+        ApprovalDtos.Response response = key == null || key.isBlank()
+                ? service.reject(id, actor) : service.reject(id, actor, key);
         if (response != null && "ROOM_TYPE_ACTIVATE".equals(response.action())) {
             roomTypes.markRejected(response.targetId(), actor);
         }
@@ -101,9 +105,9 @@ class ApprovalController {
                        @RequestParam(name = "risk", required = false) String risk,
                        @RequestParam(name = "page", required = false) Integer page, @RequestParam(name = "size", required = false) Integer size) {
         if (action == null && targetId == null && requester == null && from == null && to == null && risk == null && page == null && size == null)
-            return service.list(status).stream().map(ApprovalDtos.Response::from).collect(Collectors.toList());
+            return service.list(status);
         var result = service.page(status, action, targetId, requester, risk, from, to, page == null ? 0 : page, size == null ? 20 : size);
-        return new PageResponse(result.getContent().stream().map(ApprovalDtos.Response::from).toList(), result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
+        return new PageResponse(result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
     public record PageResponse(List<ApprovalDtos.Response> items, int page, int size, long totalElements, int totalPages) {}

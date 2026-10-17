@@ -35,59 +35,47 @@ spring:
 Không dùng `ddl-auto=create`, `ddl-auto=update` hoặc tập lệnh khởi động có thao
 tác xóa lược đồ.
 
-## Dựng lại dữ liệu minh họa (thao tác xóa dữ liệu)
+## Dựng lại dữ liệu minh họa hiện có
 
-`reset_demo.sql` xóa trực tiếp rồi nạp lại dữ liệu vào nhiều bảng nghiệp vụ.
-Chạy trực tiếp tệp SQL sẽ bỏ qua bước kiểm tra trước bằng PowerShell ở dưới.
-Chỉ chạy lệnh trực tiếp trên lược đồ cục bộ đã biết là rỗng và có thể hủy; tuyệt
-đối không chạy trên cơ sở dữ liệu dùng chung, chứa dữ liệu cần giữ hoặc đang vận
-hành thật. Khi thiết lập cục bộ thông thường, hãy dùng tập lệnh có bước bảo vệ.
+reset_demo.sql xóa và nạp lại dữ liệu nghiệp vụ cho demo. Để sửa dữ liệu đang
+bị lệch sau nhiều lần thử trên máy local, mở PowerShell ở thư mục gốc repo và
+chạy:
 
-Sau khi Flyway đã cập nhật lược đồ, chạy:
+    docker compose up -d
+    .\database\demo\reset_demo_data.ps1 -ResetExistingDemo
 
-```powershell
-docker cp database/demo/reset_demo.sql web-hotel-mis-sqlserver-1433:/tmp/reset_demo.sql
-docker exec web-hotel-mis-sqlserver-1433 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$env:MSSQL_SA_PASSWORD" -C -d QLKS -b -I -i /tmp/reset_demo.sql
-```
+Script chỉ nhắm tới container local cố định web-hotel-mis-sqlserver-1433 và
+cơ sở dữ liệu QLKS; nó kiểm tra Flyway V1–V6 cùng tài khoản demo, sao lưu rồi
+xác minh backup trước khi reset, tạm chặn các kết nối ghi đồng thời, và luôn
+khôi phục chế độ truy cập bình thường. Bản backup được giữ ngoài repo tại
+%USERPROFILE%\.codex\backups\web-hotel-mis. Nếu reset lỗi, dữ liệu được
+rollback và script vẫn giữ backup để phục hồi.
 
-Dùng `docker cp` rồi `sqlcmd -i`; không chuyển đầu ra của `Get-Content` qua pipe
-vào `sqlcmd` trong Windows PowerShell vì BOM/mã hóa có thể làm hỏng ký tự Unicode.
+Không chạy reset_demo.sql trực tiếp trên môi trường chia sẻ hoặc production.
+Script ensure_demo_data.ps1 chỉ dành cho cơ sở dữ liệu mới, chưa có dữ liệu
+nghiệp vụ; nó không sửa một bộ demo đã chạy lâu.
 
-`reset_demo.sql` xóa và nạp lại đầy đủ dữ liệu minh họa: phòng, khách lưu trú,
-dịch vụ, phiếu đặt phòng, phiếu giữ phòng theo giờ, hóa đơn, giao dịch thanh
-toán, biên lai, công việc buồng phòng/kỹ thuật, kho, tài chính, lượt đặt dịch
-vụ do khách sạn cung cấp, công nợ nhà cung cấp và yêu cầu phê duyệt đang chờ.
-Tệp cũng tạo một phiếu đặt phòng qua đêm trong tương lai ở trạng thái
-`DEPOSIT_PAID` để kiểm tra việc đặt dịch vụ trước. Ngày được tính từ
-`CAST(SYSDATETIME() AS date)` để dữ liệu vẫn dùng được khi dựng lại bản minh họa vào thời điểm khác.
+Fixture được tính lại theo giờ Việt Nam tại lúc reset, nên các lượt đến/trả,
+ca làm và ngày giao dịch không bị cũ theo thời gian. Một số kịch bản để test:
 
-Khi khởi chạy cục bộ thông thường, dùng tập lệnh có bước bảo vệ dưới đây. Tập
-lệnh kiểm tra mọi bảng dữ liệu trong lược đồ đích, chỉ bỏ qua bảng lịch sử
-migration của Flyway. Tập lệnh nhận diện 64 dòng cố định trong
-`NhomKhoaChongTrung` là dữ liệu hạ tầng khởi tạo lược đồ, chỉ nạp dữ liệu khi
-các bảng nghiệp vụ đang rỗng, không đụng vào cơ sở dữ liệu minh họa đã có dữ
-liệu và từ chối dựng lại cơ sở dữ liệu mới chỉ có một phần dữ liệu:
+- Buồng phòng: 502 cần dọn; 602 đang dọn và còn checklist chưa xong; 701 đã dọn,
+  chờ nghiệm thu; 702 chờ kỹ thuật vì sự cố điều hòa; 802 đã sẵn sàng.
+- Lễ tân: phòng 501 có khách đang ở; booking 6 nhận phòng ngày mai ở phòng 1401,
+  đã thu cọc 3.900.000đ và còn số dư cần thanh toán.
+- Tài chính: hóa đơn và các khoản thu khớp số dư; có booking đã thanh toán,
+  thanh toán một phần, cùng yêu cầu VNPay demo thành công và chờ thanh toán.
 
-```powershell
-docker compose up -d
-# Khởi chạy máy chủ một lần để Flyway tạo/cập nhật QLKS, sau đó dừng máy chủ và
-# mọi tiến trình khác đang ghi vào cơ sở dữ liệu trước khi chạy tập lệnh dựng lại:
-.\database\demo\ensure_demo_data.ps1
-```
+Để khởi tạo demo trên một cơ sở dữ liệu mới, đã áp dụng Flyway và chưa có dữ
+liệu nghiệp vụ, dùng ensure_demo_data.ps1 như bên dưới. Lệnh này sẽ từ chối
+đụng vào demo hiện có:
 
-Tệp Compose luôn dùng vùng lưu trữ Docker bền vững
-`web-hotel-mis_hotel-sqlserver` trên cổng SQL Server `1433`. Lệnh `docker compose down -v`
-không xóa được vùng lưu trữ bên ngoài này; vì vậy khởi động lại vùng chứa không
-đồng nghĩa với chuyển sang một cơ sở dữ liệu rỗng khác.
+    docker compose up -d
+    # Chạy máy chủ một lần để Flyway tạo/cập nhật QLKS, sau đó dừng máy chủ.
+    .\database\demo\ensure_demo_data.ps1
 
-Thông tin đăng nhập minh họa do tập lệnh tạo:
-
-- Khách hàng: `0901234567 / hotel123`
-- Nhân viên: `FRONTDESK`, `HOUSEKEEP`, `TECHNICAL`, `ACCOUNTING`, `KITCHEN`,
-  `MANAGER`, `DIRECTOR`, `ADMIN`, `HR`, `STAFF` — tất cả dùng `hotel123`.
-
-SQL chỉ lưu giá trị băm BCrypt, không lưu mật khẩu dạng văn bản thuần.
-
+Trong khi reset demo, hãy dừng backend và các tiến trình khác đang ghi vào QLKS.
+Reset sẽ làm mất các phiên đăng nhập demo cũ; đăng nhập lại bằng tài khoản bên
+dưới sau khi script hoàn tất.
 ## Khởi tạo tài khoản quản trị
 
 Tạo tài khoản đăng nhập nhân viên thông qua luồng khởi tạo quản trị/bảo mật của
@@ -109,3 +97,21 @@ ELSE
   INSERT INTO NhanVien (maNhanVien, hoVaTen, matKhau, vaiTro, soDienThoai)
   VALUES (N'NV_ADMIN', N'Demo Admin', N'$env:DEMO_ADMIN_BCRYPT_HASH', N'Quản lý', N'0900000000');"
 ```
+
+
+## Kịch bản demo Kho & Dịch vụ và kế toán
+
+- Vật tư, đồ vải dùng chung danh mục `DichVu` và sổ `BienDongKhoDichVu`.
+  Nước `WATER330` thấp hơn ngưỡng 80; có yêu cầu cấp 24 chai, trả 3 vỏ gối
+  sạch và thông báo 2 khăn hỏng. Kho phải nhập đủ hàng trước khi cấp; báo hỏng
+  không cộng lại tồn.
+- Giặt nhanh và tiêu chuẩn dùng chung 40 máy, thời lượng lần lượt 240/600 phút.
+  Có một đơn giặt 2 món chiếm một máy; cả hai gói đọc cùng khả dụng 39 máy.
+- Có sân tennis đang được dùng, đơn phòng họp giữ chỗ chờ thanh toán 10 phút,
+  đơn cầu lông khách đã trả tiền rồi hủy. Các khoản đã trả có payment, receipt
+  và ledger thực, được tạo bằng stored procedure nghiệp vụ.
+- Giữ các trạng thái demo hiện hành của lễ tân, nhân sự, buồng phòng và kỹ thuật.
+  Kế toán xem bàn giao, người nhận được chỉ định xác nhận; không đếm lại tiền.
+
+Thời gian demo được tính theo giờ Việt Nam tại lúc reset. Khả dụng thay đổi theo
+thời gian thực; đơn chờ thanh toán tự hết hiệu lực sau 10 phút.

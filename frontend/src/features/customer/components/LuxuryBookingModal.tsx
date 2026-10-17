@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Room } from "../../../shared/types/domain";
-import { X, Calendar, Clock, Users, ShieldCheck, CreditCard, Wallet, Banknote } from "lucide-react";
+import { getRoomFullName } from "../roomProfiles";
+import { X, Calendar, Clock, Users, ShieldCheck, Wallet } from "lucide-react";
 
 interface LuxuryBookingModalProps {
   room: Room;
@@ -17,14 +18,12 @@ interface LuxuryBookingModalProps {
     hourlyCheckIn?: string;
     hourlyCheckOut?: string;
     guests: number;
-    guestName: string;
-    guestId: string;
-    phone: string;
     email: string;
-    paymentMethod: "cash" | "card" | "transfer";
+    paymentMethod: "vnpay";
   }) => Promise<void>;
   loading?: boolean;
   isAuthenticated?: boolean;
+  customerIdentity?: { fullName: string; phone: string; identityNumber: string; email: string };
   onLogin?: () => void;
 }
 
@@ -48,6 +47,9 @@ const nextNightCheckoutDate = (checkIn: string) => {
   return localDateTime(at).slice(0, 10);
 };
 
+const validVietnamesePhone = (value: string) => /^(?:\+?84|0)[35789]\d{8}$/.test(value.replace(/[\s().-]/g, ""));
+const validIdentityDocument = (value: string) => /^(?:\d{9}|\d{12}|[A-Za-z]\d{5,11})$/.test(value.trim());
+
 export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
   room,
   isOpen,
@@ -58,6 +60,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
   onConfirm,
   loading = false,
   isAuthenticated,
+  customerIdentity,
   onLogin,
 }) => {
   const [bookMode, setBookMode] = useState<"night" | "hour">("night");
@@ -79,8 +82,17 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
   const [guestId, setGuestId] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer">("transfer");
+  const paymentMethod = "vnpay" as const;
   const [formError, setFormError] = useState("");
+
+  useEffect(() => {
+    if (!isOpen || !customerIdentity) return;
+    setGuestName(customerIdentity.fullName);
+    setPhone(customerIdentity.phone);
+    setGuestId(customerIdentity.identityNumber);
+    setEmail(customerIdentity.email);
+    setFormError("");
+  }, [isOpen, customerIdentity]);
 
   const earliestNightDate = useMemo(() => {
     const now = new Date();
@@ -122,12 +134,28 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
       onLogin();
       return;
     }
+    if (isAuthenticated && !customerIdentity) {
+      setFormError("Không tải được hồ sơ khách hàng. Vui lòng tải lại trang rồi thử lại.");
+      return;
+    }
     if (!guestName.trim()) {
       setFormError("Vui lòng nhập Họ và tên.");
       return;
     }
-    if (!phone.trim()) {
-      setFormError("Vui lòng nhập Số điện thoại liên hệ.");
+    if (guestName.trim().length < 2 || !/\p{L}/u.test(guestName.trim())) {
+      setFormError("Họ và tên cần có ít nhất 2 ký tự chữ.");
+      return;
+    }
+    if (!validVietnamesePhone(phone)) {
+      setFormError("Số điện thoại chưa đúng định dạng Việt Nam (ví dụ 0901 234 567).");
+      return;
+    }
+    if (guestId.trim() && !validIdentityDocument(guestId)) {
+      setFormError("CCCD cần có 9 hoặc 12 chữ số; hộ chiếu gồm chữ cái và 6–12 chữ số.");
+      return;
+    }
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setFormError("Email nhận xác nhận chưa đúng định dạng.");
       return;
     }
     const start = bookMode === "hour" ? new Date(hourlyCheckIn) : new Date(`${checkIn}T14:00:00`);
@@ -151,9 +179,6 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
           ? addLocalHours(hourlyCheckIn, hourlyDuration)
           : undefined,
       guests,
-      guestName,
-      guestId,
-      phone,
       email,
       paymentMethod,
     });
@@ -169,10 +194,10 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
         <div className="px-6 py-5 border-b border-[#EAE6DD] flex items-center justify-between bg-[#FAF8F5]">
           <div>
             <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[#8C6D37]">
-              Phiếu Đặt phòng Nghỉ dưỡng
+              Phiếu Đặt phòng MaM Hotel
             </span>
             <h3 className="font-display text-2xl text-[#1C1917] font-normal">
-              {room.type} – Phòng {room.number}
+              {getRoomFullName(room)}
             </h3>
           </div>
           <button
@@ -214,7 +239,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
                   : "text-[#78716C] hover:text-[#1C1917]"
               }`}
             >
-              Nghỉ dưỡng trong ngày (Theo giờ)
+              Lưu trú trong ngày (Theo giờ)
             </button>
           </div>
 
@@ -311,10 +336,12 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
                 <input
                   type="text"
                   required
+                  readOnly
+                  minLength={2}
                   placeholder="Nguyễn Văn A"
                   value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#FAF8F5] border border-[#E2DDD4] rounded-xl text-sm text-[#1C1917] outline-none focus:border-[#8C6D37]"
+                  title="Thông tin lấy từ hồ sơ khách hàng đã đăng nhập"
+                  className="w-full px-3.5 py-2.5 bg-[#F3F0EA] border border-[#E2DDD4] rounded-xl text-sm text-[#1C1917] outline-none"
                 />
               </div>
 
@@ -323,10 +350,13 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
                 <input
                   type="tel"
                   required
+                  readOnly
+                  inputMode="tel"
+                  pattern="(?:\+?84|0)[35789][0-9]{8}"
+                  title="Số điện thoại lấy từ hồ sơ khách hàng đã đăng nhập"
                   placeholder="0901 234 567"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#FAF8F5] border border-[#E2DDD4] rounded-xl text-sm text-[#1C1917] outline-none focus:border-[#8C6D37]"
+                  className="w-full px-3.5 py-2.5 bg-[#F3F0EA] border border-[#E2DDD4] rounded-xl text-sm text-[#1C1917] outline-none"
                 />
               </div>
 
@@ -334,10 +364,12 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
                 <label className="text-xs text-[#78716C] mb-1 block">Số CCCD / Hộ chiếu</label>
                 <input
                   type="text"
+                  readOnly
+                  autoComplete="off"
                   placeholder="012345678901"
                   value={guestId}
-                  onChange={(e) => setGuestId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#FAF8F5] border border-[#E2DDD4] rounded-xl text-sm text-[#1C1917] outline-none focus:border-[#8C6D37]"
+                  title="Số giấy tờ lấy từ hồ sơ khách hàng đã đăng nhập"
+                  className="w-full px-3.5 py-2.5 bg-[#F3F0EA] border border-[#E2DDD4] rounded-xl text-sm text-[#1C1917] outline-none"
                 />
               </div>
 
@@ -357,32 +389,11 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
           {/* Payment Method */}
           <div>
             <label className="text-xs text-[#78716C] mb-2 block font-medium">
-              Phương thức thanh toán bảo đảm
+              Thanh toán cọc online
             </label>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { id: "transfer", label: "Chuyển khoản QR", icon: Wallet },
-                { id: "card", label: "Thẻ Quốc tế", icon: CreditCard },
-                { id: "cash", label: "Tại khách sạn", icon: Banknote },
-              ].map((m) => {
-                const Icon = m.icon;
-                const isSelected = paymentMethod === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setPaymentMethod(m.id as any)}
-                    className={`py-3 px-2 rounded-xl text-xs font-semibold flex flex-col items-center gap-1.5 transition cursor-pointer border ${
-                      isSelected
-                        ? "bg-[#1C1917] text-white border-[#1C1917]"
-                        : "bg-[#FAF8F5] text-[#57534E] border-[#E2DDD4] hover:bg-[#F0ECE4]"
-                    }`}
-                  >
-                    <Icon size={16} />
-                    <span>{m.label}</span>
-                  </button>
-                );
-              })}
+            <div className="p-4 rounded-xl border border-[#E2DDD4] bg-[#FAF8F5] text-sm text-[#57534E]">
+              <p className="flex items-center gap-2 font-semibold text-[#1C1917]"><Wallet size={16} />Đặt cọc qua VNPay</p>
+              <p className="mt-2 text-xs leading-relaxed">Phòng được giữ tạm 10 phút để thanh toán cọc 50%. Phần còn lại thanh toán tại khách sạn. Hết hạn chưa thanh toán, phòng sẽ được mở lại.</p>
             </div>
           </div>
 
@@ -424,7 +435,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
                 ? "Đang xử lý đặt chỗ..."
                 : isAuthenticated === false
                 ? "Đăng nhập để đặt phòng"
-                : "Xác nhận & Hoàn tất Đặt phòng"}
+                : "Tiếp tục đến cổng VNPay"}
             </span>
           </button>
         </form>

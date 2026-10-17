@@ -3,12 +3,45 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import FrontDeskPMS from "./FrontDeskPMS";
 import { authApi } from "../../shared/api/auth";
 import { frontDeskApi } from "../../shared/api/frontDesk";
+import { ApiError } from "../../shared/api/client";
 
 describe("FrontDeskPMS Reception Interface", () => {
   const onBack = vi.fn();
 
+  it("counts ready rooms from the operational state instead of cleanliness badges", async () => {
+    vi.mocked(frontDeskApi.dashboard).mockResolvedValue({
+      business_date: "2026-10-15", page: 0, size: 10, total_elements: 0, total_pages: 0,
+      current_stays: [], arrivals: [], departures: [], unpaid_deposits: [], invoice_balances: [], incidents: [], room_counts: {},
+      rooms: ["available", "occupied", "reserved", "cleaning", "maintenance", "out_of_service"].map((status, i) => ({
+        room_id: String(101 + i), name: String(101 + i), floor: 1, room_type_id: "CLASSIC",
+        room_type_name: "Classic", daily_price: 1000000, bed_type: "Queen", status,
+      })),
+    });
+    render(<FrontDeskPMS onBack={onBack} />);
+    expect(await screen.findByText("Sẵn sàng: 1", { exact: true })).toBeTruthy();
+    expect(screen.getByText("Đã giữ: 1 · Đang dọn: 1", { exact: true })).toBeTruthy();
+  });
+
+  it("creates a booking with the authenticated employee, not the old demo actor", async () => {
+    vi.mocked(authApi.employeeProfile).mockResolvedValue({ employee_id: "FRONTDESK", full_name: "Lễ tân thật", role: "FRONT_DESK", permissions: [] });
+    vi.spyOn(frontDeskApi, "guests").mockResolvedValue([{ id: 10, full_name: "Khách demo", birth_year: null, identity_number: "123456789", phone: "0912345678", email: null, address: null, membership_tier: "STANDARD", total_spend: 0, late_cancellation_count: 0, late_checkout_count: 0, booking_blocked: false }]);
+    const create = vi.spyOn(frontDeskApi, "createReservation").mockResolvedValue({ id: 77 } as any);
+    render(<FrontDeskPMS onBack={onBack} />);
+    await screen.findAllByText("Lễ tân thật");
+    fireEvent.click(screen.getByRole("button", {name: /Khách hàng/i}));
+    fireEvent.click(screen.getByRole("button", {name: /Tạo đặt phòng/i}));
+    fireEvent.change(screen.getByLabelText("Khách hàng *"), {target: {value: "Khách demo"}});
+    fireEvent.click(await screen.findByRole("button", {name: /Khách demo/}));
+    fireEvent.change(screen.getByLabelText(/Mã số phòng/), {target: {value: "802"}});
+    fireEvent.change(screen.getByLabelText(/Thời gian nhận phòng/), {target: {value: "2035-01-10T14:00"}});
+    fireEvent.change(screen.getByLabelText(/Thời gian trả phòng/), {target: {value: "2035-01-12T12:00"}});
+    fireEvent.click(screen.getByRole("button", {name: "Xác nhận đã thu cọc & đặt phòng"}));
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({employee_id: "FRONTDESK", guest_id: 10, booking_source: "DIRECT", deposit_collected: true})));
+  });
+
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(frontDeskApi, "depositWarnings").mockResolvedValue([]);
     vi.spyOn(authApi, "employeeProfile").mockResolvedValue({
       employee_id: "EMP001",
       full_name: "Nguyễn Văn Lễ Tân",
@@ -46,12 +79,18 @@ describe("FrontDeskPMS Reception Interface", () => {
       ],
     });
 
+    vi.spyOn(frontDeskApi, "reservations").mockResolvedValue({ items: [], page: 0, size: 100, total_elements: 0, total_pages: 0 });
+    vi.spyOn(frontDeskApi, "guests").mockResolvedValue([]);
+
     vi.spyOn(frontDeskApi, "services").mockResolvedValue([
       { id: "1", name: "Coca Cola", price: 30000, unit: "lon", stock: 10, active: true },
       { id: "2", name: "Giặt ủi áo sơ mi", price: 50000, unit: "cái", stock: 10, active: true },
     ]);
 
     vi.spyOn(frontDeskApi, "timeline").mockResolvedValue([]);
+    vi.spyOn(frontDeskApi, "serviceBookings").mockResolvedValue([]);
+    vi.spyOn(frontDeskApi, "payments").mockResolvedValue([]);
+    vi.spyOn(frontDeskApi, "receipts").mockResolvedValue([]);
 
     vi.spyOn(frontDeskApi, "reservation").mockResolvedValue({
       id: 1001,
@@ -63,6 +102,8 @@ describe("FrontDeskPMS Reception Interface", () => {
       actual_check_out: null,
       cancellation_reason: null,
       cancellation_outcome: null,
+      customer_payment_method: null,
+      deposit_payment_status: "NOT_REQUIRED",
       deposit: 500000,
       rental_type: "PACKAGE",
       rooms: [{ room_id: "203", expected_check_in: "2026-09-20T14:00:00", expected_check_out: "2026-09-22T12:00:00", actual_check_in: "2026-09-20T14:00:00", actual_check_out: null }],
@@ -95,6 +136,8 @@ describe("FrontDeskPMS Reception Interface", () => {
       actual_check_out: null,
       cancellation_reason: null,
       cancellation_outcome: null,
+      customer_payment_method: null,
+      deposit_payment_status: "NOT_REQUIRED",
       deposit: 300000,
       rental_type: "PACKAGE",
       rooms: [{ room_id: "102", expected_check_in: "2026-09-20T14:00:00", expected_check_out: "2026-09-21T12:00:00", actual_check_in: "2026-09-20T14:05:00", actual_check_out: null }],
@@ -152,6 +195,36 @@ describe("FrontDeskPMS Reception Interface", () => {
     ]);
   });
 
+  it("rejects garbage phone numbers and shows the reason inside the guest form", async () => {
+    const create = vi.spyOn(frontDeskApi, "createGuest");
+    render(<FrontDeskPMS onBack={onBack} />);
+    await screen.findAllByText("Nguyễn Văn Lễ Tân");
+    fireEvent.click(screen.getByRole("button", {name: /Khách hàng/i}));
+    fireEvent.click(screen.getByRole("button", {name: "Thêm khách hàng"}));
+    fireEvent.change(screen.getByLabelText("Họ và tên *"), {target: {value: "Khách demo"}});
+    fireEvent.change(screen.getByLabelText("CCCD / Hộ chiếu *"), {target: {value: "TEST123"}});
+    fireEvent.change(screen.getByLabelText("Số điện thoại *"), {target: {value: "abc"}});
+    fireEvent.click(screen.getByRole("button", {name: "Tạo hồ sơ"}));
+    expect(within(screen.getByRole("form", {name: "Tạo hồ sơ khách hàng"})).getByRole("alert").textContent).toContain("Số điện thoại phải có 8–15 ký tự");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("keeps the API validation reason visible inside the booking form", async () => {
+    vi.spyOn(frontDeskApi, "guests").mockResolvedValue([{ id: 10, full_name: "Khách demo", birth_year: null, identity_number: "123456789", phone: "0912345678", email: null, address: null, membership_tier: "STANDARD", total_spend: 0, late_cancellation_count: 0, late_checkout_count: 0, booking_blocked: false }]);
+    vi.spyOn(frontDeskApi, "createReservation").mockRejectedValue(new ApiError(422, {code: "INVALID_DEPOSIT", message: "Tiền cọc không đúng mức yêu cầu"}));
+    render(<FrontDeskPMS onBack={onBack} />);
+    await screen.findAllByText("Nguyễn Văn Lễ Tân");
+    fireEvent.click(screen.getByRole("button", {name: /Khách hàng/i}));
+    fireEvent.click(screen.getByRole("button", {name: "Tạo đặt phòng"}));
+    fireEvent.change(screen.getByLabelText("Khách hàng *"), {target: {value: "Khách demo"}});
+    fireEvent.click(await screen.findByRole("button", {name: /Khách demo/}));
+    fireEvent.change(screen.getByLabelText(/Mã số phòng/), {target: {value: "802"}});
+    fireEvent.change(screen.getByLabelText(/Thời gian nhận phòng/), {target: {value: "2035-01-10T14:00"}});
+    fireEvent.change(screen.getByLabelText(/Thời gian trả phòng/), {target: {value: "2035-01-12T12:00"}});
+    fireEvent.click(screen.getByRole("button", {name: "Xác nhận đã thu cọc & đặt phòng"}));
+    expect((await within(screen.getByRole("form", {name: "Tạo đặt phòng tại quầy"})).findByRole("alert")).textContent).toContain("Tiền cọc không đúng mức yêu cầu");
+  });
+
   it("renders Overview screen with KPIs and arrivals / departures tables", async () => {
     render(<FrontDeskPMS onBack={onBack} />);
 
@@ -169,6 +242,62 @@ describe("FrontDeskPMS Reception Interface", () => {
     // Click "Xem phòng" opens RoomMap and selects that room
     fireEvent.click(viewRoomBtns[0]);
     expect(await screen.findByRole("heading", { name: "Sơ đồ phòng" })).toBeDefined();
+  });
+
+  it("shows invoice total, net completed payments and the invoice's remaining balance separately", async () => {
+    const invoice = await frontDeskApi.invoice(1001);
+    vi.mocked(frontDeskApi.invoice).mockResolvedValue({...invoice,room_total:2500000,service_total:200000,deposit:1000000,payable:1600000});
+    vi.mocked(frontDeskApi.payments).mockResolvedValue([
+      {id:1,invoice_id:2001,amount:1000000,method:"CASH",type:"PAYMENT",status:"COMPLETED",reference:null,occurred_at:"2026-10-17T10:00:00",actor_id:"EMP001"},
+      {id:2,invoice_id:2001,amount:200000,method:"CASH",type:"PAYMENT",status:"COMPLETED",reference:null,occurred_at:"2026-10-17T11:00:00",actor_id:"EMP001"},
+      {id:3,invoice_id:2001,amount:100000,method:"CASH",type:"REFUND",status:"COMPLETED",reference:null,occurred_at:"2026-10-17T11:05:00",actor_id:"EMP001"},
+      {id:4,invoice_id:2001,amount:9000000,method:"CARD",type:"PAYMENT",status:"FAILED",reference:null,occurred_at:"2026-10-17T11:10:00",actor_id:"EMP001"},
+    ]);
+    render(<FrontDeskPMS onBack={onBack} />);
+    fireEvent.click(screen.getByRole("button",{name:/Sơ đồ phòng/i}));
+    fireEvent.click(await screen.findByText("203",{exact:true}));
+    const drawer=await screen.findByLabelText("Chi tiết phòng 203");
+    for(const [label,amount] of [["Tổng hóa đơn",2700000],["Đã thanh toán",1100000],["Còn phải thu",1600000]] as const) {
+      const row=(await within(drawer).findByText(label)).parentElement!;
+      await waitFor(()=>expect(row.textContent?.replace(/\D/g,"")).toBe(String(amount)));
+    }
+  });
+
+  it("shows verified late-payment warnings without confirming the expired booking", async () => {
+    vi.mocked(frontDeskApi.depositWarnings).mockResolvedValue([{id:81,topic:"DEPOSIT_PAYMENT_REVIEW",payload:JSON.stringify({reservation_id:55,amount:1000000,provider_transaction:"BANK-LATE-55"})}]);
+    render(<FrontDeskPMS onBack={onBack} />);
+    expect(await screen.findByText(/BK-55: VNPay báo/)).toBeDefined();
+    expect(screen.getByText(/BANK-LATE-55/)).toBeDefined();
+  });
+
+  it("shows cash holds to reception and records receipt only for those requests", async () => {
+    const hotelRequest = {
+      id: 9001, guest_id: 91, employee_id: "EMP001", status: "PENDING_PAYMENT" as const, rental_type: "PACKAGE" as const,
+      customer_payment_method: "PAY_AT_HOTEL" as const, deposit_payment_status: "PENDING" as const, deposit_payment_expires_at: "2035-01-01T12:00:00",
+      deposit: 300000, booked_at: "2026-10-01T10:00:00", actual_check_in: null, actual_check_out: null,
+      rooms: [{ room_id: "503", expected_check_in: "2026-10-05T14:00:00", expected_check_out: "2026-10-06T12:00:00", actual_check_in: null, actual_check_out: null }],
+      cancellation_reason: null, cancellation_outcome: null,
+    };
+    const vnpayRequest = { ...hotelRequest, id: 9002, customer_payment_method: "VNPAY" as const, deposit_payment_status: "PENDING" as const };
+    vi.spyOn(frontDeskApi, "reservations").mockResolvedValueOnce({ items: [hotelRequest, vnpayRequest], page: 0, size: 100, total_elements: 2, total_pages: 1 });
+    vi.spyOn(frontDeskApi, "guests").mockResolvedValueOnce([{
+      id: 91, full_name: "Khách đặt tại quầy UAT", birth_year: null, identity_number: "012345678901", phone: "0900000091",
+      email: null, address: null, membership_tier: "STANDARD", total_spend: 0, late_cancellation_count: 0,
+      late_checkout_count: 0, booking_blocked: false,
+    }]);
+    const confirmSpy = vi.spyOn(frontDeskApi, "receiveDeposit").mockResolvedValue({
+      ...hotelRequest, status: "DEPOSIT_PAID", deposit_payment_status: "PAID", employee_id: "EMP001",
+    });
+
+    render(<FrontDeskPMS onBack={onBack} />);
+
+    expect(await screen.findByText("Khách đặt tại quầy UAT")).toBeDefined();
+    expect(screen.getByText(/BK-9001/)).toBeDefined();
+    expect(screen.queryByText(/BK-9002/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Đã nhận đủ cọc:/ }));
+
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalledWith(9001, expect.any(String)));
+    await waitFor(() => expect(screen.queryByText("Khách đặt tại quầy UAT")).toBeNull());
   });
 
   it("navigates to Sơ đồ phòng and tests grid / list views, drawer close and tabs", async () => {
@@ -277,6 +406,33 @@ describe("FrontDeskPMS Reception Interface", () => {
     expect(within(drawer).queryByText("Có khách")).toBeNull();
     expect(within(drawer).getByText("Nguyễn Văn An")).toBeDefined();
     expect(within(drawer).getByText(/2026-09-24T18:00:00/)).toBeDefined();
+  });
+
+  it("shows a temporary cash hold and requires an explicit cash receipt", async () => {
+    vi.mocked(frontDeskApi.dashboard).mockResolvedValue({
+      business_date: "2026-09-23", page: 0, size: 100, total_elements: 1, total_pages: 1,
+      room_counts: {}, invoice_balances: [], arrivals: [], departures: [], current_stays: [], incidents: [],
+      rooms: [
+        { room_id: "903", name: "903", floor: 9, room_type_id: "DLX", room_type_name: "Deluxe", bed_type: "King", daily_price: 2600000, status: "READY" },
+      ],
+      unpaid_deposits: [{
+        reservation_id: 903, guest_id: 9, guest_name: "Khách thanh toán tại quầy", guest_phone: "0909000903",
+        check_in: "2026-10-03T14:00:00", check_out: "2026-10-04T12:00:00", status: "PENDING_PAYMENT",
+        deposit_amount: 1300000, deposit_payment_status: "PENDING", invoice_balance: 0, room_ids: ["903"],
+      }],
+    });
+    const confirm = vi.spyOn(frontDeskApi, "receiveDeposit").mockResolvedValue({} as never);
+    vi.mocked(frontDeskApi.reservation).mockResolvedValue({ id:903, customer_payment_method:"PAY_AT_HOTEL", deposit_payment_expires_at:"2035-01-01T12:00:00" } as never);
+
+    render(<FrontDeskPMS onBack={onBack} />);
+    fireEvent.click(screen.getByRole("button", { name: /Sơ đồ phòng/i }));
+
+    const drawer = await screen.findByLabelText("Chi tiết phòng 903");
+    expect(within(drawer).getByText("Giữ tạm")).toBeDefined();
+    expect(within(drawer).getByText("Khách thanh toán tại quầy")).toBeDefined();
+    expect(within(drawer).getByText("Giữ tạm · chờ thanh toán cọc")).toBeDefined();
+    fireEvent.click(await within(drawer).findByRole("button", { name: /Đã nhận đủ cọc:/ }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith(903, expect.any(String)));
   });
 
   it("navigates to Khách hàng screen, searches and toggles VIP filter", async () => {
@@ -421,6 +577,46 @@ describe("FrontDeskPMS Reception Interface", () => {
     // Room card should display badge "Đã giữ phòng"
     const badges = screen.getAllByText("Đã giữ phòng");
     expect(badges.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps checkout settlement after the live room becomes vacant and refreshes the paid balance", async () => {
+    render(<FrontDeskPMS onBack={onBack} />);
+    fireEvent.click(screen.getByRole("button", { name: /Sơ đồ phòng/i }));
+    const drawer = await screen.findByLabelText("Chi tiết phòng 203");
+    await within(drawer).findByText("1.200.000 ₫");
+    fireEvent.click(within(drawer).getByRole("button", { name: "Trả phòng & Quyết toán" }));
+    await within(drawer).findByRole("button", { name: "Khách đã xác nhận hóa đơn" });
+    const before: Awaited<ReturnType<typeof frontDeskApi.dashboard>> = await vi.mocked(frontDeskApi.dashboard).mock.results[0].value;
+    vi.mocked(frontDeskApi.dashboard).mockResolvedValue({ ...before, current_stays: [], departures: [], rooms: before.rooms.map(room => ({ ...room, status: "CLEANING" })) });
+    fireEvent.change(screen.getByPlaceholderText("Tìm tên khách, CCCD, số phòng, mã booking"), { target: { value: "203" } });
+    await waitFor(() => expect(frontDeskApi.dashboard).toHaveBeenCalledTimes(2));
+    expect(within(drawer).getByRole("button", { name: "Khách đã xác nhận hóa đơn" })).toBeTruthy();
+    const currentInvoice = await vi.mocked(frontDeskApi.invoice).mock.results[0].value;
+    vi.mocked(frontDeskApi.invoice).mockResolvedValue({ ...currentInvoice, payable: 0 });
+    vi.mocked(frontDeskApi.payments).mockResolvedValue([{ amount: 1700000, type: "PAYMENT", status: "COMPLETED" }] as never);
+    const payment = vi.spyOn(frontDeskApi, "recordPayment").mockResolvedValue({} as never);
+    fireEvent.click(within(drawer).getByRole("button", { name: "Khách đã xác nhận hóa đơn" }));
+    fireEvent.click(within(drawer).getByRole("button", { name: "Xác nhận đã thu 1.200.000 ₫" }));
+    await waitFor(() => expect(payment).toHaveBeenCalledWith(2001, expect.objectContaining({ amount: 1200000 }), expect.any(String)));
+    expect(await within(drawer).findByRole("button", { name: "Phát hành & in biên lai" })).toBeTruthy();
+    await waitFor(() => expect(within(drawer).getAllByText("0 ₫").length).toBeGreaterThan(0));
+  });
+
+  it("reopens an unpaid checked-out invoice after the room has been released", async () => {
+    const dashboard: Awaited<ReturnType<typeof frontDeskApi.dashboard>> = await vi.mocked(frontDeskApi.dashboard)({});
+    const reservation = await vi.mocked(frontDeskApi.reservation)(1001);
+    vi.mocked(frontDeskApi.reservation).mockResolvedValue({ ...reservation, status: "CHECKED_OUT" });
+    vi.mocked(frontDeskApi.dashboard).mockResolvedValue({ ...dashboard, current_stays: [],
+      invoice_balances: [{ ...dashboard.current_stays[0], status: "CHECKED_OUT", room_ids: [], invoice_balance: 1200000 }],
+      rooms: dashboard.rooms.map(room => ({ ...room, status: "CLEANING" })) });
+    render(<FrontDeskPMS onBack={onBack} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Tiếp tục quyết toán BK-1001" }));
+    const settlement = await screen.findByRole("dialog", { name: "Quyết toán BK-1001" });
+    expect(await within(settlement).findByRole("button", { name: "Khách đã xác nhận hóa đơn" })).toBeTruthy();
+    expect(frontDeskApi.checkOut).not.toHaveBeenCalled();
+    fireEvent.click(within(settlement).getByRole("button", { name: "Đóng chi tiết phòng" }));
+    expect(screen.queryByRole("dialog", { name: "Quyết toán BK-1001" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "Tiếp tục quyết toán BK-1001" })).toBeTruthy();
   });
 
   it("shows error banner and retry button on API failure without mock data fallback", async () => {

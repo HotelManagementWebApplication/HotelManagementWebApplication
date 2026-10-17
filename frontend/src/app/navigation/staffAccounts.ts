@@ -9,7 +9,6 @@ export type View =
   | "maintenance"
   | "accounting"
   | "manager"
-  | "staff"
   | "hr"
   | "admin";
 
@@ -31,7 +30,6 @@ export const staffAccounts: Record<string, StaffAccount> = {
   director: { employeeId: "DIRECTOR", role: "director", view: "manager", label: "Giám đốc" },
   admin: { employeeId: "ADMIN", role: "admin", view: "admin", label: "Quản trị hệ thống" },
   hr: { employeeId: "HR", role: "hr", view: "hr", label: "Nhân sự" },
-  staff: { employeeId: "STAFF", role: "staff", view: "staff", label: "Nhân viên" },
   // Email aliases retained for existing login credentials.
   "frontdesk@hotel.com": { employeeId: "FRONTDESK", role: "reception", view: "frontdesk", label: "Lễ tân" },
   "housekeeping@hotel.com": { employeeId: "HOUSEKEEP", role: "housekeeping", view: "housekeeping", label: "Buồng phòng" },
@@ -42,7 +40,6 @@ export const staffAccounts: Record<string, StaffAccount> = {
   "director@hotel.com": { employeeId: "DIRECTOR", role: "director", view: "manager", label: "Giám đốc" },
   "admin@hotel.com": { employeeId: "ADMIN", role: "admin", view: "admin", label: "Quản trị hệ thống" },
   "hr@hotel.com": { employeeId: "HR", role: "hr", view: "hr", label: "Nhân sự" },
-  "staff@hotel.com": { employeeId: "STAFF", role: "staff", view: "staff", label: "Nhân viên" },
 };
 
 const employeeRoleDestinations: Record<string, Pick<StaffAccount, "role" | "view">> = {
@@ -55,11 +52,9 @@ const employeeRoleDestinations: Record<string, Pick<StaffAccount, "role" | "view
   DIRECTOR: { role: "director", view: "manager" },
   ADMIN: { role: "admin", view: "admin" },
   HR: { role: "hr", view: "hr" },
-  STAFF: { role: "staff", view: "staff" },
 };
 
-export function resolveEmployeeDestination(role: string, fallback?: StaffAccount): Pick<StaffAccount, "role" | "view"> {
+export function resolveEmployeeDestination(role: string): Pick<StaffAccount, "role" | "view"> {
   if (employeeRoleDestinations[role]) return employeeRoleDestinations[role];
-  if (fallback) return { role: fallback.role, view: fallback.view };
-  return { role: "staff", view: "staff" };
+  throw new Error("Không xác định được vai trò nhân viên từ hồ sơ máy chủ.");
 }

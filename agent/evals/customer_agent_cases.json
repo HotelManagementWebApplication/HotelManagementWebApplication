@@ -1,0 +1,44 @@
+[
+  {
+    "id": "room-tier-count",
+    "question": "Khách sạn có bao nhiêu loại phòng?",
+    "expected_intent": "room_tiers",
+    "must_include": ["5 hạng phòng chính", "STD", "SUP", "DLX", "SUT", "VIP"],
+    "must_not_include": ["VND", "phòng còn trống", "Một số phòng"]
+  },
+  {
+    "id": "room-tier-count-paraphrase",
+    "question": "Bên mình có mấy hạng phòng?",
+    "expected_intent": "room_tiers",
+    "must_include": ["5 hạng phòng chính", "STD", "SUP", "DLX", "SUT", "VIP"],
+    "must_not_include": ["VND", "phòng còn trống", "Một số phòng"]
+  },
+  {
+    "id": "room-tier-list",
+    "question": "Cho tôi danh sách các loại phòng, không cần giá.",
+    "expected_intent": "room_tiers",
+    "must_include": ["5 hạng phòng chính", "STD", "SUP", "DLX", "SUT", "VIP"],
+    "must_not_include": ["VND", "phòng còn trống", "Một số phòng"]
+  },
+  {
+    "id": "room-tier-list-natural",
+    "question": "Khách sạn đang có những hạng phòng nào?",
+    "expected_intent": "room_tiers",
+    "must_include": ["5 hạng phòng chính", "STD", "SUP", "DLX", "SUT", "VIP"],
+    "must_not_include": ["VND", "phòng còn trống", "Một số phòng"]
+  },
+  {
+    "id": "physical-room-count",
+    "question": "Khách sạn có tổng cộng bao nhiêu phòng?",
+    "expected_intent": "physical_room_count",
+    "must_include": ["9 phòng vật lý", "5 hạng phòng chính"],
+    "must_not_include": ["VND", "phòng còn trống", "Một số phòng"]
+  },
+  {
+    "id": "physical-room-count-paraphrase",
+    "question": "Hiện khách sạn có mấy phòng tất cả?",
+    "expected_intent": "physical_room_count",
+    "must_include": ["9 phòng vật lý", "5 hạng phòng chính"],
+    "must_not_include": ["VND", "phòng còn trống", "Một số phòng"]
+  }
+]

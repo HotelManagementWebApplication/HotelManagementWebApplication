@@ -76,33 +76,13 @@ public class ServiceController {
 
 
     /**
-     * Tạo dịch vụ qua POST /api/services; body tạo dịch vụ được {@code @Valid} kiểm tra và trả 201 cùng dịch vụ mới.
-     * Chỉ SERVICE_WRITE được phép, actor hiện tại được truyền để ghi nhận trách nhiệm; không có khóa idempotency,
-     * vì vậy dữ liệu trùng hoặc lỗi nghiệp vụ do dịch vụ báo lỗi.
-     */
-    @PostMapping
-
-    @ResponseStatus(HttpStatus.CREATED)
-
-    @PreAuthorize("@departmentAccess.allows(authentication, 'SERVICE_WRITE')")
-    public ServiceDtos.Response create(@Valid @RequestBody ServiceDtos.CreateRequest request) {
-
-        return service.create(request, SecurityActor.currentActor());
-
-    }
-
-
-
-
-
-    /**
      * Bổ sung tồn kho qua canonical RECEIVE movement tại POST /api/services/{id}/stock.
      * Idempotency-Key bắt buộc để retry không tạo thêm movement; actor hiện tại được ghi nhận.
      */
     @PostMapping("/{id}/stock")
 
 
-    @PreAuthorize("@departmentAccess.allows(authentication, 'INVENTORY_WRITE')")
+    @PreAuthorize("hasAnyRole('KITCHEN','MANAGER','ADMIN','DIRECTOR')")
     public ServiceDtos.Response restock(@PathVariable String id,
 
                                         @Valid @RequestBody ServiceDtos.StockRequest request,
@@ -140,8 +120,7 @@ public class ServiceController {
     @GetMapping("/price-requests")
     @PreAuthorize("@departmentAccess.allows(authentication, 'SERVICE_PRICE_REQUEST')")
     public List<com.hospitality.mis.dto.governance.ApprovalDtos.Response> myPriceRequests() {
-        return service.priceRequestsFor(SecurityActor.currentActor()).stream()
-                .map(com.hospitality.mis.dto.governance.ApprovalDtos.Response::from).toList();
+        return service.priceRequestsFor(SecurityActor.currentActor());
     }
 
 }

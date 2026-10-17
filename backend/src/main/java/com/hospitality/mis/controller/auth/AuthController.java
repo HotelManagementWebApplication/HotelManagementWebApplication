@@ -110,7 +110,7 @@ public class AuthController {
 
     /** Lấy identity/role/permission snapshot của employee hiện tại từ JWT actor và authority backend. */
     @GetMapping("/me")
-    @PreAuthorize("hasAnyRole('ADMIN','DIRECTOR','MANAGER','HR','FRONT_DESK','ACCOUNTING','HOUSEKEEPING','TECHNICAL','KITCHEN','STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN','DIRECTOR','MANAGER','HR','FRONT_DESK','ACCOUNTING','HOUSEKEEPING','TECHNICAL','KITCHEN')")
     public AuthDtos.EmployeeProfileResponse me() {
         return service.employeeMe(SecurityActor.currentPrincipal());
     }
@@ -120,13 +120,13 @@ public class AuthController {
 
     /**
      * Tạo tài khoản nhân viên qua POST /api/auth/employees; body phải là request cấp tài khoản hợp lệ và response là nhân viên mới.
-     * {@code @PreAuthorize} giới hạn quyền EMPLOYEE_PROVISION đồng thời kiểm tra người gọi được quản lý role yêu cầu.
+     * Admin cấp trực tiếp trong ceiling; Quản lý/Giám đốc cấp qua phê duyệt đề nghị HR.
      * Không có khóa idempotency; dữ liệu trùng hoặc không hợp lệ được dịch vụ trả về dưới dạng lỗi nghiệp vụ/validation.
      */
     @PostMapping("/employees")
     @ResponseStatus(HttpStatus.CREATED)
 
-    @PreAuthorize("@departmentAccess.allows(authentication, 'EMPLOYEE_PROVISION') && @employeeService.canManageRole(authentication, #request.role())")
+    @PreAuthorize("hasRole('ADMIN') && @employeeService.canManageRole(authentication, #request.role())")
     public AuthDtos.EmployeeResponse provision(@Valid @RequestBody AuthDtos.ProvisionRequest request) {
 
         return service.provision(request);

@@ -15,6 +15,13 @@ import java.util.List;
 
 /** DTO cho bàn giao tiền mặt, chi phí và công nợ đối tác của vận hành. */
 public final class FinanceDtos {
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record CashRecipient(String employeeId, String fullName) {}
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record CashBalanceResponse(String actorId, LocalDateTime calculatedAt, BigDecimal payments,
+                                      BigDecimal refunds, BigDecimal receivedHandovers,
+                                      BigDecimal handedOverExpected, BigDecimal cashExpenses,
+                                      BigDecimal cashDebtSettlements, BigDecimal expectedAmount) {}
     /** Namespace không trạng thái cho các payload tài chính. */
     private FinanceDtos() {}
     /** Request bàn giao ca; mã ca và hai tác nhân bắt buộc để truy vết. */
@@ -59,11 +66,11 @@ public final class FinanceDtos {
                                        LocalDateTime handedOverAt,
                                        /** Ghi chú. */
                                        String note,
-                                       List<DenominationLine> denominations) {
+                                       List<DenominationLine> denominations,String confirmedBy,LocalDateTime confirmedAt) {
         public CashHandoverResponse(Long id, String shiftCode, String fromActor, String toActor,
                                     BigDecimal expectedAmount, BigDecimal actualAmount, BigDecimal variance,
                                     LocalDateTime handedOverAt, String note) {
-            this(id, shiftCode, fromActor, toActor, expectedAmount, actualAmount, variance, handedOverAt, note, List.of());
+            this(id, shiftCode, fromActor, toActor, expectedAmount, actualAmount, variance, handedOverAt, note, List.of(),null,null);
         }
     }
     /** Request ghi nhận một khoản chi phí dương theo nhóm và mô tả. */
@@ -74,7 +81,8 @@ public final class FinanceDtos {
                                  /** Mô tả khoản chi. */
                                  @NotBlank String description,
                                  /** Số tiền chi dương. */
-                                 @NotNull @Positive BigDecimal amount) {}
+                                 @NotNull @Positive BigDecimal amount,
+                                 @NotNull com.hospitality.mis.entity.billing.PaymentMethod method) {}
     /** Khoản chi đã ghi nhận cùng tác nhân, thời điểm và trạng thái. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record ExpenseResponse(
@@ -91,7 +99,7 @@ public final class FinanceDtos {
                                   /** Thời điểm trả. */
                                   LocalDateTime paidAt,
                                   /** Trạng thái khoản chi. */
-                                  Expense.ExpenseStatus status) {}
+                                  Expense.ExpenseStatus status, com.hospitality.mis.entity.billing.PaymentMethod method) {}
     /** Request ghi nhận công nợ phải trả cho một đối tác. */
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record PartnerDebtRequest(
@@ -120,10 +128,11 @@ public final class FinanceDtos {
                                       LocalDateTime recordedAt) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record DebtSettlementRequest(@NotNull @Positive BigDecimal amount, String note) {}
+    public record DebtSettlementRequest(@NotNull @Positive BigDecimal amount, String note,
+                                        @NotNull com.hospitality.mis.entity.billing.PaymentMethod method) {}
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record DebtSettlementResponse(Long id, Long partnerDebtId, BigDecimal amount, String settledBy,
-                                         LocalDateTime settledAt, String note) {}
+                                         LocalDateTime settledAt, String note, com.hospitality.mis.entity.billing.PaymentMethod method) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record LedgerEntryResponse(Long id, String entryType, String sourceType, String sourceId,
@@ -134,7 +143,7 @@ public final class FinanceDtos {
     public record ReconciliationResponse(LocalDate fromDate, LocalDate toDate, Map<String, BigDecimal> totalsByMethod,
                                          BigDecimal totalPayments, BigDecimal totalRefunds, BigDecimal netTotal,
                                          BigDecimal recognizedRevenue, BigDecimal outstandingPartnerDebt,
-                                         BigDecimal cashVariance) {}
+                                         BigDecimal cashVariance, long completedTransactions, BigDecimal outstandingBankTransferBalances) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record PageResponse<T>(java.util.List<T> items, int page, int size, long totalElements, int totalPages) {}

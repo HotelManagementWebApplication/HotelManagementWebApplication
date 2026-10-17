@@ -43,7 +43,7 @@ hoa hồng thương mại của đối tác.
 | `Repository` / `DAO` | Bộ truy cập dữ liệu | Đọc và ghi database theo yêu cầu của service |
 | `Database` | Cơ sở dữ liệu | Nơi lưu dữ liệu thật của hệ thống |
 | `Migration` | Phiên bản thay đổi database | Script tạo bảng, thêm cột hoặc cập nhật cấu trúc |
-| `Flyway` | Công cụ quản lý cấu trúc | Database demo chạy baseline `V1` duy nhất |
+| `Flyway` | Công cụ quản lý cấu trúc | Database demo chạy đúng chuỗi `V1`–`V6`; không tạo migration bổ sung, theo `AGENTS.md` |
 | `Schema` | Bộ cấu trúc database | Trong dự án hiện tại là schema `QLKS` |
 | `Transaction` | Giao dịch nguyên tử | Một chuỗi thao tác thành công toàn bộ hoặc hoàn tác toàn bộ |
 | `Validation` | Kiểm tra hợp lệ | Chặn dữ liệu thiếu, sai định dạng hoặc sai giới hạn |
@@ -92,7 +92,8 @@ hoa hồng thương mại của đối tác.
 
 | Mã | Tiếng Việt | Ý nghĩa và điều kiện |
 |---|---|---|
-| `DRAFT` | Bản nháp / chờ hoàn tất | Booking mới tạo nhưng chưa đủ điều kiện xác nhận. Booking online thường bắt đầu ở đây và chờ tiền cọc. |
+| `DRAFT` | Bản nháp | Chưa xác nhận và không giữ phòng. |
+| `PENDING_PAYMENT` | Chờ nộp cọc | Phòng giữ tạm tới hạn; chưa có tiền thực thu. Chi tiết phòng là `TEMPORARILY_HELD`. |
 | `DEPOSIT_PAID` | Đã thanh toán tiền cọc | Cổng thanh toán hoặc nhân viên đã xác nhận tiền cọc. Đây là một trạng thái đủ điều kiện để lễ tân theo dõi khách đến. |
 | `CONFIRMED` | Đã xác nhận | Booking đã được khách sạn xác nhận. |
 | `CHECKED_IN` | Đã nhận phòng | Khách đã đến và được nhận phòng. |
@@ -103,14 +104,14 @@ hoa hồng thương mại của đối tác.
 Luồng thông thường:
 
 ```text
-Đặt online -> DRAFT -> Thanh toán cọc -> DEPOSIT_PAID
+Đặt online/tại quầy -> PENDING_PAYMENT -> Nhận đủ cọc -> DEPOSIT_PAID
                                       -> Lễ tân thấy khách đến
 DEPOSIT_PAID/CONFIRMED -> CHECKED_IN -> CHECKED_OUT
                          -> CANCELLED hoặc NO_SHOW nếu không tiếp tục
 ```
 
 Quy tắc hiện tại của màn hình “Khách đến hôm nay” là đúng theo nghiệp vụ:
-chỉ lấy booking `CONFIRMED` hoặc `DEPOSIT_PAID`. Booking `DRAFT` còn đang chờ
+chỉ lấy booking `CONFIRMED` hoặc `DEPOSIT_PAID`. Booking `DRAFT` chưa giữ phòng và `PENDING_PAYMENT` đang chờ
 cọc không hiển thị ở danh sách khách đến.
 
 ### 5.2. Trạng thái tiền cọc (`DepositPaymentStatus`)
@@ -184,11 +185,11 @@ khách trả phòng và bộ phận buồng phòng hoàn tất checklist.
 
 | Mã | Tên tiếng Việt | Định hướng sử dụng |
 |---|---|---|
-| `STD` | Standard – Tiêu chuẩn | Khoảng 15–25 m²; phòng đơn tối đa 2 người, phòng đôi tối đa 4 người. |
-| `SUP` | Superior – Cao cấp hơn | Khoảng 25–35 m²; nội thất và tầm nhìn tốt hơn Standard. |
+| `STD` | Phòng Classic | Khoảng 15–25 m²; phòng đơn tối đa 2 người, phòng đôi tối đa 4 người. |
+| `SUP` | Phòng Superior | Khoảng 25–35 m²; nội thất và tầm nhìn nâng cấp hơn Classic. |
 | `DLX` | Deluxe – Cao cấp | Diện tích rộng, tầng cao, hướng nhìn đẹp, thiết bị cao cấp. |
-| `SUT` | Suite | Diện tích lớn, khu vực riêng, tiện nghi cao cấp, thường ở tầng cao. |
-| `VIP` | Phòng VIP nguyên căn | Có phòng khách riêng, ban công và dịch vụ đặc biệt. |
+| `SUT` | Suite Hoàng Gia | Diện tích lớn, khu vực riêng, tiện nghi cao cấp, thường ở tầng cao. |
+| `VIP` | Penthouse Tổng Thống | Không gian riêng tư trên tầng cao với phòng khách và khu ngủ sang trọng. |
 
 Không có phòng nào được cấu hình vượt quá sức chứa thực tế. Theo yêu cầu dự
 án, hạng phòng lớn nhất được thiết kế tối đa 8 người/phòng.
@@ -207,7 +208,6 @@ Không có phòng nào được cấu hình vượt quá sức chứa thực t�
 | `HOUSEKEEPING` | Buồng phòng | Dọn phòng, checklist, đồ vải và sự cố trong phòng. |
 | `TECHNICAL` | Kỹ thuật | Bảo trì phòng, thiết bị và tài sản kỹ thuật của tòa nhà. |
 | `KITCHEN` | Bếp / vận hành dịch vụ | Dịch vụ ăn uống và tồn kho liên quan. |
-| `STAFF` | Nhân viên nghiệp vụ | Quyền xem giới hạn theo nhiệm vụ được cấp. |
 | `CUSTOMER` | Khách hàng | Chỉ dùng cổng customer và chỉ xem dữ liệu của chính mình. |
 
 `CUSTOMER` là loại tài khoản khách hàng, không phải chức vụ nhân viên.
@@ -415,13 +415,12 @@ Chỉ khách có booking phòng đã xác nhận cọc mới được đặt tr�
 khách ngoài không được đặt. Dịch vụ chỉ được ghi nhận `USED` sau khi booking
 `CHECKED_IN`. Mỗi lượt đặt gắn với `reservation_id`, `room_id`, số lượng và
 thời gian sử dụng. `free_quantity` là phần nằm trong hạn mức; chỉ phần vượt
-hạn mức đã dùng mới tính vào hóa đơn phòng. Hủy booking phòng tự hủy dịch vụ
-chưa dùng. Hồ bơi chỉ xem thông tin trên web, không đặt trước.
+hạn mức được tính phí theo chính sách thanh toán trước. Khoản đã trả được giữ
+trên hóa đơn kể cả khi khách hủy hoặc không dùng, và khấu trừ tiền đã thu khi checkout.
+Hủy booking phòng tự hủy dịch vụ chưa dùng. Hồ bơi chỉ xem thông tin trên web, không đặt trước.
 
-Khách thuê theo gói ngày-đêm có quyền lợi: hồ bơi không giới hạn theo số khách
-trong booking; giặt ủi một lần/ngày/phòng; bữa sáng một suất/ngày/khách; tại
-MaM Restaurant mỗi khách một bữa trưa và một bữa tối/ngày. Khách thuê theo giờ
-trả giá niêm yết cho mọi dịch vụ. Xem bảng giá tại `rule.md` mục 15.
+Quyền lợi, định mức miễn phí và giá dịch vụ áp dụng cho khách được định nghĩa
+duy nhất tại `customer-policy.md` mục 8.
 
 ### 9.3. Thuật ngữ đặt bàn/lịch hẹn
 
@@ -429,9 +428,11 @@ trả giá niêm yết cho mọi dịch vụ. Xem bảng giá tại `rule.md` m�
 |---|---|
 | `Table booking` | Đặt bàn |
 | `Appointment` | Đặt lịch hẹn, ví dụ lịch spa |
-| `CONFIRMED` | Dịch vụ đã đặt và giữ hạn mức miễn phí |
+| `PENDING_PAYMENT` | Giữ chỗ tối đa 10 phút để khách thanh toán phần tính phí |
+| `EXPIRED` | Hết hạn thanh toán, đã trả lại khả dụng |
+| `CONFIRMED` | Lượt miễn phí hoặc lượt đã thanh toán hợp lệ, đã xác nhận |
 | `USED` | Lễ tân xác nhận đã sử dụng; phần trả phí vào hóa đơn phòng |
-| `CANCELLED` | Dịch vụ đã hủy; hạn mức được giải phóng |
+| `CANCELLED` | Lượt đã hủy; khoản đã thanh toán không hoàn theo chính sách khách hàng |
 | `Supplier debt` | Công nợ nhà cung cấp hàng hóa/vật tư |
 
 ## 10. Vận hành buồng phòng và kỹ thuật
@@ -685,8 +686,9 @@ tiếng Việt như “Khách đến hôm nay”, “Chưa thanh toán cọc”,
 4. Khi cần đổi chữ hiển thị, chỉ sửa nhãn tiếng Việt ở frontend hoặc lớp dịch.
 5. Khi thêm trạng thái mới, phải ghi vào tài liệu này, cập nhật luồng chuyển
    trạng thái, API, giao diện và dữ liệu mẫu.
-6. Khi thêm trường database, tạo migration Flyway mới; không sửa migration đã
-   chạy trên database đang có dữ liệu.
+6. Khi thêm trường database, sửa V1 trong baseline demo cố định V1–V6 theo
+   `AGENTS.md`; trigger chỉ đặt ở V6, không tạo V7+ hoặc SQL phụ. Chỉ dựng lại database demo/test đã
+   được cho phép khi checksum thay đổi; không repair lịch sử Flyway.
 7. Mọi thao tác tài chính, hoàn tiền, điều chỉnh hóa đơn, duyệt giá hoặc thay
    đổi dữ liệu nhạy cảm phải có người thực hiện và nhật ký audit.
 

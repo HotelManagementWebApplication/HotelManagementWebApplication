@@ -1,59 +1,28 @@
 package com.hospitality.mis.governance;
-
 import com.hospitality.mis.common.exception.DomainException;
-import com.hospitality.mis.dao.governance.ApprovalRepository;
-import com.hospitality.mis.entity.governance.ApprovalRequest;
 import com.hospitality.mis.service.governance.ApprovalService;
-import com.hospitality.mis.service.governance.AuditService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import java.time.*;
+import java.math.BigDecimal;
+import static org.assertj.core.api.Assertions.*;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest(properties={"spring.datasource.url=${MIGRATION_TEST_DB_URL}","spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}","spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}","spring.flyway.enabled=true","spring.jpa.hibernate.ddl-auto=validate"})
 class ApprovalQueueFilterTest {
-    @Mock ApprovalRepository approvals;
-    @Mock AuditService audit;
-    private ApprovalService service;
-
-    @BeforeEach
-    void setUp() {
-        service = new ApprovalService(approvals, audit);
-        org.springframework.test.util.ReflectionTestUtils.setField(service, "clock",
-                Clock.fixed(Instant.parse("2026-09-14T00:00:00Z"), ZoneOffset.UTC));
-        when(approvals.findByStatusAndExpiresAtLessThanEqual(eq(ApprovalRequest.PENDING), any()))
-                .thenReturn(List.of());
+    @Autowired ApprovalService service;@Autowired JdbcTemplate jdbc;
+    @BeforeEach @AfterEach void cleanup(){jdbc.update("DELETE BanGhiChongTrung WHERE nguoiThucHien=N'APQ-requester'");jdbc.update("DELETE NhatKyKiemSoat WHERE nguoiThucHien=N'APQ-requester'");jdbc.update("DELETE YeuCauPheDuyet WHERE nguoiYeuCau=N'APQ-requester'");SecurityContextHolder.clearContext();}
+    @Test void queueAppliesRiskRequestedTimeAndEveryFilterInDatabase(){
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("APQ-requester","n/a","ROLE_FRONT_DESK"));
+        var request=service.request("APQ-requester","PRICE_OVERRIDE","APQ-R","{}",new BigDecimal("10000000"),"review","APQ-key");
+        Instant now=request.requestedAt();
+        assertThat(service.page(null,"PRICE_OVERRIDE","APQ-R","APQ-requester","high",now,now.plusSeconds(1),0,20).getContent()).containsExactly(request);
+        assertThat(service.page(null,"PRICE_OVERRIDE","APQ-R","APQ-requester","LOW",null,null,0,20).getContent()).isEmpty();
+        assertThat(service.page(null,"PRICE_OVERRIDE","APQ-R","APQ-requester","HIGH",null,now,0,20).getContent()).isEmpty();
+        assertThat(service.page(null,"PRICE_OVERRIDE","APQ-R","APQ-requester","HIGH",null,null,-1,1000).getSize()).isEqualTo(100);
     }
-
-    @Test
-    void queuePassesRiskAndRequestedDateToRepository() {
-        Instant from = Instant.parse("2026-09-01T00:00:00Z");
-        Instant to = Instant.parse("2026-10-01T00:00:00Z");
-        when(approvals.searchAdvanced(eq("PENDING"), eq("PRICE_OVERRIDE"), eq("R1"), eq("requester"),
-                eq("HIGH"), eq(from), eq(to), any(Pageable.class))).thenReturn(Page.empty());
-
-        service.page(null, "PRICE_OVERRIDE", "R1", "requester", "high", from, to, 0, 20);
-
-        verify(approvals).searchAdvanced(eq("PENDING"), eq("PRICE_OVERRIDE"), eq("R1"), eq("requester"),
-                eq("HIGH"), eq(from), eq(to), any(Pageable.class));
-    }
-
-    @Test
-    void queueRejectsUnknownRisk() {
-        DomainException error = assertThrows(DomainException.class,
-                () -> service.page(null, null, null, null, "urgent", null, null, 0, 20));
-        assertThat(error.getCode()).isEqualTo("INVALID_APPROVAL_RISK");
-    }
+    @Test void queueRejectsUnknownRisk(){assertThatThrownBy(()->service.page(null,null,null,null,"urgent",null,null,0,20)).isInstanceOf(DomainException.class).extracting("code").isEqualTo("INVALID_APPROVAL_RISK");}
 }

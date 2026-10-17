@@ -28,10 +28,11 @@ class ReservationDomainTest {
     }
 
     @Test
-    /** Given CONFIRMED -> CHECKED_IN -> CHECKED_OUT, When mở lại, Then terminal state bị từ chối. */
+    /** Given PENDING_PAYMENT -> DEPOSIT_PAID -> CHECKED_IN -> CHECKED_OUT, When mở lại, Then terminal state bị từ chối. */
     void stateTransitionsAreExplicitAndTerminalStatesCannotBeReopened() {
         Reservation reservation = new Reservation();
-        reservation.transitionTo(ReservationStatus.CONFIRMED);
+        reservation.transitionTo(ReservationStatus.PENDING_PAYMENT);
+        reservation.transitionTo(ReservationStatus.DEPOSIT_PAID);
         reservation.transitionTo(ReservationStatus.CHECKED_IN);
         reservation.transitionTo(ReservationStatus.CHECKED_OUT);
         assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CHECKED_OUT);
@@ -39,9 +40,11 @@ class ReservationDomainTest {
     }
 
     @Test
-    /** Given deposit đã trả, When transition trực tiếp, Then DEPOSIT_PAID là creation state hợp lệ. */
-    void depositPaidIsAValidCreationState() {
+    /** Given bản nháp, When bỏ qua chờ cọc, Then bị từ chối; nhận cọc từ PENDING_PAYMENT mới hợp lệ. */
+    void depositPaidRequiresThePendingDepositState() {
         Reservation reservation = new Reservation();
+        assertThrows(IllegalStateException.class, () -> reservation.transitionTo(ReservationStatus.DEPOSIT_PAID));
+        reservation.transitionTo(ReservationStatus.PENDING_PAYMENT);
         reservation.transitionTo(ReservationStatus.DEPOSIT_PAID);
         assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.DEPOSIT_PAID);
     }

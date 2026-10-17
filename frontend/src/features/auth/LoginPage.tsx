@@ -38,11 +38,11 @@ const DEMO_ROLES = [
   { label: "Buồng phòng", email: "HOUSEKEEP", desc: "Điều phối buồng phòng" },
   { label: "Kỹ thuật", email: "TECHNICAL", desc: "Kỹ thuật & bảo trì" },
   { label: "Kế toán", email: "ACCOUNTING", desc: "Điều phối kế toán" },
-  { label: "Bếp & Nhà hàng", email: "KITCHEN", desc: "Điều phối nhà hàng & kho" },
+  { label: "Kho và Dịch vụ", email: "KITCHEN", desc: "Điều phối kho và dịch vụ" },
   { label: "Nhân sự", email: "HR", desc: "Điều phối nhân sự" },
-  { label: "Quản trị", email: "ADMIN", desc: "Quản trị hệ thống" },
-  { label: "Nhân viên vận hành", email: "STAFF", desc: "Cổng nhân viên" },
 ];
+
+const SHOW_DEMO_ACCOUNTS = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === "true";
 
 export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const [username, setUsername] = useState("");
@@ -62,7 +62,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
       sessionStorage.getItem("pending_booking_category")
     );
     setHasPendingBooking(hasPending);
-    if (hasPending && import.meta.env.DEV) {
+    if (hasPending && SHOW_DEMO_ACCOUNTS) {
       setSelectedRole("Khách hàng");
       setUsername("0901234567");
       setPassword("hotel123");
@@ -369,7 +369,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
                 MaM Hotel
               </span>
               <span className="text-[10px] uppercase tracking-[0.35em] text-[#E6CA85] font-semibold block mt-1.5">
-                Beachfront Retreat &amp; Spa · Biển Hội An
+                Beachfront Retreat &amp; Spa · Biển Vũng Tàu
               </span>
             </div>
           </div>
@@ -385,13 +385,13 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
         {/* 2. Center Editorial Quote Block */}
         <div className="relative z-10 px-8 lg:px-16 my-auto max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-[#D4AF6E]/30 mb-6 text-[#E6CA85] text-[10px] tracking-[0.3em] uppercase font-semibold">
-            <span>KHU NGHỈ DƯỠNG BIỂN CAO CẤP</span>
+            <span>KHÁCH SẠN THƯỢNG LƯU</span>
           </div>
 
           <h2 className="font-display font-light text-white text-3xl sm:text-4xl lg:text-5xl leading-[1.2] tracking-tight mb-6">
             Nơi từng khoảnh khắc{" "}
             <span className="italic text-[#E8C878] font-normal block mt-1">
-              hòa cùng biển trời vô tận.
+              được nâng tầm thành trải nghiệm.
             </span>
           </h2>
 
@@ -402,8 +402,8 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
           </div>
 
           <p className="text-white/80 text-sm lg:text-base font-light leading-relaxed max-w-xl">
-            Không gian kiến trúc trầm ấm bên bờ biển nguyên sơ lộng gió,
-            mở ra kỳ nghỉ an trú tuyệt đối cùng nghệ thuật ẩm thực tinh hoa và các nghi thức dưỡng tâm cổ truyền.
+            Không gian kiến trúc thanh lịch, nội thất tinh tế và dịch vụ tận tâm,
+            mở ra trải nghiệm lưu trú đẳng cấp cùng nghệ thuật ẩm thực tinh hoa và những phút giây thư giãn trọn vẹn.
           </p>
         </div>
 
@@ -411,7 +411,7 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
         <div className="relative z-10 p-8 lg:p-14 pt-0">
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/15 pt-6 text-[10px] uppercase tracking-[0.25em] text-white/60 font-light">
             <div className="flex items-center gap-6">
-              <span>Biệt thự hướng biển</span>
+              <span>Phòng &amp; Suite sang trọng</span>
               <span>·</span>
               <span>Ẩm thực thượng hạng</span>
               <span>·</span>
@@ -473,8 +473,8 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
             </div>
           )}
 
-          {/* ── DEMO ACCOUNT SELECTOR (Development Only) ── */}
-          {import.meta.env.DEV && (
+          {/* ── DEMO ACCOUNT SELECTOR ── */}
+          {SHOW_DEMO_ACCOUNTS && (
             <div className="mb-5 rounded-2xl bg-white border border-[#E5DDD0] shadow-sm overflow-hidden transition-all duration-300">
               {/* Quick 1-click role chips */}
               <div className="p-3 bg-[#FDFBF7] border-b border-[#F0EBE1] flex items-center justify-between gap-2">
@@ -687,49 +687,6 @@ export default function LoginPage({ onLogin, onBack }: LoginPageProps) {
             </button>
           </form>
 
-          {/* Ornamental Divider */}
-          <div className="relative my-5 flex items-center justify-center">
-            <div className="border-t border-[#E5DDD0] w-full" />
-            <span className="bg-[#FAF8F5] px-4 text-[10px] uppercase tracking-[0.22em] text-[#8C827A] font-semibold shrink-0">
-              Hoặc tiếp tục với
-            </span>
-          </div>
-
-          {/* Social Logins */}
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            <button
-              type="button"
-              onClick={() => {
-                setUsername("0900000001");
-                setPassword("customer123");
-                setSelectedRole("Khách hàng mẫu");
-              }}
-              className="flex items-center justify-center gap-2.5 py-2.5 px-4 bg-white border border-[#DDD5C7] hover:border-[#8C6D37] hover:bg-[#FDFBF7] rounded-xl text-xs font-medium text-[#1C1917] transition shadow-xs cursor-pointer"
-            >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 18 18">
-                <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-                <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-                <path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05"/>
-                <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-              </svg>
-              <span>Google</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setUsername("0900000001");
-                setPassword("customer123");
-                setSelectedRole("Khách hàng mẫu");
-              }}
-              className="flex items-center justify-center gap-2.5 py-2.5 px-4 bg-[#1C1917] hover:bg-[#2D2A26] text-white border border-[#1C1917] rounded-xl text-xs font-medium transition shadow-xs cursor-pointer"
-            >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 16 18" fill="white">
-                <path d="M13.173 9.7c-.02-2.017 1.645-2.99 1.72-3.038-.937-1.37-2.395-1.558-2.913-1.576-1.24-.126-2.424.732-3.051.732-.627 0-1.596-.715-2.626-.696-1.352.02-2.598.787-3.292 1.998-1.404 2.44-.36 6.062 1.012 8.045.668.972 1.46 2.065 2.505 2.025 1.007-.04 1.388-.652 2.607-.652 1.22 0 1.564.652 2.632.632 1.082-.02 1.765-.993 2.425-1.972.768-1.13 1.084-2.228 1.101-2.285-.024-.01-2.1-.806-2.12-3.213z"/>
-                <path d="M11.14 3.217c.554-.672.928-1.604.826-2.534-.798.033-1.764.531-2.336 1.197-.513.595-.963 1.549-.842 2.461.89.069 1.797-.452 2.352-1.124z"/>
-              </svg>
-              <span>Apple ID</span>
-            </button>
-          </div>
 
           {/* Registration Invitation */}
           <div className="text-center pt-2">

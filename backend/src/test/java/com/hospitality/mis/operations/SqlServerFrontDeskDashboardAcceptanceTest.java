@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** SQL Server acceptance for the front-desk dashboard's real service/JPA read path. */
+/** SQL Server acceptance for the production dashboard view/function read path. */
 @SpringBootTest(properties = {
         "spring.datasource.url=${MIGRATION_TEST_DB_URL}",
         "spring.datasource.username=${MIGRATION_TEST_DB_USERNAME}",
@@ -109,6 +109,15 @@ class SqlServerFrontDeskDashboardAcceptanceTest {
     }
 
     @Test
+    void currentStayDoesNotReattachCancelledSourceRoomsAfterTransfers() {
+        jdbc.update("UPDATE ChiTietDatPhong SET trangThai=N'Đang có khách' WHERE maPhieuDatPhong=?",CURRENT);
+        for(String room:java.util.List.of("M1","M2")) jdbc.update("INSERT ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,thoiDiemTraPhongBanDau,trangThai) VALUES(?,?,?, ?,?,N'Đã hủy')",CURRENT,room,BUSINESS_DATE.minusDays(3).atTime(14,0),BUSINESS_DATE.minusDays(2).atTime(12,0),BUSINESS_DATE.minusDays(2).atTime(12,0));
+        var current=dashboard.get(BUSINESS_DATE,null,null,0,100).currentStays().stream().filter(r->r.reservationId()==CURRENT).findFirst().orElseThrow();
+        assertThat(current.roomIds()).containsExactly("M5");
+        assertThat(current.checkIn()).isEqualTo(BUSINESS_DATE.minusDays(3).atTime(14,0));
+    }
+
+    @Test
     void incidentsUseStableDatabaseOrderingAndBoundedPage() {
         FrontDeskDashboardDtos.Response page = dashboard.get(BUSINESS_DATE, null, null, 1, 1);
 
@@ -124,7 +133,7 @@ class SqlServerFrontDeskDashboardAcceptanceTest {
                              LocalDateTime checkOut, String depositStatus) {
         jdbc.update("SET IDENTITY_INSERT PhieuDatPhong ON; insert into PhieuDatPhong(maPhieuDatPhong, maKhachLuuTru, trangThai, hinhThucThue, trangThaiThanhToanCoc) values (?,?,?,?,?); SET IDENTITY_INSERT PhieuDatPhong OFF",
                 id, guestId, status, "Theo gói", depositStatus);
-        jdbc.update("insert into ChiTietDatPhong(maPhieuDatPhong, maPhong, thoiDiemNhanPhong, thoiDiemTraPhong, thoiDiemTraPhongBanDau) values (?,?,?,?,?)",
+        jdbc.update("insert into ChiTietDatPhong(maPhieuDatPhong, maPhong, thoiDiemNhanPhong, thoiDiemTraPhong, thoiDiemTraPhongBanDau, trangThai) values (?,?,?,?,?,N'Đã giữ phòng')",
                 id, room, checkIn, checkOut, checkOut);
     }
 

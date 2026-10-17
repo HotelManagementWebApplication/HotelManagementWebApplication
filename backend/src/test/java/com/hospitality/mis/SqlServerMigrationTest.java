@@ -2,7 +2,7 @@ package com.hospitality.mis;
 
 
 
-import com.hospitality.mis.dao.room.JpaReservationOverlapAdapter;
+import com.hospitality.mis.dao.room.RoomDatabase;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,12 +43,13 @@ class SqlServerMigrationTest {
     /** DataSource thật dùng kiểm tra product name và metadata SQL. */
     @Autowired DataSource dataSource;
     /** Adapter native SQL phải dùng đúng giá trị trạng thái tiếng Việt trong SQL Server. */
-    @Autowired JpaReservationOverlapAdapter reservationOverlap;
+    @Autowired RoomDatabase reservationOverlap;
+    @Autowired java.time.Clock overlapClock;
 
 
     @Test
 
-    /** Given SQL Server đã chạy baseline demo, When validate/info, Then migration line và JPA validate đều hợp lệ. */
+    /** Given SQL Server đã chạy migration chain, When validate/info, Then baseline V1 hiện diện và JPA validate hợp lệ. */
     void sqlServerHasTheCompleteMigrationLineAndJpaMappingsValidate() throws Exception {
         try (var connection = dataSource.getConnection()) {
             assertThat(connection.getMetaData().getDatabaseProductName()).isEqualToIgnoringCase("Microsoft SQL Server");
@@ -59,7 +60,236 @@ class SqlServerMigrationTest {
         var appliedVersions = java.util.Arrays.stream(flyway.info().applied())
                 .map(info -> info.getVersion() == null ? "" : info.getVersion().toString())
                 .toList();
-        assertThat(appliedVersions).containsExactly("1");
+        assertThat(appliedVersions).containsExactly("1", "2", "3", "4", "5", "6");
+        Path migrations = Stream.of(Path.of("src/main/resources/db/migration"),
+                        Path.of("backend/src/main/resources/db/migration"))
+                .filter(Files::isDirectory).findFirst()
+                .orElseThrow(() -> new IllegalStateException("Cannot locate the six owned migration files"));
+        try (var files = Files.walk(migrations)) {
+            var sqlFiles = files.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".sql"))
+                    .map(path -> migrations.relativize(path).toString().replace('\\', '/'))
+                    .toList();
+            assertThat(sqlFiles).containsExactlyInAnyOrder(
+                    "V1__baseline_schema.sql", "V2__indexes.sql", "V3__functions.sql",
+                    "V4__views.sql", "V5__stored_procedures.sql", "V6__triggers.sql");
+        }
+        assertDatabaseObjects("FN", Set.of(
+                "fnKiemTraLichPhongTrong",
+                "fnKiemTraPhongTrong", "fnTinhTongTienPhong", "fnTinhTongTienDichVu",
+                "fnTinhSoDuHoaDon", "fnKiemTraTrungCaLamViec"));
+        assertDatabaseObjects("V", Set.of(
+                "vwPhongCongKhai", "vwDichVuCongKhai", "vwDatPhongChiTiet", "vwDashboardLeTan",
+                "vwHoaDonChiTiet", "vwYeuCauKho", "vwCongViecBuongPhong", "vwChuyenPhong",
+                "vwCongViecKyThuat", "vwLichLamViecNhanVien", "vwDoanhThuTheoNgay"));
+        assertDatabaseObjects("P", Set.of(
+                "uspTaoDatPhong", "uspLenhDatPhong", "uspLenhHoaDon",
+                "uspChuyenPhong", "uspLenhThanhToanCocOnline", "uspHetHanGiuCoc",
+                "uspXacNhanSuDungDichVu", "uspHuyDatDichVu", "uspLenhYeuCauKho",
+                "uspLenhGiaoDichThanhToan", "uspPhatHanhBienLai", "uspTaoNhiemVuBuongPhong",
+                "uspCapNhatNhiemVuBuongPhong", "uspLenhCongViecKyThuat",
+                "uspPhanCongCa", "uspLenhPheDuyet"));
+        assertDatabaseObjects("TR", Set.of(
+                "trgBienLaiBaoDamTienThu", "trgThanhToanBaoDamBienLai", "trgCaLamViecKhongTrung",
+                "trgNhatKyKiemSoatKhongSua", "trgYeuCauPheDuyetKhongTuDuyet",
+                "trgButToanTaiChinhKhongSua", "trgLichSuHangThanhVienKhongSua",
+                "trgDatDichVuDungKhungGioBuaAn", "trgDatDichVuTrongKyLuuTru",
+                "trgDatDichVuChiDungKhiDangO"));
+    }
+
+    @Test
+    /** Audit đã ghi chỉ được bổ sung bằng sự kiện mới, không được sửa lại bằng DML trực tiếp. */
+    void auditTriggerRejectsRewritingExistingEvidence() throws Exception {
+        String key = "TR-AUDIT-" + UUID.randomUUID();
+        try (var connection = dataSource.getConnection()) {
+            try (var insert = connection.prepareStatement("insert dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,khoaLienKet) values(N'AUDIT',N'ORIGINAL',N'TRIGGER_TEST',N'1',?)")) {
+                insert.setString(1, key);
+                assertThat(insert.executeUpdate()).isEqualTo(1);
+            }
+            assertThatThrownBy(() -> {
+                try (var update = connection.prepareStatement("update dbo.NhatKyKiemSoat set hanhDong=N'REWRITTEN' where khoaLienKet=?")) {
+                    update.setString(1, key);
+                    update.executeUpdate();
+                }
+            }).isInstanceOf(java.sql.SQLException.class)
+                    .satisfies(error -> assertThat(((java.sql.SQLException) error).getErrorCode()).isEqualTo(53605));
+            try (var query = connection.prepareStatement("select hanhDong from dbo.NhatKyKiemSoat where khoaLienKet=?")) {
+                query.setString(1, key);
+                try (var result = query.executeQuery()) {
+                    assertThat(result.next()).isTrue();
+                    assertThat(result.getString(1)).isEqualTo("ORIGINAL");
+                }
+            } finally {
+                try (var cleanup = connection.prepareStatement("delete dbo.NhatKyKiemSoat where khoaLienKet=?")) {
+                    cleanup.setString(1, key);
+                    cleanup.executeUpdate();
+                }
+            }
+        }
+    }
+
+    @Test
+    /** DML trực tiếp cũng phải giữ separation-of-duties giữa requester và approver. */
+    void approvalTriggerRejectsSelfApprovalAndAllowsAnotherApprover() throws Exception {
+        String key = "TR-APP-" + UUID.randomUUID();
+        try (var connection = dataSource.getConnection()) {
+            try (var insert = connection.prepareStatement("insert dbo.YeuCauPheDuyet(nguoiYeuCau,hanhDong,maDoiTuong,duLieuThayDoi,dauVanTayDuLieu,lyDo,mucDoRuiRo,thoiDiemYeuCau,trangThai,thoiDiemHetHan,khoaLienKet) values(N'REQUESTER',N'Điều chỉnh giá',N'1',N'{}',REPLICATE(N'0',64),N'Kiểm tra SoD',N'Thấp',SYSDATETIMEOFFSET(),N'Chờ phê duyệt',DATEADD(HOUR,1,SYSDATETIMEOFFSET()),?)")) {
+                insert.setString(1, key);
+                assertThat(insert.executeUpdate()).isEqualTo(1);
+            }
+            assertThatThrownBy(() -> {
+                try (var update = connection.prepareStatement("update dbo.YeuCauPheDuyet set trangThai=N'Đã phê duyệt',nguoiPheDuyet=N'REQUESTER',thoiDiemQuyetDinh=SYSDATETIMEOFFSET() where khoaLienKet=?")) {
+                    update.setString(1, key);
+                    update.executeUpdate();
+                }
+            }).isInstanceOf(java.sql.SQLException.class)
+                    .satisfies(error -> assertThat(((java.sql.SQLException) error).getErrorCode()).isEqualTo(53606));
+            try (var valid = connection.prepareStatement("update dbo.YeuCauPheDuyet set trangThai=N'Đã phê duyệt',nguoiPheDuyet=N'DIRECTOR',thoiDiemQuyetDinh=SYSDATETIMEOFFSET() where khoaLienKet=?")) {
+                valid.setString(1, key);
+                assertThat(valid.executeUpdate()).isEqualTo(1);
+            }
+            try (var query = connection.prepareStatement("select trangThai,nguoiPheDuyet from dbo.YeuCauPheDuyet where khoaLienKet=?")) {
+                query.setString(1, key);
+                try (var result = query.executeQuery()) {
+                    assertThat(result.next()).isTrue();
+                    assertThat(result.getString(1)).isEqualTo("Đã phê duyệt");
+                    assertThat(result.getString(2)).isEqualTo("DIRECTOR");
+                }
+            } finally {
+                try (var cleanup = connection.prepareStatement("delete dbo.YeuCauPheDuyet where khoaLienKet=?")) {
+                    cleanup.setString(1, key);
+                    cleanup.executeUpdate();
+                }
+            }
+        }
+    }
+
+    @Test
+    /** Bút toán đã ghi là chứng từ bất biến; sửa sai phải dùng dòng điều chỉnh mới. */
+    void financialPostingTriggerRejectsRewritingLedgerHistory() throws Exception {
+        String source = "TR-LEDGER-" + UUID.randomUUID();
+        try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+            try {
+                statement.executeUpdate("insert dbo.ButToanTaiChinh(loaiButToan,loaiNguon,maNguon,chieuButToan,soTien,maNguoiThucHien,thoiDiemPhatSinh,ghiChu,daChotSo) "
+                        + "values(N'Kiểm thử',N'TRIGGER',N'" + source + "',N'Ghi nợ',1000,N'AUDIT',SYSDATETIME(),N'Giá trị gốc',1)");
+                assertThatThrownBy(() -> statement.executeUpdate("update dbo.ButToanTaiChinh set soTien=2000 where maNguon=N'" + source + "'"))
+                        .isInstanceOf(java.sql.SQLException.class)
+                        .satisfies(error -> assertThat(((java.sql.SQLException) error).getErrorCode()).isEqualTo(53607));
+                try (var result = statement.executeQuery("select soTien from dbo.ButToanTaiChinh where maNguon=N'" + source + "'")) {
+                    assertThat(result.next()).isTrue();
+                    assertThat(result.getBigDecimal(1)).isEqualByComparingTo("1000");
+                }
+            } finally {
+                statement.executeUpdate("delete dbo.ButToanTaiChinh where maNguon=N'" + source + "'");
+            }
+        }
+    }
+
+    @Test
+    /** Lịch sử đổi hạng chỉ được nối thêm, không được viết lại sự kiện đã xảy ra. */
+    void membershipTierHistoryTriggerRejectsRewritingTransitions() throws Exception {
+        String reason = "TR-TIER-" + UUID.randomUUID();
+        String phone = "07" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+            try {
+                statement.executeUpdate("insert dbo.KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) "
+                        + "values(N'Trigger tier test',N'" + phone + "',N'" + phone + "')");
+                statement.executeUpdate("insert dbo.LichSuHangThanhVien(maKhachLuuTru,hangCu,hangMoi,lyDo,thoiDiemThayDoi) "
+                        + "select maKhachLuuTru,N'Tiêu chuẩn',N'Bạc',N'" + reason + "',SYSDATETIME() from dbo.KhachLuuTru where soDienThoai=N'" + phone + "'");
+                assertThatThrownBy(() -> statement.executeUpdate("update dbo.LichSuHangThanhVien set hangMoi=N'Vàng' where lyDo=N'" + reason + "'"))
+                        .isInstanceOf(java.sql.SQLException.class)
+                        .satisfies(error -> assertThat(((java.sql.SQLException) error).getErrorCode()).isEqualTo(53608));
+                try (var result = statement.executeQuery("select hangMoi from dbo.LichSuHangThanhVien where lyDo=N'" + reason + "'")) {
+                    assertThat(result.next()).isTrue();
+                    assertThat(result.getString(1)).isEqualTo("Bạc");
+                }
+            } finally {
+                statement.executeUpdate("delete dbo.LichSuHangThanhVien where lyDo=N'" + reason + "'");
+                statement.executeUpdate("delete dbo.KhachLuuTru where soDienThoai=N'" + phone + "'");
+            }
+        }
+    }
+
+    @Test
+    /** Function tiền phòng phải giữ cách làm tròn giờ/ngày và giá giờ cấu hình của PricingPolicy. */
+    void databasePricingFunctionsMatchCurrentBoundaryRules() throws Exception {
+        try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+            try (var result = statement.executeQuery("select "
+                    + "dbo.fnTinhTongTienPhong(1000000,100000,'2035-01-10T14:00:00','2035-01-11T12:00:00',0,3),"
+                    + "dbo.fnTinhTongTienPhong(1000000,100000,'2035-01-10T08:00:00','2035-01-10T12:15:00',1,3),"
+                    + "dbo.fnTinhTongTienPhong(1000000,100000,'2035-01-10T12:00:00','2035-01-10T12:00:00',0,3)")) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getBigDecimal(1)).isEqualByComparingTo("1000000.00");
+                assertThat(result.getBigDecimal(2)).isEqualByComparingTo("500000.00");
+                assertThat(result.getBigDecimal(3)).isNull();
+            }
+        }
+    }
+
+    @Test
+    /** View public chỉ chứa allow-list và không đưa PII/booking/payment vào schema. */
+    void publicViewsDoNotExposeSensitiveColumns() throws Exception {
+        Set<String> forbidden = Set.of("maKhachLuuTru", "hoVaTen", "soDienThoai", "email",
+                "soGiayToTuyThan", "maPhieuDatPhong", "maHoaDon", "maGiaoDichThanhToan",
+                "maNhanVien", "ghiChu");
+        try (var connection = dataSource.getConnection();
+             var statement = connection.prepareStatement("select column_name from information_schema.columns "
+                     + "where table_schema='dbo' and table_name in ('vwPhongCongKhai','vwDichVuCongKhai')")) {
+            Set<String> actual = new HashSet<>();
+            try (var result = statement.executeQuery()) {
+                while (result.next()) actual.add(result.getString(1));
+            }
+            assertThat(actual).isNotEmpty();
+            assertThat(actual).doesNotContainAnyElementsOf(forbidden);
+        }
+    }
+
+    @Test
+    /** Procedure tồn kho phải rollback cả stock lẫn movement khi số lượng không đủ. */
+    void inventoryProcedureRejectsNegativeStockWithoutPartialWrite() throws Exception {
+        String itemId = "ASTK" + UUID.randomUUID().toString().substring(0, 6);
+        try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+            try {
+                statement.executeUpdate("insert into DichVu(maDichVu,ten,danhMuc,donViTinh,soLuongTonKho,nguongAnToan,gia) "
+                        + "values(N'" + itemId + "',N'Audit stock',N'Vật dụng phòng',N'đơn vị',1,0,0)");
+                assertThatThrownBy(() -> {
+                    try (var call = connection.prepareCall("{call dbo.uspGhiBienDongKhoDichVu(?,?,?,?,?,?,?,?,?)}")) {
+                        call.setString(1, itemId);
+                        call.setNString(2, "Xuất kho");
+                        call.setInt(3, 2);
+                        call.setNString(4, "AUDIT");
+                        call.setNString(5, "rollback contract");
+                        call.setString(6, UUID.randomUUID().toString());call.setString(7,"a".repeat(64));call.setShort(8,(short)0);
+                        call.setObject(9, LocalDateTime.of(2035, 1, 10, 10, 0));
+                        call.execute();
+                    }
+                }).isInstanceOf(java.sql.SQLException.class)
+                        .satisfies(error -> assertThat(((java.sql.SQLException) error).getErrorCode()).isEqualTo(51006));
+                try (var result = statement.executeQuery("select soLuongTonKho,(select count(*) from BienDongKhoDichVu "
+                        + "where maDichVu=N'" + itemId + "') from DichVu where maDichVu=N'" + itemId + "'")) {
+                    assertThat(result.next()).isTrue();
+                    assertThat(result.getInt(1)).isEqualTo(1);
+                    assertThat(result.getInt(2)).isZero();
+                }
+            } finally {
+                statement.executeUpdate("delete from BienDongKhoDichVu where maDichVu=N'" + itemId + "'");
+                statement.executeUpdate("delete from DichVu where maDichVu=N'" + itemId + "'");
+            }
+        }
+    }
+
+
+
+    private void assertDatabaseObjects(String type, Set<String> expectedNames) throws Exception {
+        try (var connection = dataSource.getConnection();
+             var statement = connection.prepareStatement("select name from sys.objects where type=?")) {
+            statement.setString(1, type);
+            Set<String> actual = new HashSet<>();
+            try (var result = statement.executeQuery()) {
+                while (result.next()) actual.add(result.getString(1));
+            }
+            assertThat(actual).containsAll(expectedNames);
+        }
     }
 
     @Test
@@ -70,19 +300,19 @@ class SqlServerMigrationTest {
     }
 
     @Test
-    /** Metadata phải khớp trọn bộ 51 bảng và quy ước PascalCase/camelCase đã chốt. */
+    /** Metadata phải khớp trọn bộ bảng và quy ước PascalCase/camelCase đã chốt. */
     void physicalSchemaMatchesTheVietnameseNamingContract() throws Exception {
         Set<String> expectedTables = Set.of(
-                "BanGhiChongTrung", "BanGiaoTienCa", "BienDongKhoDichVu", "BienDongTonKho", "BienLai",
+                "BanGhiChongTrung", "BanGiaoTienCa", "BienDongKhoDichVu", "BienLai",
                 "ButToanTaiChinh", "CaLamViecNhanVien", "ChamCong", "ChiTietDatPhong", "ChiTietTienBanGiao",
                 "ChuyenPhong", "CongNoDoiTac", "DatDichVuKhachSan", "DichVu", "DieuChinhHoaDon", "DonNghiPhep",
                 "GiaoDichThanhToan", "HangDoiThongBao", "HinhAnhLoaiPhong", "HinhAnhPhong", "HoaDon", "HoaDonGiaTriGiaTang",
                 "KetQuaChecklistBuongPhong", "KhachLuuTru", "KhoanChi", "KiemTraBuongPhong", "LichSuGiaDichVu",
                 "LichSuGiaLoaiPhong", "LichSuHangThanhVien", "LoaiPhong", "LoaiPhongTienNghi", "MaLamMoiDangNhap",
-                "MatHangTonKho", "MauChecklistBuongPhong", "NhanVien", "NhatKyKiemSoat", "NhiemVuBuongPhong",
+                "YeuCauKho", "HoSoNhanSu", "DeNghiTiepNhanNhanVien", "MauChecklistBuongPhong", "NhanVien", "NhatKyKiemSoat", "NhiemVuBuongPhong",
                 "NhomKhoaChongTrung", "PhieuBaoTri", "PhieuCongViecKyThuat", "PhieuDatPhong", "Phong",
                 "SuCoThietBi", "SuDungDichVu", "SuKienDangNhapNhanVien", "TaiKhoanKhachHang", "TaiSanKyThuat",
-                "ThanhToanCongNoDoiTac", "ThietBiPhong", "TienNghi", "YeuCauPheDuyet");
+                "ThanhToanCongNoDoiTac", "ThietBiPhong", "TienNghi", "YeuCauPheDuyet", "YeuCauThanhToanVnpay");
 
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
             Set<String> actualTables = new HashSet<>();
@@ -103,11 +333,11 @@ class SqlServerMigrationTest {
                 }
             }
 
-            assertThat(actualTables).hasSize(51);
-            assertColumnCount(statement, 459);
-            assertConstraintCount(statement, "FOREIGN KEY", 51);
-            assertConstraintCount(statement, "UNIQUE", 25);
-            assertConstraintCount(statement, "CHECK", 122);
+            assertThat(actualTables).hasSize(53);
+            assertColumnCount(statement, 516);
+            assertConstraintCount(statement, "FOREIGN KEY", 60);
+            assertConstraintCount(statement, "UNIQUE", 31);
+            assertConstraintCount(statement, "CHECK", 147);
 
             try (var result = statement.executeQuery("select constraint_name from information_schema.table_constraints "
                     + "where table_schema='dbo' and LTRIM(RTRIM(constraint_type)) <> 'PRIMARY KEY'")) {
@@ -130,7 +360,7 @@ class SqlServerMigrationTest {
     /** Từ điển giá trị phải khớp metadata đầy đủ; so sánh sai dấu/chữ hoa phải bị CHECK chặn. */
     void everyDictionaryColumnUsesExactCollationAndRejectsAccentlessLookalikes() throws Exception {
         Set<String> expectedColumns = valueDictionaryColumns();
-        assertThat(expectedColumns).hasSize(57);
+        assertThat(expectedColumns).hasSize(55);
         String auditRun = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String invalidEmployeeCode = "AC" + auditRun;
         String leaveEmployeeCode = "AL" + auditRun;
@@ -213,6 +443,8 @@ class SqlServerMigrationTest {
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
             statement.executeUpdate("insert into LoaiPhong(maLoaiPhong,ten,giaTheoNgay) values(N'AUDIT-RT',N'Audit',100000)");
             statement.executeUpdate("insert into Phong(maPhong,maLoaiPhong,trangThai) values(N'AUDIT-R',N'AUDIT-RT',N'Sẵn sàng')");
+            LocalDateTime pointProbe = from.plusHours(1);
+            assertThat(reservationOverlap.overlap("AUDIT-R", pointProbe, pointProbe.plusNanos(1), LocalDateTime.now(overlapClock))).isFalse();
             statement.executeUpdate("insert into KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) "
                     + "values(N'Audit','0999999998','999999999998')");
             long guestId;
@@ -230,15 +462,70 @@ class SqlServerMigrationTest {
                     + "thoiDiemTraPhong,thoiDiemTraPhongBanDau,trangThai) values(" + reservationId
                     + ",N'AUDIT-R','2035-01-10 14:00:00','2035-01-11 12:00:00','2035-01-11 12:00:00',N'Đã hủy')");
 
-            assertThat(reservationOverlap.hasOverlap("AUDIT-R", from, to)).isFalse();
+            assertThat(reservationOverlap.overlap("AUDIT-R", from, to, LocalDateTime.now(overlapClock))).isFalse();
             statement.executeUpdate("update PhieuDatPhong set trangThai=N'Đã xác nhận' where maPhieuDatPhong=" + reservationId);
             statement.executeUpdate("update ChiTietDatPhong set trangThai=N'Đã giữ phòng' where maPhieuDatPhong=" + reservationId);
-            assertThat(reservationOverlap.hasOverlap("AUDIT-R", from, to)).isTrue();
+            assertThat(reservationOverlap.overlap("AUDIT-R", from, to, LocalDateTime.now(overlapClock))).isTrue();
+            assertThat(reservationOverlap.overlap("AUDIT-R", pointProbe, pointProbe.plusNanos(1), LocalDateTime.now(overlapClock))).isTrue();
 
             statement.executeUpdate("delete from PhieuDatPhong where maPhieuDatPhong=" + reservationId);
             statement.executeUpdate("delete from KhachLuuTru where maKhachLuuTru=" + guestId);
             statement.executeUpdate("delete from Phong where maPhong=N'AUDIT-R'");
             statement.executeUpdate("delete from LoaiPhong where maLoaiPhong=N'AUDIT-RT'");
+        }
+    }
+
+    @Test
+    /** Booking online trả tại khách sạn chỉ chiếm lịch sau khi lễ tân xác nhận. */
+    void payAtHotelDraftDoesNotBlockUntilFrontDeskConfirms() throws Exception {
+        LocalDateTime from = LocalDateTime.of(2035, 2, 10, 14, 0);
+        LocalDateTime to = LocalDateTime.of(2035, 2, 11, 12, 0);
+        try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+            try {
+                statement.executeUpdate("insert into LoaiPhong(maLoaiPhong,ten,giaTheoNgay) "
+                        + "values(N'AUDPHRT',N'Audit pay hotel',100000)");
+                statement.executeUpdate("insert into Phong(maPhong,maLoaiPhong,trangThai) "
+                        + "values(N'AUDPHR',N'AUDPHRT',N'Sẵn sàng')");
+                statement.executeUpdate("insert into KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) "
+                        + "values(N'Audit pay hotel','0999999997','999999999997')");
+                long guestId;
+                try (var result = statement.executeQuery("select maKhachLuuTru from KhachLuuTru "
+                        + "where soDienThoai='0999999997'")) {
+                    assertThat(result.next()).isTrue();
+                    guestId = result.getLong(1);
+                }
+                statement.executeUpdate("insert into TaiKhoanKhachHang(maKhachLuuTru,soDienThoai,matKhau) "
+                        + "values(" + guestId + ",'0999999997','not-a-password')");
+                long customerAccountId;
+                try (var result = statement.executeQuery("select cast(scope_identity() as bigint)")) {
+                    assertThat(result.next()).isTrue();
+                    customerAccountId = result.getLong(1);
+                }
+                statement.executeUpdate("insert into PhieuDatPhong(maKhachLuuTru,maTaiKhoanKhachHang,trangThai,"
+                        + "trangThaiThanhToanCoc,phuongThucBaoDam) values(" + guestId + ","
+                        + customerAccountId + ",N'Bản nháp',N'Không yêu cầu',N'Tại khách sạn')");
+                long reservationId;
+                try (var result = statement.executeQuery("select cast(scope_identity() as bigint)")) {
+                    assertThat(result.next()).isTrue();
+                    reservationId = result.getLong(1);
+                }
+                statement.executeUpdate("insert into ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,"
+                        + "thoiDiemTraPhong,thoiDiemTraPhongBanDau,trangThai) values(" + reservationId
+                        + ",N'AUDPHR','2035-02-10 14:00:00','2035-02-11 12:00:00',"
+                        + "'2035-02-11 12:00:00',N'Đã giữ phòng')");
+
+                assertThat(reservationOverlap.overlap("AUDPHR", from, to, LocalDateTime.now(overlapClock))).isFalse();
+                statement.executeUpdate("update PhieuDatPhong set trangThai=N'Đã xác nhận' "
+                        + "where maPhieuDatPhong=" + reservationId);
+                assertThat(reservationOverlap.overlap("AUDPHR", from, to, LocalDateTime.now(overlapClock))).isTrue();
+            } finally {
+                statement.executeUpdate("delete from PhieuDatPhong where maKhachLuuTru in "
+                        + "(select maKhachLuuTru from KhachLuuTru where soDienThoai='0999999997')");
+                statement.executeUpdate("delete from TaiKhoanKhachHang where soDienThoai='0999999997'");
+                statement.executeUpdate("delete from KhachLuuTru where soDienThoai='0999999997'");
+                statement.executeUpdate("delete from Phong where maPhong=N'AUDPHR'");
+                statement.executeUpdate("delete from LoaiPhong where maLoaiPhong=N'AUDPHRT'");
+            }
         }
     }
 
@@ -256,8 +543,10 @@ class SqlServerMigrationTest {
     }
 
     private void assertColumnCount(java.sql.Statement statement, int expected) throws Exception {
-        try (var result = statement.executeQuery("select count(*) from information_schema.columns "
-                + "where table_schema='dbo' and table_name <> 'flyway_schema_history'")) {
+        try (var result = statement.executeQuery("select count(*) from information_schema.columns c "
+                + "join information_schema.tables t on t.table_schema=c.table_schema and t.table_name=c.table_name "
+                + "where c.table_schema='dbo' and t.table_type='BASE TABLE' "
+                + "and c.table_name <> 'flyway_schema_history'")) {
             assertThat(result.next()).isTrue();
             assertThat(result.getInt(1)).as("physical business column count").isEqualTo(expected);
         }

@@ -92,9 +92,10 @@ class SqlServerSecuritySmokeTest {
         String bearer = "Bearer " + token.get("access_token").asText();
         mvc.perform(get("/api/services").header(AUTHORIZATION, bearer))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/services").header(AUTHORIZATION, bearer)
+        mvc.perform(post("/api/services/catalog-proposals").header(AUTHORIZATION, bearer)
+                        .header("Idempotency-Key", "security-smoke-catalog-denied")
                         .contentType(APPLICATION_JSON)
-                        .content("{\"id\":\"SEC1\",\"name\":\"Test\",\"price\":1,\"opening_stock\":0,\"safety_threshold\":0}"))
+                        .content("{\"kind\":\"WAREHOUSE\",\"id\":\"SEC1\",\"name\":\"Test\",\"price\":1,\"unit\":\"cái\",\"category\":\"room-amenity\",\"reason\":\"test\"}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }

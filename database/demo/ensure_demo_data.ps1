@@ -2,7 +2,7 @@ param(
     [string]$ContainerName = "web-hotel-mis-sqlserver-1433",
     [string]$Database = "QLKS",
     [string]$Username = "sa",
-    [string]$Password =
+    [string]$Password = $(if ($env:MSSQL_SA_PASSWORD) { $env:MSSQL_SA_PASSWORD } elseif ($env:DB_PASSWORD) { $env:DB_PASSWORD } else { "Hotel_Mis_SqlServer_2026!" })
 )
 
 $ErrorActionPreference = "Stop"

@@ -70,16 +70,6 @@ public class EnterpriseExtensionController {
     @PreAuthorize("hasAnyRole('MANAGER','DIRECTOR','ADMIN')")
     public EnterpriseDtos.LeaveResponse rejectLeave(@PathVariable long id) { return service.decideLeave(id, false, SecurityActor.currentActor()); }
 
-    @GetMapping("/api/operations/linen")
-    @PreAuthorize("@departmentAccess.allows(authentication, 'INVENTORY_READ')")
-    public java.util.List<EnterpriseDtos.StockItemResponse> linen() { return service.linen(); }
-
-    @PostMapping("/api/operations/linen/movements")
-    @PreAuthorize("@departmentAccess.allows(authentication, 'INVENTORY_WRITE')")
-    public EnterpriseDtos.StockItemResponse moveLinen(@Valid @RequestBody EnterpriseDtos.StockMovementRequest request) {
-        return service.moveStock(request, SecurityActor.currentActor());
-    }
-
     @GetMapping("/api/operations/assets")
     @PreAuthorize("@departmentAccess.allows(authentication, 'EQUIPMENT_READ')")
     public java.util.List<EnterpriseDtos.TechnicalAssetResponse> assets() { return service.assets(); }

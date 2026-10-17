@@ -46,6 +46,12 @@ public class HousekeepingController {
         return service.list(roomId, assignee, status, SecurityActor.currentActor());
     }
 
+    @GetMapping("/assignments")
+    @PreAuthorize("@departmentAccess.allows(authentication, 'HOUSEKEEPING_TASK_ASSIGN')")
+    public List<HousekeepingDtos.ShiftAssignmentResponse> assignments(@RequestParam("shiftCode") String shiftCode) {
+        return service.shiftAssignments(shiftCode, SecurityActor.currentActor());
+    }
+
     @PostMapping("/tasks")
     @PreAuthorize("@departmentAccess.allows(authentication, 'HOUSEKEEPING_TASK_ASSIGN')")
     public HousekeepingDtos.Response create(@Valid @RequestBody HousekeepingDtos.CreateRequest request,

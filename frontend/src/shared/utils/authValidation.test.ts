@@ -34,7 +34,7 @@ describe("classifyAccount", () => {
     expect(classifyAccount("FRONTDESK")).toEqual({ valid: true, type: "employee" });
     expect(classifyAccount("MANAGER")).toEqual({ valid: true, type: "employee" });
     expect(classifyAccount("HR")).toEqual({ valid: true, type: "employee" });
-    expect(classifyAccount("STAFF")).toEqual({ valid: true, type: "employee" });
+    expect(classifyAccount("FRONTDESK")).toEqual({ valid: true, type: "employee" });
     expect(classifyAccount("NV_01")).toEqual({ valid: true, type: "employee" });
   });
 

@@ -86,6 +86,8 @@ public final class ServiceDtos {
 
                            /** Có đang ở dưới hoặc bằng ngưỡng cảnh báo hay không. */
                            boolean lowStock,
-                           boolean active) {}
+                           boolean active,int durationMinutes,boolean resource) {
+        public Response(String id,String name,BigDecimal price,String unit,String category,String description,String imageUrl,int stock,int safetyThreshold,boolean lowStock,boolean active){this(id,name,price,unit,category,description,imageUrl,stock,safetyThreshold,lowStock,active,60,true);}
+    }
 
 }
