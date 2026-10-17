@@ -71,6 +71,7 @@ class GovernanceApiContractTest {
                 "Review", Instant.now().plusSeconds(3600), "approval-1");
         ReflectionTestUtils.setField(pending, "id", 42L);
         when(approvalAuthorization.canApprove(eq(42L), anyString())).thenReturn(true);
+        when(approvalService.findRequired(42L)).thenReturn(ApprovalDtos.Response.from(pending));
     }
 
     /** Given approval response, When POST create, Then JSON snake_case đúng allowlist và không có field nội bộ. */

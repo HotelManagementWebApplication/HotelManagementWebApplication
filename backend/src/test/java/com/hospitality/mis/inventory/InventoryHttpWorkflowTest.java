@@ -73,14 +73,15 @@ class InventoryHttpWorkflowTest {
         movement("ISSUE", 2, "used", "issue-1");
         movement("ADJUST", -1, "count", "adjust-1");
         movement("WASTE", 1, "damaged", "waste-1");
-        movement("RETURN", 2, "supplier return", "return-1");
+        mvc.perform(post("/api/services/MINI/inventory-movements").header("Idempotency-Key","return-1").contentType(APPLICATION_JSON).content("{\"service_id\":\"MINI\",\"type\":\"RETURN\",\"quantity\":2}")).andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("RETURN_APPROVAL_REQUIRED"));
+        movement("RECEIVE",2,"delivery","receive-2");
 
         mvc.perform(get("/api/services/MINI/inventory-movements/inventory-report"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.received").value(3))
+                .andExpect(jsonPath("$.received").value(5))
                 .andExpect(jsonPath("$.issued").value(2))
                 .andExpect(jsonPath("$.wasted").value(1))
-                .andExpect(jsonPath("$.returned").value(2))
+                .andExpect(jsonPath("$.returned").value(0))
                 .andExpect(jsonPath("$.adjusted").value(-1))
                 .andExpect(jsonPath("$.net_change").value(1));
 
@@ -144,18 +145,12 @@ class InventoryHttpWorkflowTest {
 
     @Test
     @WithMockUser(username = "kitchen", roles = "KITCHEN")
-    void serviceOpeningStockIsRecordedAsCanonicalReceive() throws Exception {
+    void directCreationCannotBypassCatalogProposalApproval() throws Exception {
         mvc.perform(post("/api/services").contentType(APPLICATION_JSON)
-                        .content("{\"id\":\"OPEN\",\"name\":\"Opening stock\",\"price\":10,\"unit\":\"UNIT\",\"opening_stock\":4,\"safety_threshold\":1}"))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.stock").value(4));
-
-        assertThat(services.findById("OPEN").orElseThrow().getStockQuantity()).isEqualTo(4);
-        assertThat(movements.findByServiceIdOrderByOccurredAtDesc("OPEN")).singleElement().satisfies(movement -> {
-            assertThat(movement.getType()).isEqualTo(InventoryMovement.MovementType.RECEIVE);
-            assertThat(movement.getQuantity()).isEqualTo(4);
-            assertThat(movement.getReason()).isEqualTo("SERVICE_OPENING_STOCK");
-            assertThat(movement.getActorId()).isEqualTo("kitchen");
-        });
+            .content("{\"id\":\"OPEN\",\"name\":\"Opening stock\",\"price\":10,\"unit\":\"đơn vị\",\"opening_stock\":4,\"safety_threshold\":1}"))
+            .andExpect(status().isMethodNotAllowed());
+        assertThat(services.findById("OPEN")).isEmpty();
+        assertThat(movements.findByServiceIdOrderByOccurredAtDesc("OPEN")).isEmpty();
     }
 
     @Test

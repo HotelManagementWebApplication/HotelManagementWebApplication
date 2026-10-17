@@ -109,8 +109,7 @@ class FinanceHttpReconciliationIntegrationTest {
         mvc.perform(post("/api/finance/cash-handovers").contentType(APPLICATION_JSON)
                         .header("Idempotency-Key", "finance-handover-1")
                         .content("{\"shift_code\":\"SHIFT-REAL\",\"from_actor\":\"accounting\",\"to_actor\":\"next\",\"actual_amount\":75,\"note\":\"counted\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.expected_amount").value(80))
-                .andExpect(jsonPath("$.variance").value(-5));
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -161,8 +160,7 @@ class FinanceHttpReconciliationIntegrationTest {
         mvc.perform(post("/api/finance/cash-handovers").contentType(APPLICATION_JSON)
                         .header("Idempotency-Key", "spoofed-handover-1")
                         .content("{\"shift_code\":\"SHIFT-SPOOF\",\"from_actor\":\"attacker\",\"to_actor\":\"next\",\"actual_amount\":1}"))
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.code").value("ACTOR_MISMATCH"));
+                .andExpect(status().isForbidden());
 
         PartnerDebt debt = new PartnerDebt(); debt.setPartnerName("Supplier"); debt.setReferenceCode("SETTLE-INVALID");
         debt.setAmount(new BigDecimal("100")); debt.setSettledAmount(BigDecimal.ZERO); debt.setRecordedAt(LocalDateTime.now());

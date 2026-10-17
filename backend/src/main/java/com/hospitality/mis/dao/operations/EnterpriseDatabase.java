@@ -29,7 +29,6 @@ public class EnterpriseDatabase {
         try { return jdbc.queryForObject(sql,Long.class,args); } catch(DataAccessException error) { throw translate(error); }
     }
     private static final String VAT="SELECT maHoaDonGiaTriGiaTang,maHoaDon,soHoaDonGiaTriGiaTang,thueSuat,soTienChiuThue,loaiKhachHang,tenKhachHang,maSoThue,tenCongTy,diaChiCongTy,trangThai,trangThaiXml,thoiDiemPhatHanh,nguoiTao FROM dbo.vwHoaDonGiaTriGiaTang";
-    private static final String STOCK="SELECT maMatHang,ten,danhMuc,donViTinh,soLuongHienTai,nguongAnToan,maDichVu,dangHoatDong FROM dbo.vwTonKhoHienTai";
     public <T> List<T> ota(RowMapper<T> mapper) {
         return read("SELECT maPhieuDatPhong,hoVaTen,maPhong,nguonDatPhong,doanhThuGop,hoaHongOta,doanhThuRong,trangThaiDoiSoatOta,thoiDiemDat FROM dbo.vwDoiSoatOta ORDER BY thoiDiemDat DESC",mapper);
     }
@@ -51,9 +50,6 @@ public class EnterpriseDatabase {
     }
     public long createLeave(EnterpriseDtos.LeaveRequest request,String type,String actor){return create("EXEC dbo.uspTaoDonNghiPhep ?,?,?,?,?,?,?",request.employeeId(),type,request.startDate(),request.endDate(),request.reason().trim(),request.shiftSwapWith(),actor);}
     public void decideLeave(long id,boolean approve,String actor){command("EXEC dbo.uspQuyetDinhNghiPhep ?,?,?",id,approve,actor);}
-    public <T> List<T> linen(RowMapper<T> mapper){return read(STOCK+" WHERE danhMuc IN(N'Đồ vải',N'Khăn',N'Đồ dùng',N'Minibar') AND dangHoatDong=1 ORDER BY ten",mapper);}
-    public <T> List<T> stock(String id,RowMapper<T> mapper){return read(STOCK+" WHERE maMatHang=?",mapper,id);}
-    public void moveStock(EnterpriseDtos.StockMovementRequest request,String type,String actor,LocalDateTime now){command("EXEC dbo.uspDieuChinhTonKho ?,?,?,?,?,?",request.itemId(),type,request.quantity(),actor,request.reason(),now);}
     public <T> List<T> assets(RowMapper<T> mapper){return read("SELECT maTaiSanKyThuat,ten,danhMuc,loaiViTri,maPhong,tang,viTri,thuongHieuMau,ngayLapDat,ngayBaoTriTiepTheo,trangThai,giaTriBanDau,ghiChu,dangHoatDong FROM dbo.vwTaiSanKyThuat WHERE dangHoatDong=1 ORDER BY COALESCE(tang,0),ten",mapper);}
     public void createAsset(EnterpriseDtos.TechnicalAssetRequest request,String locationType,String status){command("EXEC dbo.uspTaoTaiSanKyThuat ?,?,?,?,?,?,?,?,?,?,?,?,?",request.id(),request.name(),request.category(),locationType,request.roomId(),request.floor(),request.location(),request.brandModel(),request.installedOn(),request.nextMaintenance(),status,request.originalValue()==null?BigDecimal.ZERO:request.originalValue(),request.note());}
     public void updateAsset(String id,String status){command("EXEC dbo.uspCapNhatTaiSanKyThuat ?,?",id,status);}

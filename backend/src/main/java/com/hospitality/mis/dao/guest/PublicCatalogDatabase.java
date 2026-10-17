@@ -41,10 +41,10 @@ public class PublicCatalogDatabase {
         return !gallery.isEmpty()?gallery:room.cover()==null?List.of():List.of(room.cover());
     }
     public List<PublicGuestDtos.ServiceSummary> services(){
-        return jdbc.query("SELECT maDichVu,ten,gia,donViTinh,danhMuc,moTa,duongDanAnh FROM dbo.vwDichVuCongKhai ORDER BY ten",(rs,n)->
+        return jdbc.query("SELECT maDichVu,ten,gia,donViTinh,danhMuc,moTa,duongDanAnh,thoiLuongPhut FROM dbo.vwDichVuCongKhai ORDER BY ten",(rs,n)->
                 new PublicGuestDtos.ServiceSummary(rs.getString(1),rs.getString(2),rs.getBigDecimal(3),
                         new VietnameseCodeConverters.ServiceUnitConverter().convertToEntityAttribute(rs.getString(4)),
-                        new VietnameseCodeConverters.ServiceCategoryConverter().convertToEntityAttribute(rs.getString(5)),rs.getString(6),rs.getString(7)));
+                        new VietnameseCodeConverters.ServiceCategoryConverter().convertToEntityAttribute(rs.getString(5)),rs.getString(6),rs.getString(7),rs.getInt(8)));
     }
     private RoomRow roomRow(ResultSet r,int n)throws SQLException{
         return new RoomRow(r.getString("maPhong"),r.getString("tenPhong"),r.getString("maLoaiPhong"),r.getString("maHangPhong"),

@@ -2,6 +2,7 @@
 -- Mỗi đối tượng có một định nghĩa cuối cùng; sửa trực tiếp trong file sở hữu.
 -- Giữ nguyên tên, thứ tự tham số và các cột kết quả để bên gọi tiếp tục sử dụng.
 -- Mục lục:
+--   fnKiemTraLichPhongTrong
 --   fnKiemTraPhongTrong
 --   fnTinhTongTienPhong
 --   fnTinhTongTienDichVu
@@ -15,12 +16,11 @@
 --   fnTinhBoiThuongThietBi
 
 -- =============================================================================
--- fnKiemTraPhongTrong
--- Trả 1 nếu không có chi tiết đặt phòng còn hiệu lực giao với khoảng yêu cầu.
+-- fnKiemTraLichPhongTrong
+-- Chỉ kiểm tra lịch lưu trú còn hiệu lực; không xét trạng thái vật lý của phòng.
 -- Hai khoảng sát nhau ở giờ trả/nhận phòng không bị xem là giao nhau.
--- Booking nháp của khách online chỉ giữ phòng khi còn hạn chờ thanh toán cọc.
 -- =============================================================================
-CREATE FUNCTION dbo.fnKiemTraPhongTrong
+CREATE FUNCTION dbo.fnKiemTraLichPhongTrong
 (
     @maPhong NVARCHAR(10),
     @tuThoiDiem DATETIME2(6),
@@ -38,6 +38,9 @@ BEGIN
         OR @tuThoiDiem >= @denThoiDiem
         RETURN 0;
 
+    IF NOT EXISTS (SELECT 1 FROM dbo.Phong WHERE maPhong = @maPhong)
+        RETURN 0;
+
     IF EXISTS (
         SELECT
             1
@@ -51,20 +54,63 @@ BEGIN
             )
             AND chiTiet.thoiDiemNhanPhong < @denThoiDiem
             AND chiTiet.thoiDiemTraPhong > @tuThoiDiem
-            AND chiTiet.trangThai <> N'Đã hủy'
-            AND phieu.trangThai NOT IN (N'Đã hủy', N'Không đến', N'Đã trả phòng')
+            AND chiTiet.trangThai IN (N'Giữ tạm phòng', N'Đã giữ phòng', N'Đang có khách')
             AND (
-                phieu.trangThai <> N'Bản nháp'
-                OR phieu.maTaiKhoanKhachHang IS NULL
+                phieu.trangThai IN (N'Đã xác nhận', N'Đã thanh toán cọc', N'Đã nhận phòng')
                 OR (
-                    phieu.trangThaiThanhToanCoc = N'Chờ thanh toán'
+                    phieu.trangThai = N'Chờ thanh toán'
+                    AND phieu.trangThaiThanhToanCoc = N'Chờ thanh toán'
                     AND phieu.thoiDiemHetHanThanhToanCoc > @thoiDiemHienTai
                 )
             )
     )
         SET @phongTrong = 0;
 
+    -- Phiếu bảo trì ngày-only giữ kín phòng đúng ngày dự kiến, không làm
+    -- phòng mất khả dụng ngay từ lúc lập phiếu cho một ngày trong tương lai.
+    IF EXISTS (
+        SELECT 1
+        FROM dbo.PhieuBaoTri AS baoTri
+        WHERE baoTri.maPhong = @maPhong
+            AND baoTri.trangThai IN (N'Chưa xử lý', N'Đang bảo trì')
+            AND CONVERT(DATETIME2(6), baoTri.ngayDuKien) < @denThoiDiem
+            AND DATEADD(DAY, 1, CONVERT(DATETIME2(6), baoTri.ngayDuKien)) > @tuThoiDiem
+    )
+        SET @phongTrong = 0;
+
     RETURN @phongTrong;
+END;
+GO
+
+-- =============================================================================
+-- fnKiemTraPhongTrong
+-- Lịch còn hiệu lực và trạng thái vận hành có cho phép nhận booking.
+-- Bản nháp không chiếm phòng; chờ thanh toán chỉ chiếm phòng khi còn hạn cọc.
+-- Khách đang ở/đang dọn không chặn một lịch tương lai không giao nhau.
+-- =============================================================================
+CREATE FUNCTION dbo.fnKiemTraPhongTrong
+(
+    @maPhong NVARCHAR(10),
+    @tuThoiDiem DATETIME2(6),
+    @denThoiDiem DATETIME2(6),
+    @thoiDiemHienTai DATETIME2(6),
+    @maPhieuDatPhongBoQua BIGINT = NULL
+)
+RETURNS BIT
+AS
+BEGIN
+    IF @tuThoiDiem IS NULL
+        OR @denThoiDiem IS NULL
+        OR @tuThoiDiem >= @denThoiDiem
+        RETURN 0;
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.Phong WHERE maPhong = @maPhong)
+        OR EXISTS (SELECT 1 FROM dbo.Phong WHERE maPhong = @maPhong
+            AND (trangThai IN (N'Đang bảo trì', N'Ngừng sử dụng')
+                OR (@maPhieuDatPhongBoQua IS NULL AND @tuThoiDiem <= @thoiDiemHienTai AND trangThai IN (N'Đang có khách', N'Đang dọn phòng'))))
+        RETURN 0;
+
+    RETURN dbo.fnKiemTraLichPhongTrong(@maPhong, @tuThoiDiem, @denThoiDiem, @thoiDiemHienTai, @maPhieuDatPhongBoQua);
 END;
 GO
 
@@ -138,7 +184,7 @@ BEGIN
         @tong = @tong + COALESCE(SUM(CAST(soLuong - soLuongMienPhi AS DECIMAL(19, 2)) * donGia), 0)
     FROM dbo.DatDichVuKhachSan
     WHERE maPhieuDatPhong = @maPhieuDatPhong
-        AND trangThai = N'Đã sử dụng';
+        AND (trangThai = N'Đã sử dụng' OR soTienDaThanhToan>0);
 
     RETURN @tong;
 END;
@@ -189,7 +235,7 @@ GO
 -- Cộng số dư từng giao dịch cọc sau khi trừ các khoản hoàn gắn với giao dịch gốc.
 -- @maHoaDon là mã hóa đơn cần tính số dư tiền cọc.
 -- REFUND_OF:<mã giao dịch>:... xác định khoản hoàn của đúng lần thu cọc.
--- Cọc được nhận diện qua DEPOSIT:..., mã sự kiện ngoài hoặc người thực hiện PAYMENT_GATEWAY.
+-- Cọc được nhận diện qua DEPOSIT:..., hoặc sự kiện ngoài không thuộc tiền dịch vụ (SVC:...).
 -- =============================================================================
 CREATE FUNCTION dbo.fnSoDuTienCoc
 (
@@ -216,8 +262,14 @@ BEGIN
         AND tienCoc.trangThai = N'Đã hoàn tất'
         AND (
             tienCoc.maThamChieu LIKE N'DEPOSIT:%'
-            OR tienCoc.maSuKienBenNgoai IS NOT NULL
-            OR tienCoc.maNguoiThucHien = N'PAYMENT_GATEWAY'
+            OR (
+                tienCoc.maSuKienBenNgoai IS NOT NULL
+                AND tienCoc.maSuKienBenNgoai NOT LIKE N'SVC:%'
+            )
+            OR (
+                tienCoc.maNguoiThucHien = N'PAYMENT_GATEWAY'
+                AND COALESCE(tienCoc.maSuKienBenNgoai, N'') NOT LIKE N'SVC:%'
+            )
         );
     RETURN CASE
         WHEN @soDuCoc < 0 THEN 0
@@ -280,7 +332,7 @@ BEGIN
         @tong = COALESCE(SUM((soLuong - soLuongMienPhi) * donGia), 0)
     FROM dbo.DatDichVuKhachSan
     WHERE maPhieuDatPhong = @maPhieu
-        AND trangThai = N'Đã sử dụng';
+        AND (trangThai = N'Đã sử dụng' OR soTienDaThanhToan>0);
 
     RETURN @tong;
 END;
@@ -319,6 +371,7 @@ FROM (
         phieu.trangThai,
         phieu.trangThaiThanhToanCoc,
         phieu.tienDatCoc,
+        MAX(phieu.thoiDiemHetHanThanhToanCoc) AS thoiDiemHetHanThanhToanCoc,
         khach.maKhachLuuTru,
         khach.hoVaTen,
         khach.soDienThoai,
@@ -328,7 +381,7 @@ FROM (
             WHEN chiTiet.trangThai = N'Đã giữ phòng' THEN chiTiet.thoiDiemNhanPhong
         END) AS thoiDiemNhanPhongDangGiu,
         hoaDon.maHoaDon,
-        COALESCE(hoaDon.soTienPhaiTra, 0) AS soTienPhaiTra
+        COALESCE(dbo.fnTinhSoDuHoaDon(hoaDon.maHoaDon), 0) AS soTienPhaiTra
     FROM dbo.PhieuDatPhong phieu
     JOIN dbo.KhachLuuTru khach
         ON khach.maKhachLuuTru = phieu.maKhachLuuTru
@@ -405,6 +458,8 @@ WHERE (
         -- Còn chờ hoặc chưa hoàn tất thanh toán cọc.
         OR (
             @nhom = N'UNPAID_DEPOSITS'
+            AND bangTongHopDatPhong.trangThai NOT IN(N'Đã hủy',N'Không đến',N'Đã trả phòng',N'Bản nháp')
+            AND (bangTongHopDatPhong.trangThai<>N'Chờ thanh toán' OR bangTongHopDatPhong.thoiDiemHetHanThanhToanCoc>SYSDATETIME())
             AND (
                 bangTongHopDatPhong.trangThaiThanhToanCoc = N'Chờ thanh toán'
                 OR (
@@ -506,4 +561,33 @@ BEGIN
         ELSE 1.50
     END, 2);
 END;
+GO
+
+
+-- Single source for customer booking and the real-time warehouse display.
+-- A resource booking occupies one unit; consumables reserve their quantity.
+CREATE FUNCTION dbo.fnKhaDungDichVu(@tu DATETIME2(6),@den DATETIME2(6))
+RETURNS TABLE AS RETURN (
+ WITH Holds AS (
+  SELECT COALESCE(d.maNguonTaiNguyen,b.maDichVu) maDichVu,CASE WHEN d.laTaiNguyen=1 THEN b.thoiDiemDuKien ELSE CONVERT(DATETIME2,'0001-01-01') END thoiDiemDuKien,
+   CASE WHEN d.laTaiNguyen=1 THEN b.thoiDiemKetThuc ELSE CONVERT(DATETIME2,'9999-12-31') END thoiDiemKetThuc,
+   CASE WHEN d.laTaiNguyen=1 THEN CONVERT(BIGINT,1) ELSE CONVERT(BIGINT,b.soLuong) END qty
+  FROM dbo.DatDichVuKhachSan b JOIN dbo.DichVu d ON d.maDichVu=b.maDichVu
+  WHERE ((b.trangThai=N'Đã xác nhận' OR (b.trangThai=N'Đã sử dụng' AND d.laTaiNguyen=1)) OR
+   (b.trangThai=N'Chờ thanh toán' AND b.hanThanhToan>CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATETIME2(6))))
+ ), Points AS (
+  SELECT d.maDichVu,@tu atTime FROM dbo.DichVu d
+  UNION SELECT maDichVu,thoiDiemDuKien FROM Holds WHERE thoiDiemDuKien>@tu AND thoiDiemDuKien<@den
+ ), Peak AS (
+  SELECT p.maDichVu,MAX(a.busy) busy FROM Points p
+  CROSS APPLY(SELECT COALESCE(SUM(h.qty),0) busy FROM Holds h WHERE h.maDichVu=p.maDichVu AND
+   h.thoiDiemDuKien<=p.atTime AND h.thoiDiemKetThuc>p.atTime) a GROUP BY p.maDichVu
+ )
+ SELECT d.maDichVu,COALESCE(owner.soLuongTonKho,d.soLuongTonKho) congSuat,COALESCE(p.busy,0) daDat,
+  CASE WHEN COALESCE(owner.soLuongTonKho,d.soLuongTonKho)>COALESCE(p.busy,0) THEN COALESCE(owner.soLuongTonKho,d.soLuongTonKho)-COALESCE(p.busy,0) ELSE 0 END conLai,
+  d.thoiLuongPhut,d.laTaiNguyen,d.maNguonTaiNguyen,CASE WHEN d.laTaiNguyen=1 THEN d.donViTaiNguyen COLLATE Vietnamese_100_CS_AS ELSE d.donViTinh END donViKhaDung
+ FROM dbo.DichVu d LEFT JOIN dbo.DichVu owner ON owner.maDichVu=d.maNguonTaiNguyen
+ LEFT JOIN Peak p ON p.maDichVu=COALESCE(d.maNguonTaiNguyen,d.maDichVu)
+ WHERE d.dangHoatDong=1 AND @tu<@den
+);
 GO

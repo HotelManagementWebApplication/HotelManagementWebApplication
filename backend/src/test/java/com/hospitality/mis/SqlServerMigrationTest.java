@@ -75,16 +75,17 @@ class SqlServerMigrationTest {
                     "V4__views.sql", "V5__stored_procedures.sql", "V6__triggers.sql");
         }
         assertDatabaseObjects("FN", Set.of(
+                "fnKiemTraLichPhongTrong",
                 "fnKiemTraPhongTrong", "fnTinhTongTienPhong", "fnTinhTongTienDichVu",
                 "fnTinhSoDuHoaDon", "fnKiemTraTrungCaLamViec"));
         assertDatabaseObjects("V", Set.of(
                 "vwPhongCongKhai", "vwDichVuCongKhai", "vwDatPhongChiTiet", "vwDashboardLeTan",
-                "vwHoaDonChiTiet", "vwTonKhoHienTai", "vwCongViecBuongPhong", "vwChuyenPhong",
+                "vwHoaDonChiTiet", "vwYeuCauKho", "vwCongViecBuongPhong", "vwChuyenPhong",
                 "vwCongViecKyThuat", "vwLichLamViecNhanVien", "vwDoanhThuTheoNgay"));
         assertDatabaseObjects("P", Set.of(
                 "uspTaoDatPhong", "uspLenhDatPhong", "uspLenhHoaDon",
                 "uspChuyenPhong", "uspLenhThanhToanCocOnline", "uspHetHanGiuCoc",
-                "uspXacNhanSuDungDichVu", "uspHuyDatDichVu", "uspDieuChinhTonKho",
+                "uspXacNhanSuDungDichVu", "uspHuyDatDichVu", "uspLenhYeuCauKho",
                 "uspLenhGiaoDichThanhToan", "uspPhatHanhBienLai", "uspTaoNhiemVuBuongPhong",
                 "uspCapNhatNhiemVuBuongPhong", "uspLenhCongViecKyThuat",
                 "uspPhanCongCa", "uspLenhPheDuyet"));
@@ -246,32 +247,33 @@ class SqlServerMigrationTest {
     @Test
     /** Procedure tồn kho phải rollback cả stock lẫn movement khi số lượng không đủ. */
     void inventoryProcedureRejectsNegativeStockWithoutPartialWrite() throws Exception {
-        String itemId = "AUDIT-STOCK-" + UUID.randomUUID().toString().substring(0, 6);
+        String itemId = "ASTK" + UUID.randomUUID().toString().substring(0, 6);
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
             try {
-                statement.executeUpdate("insert into MatHangTonKho(maMatHang,ten,danhMuc,donViTinh,soLuongHienTai,nguongAnToan) "
-                        + "values(N'" + itemId + "',N'Audit stock',N'Minibar',N'đơn vị',1,0)");
+                statement.executeUpdate("insert into DichVu(maDichVu,ten,danhMuc,donViTinh,soLuongTonKho,nguongAnToan,gia) "
+                        + "values(N'" + itemId + "',N'Audit stock',N'Vật dụng phòng',N'đơn vị',1,0,0)");
                 assertThatThrownBy(() -> {
-                    try (var call = connection.prepareCall("{call dbo.uspDieuChinhTonKho(?,?,?,?,?,?)}")) {
+                    try (var call = connection.prepareCall("{call dbo.uspGhiBienDongKhoDichVu(?,?,?,?,?,?,?,?,?)}")) {
                         call.setString(1, itemId);
                         call.setNString(2, "Xuất kho");
                         call.setInt(3, 2);
                         call.setNString(4, "AUDIT");
                         call.setNString(5, "rollback contract");
-                        call.setObject(6, LocalDateTime.of(2035, 1, 10, 10, 0));
+                        call.setString(6, UUID.randomUUID().toString());call.setString(7,"a".repeat(64));call.setShort(8,(short)0);
+                        call.setObject(9, LocalDateTime.of(2035, 1, 10, 10, 0));
                         call.execute();
                     }
                 }).isInstanceOf(java.sql.SQLException.class)
                         .satisfies(error -> assertThat(((java.sql.SQLException) error).getErrorCode()).isEqualTo(51006));
-                try (var result = statement.executeQuery("select soLuongHienTai,(select count(*) from BienDongTonKho "
-                        + "where maMatHang=N'" + itemId + "') from MatHangTonKho where maMatHang=N'" + itemId + "'")) {
+                try (var result = statement.executeQuery("select soLuongTonKho,(select count(*) from BienDongKhoDichVu "
+                        + "where maDichVu=N'" + itemId + "') from DichVu where maDichVu=N'" + itemId + "'")) {
                     assertThat(result.next()).isTrue();
                     assertThat(result.getInt(1)).isEqualTo(1);
                     assertThat(result.getInt(2)).isZero();
                 }
             } finally {
-                statement.executeUpdate("delete from BienDongTonKho where maMatHang=N'" + itemId + "'");
-                statement.executeUpdate("delete from MatHangTonKho where maMatHang=N'" + itemId + "'");
+                statement.executeUpdate("delete from BienDongKhoDichVu where maDichVu=N'" + itemId + "'");
+                statement.executeUpdate("delete from DichVu where maDichVu=N'" + itemId + "'");
             }
         }
     }
@@ -301,13 +303,13 @@ class SqlServerMigrationTest {
     /** Metadata phải khớp trọn bộ bảng và quy ước PascalCase/camelCase đã chốt. */
     void physicalSchemaMatchesTheVietnameseNamingContract() throws Exception {
         Set<String> expectedTables = Set.of(
-                "BanGhiChongTrung", "BanGiaoTienCa", "BienDongKhoDichVu", "BienDongTonKho", "BienLai",
+                "BanGhiChongTrung", "BanGiaoTienCa", "BienDongKhoDichVu", "BienLai",
                 "ButToanTaiChinh", "CaLamViecNhanVien", "ChamCong", "ChiTietDatPhong", "ChiTietTienBanGiao",
                 "ChuyenPhong", "CongNoDoiTac", "DatDichVuKhachSan", "DichVu", "DieuChinhHoaDon", "DonNghiPhep",
                 "GiaoDichThanhToan", "HangDoiThongBao", "HinhAnhLoaiPhong", "HinhAnhPhong", "HoaDon", "HoaDonGiaTriGiaTang",
                 "KetQuaChecklistBuongPhong", "KhachLuuTru", "KhoanChi", "KiemTraBuongPhong", "LichSuGiaDichVu",
                 "LichSuGiaLoaiPhong", "LichSuHangThanhVien", "LoaiPhong", "LoaiPhongTienNghi", "MaLamMoiDangNhap",
-                "MatHangTonKho", "MauChecklistBuongPhong", "NhanVien", "NhatKyKiemSoat", "NhiemVuBuongPhong",
+                "YeuCauKho", "HoSoNhanSu", "DeNghiTiepNhanNhanVien", "MauChecklistBuongPhong", "NhanVien", "NhatKyKiemSoat", "NhiemVuBuongPhong",
                 "NhomKhoaChongTrung", "PhieuBaoTri", "PhieuCongViecKyThuat", "PhieuDatPhong", "Phong",
                 "SuCoThietBi", "SuDungDichVu", "SuKienDangNhapNhanVien", "TaiKhoanKhachHang", "TaiSanKyThuat",
                 "ThanhToanCongNoDoiTac", "ThietBiPhong", "TienNghi", "YeuCauPheDuyet", "YeuCauThanhToanVnpay");
@@ -331,11 +333,11 @@ class SqlServerMigrationTest {
                 }
             }
 
-            assertThat(actualTables).hasSize(52);
-            assertColumnCount(statement, 479);
-            assertConstraintCount(statement, "FOREIGN KEY", 52);
-            assertConstraintCount(statement, "UNIQUE", 26);
-            assertConstraintCount(statement, "CHECK", 130);
+            assertThat(actualTables).hasSize(53);
+            assertColumnCount(statement, 516);
+            assertConstraintCount(statement, "FOREIGN KEY", 60);
+            assertConstraintCount(statement, "UNIQUE", 31);
+            assertConstraintCount(statement, "CHECK", 147);
 
             try (var result = statement.executeQuery("select constraint_name from information_schema.table_constraints "
                     + "where table_schema='dbo' and LTRIM(RTRIM(constraint_type)) <> 'PRIMARY KEY'")) {
@@ -358,7 +360,7 @@ class SqlServerMigrationTest {
     /** Từ điển giá trị phải khớp metadata đầy đủ; so sánh sai dấu/chữ hoa phải bị CHECK chặn. */
     void everyDictionaryColumnUsesExactCollationAndRejectsAccentlessLookalikes() throws Exception {
         Set<String> expectedColumns = valueDictionaryColumns();
-        assertThat(expectedColumns).hasSize(57);
+        assertThat(expectedColumns).hasSize(55);
         String auditRun = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String invalidEmployeeCode = "AC" + auditRun;
         String leaveEmployeeCode = "AL" + auditRun;

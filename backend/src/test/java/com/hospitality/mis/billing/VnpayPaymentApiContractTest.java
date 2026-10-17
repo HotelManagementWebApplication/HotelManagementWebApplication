@@ -143,14 +143,17 @@ class VnpayPaymentApiContractTest {
     }
 
     @Test
-    void payAtHotelWaitsForFrontDeskAndDoesNotHoldInventory() throws Exception {
+    void customerPortalRejectsCashButCanReserveWithOnlineDeposit() throws Exception {
         String bearer = registerAndLogin("0900000904", "ID0000000904");
-        JsonNode atHotel = createBooking(bearer, "PAY_AT_HOTEL", "hotel-book-1");
-        assertThat(atHotel.at("/deposit_payment/status").asText()).isEqualTo("NOT_REQUIRED");
-        assertThat(atHotel.at("/deposit_payment/payment_code").isNull()).isTrue();
-
+        String body = """
+            {"rental_type":"PACKAGE","booking_source":"DIRECT","idempotency_key":"hotel-book-1",
+             "payment_method":"PAY_AT_HOTEL","rooms":[{"room_id":"903","expected_check_in":"2031-01-10T14:00:00",
+             "expected_check_out":"2031-01-11T12:00:00","guest_count":2}]}
+            """;
+        mockMvc.perform(post("/api/customer/reservations").header(AUTHORIZATION,bearer).contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("ONLINE_PAYMENT_REQUIRED"));
         JsonNode online = createBooking(bearer, "VNPAY", "vnpay-overlap-1");
-        assertThat(online.get("id").asLong()).isNotEqualTo(atHotel.get("id").asLong());
+        assertThat(online.get("status").asText()).isEqualTo("PENDING_PAYMENT");
         assertThat(online.at("/deposit_payment/status").asText()).isEqualTo("PENDING");
     }
 

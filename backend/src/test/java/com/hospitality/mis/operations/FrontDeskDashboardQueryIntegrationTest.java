@@ -33,12 +33,12 @@ class FrontDeskDashboardQueryIntegrationTest {
     @Test
     void dashboardReservationQueryAppliesSearchSortAndCountBeforePage() {
         Guest guest = guest("Target Guest", "0900000101", "010000000001");
-        Room room = room("R101");
+        Room room = room("FDQ-R101");
         Reservation first = reservation(guest, room, ReservationStatus.CONFIRMED,
                 BUSINESS_DATE.atTime(8, 0), BUSINESS_DATE.plusDays(1).atTime(12, 0));
-        Reservation second = reservation(guest, room("R102"), ReservationStatus.CONFIRMED,
+        Reservation second = reservation(guest, room("FDQ-R102"), ReservationStatus.CONFIRMED,
                 BUSINESS_DATE.plusDays(1).atTime(8, 0), BUSINESS_DATE.plusDays(2).atTime(12, 0));
-        reservation(guest("Other Guest", "0900000102", "010000000002"), room("R103"),
+        reservation(guest("Other Guest", "0900000102", "010000000002"), room("FDQ-R103"),
                 ReservationStatus.CONFIRMED, BUSINESS_DATE.atTime(9, 0), BUSINESS_DATE.plusDays(1).atTime(12, 0));
         entityManager.flush();
         entityManager.clear();
@@ -55,12 +55,12 @@ class FrontDeskDashboardQueryIntegrationTest {
     @Test
     void dashboardArrivalBucketUsesMinCheckInDateAndStatusInDatabase() {
         Guest guest = guest("Arrival Guest", "0900000111", "010000000011");
-        Reservation validArrival = reservation(guest, room("R201"), ReservationStatus.CONFIRMED,
+        Reservation validArrival = reservation(guest, room("FDQ-R201"), ReservationStatus.CONFIRMED,
                 BUSINESS_DATE.atTime(14, 0), BUSINESS_DATE.plusDays(1).atTime(12, 0));
-        Reservation earlierRoom = reservation(guest, room("R202"), ReservationStatus.CONFIRMED,
+        Reservation earlierRoom = reservation(guest, room("FDQ-R202"), ReservationStatus.CONFIRMED,
                 BUSINESS_DATE.minusDays(1).atTime(14, 0), BUSINESS_DATE.atTime(12, 0));
-        addRoom(earlierRoom, room("R203"), BUSINESS_DATE.atTime(14, 0), BUSINESS_DATE.plusDays(1).atTime(12, 0));
-        reservation(guest, room("R204"), ReservationStatus.CHECKED_IN,
+        addRoom(earlierRoom, room("FDQ-R203"), BUSINESS_DATE.atTime(14, 0), BUSINESS_DATE.plusDays(1).atTime(12, 0));
+        reservation(guest, room("FDQ-R204"), ReservationStatus.CHECKED_IN,
                 BUSINESS_DATE.atTime(15, 0), BUSINESS_DATE.plusDays(1).atTime(12, 0));
         entityManager.flush();
         entityManager.clear();
@@ -74,13 +74,13 @@ class FrontDeskDashboardQueryIntegrationTest {
     @Test
     void dashboardUpcomingBucketReturnsFutureReservedRoomsWithoutMixingThemIntoTodaysArrivals() {
         Guest guest = guest("Future Guest", "0900000112", "010000000012");
-        Reservation future = reservation(guest, room("R205"), ReservationStatus.CONFIRMED,
+        Reservation future = reservation(guest, room("FDQ-R205"), ReservationStatus.CONFIRMED,
                 BUSINESS_DATE.plusDays(1).atTime(18, 0), BUSINESS_DATE.plusDays(1).atTime(21, 0));
-        reservation(guest, room("R206"), ReservationStatus.CONFIRMED,
+        reservation(guest, room("FDQ-R206"), ReservationStatus.CONFIRMED,
                 BUSINESS_DATE.atTime(18, 0), BUSINESS_DATE.atTime(21, 0));
-        Reservation cancelledLine = reservation(guest, room("R207"), ReservationStatus.CONFIRMED,
+        Reservation cancelledLine = reservation(guest, room("FDQ-R207"), ReservationStatus.CONFIRMED,
                 BUSINESS_DATE.plusDays(2).atTime(18, 0), BUSINESS_DATE.plusDays(2).atTime(21, 0));
-        cancelledLine.getRooms().get(0).setStatus(com.hospitality.mis.entity.room.RoomStatus.CANCELLED);
+        cancelledLine.getRooms().get(0).setStatus(com.hospitality.mis.entity.reservation.ReservationRoomStatus.CANCELLED);
         entityManager.flush();
         entityManager.clear();
 
@@ -93,7 +93,7 @@ class FrontDeskDashboardQueryIntegrationTest {
     @Test
     void dashboardUpcomingBucketIncludesReservedStayAlreadyStartedButNotCheckedIn() {
         Guest guest = guest("Overdue Arrival Guest", "0900000113", "010000000013");
-        Reservation overdue = reservation(guest, room("R208"), ReservationStatus.DEPOSIT_PAID,
+        Reservation overdue = reservation(guest, room("FDQ-R208"), ReservationStatus.DEPOSIT_PAID,
                 BUSINESS_DATE.minusDays(1).atTime(14, 0), BUSINESS_DATE.plusDays(1).atTime(12, 0));
 
         entityManager.flush();
@@ -108,11 +108,11 @@ class FrontDeskDashboardQueryIntegrationTest {
     @Test
     void dashboardIncidentQueryIsStableAndBoundedByRequestedPage() {
         Guest guest = guest("Incident Guest", "0900000121", "010000000021");
-        Reservation reservation = reservation(guest, room("R301"), ReservationStatus.CHECKED_IN,
+        Reservation reservation = reservation(guest, room("FDQ-R301"), ReservationStatus.CHECKED_IN,
                 BUSINESS_DATE.atTime(14, 0), BUSINESS_DATE.plusDays(1).atTime(12, 0));
-        Room secondRoom = room("R302");
+        Room secondRoom = room("FDQ-R302");
         entityManager.persist(secondRoom);
-        EquipmentIncident first = new EquipmentIncident(reservation, room("R303"), "TV",
+        EquipmentIncident first = new EquipmentIncident(reservation, room("FDQ-R303"), "TV",
                 BigDecimal.TEN, LocalDate.of(2030, 1, 1), 1, BigDecimal.ONE);
         entityManager.persist(first);
         EquipmentIncident second = new EquipmentIncident(reservation, secondRoom, "Lamp",
@@ -137,7 +137,7 @@ class FrontDeskDashboardQueryIntegrationTest {
 
     private Room room(String id) {
         RoomType type = new RoomType();
-        type.setId("STD" + id.substring(id.length() - 1));
+        type.setId("FDQ" + id.substring(id.length() - 3));
         type.setName("Standard " + id);
         type.setDailyPrice(BigDecimal.valueOf(100));
         entityManager.persist(type);
@@ -153,12 +153,8 @@ class FrontDeskDashboardQueryIntegrationTest {
                                     LocalDateTime checkIn, LocalDateTime checkOut) {
         Reservation reservation = new Reservation();
         reservation.setGuest(guest);
-        if (status == ReservationStatus.CHECKED_IN) {
-            reservation.transitionTo(ReservationStatus.CONFIRMED);
-            reservation.transitionTo(ReservationStatus.CHECKED_IN);
-        } else {
-            reservation.transitionTo(status);
-        }
+        // This query fixture covers existing persisted states, independently of creation commands.
+        org.springframework.test.util.ReflectionTestUtils.setField(reservation,"status",status);
         addRoom(reservation, room, checkIn, checkOut);
         entityManager.persist(reservation);
         return reservation;
@@ -167,6 +163,14 @@ class FrontDeskDashboardQueryIntegrationTest {
     private void addRoom(Reservation reservation, Room room, LocalDateTime checkIn, LocalDateTime checkOut) {
         ReservationRoom line = new ReservationRoom();
         line.setRoom(room);
+        line.setStatus(switch(reservation.getStatus()) {
+            case DRAFT -> com.hospitality.mis.entity.reservation.ReservationRoomStatus.DRAFT;
+            case PENDING_PAYMENT -> com.hospitality.mis.entity.reservation.ReservationRoomStatus.TEMPORARILY_HELD;
+            case CHECKED_IN -> com.hospitality.mis.entity.reservation.ReservationRoomStatus.OCCUPIED;
+            case CHECKED_OUT -> com.hospitality.mis.entity.reservation.ReservationRoomStatus.RETURNED;
+            case CANCELLED,NO_SHOW -> com.hospitality.mis.entity.reservation.ReservationRoomStatus.CANCELLED;
+            default -> com.hospitality.mis.entity.reservation.ReservationRoomStatus.RESERVED;
+        });
         line.setCheckIn(checkIn);
         line.setCheckOut(checkOut);
         reservation.addRoom(line);

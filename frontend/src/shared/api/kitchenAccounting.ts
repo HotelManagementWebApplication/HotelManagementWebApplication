@@ -23,8 +23,8 @@ const normalizePage = <T>(res: ApiPage<T>): Page<T> => {
 
 export const kitchenAccountingApi = {
   services: () => apiClient.request<Service[]>("/api/services"),
-  restaurantBookings: (params: { date?: string; status?: string } = {}) => apiClient.request<RestaurantBooking[]>(`/api/operations/restaurant/service-bookings${query(params)}`),
-  markRestaurantBookingUsed: (id: number) => apiClient.request<RestaurantBooking>(`/api/operations/restaurant/service-bookings/${id}/use`, { method: "POST" }),
+  coordinatedBookings: (params: { date?: string; status?: string } = {}) => apiClient.request<RestaurantBooking[]>(`/api/operations/restaurant/service-bookings${query(params)}`),
+  markServiceBookingUsed: (id: number) => apiClient.request<RestaurantBooking>(`/api/operations/restaurant/service-bookings/${id}/use`, { method: "POST" }),
   priceRequests: () => apiClient.request<Approval[]>("/api/services/price-requests"),
   lowStock: () => apiClient.request<Service[]>("/api/services/low-stock"),
   inventoryMovements: (serviceId: string) => apiClient.request<InventoryMovement[]>(`/api/services/${encodeURIComponent(serviceId)}/inventory-movements`),
@@ -53,6 +53,7 @@ export const kitchenAccountingApi = {
   expenses: () => apiClient.request<Expense[]>("/api/finance/expenses"),
   partnerDebts: () => apiClient.request<PartnerDebt[]>("/api/finance/partner-debts"),
   settlements: (id: number) => apiClient.request<DebtSettlement[]>(`/api/finance/partner-debts/${id}/settlements`),
+  confirmCashHandover:(id:number)=>apiClient.request<void>(`/api/finance/cash-handovers/${id}/confirm`,{method:"POST"}),
   cashHandovers: () => apiClient.request<CashHandover[]>("/api/finance/cash-handovers"),
   cashBalance: () => apiClient.request<import("../types/kitchenAccounting").CashBalance>("/api/finance/cash-handovers/balance"),
   cashRecipients: () => apiClient.request<import("../types/kitchenAccounting").CashRecipient[]>("/api/finance/cash-handovers/recipients"),

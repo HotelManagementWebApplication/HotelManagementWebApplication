@@ -31,6 +31,8 @@ export const customerApi = {
   },
   cancelReservation: (id: number, reason: string, key: string) => apiClient.request<CustomerReservation>(`/api/customer/reservations/${id}/cancel`, { method: "POST", body: { reason }, idempotencyKey: key }),
   changeReservationStay: (id: number, body: CustomerStayChangeRequest, key: string) => apiClient.request<CustomerReservation>(`/api/customer/reservations/${id}/stay-change`, { method: "POST", body, idempotencyKey: key }),
+  payService:(id:number)=>apiClient.request<VnpayCheckout>(`/api/customer/service-bookings/${id}/payment`,{method:"POST"}),
+  servicePayment:(id:number)=>apiClient.request<HotelServiceBooking>(`/api/customer/service-bookings/${id}/payment`),
   bookService: (body: HotelServiceBookingRequest, key: string) => apiClient.request<HotelServiceBooking>("/api/customer/service-bookings", { method: "POST", body, idempotencyKey: key }),
   serviceBookings: (reservationId: number) => apiClient.request<HotelServiceBooking[]>(`/api/customer/service-bookings?reservation_id=${reservationId}`),
   cancelServiceBooking: (id: number) => apiClient.request<HotelServiceBooking>(`/api/customer/service-bookings/${id}/cancel`, { method: "POST" }),

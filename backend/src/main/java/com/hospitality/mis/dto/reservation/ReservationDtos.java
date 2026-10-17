@@ -88,10 +88,16 @@ public final class ReservationDtos {
                                 /** Khóa tùy chọn chống tạo trùng khi client retry. */
                                 String idempotencyKey,
                                 /** Nguồn đặt phòng chuẩn; không nhận mã tự đặt của frontend. */
-                                @jakarta.validation.constraints.Pattern(regexp = "DIRECT|BOOKING_COM|AGODA|EXPEDIA|AIRBNB", message = "Nguồn đặt phòng không hợp lệ") String bookingSource) {
+                                @jakarta.validation.constraints.Pattern(regexp = "DIRECT|BOOKING_COM|AGODA|EXPEDIA|AIRBNB", message = "Nguồn đặt phòng không hợp lệ") String bookingSource,
+                                /** Lễ tân đã thực thu cọc tại quầy ngay khi tạo đặt phòng. */
+                                boolean depositCollected) {
         public CreateRequest(Long guestId, String employeeId, BigDecimal deposit, RentalType rentalType,
                              List<RoomStay> rooms, String idempotencyKey) {
-            this(guestId, employeeId, deposit, rentalType, rooms, idempotencyKey, "DIRECT");
+            this(guestId, employeeId, deposit, rentalType, rooms, idempotencyKey, "DIRECT", false);
+        }
+        public CreateRequest(Long guestId, String employeeId, BigDecimal deposit, RentalType rentalType,
+                             List<RoomStay> rooms, String idempotencyKey, String bookingSource) {
+            this(guestId, employeeId, deposit, rentalType, rooms, idempotencyKey, bookingSource, false);
         }
     }
 
@@ -166,7 +172,7 @@ public final class ReservationDtos {
                            BigDecimal otaNetRevenue, String otaReconciliationStatus,
                            List<ServiceUsageLine> serviceUsages,
                            CustomerPaymentMethod customerPaymentMethod,
-                           DepositPaymentStatus depositPaymentStatus) {
+                           DepositPaymentStatus depositPaymentStatus, LocalDateTime depositPaymentExpiresAt) {
         public Response {
             serviceUsages = serviceUsages == null ? List.of() : List.copyOf(serviceUsages);
         }

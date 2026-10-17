@@ -1,10 +1,10 @@
 import type { CustomerProfileDto } from "./api";
 
 export type RentalType = "HOURLY" | "PACKAGE";
-export type ReservationStatus = "DRAFT" | "DEPOSIT_PAID" | "CONFIRMED" | "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED" | "NO_SHOW";
+export type ReservationStatus = "DRAFT" | "PENDING_PAYMENT" | "DEPOSIT_PAID" | "CONFIRMED" | "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED" | "NO_SHOW";
 export type DepositPaymentStatus = "NOT_REQUIRED" | "PENDING" | "PAID" | "EXPIRED";
-export type CustomerPaymentMethod = "VNPAY" | "PAY_AT_HOTEL";
-export type VnpayPaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "EXPIRED" | "CANCELLED";
+export type CustomerPaymentMethod = "VNPAY";
+export type VnpayPaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "EXPIRED" | "REQUIRES_REVIEW" | "CANCELLED";
 
 export interface CustomerRegistrationRequest { phone: string; password: string; full_name: string; identity_number: string; email?: string; otp?: string; }
 export interface CustomerLoginRequest { phone: string; password: string; }
@@ -77,8 +77,8 @@ export interface HotelServiceBooking {
   unit_price: number;
   amount_due: number;
   meal_period: "LUNCH" | "DINNER" | null;
-  status: "CONFIRMED" | "USED" | "CANCELLED";
+  status: "PENDING_PAYMENT" | "EXPIRED" | "CONFIRMED" | "USED" | "CANCELLED";
   note: string | null;
-}
+ ends_at?:string; payment_expires_at?:string|null; paid_amount?:number; payment_reference?:string|null; payment_response?:string|null; }
 
 export type CustomerMe = CustomerProfileDto;

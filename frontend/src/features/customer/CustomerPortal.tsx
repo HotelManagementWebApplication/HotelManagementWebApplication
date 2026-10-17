@@ -22,6 +22,7 @@ import { RoomDetailPage } from "./components/RoomDetailPage";
 import { LuxuryBookingModal } from "./components/LuxuryBookingModal";
 import { LuxuryFnBView, type FnbService } from "./components/LuxuryFnBView";
 import { CustomerProfileDropdown } from "./components/CustomerProfileDropdown";
+import ServicePaymentResultPage from "./components/ServicePaymentResultPage";
 import { VnpayPaymentResultPage } from "./components/VnpayPaymentResultPage";
 import { localDateValue } from "../../shared/utils/localDate";
 import { getRoomFullName } from "./roomProfiles";
@@ -124,7 +125,8 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
     depositAmount: number;
     paymentCode: string;
     paymentStatus: string;
-    paymentMethod: "vnpay" | "hotel";
+    expiresAt: string;
+    paymentMethod: "vnpay";
   } | null>(null);
 
   // Sync customer display name
@@ -237,6 +239,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             subtitle: service.unit ? `${service.name} · ${service.unit}` : service.name,
             price: service.price,
             unit: service.unit,
+            durationMinutes:service.duration_minutes,
             desc: service.description ?? "",
             img: service.image_url || "",
             tag: service.price === 0 ? "Chưa niêm yết" : service.unit || "Dịch vụ",
@@ -362,6 +365,15 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
     }
   }, [isAuthenticated, roomList, serviceList]);
 
+  const [bookingNow, setBookingNow] = useState(Date.now());
+  useEffect(() => {
+    if (!bookingConfirmation) return;
+    setBookingNow(Date.now());
+    const timer = window.setInterval(() => setBookingNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [bookingConfirmation]);
+  const bookingExpired = Boolean(bookingConfirmation?.expiresAt && Date.parse(bookingConfirmation.expiresAt) <= bookingNow);
+
   const handleConfirmBooking = async (bookingData: {
     room: Room;
     mode: "night" | "hour";
@@ -371,7 +383,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
     hourlyCheckOut?: string;
     guests: number;
     email: string;
-    paymentMethod: "vnpay" | "hotel";
+    paymentMethod: "vnpay";
   }) => {
     if (!isAuthenticated) {
       sessionStorage.setItem("pending_booking_room_id", bookingData.room.id);
@@ -403,7 +415,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             guest_count: bookingData.guests,
           }],
           idempotency_key: `book-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          payment_method: bookingData.paymentMethod === "vnpay" ? "VNPAY" : "PAY_AT_HOTEL",
+          payment_method: "VNPAY",
           confirmation_email: bookingData.email.trim() || undefined,
       });
 
@@ -419,10 +431,11 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         hourlyCheckIn: bookingData.hourlyCheckIn,
         hourlyCheckOut: bookingData.hourlyCheckOut,
         guests: bookingData.guests,
-        total: calculatedTotal,
+        total: Number(res.total_amount ?? calculatedTotal),
         depositAmount: Number(res.deposit_amount ?? 0),
         paymentCode: res.deposit_payment?.payment_code ?? "",
         paymentStatus: res.deposit_payment?.status ?? "PENDING",
+        expiresAt: res.deposit_payment.expires_at,
         paymentMethod: bookingData.paymentMethod,
       });
       setBookingModalOpen(false);
@@ -466,7 +479,8 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         serviceRequestRef.current = { body, key: `service-${crypto.randomUUID()}` };
       }
       const result = await customerApi.bookService(request, serviceRequestRef.current.key);
-      serviceRequestRef.current = null;
+      if(result.status==="PENDING_PAYMENT"){const checkout=await customerApi.payService(result.id);window.location.assign(checkout.payment_url);}
+      serviceRequestRef.current=null;
       return result;
     } catch (error) {
       if (
@@ -493,6 +507,9 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
     }
   }, []);
 
+  if (window.location.pathname === "/payment/vnpay-result" && new URLSearchParams(window.location.search).has("service_booking_id")) {
+    return <ServicePaymentResultPage onBack={()=>window.location.assign("/")} />;
+  }
   if (window.location.pathname === "/payment/vnpay-result") {
     return <VnpayPaymentResultPage isAuthenticated={isAuthenticated} onLogin={onLogin} />;
   }
@@ -510,17 +527,15 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             Đã tạo yêu cầu đặt phòng
           </span>
           <h2 className="font-display text-3xl sm:text-4xl text-[#1C1917] mt-1 mb-3">
-            Hân hạnh Đón tiếp Quý khách
+            {bookingExpired ? "Yêu cầu đã hết hạn" : "Chờ thanh toán tiền cọc"}
           </h2>
           <p className="text-sm text-[#78716C] mb-8 font-light">
-            {bookingConfirmation.paymentMethod === "vnpay"
-              ? "Đặt phòng đang được giữ trong 30 phút để quý khách hoàn tất tiền cọc qua VNPay."
-              : "Yêu cầu đã được gửi tới lễ tân. Phòng chỉ được giữ sau khi lễ tân xác nhận."}
+            {bookingExpired ? "Phòng không còn được giữ. Vui lòng kiểm tra lại phòng trước khi đặt yêu cầu mới." : "Phòng được giữ tạm 10 phút để hoàn tất cọc qua VNPay. Chỉ xác nhận đặt phòng sau khi thanh toán thành công."}
           </p>
 
           <div className="bg-[#FAF8F5] rounded-2xl p-6 mb-8 text-left border border-[#E7E2D6] space-y-3">
             <div className="flex justify-between items-center pb-3 border-b border-[#E2DDD4]">
-              <span className="text-xs uppercase tracking-wider text-[#78716C]">Mã xác nhận:</span>
+              <span className="text-xs uppercase tracking-wider text-[#78716C]">Mã yêu cầu:</span>
               <span className="font-mono text-base font-bold text-[#8C6D37]">
                 {bookingConfirmation.code}
               </span>
@@ -528,11 +543,10 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             <div className="flex justify-between items-center text-sm">
               <span className="text-[#78716C]">Trạng thái booking:</span>
               <span className="font-semibold text-amber-700">
-                {bookingConfirmation.paymentMethod === "vnpay"
-                  ? `Chờ thanh toán cọc (${bookingConfirmation.paymentStatus})`
-                  : "Chờ lễ tân xác nhận"}
+                {bookingExpired ? "Hết hạn nộp cọc" : "Chờ thanh toán cọc"}
               </span>
             </div>
+            <div className="flex justify-between items-center text-sm"><span className="text-[#78716C]">Hạn nộp cọc:</span><strong>{new Date(bookingConfirmation.expiresAt).toLocaleString("vi-VN")}</strong></div>
             <div className="flex justify-between items-center text-sm">
               <span className="text-[#78716C]">Mã thanh toán cọc:</span>
               <span className="font-mono font-semibold text-[#1C1917]">
@@ -574,12 +588,10 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
           </div>
 
           <button
-            onClick={() => bookingConfirmation.paymentMethod === "vnpay"
-              ? void openVnpayCheckout(bookingConfirmation.reservationId)
-              : setBookingConfirmation(null)}
+            onClick={() => bookingExpired ? setBookingConfirmation(null) : void openVnpayCheckout(bookingConfirmation.reservationId)}
             className="w-full py-4 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs uppercase tracking-[0.2em] font-semibold transition-all duration-300 rounded-xl shadow-md cursor-pointer"
           >
-            {bookingConfirmation.paymentMethod === "vnpay" ? "Thanh toán qua VNPay" : "Quay về Trang chủ"}
+            {bookingExpired ? "Chọn phòng lại" : "Thanh toán qua VNPay"}
           </button>
         </div>
       </div>

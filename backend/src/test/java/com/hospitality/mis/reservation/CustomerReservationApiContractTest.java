@@ -46,7 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.password=${MIGRATION_TEST_DB_PASSWORD}",
         "spring.flyway.enabled=true",
         "spring.jpa.hibernate.ddl-auto=validate",
-        "hotel.booking.deposit-hold-minutes=30",
+        "hotel.booking.deposit-hold-minutes=10",
         "hotel.payment.webhook-secret=test-secret"
 })
 @AutoConfigureMockMvc
@@ -114,14 +114,14 @@ class CustomerReservationApiContractTest {
         JsonNode booking = objectMapper.readTree(mockMvc.perform(post("/api/customer/reservations")
                         .header(AUTHORIZATION, bearer).contentType(APPLICATION_JSON).content(json(request)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("DRAFT"))
+                .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"))
                 .andExpect(jsonPath("$.deposit_amount").value(1200.00))
                 .andExpect(jsonPath("$.deposit_payment.status").value("PENDING"))
                 .andExpect(jsonPath("$.deposit_payment.payment_code").value(org.hamcrest.Matchers.startsWith("HOS-")))
                 .andReturn().getResponse().getContentAsString());
         long id = booking.get("id").asLong();
         assertThat(LocalDateTime.parse(booking.at("/deposit_payment/expires_at").asText()))
-                .isEqualTo(LocalDateTime.parse(booking.get("booked_at").asText()).plusMinutes(30));
+                .isEqualTo(LocalDateTime.parse(booking.get("booked_at").asText()).plusMinutes(10));
         JsonNode replay = objectMapper.readTree(mockMvc.perform(post("/api/customer/reservations")
                         .header(AUTHORIZATION, bearer).contentType(APPLICATION_JSON).content(json(request)))
                 .andExpect(status().isCreated())

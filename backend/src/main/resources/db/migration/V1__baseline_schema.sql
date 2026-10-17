@@ -234,7 +234,9 @@ CREATE TABLE ChiTietDatPhong (
     thoiDiemNhanPhong DATETIME2(6) NOT NULL,
     thoiDiemTraPhong DATETIME2(6) NOT NULL,
     thoiDiemTraPhongBanDau DATETIME2(6) NOT NULL,
-    trangThai NVARCHAR(30) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Đã giữ phòng',
+    giaTheoNgayDaChot DECIMAL(12, 2),
+    giaTheoGioDaChot DECIMAL(12, 2),
+    trangThai NVARCHAR(30) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Bản nháp',
     soLanChuyenPhong INT NOT NULL DEFAULT 0,
     soLuongKhach INT NOT NULL DEFAULT 1,
     CONSTRAINT pkChiTietDatPhong PRIMARY KEY (maPhieuDatPhong, maPhong),
@@ -245,7 +247,11 @@ CREATE TABLE ChiTietDatPhong (
     CONSTRAINT chkChiTietDatPhong02 CHECK (thoiDiemTraPhongBanDau >= thoiDiemNhanPhong AND thoiDiemTraPhong >= thoiDiemTraPhongBanDau),
     CONSTRAINT chkChiTietDatPhong03 CHECK (soLanChuyenPhong >= 0),
     CONSTRAINT chkChiTietDatPhong04 CHECK (soLuongKhach > 0),
-    CONSTRAINT chkChiTietDatPhong05 CHECK (trangThai IN (N'Sẵn sàng', N'Đang có khách', N'Đang dọn phòng', N'Đang bảo trì', N'Ngừng sử dụng', N'Đã giữ phòng', N'Đã trả phòng', N'Đã hủy'))
+    CONSTRAINT chkChiTietDatPhong05 CHECK (trangThai IN (N'Bản nháp', N'Giữ tạm phòng', N'Đã giữ phòng', N'Đang có khách', N'Đã trả phòng', N'Đã hủy')),
+    CONSTRAINT chkChiTietDatPhong06 CHECK (
+        (giaTheoNgayDaChot IS NULL AND giaTheoGioDaChot IS NULL)
+        OR (giaTheoNgayDaChot >= 0 AND giaTheoGioDaChot >= 0)
+    )
 );
 
 
@@ -282,6 +288,12 @@ CREATE TABLE DichVu (
     danhMuc NVARCHAR(50) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Khác',
     moTa NVARCHAR(1000),
     duongDanAnh NVARCHAR(500),
+    thoiLuongPhut INT NOT NULL DEFAULT 60 CONSTRAINT chkDichVu04 CHECK (thoiLuongPhut BETWEEN 1 AND 10080),
+    laTaiNguyen BIT NOT NULL DEFAULT 0,
+    donViTaiNguyen NVARCHAR(20) NOT NULL DEFAULT N'tài nguyên',
+    maNguonTaiNguyen NVARCHAR(10) NULL,
+    CONSTRAINT fkDichVuNguonTaiNguyen FOREIGN KEY (maNguonTaiNguyen) REFERENCES DichVu(maDichVu),
+    CONSTRAINT chkDichVuNguonTaiNguyen CHECK (maNguonTaiNguyen IS NULL OR (laTaiNguyen=1 AND maNguonTaiNguyen<>maDichVu)),
     CONSTRAINT pkDichVu PRIMARY KEY (maDichVu),
     CONSTRAINT chkDichVu01 CHECK (gia >= 0),
     CONSTRAINT chkDichVu02 CHECK (soLuongTonKho >= 0),
@@ -505,7 +517,7 @@ CREATE TABLE YeuCauThanhToanVnpay (
     CONSTRAINT chkYeuCauThanhToanVnpay01 CHECK (soTien > 0),
     CONSTRAINT chkYeuCauThanhToanVnpay02 CHECK (thoiDiemHetHan > thoiDiemTao),
     CONSTRAINT chkYeuCauThanhToanVnpay03 CHECK (phienBan >= 0),
-    CONSTRAINT chkYeuCauThanhToanVnpay04 CHECK (trangThai IN (N'Chờ thanh toán', N'Thành công', N'Thất bại', N'Đã hết hạn', N'Đã hủy'))
+    CONSTRAINT chkYeuCauThanhToanVnpay04 CHECK (trangThai IN (N'Chờ thanh toán', N'Thành công', N'Thất bại', N'Đã hết hạn', N'Đã hủy', N'Cần đối soát'))
 );
 
 
@@ -561,6 +573,8 @@ CREATE TABLE BanGiaoTienCa (
     soTienThucTe DECIMAL(14,2) NOT NULL,
     thoiDiemBanGiao DATETIME2(6) NOT NULL,
     ghiChu NVARCHAR(500),
+    nguoiXacNhan NVARCHAR(50),
+    thoiDiemXacNhan DATETIME2(6),
     CONSTRAINT pkBanGiaoTienCa PRIMARY KEY (maBanGiaoTienCa)
 );
 
@@ -1011,35 +1025,12 @@ CREATE TABLE DonNghiPhep (
 -- =============================================================================
 -- Bảng MatHangTonKho
 -- =============================================================================
-CREATE TABLE MatHangTonKho (
-    maMatHang NVARCHAR(30) NOT NULL,
-    ten NVARCHAR(150) NOT NULL,
-    danhMuc NVARCHAR(30) COLLATE Vietnamese_100_CS_AS NOT NULL,
-    donViTinh NVARCHAR(20) NOT NULL,
-    soLuongHienTai INT NOT NULL DEFAULT 0,
-    nguongAnToan INT NOT NULL DEFAULT 0,
-    maDichVu NVARCHAR(10),
-    dangHoatDong BIT NOT NULL DEFAULT 1,
-    CONSTRAINT pkMatHangTonKho PRIMARY KEY (maMatHang),
-    CONSTRAINT fkMatHangTonKho01 FOREIGN KEY (maDichVu) REFERENCES DichVu (maDichVu),
-    CONSTRAINT chkMatHangTonKho01 CHECK (soLuongHienTai >= 0 AND nguongAnToan >= 0)
-);
+
 
 -- =============================================================================
 -- Bảng BienDongTonKho
 -- =============================================================================
-CREATE TABLE BienDongTonKho (
-    maBienDongTonKho BIGINT IDENTITY(1,1) NOT NULL,
-    maMatHang NVARCHAR(30) NOT NULL,
-    loaiBienDong NVARCHAR(20) COLLATE Vietnamese_100_CS_AS NOT NULL,
-    soLuong INT NOT NULL,
-    maNguoiThucHien NVARCHAR(50) NOT NULL,
-    thoiDiemPhatSinh DATETIME2(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    lyDo NVARCHAR(255),
-    CONSTRAINT pkBienDongTonKho PRIMARY KEY (maBienDongTonKho),
-    CONSTRAINT fkBienDongTonKho01 FOREIGN KEY (maMatHang) REFERENCES MatHangTonKho (maMatHang),
-    CONSTRAINT chkBienDongTonKho01 CHECK (soLuong > 0)
-);
+
 
 
 -- =============================================================================
@@ -1102,6 +1093,13 @@ CREATE TABLE DatDichVuKhachSan (
     thoiDiemTao DATETIME2(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     thoiDiemSuDung DATETIME2(6),
     nguoiXacNhanSuDung NVARCHAR(80),
+    thoiDiemKetThuc DATETIME2(6) NOT NULL DEFAULT DATEADD(HOUR,1,SYSDATETIME()),
+    hanThanhToan DATETIME2(6),
+    soTienDaThanhToan DECIMAL(12,2) NOT NULL DEFAULT 0 CONSTRAINT chkDatDichVuKhachSan05 CHECK (soTienDaThanhToan>=0),
+    maThamChieuThanhToan NVARCHAR(100),
+    maGiaoDichVnpay NVARCHAR(100),
+    maPhanHoiThanhToan NVARCHAR(20),
+    thoiDiemThanhToan DATETIME2(6),
     CONSTRAINT pkDatDichVuKhachSan PRIMARY KEY (maDatDichVuKhachSan),
     CONSTRAINT ukDatDichVuKhachSan01 UNIQUE (khoaYeuCau),
     CONSTRAINT fkDatDichVuKhachSan01 FOREIGN KEY (maPhieuDatPhong, maPhong)
@@ -1110,7 +1108,7 @@ CREATE TABLE DatDichVuKhachSan (
     CONSTRAINT chkDatDichVuKhachSan01 CHECK (soLuong > 0 AND soLuongMienPhi >= 0 AND soLuongMienPhi <= soLuong),
     CONSTRAINT chkDatDichVuKhachSan02 CHECK (donGia >= 0),
     CONSTRAINT chkDatDichVuKhachSan03 CHECK (buoiAn IS NULL OR buoiAn IN (N'Bữa trưa', N'Bữa tối')),
-    CONSTRAINT chkDatDichVuKhachSan04 CHECK (trangThai IN (N'Đã xác nhận', N'Đã sử dụng', N'Đã hủy'))
+    CONSTRAINT chkDatDichVuKhachSan04 CHECK (trangThai IN (N'Chờ thanh toán',N'Hết hạn',N'Đã xác nhận',N'Đã sử dụng',N'Đã hủy'))
 );
 
 
@@ -1139,8 +1137,7 @@ ALTER TABLE BienDongKhoDichVu
     ADD CONSTRAINT chkBienDongKhoDichVuloai CHECK (loai IN (N'Nhập kho', N'Xuất kho', N'Điều chỉnh', N'Hao hụt', N'Hoàn kho'));
 
 -- Giá trị hợp lệ: BienDongTonKho.
-ALTER TABLE BienDongTonKho
-    ADD CONSTRAINT chkBienDongTonKholoaiBienDong CHECK (loaiBienDong IN (N'Nhập kho', N'Hoàn kho', N'Xuất kho', N'Hao hụt', N'Điều chỉnh'));
+
 
 -- Giá trị hợp lệ: BienLai.
 ALTER TABLE BienLai
@@ -1177,7 +1174,9 @@ ALTER TABLE DichVu
             N'Giải trí',
             N'Spa',
             N'Đưa đón',
-            N'Vật dụng phòng'
+            N'Vật dụng phòng',
+            N'Món ăn',
+            N'Thức uống'
         )
     );
 ALTER TABLE DichVu
@@ -1195,6 +1194,9 @@ ALTER TABLE DichVu
             N'giờ',
             N'ngày',
             N'chai',
+            N'lon',
+            N'ly',
+            N'kg',
             N'đơn vị',
             N'cái',
             N'gói',
@@ -1268,8 +1270,7 @@ ALTER TABLE LichSuHangThanhVien
     ADD CONSTRAINT chkLichSuHangThanhVienhangMoi CHECK (hangMoi IN (N'Tiêu chuẩn', N'Bạc', N'Vàng', N'Bạch kim'));
 
 -- Giá trị hợp lệ: MatHangTonKho.
-ALTER TABLE MatHangTonKho
-    ADD CONSTRAINT chkMatHangTonKhodanhMuc CHECK (danhMuc IN (N'Đồ vải', N'Khăn', N'Đồ dùng', N'Minibar', N'Khác'));
+
 
 -- Giá trị hợp lệ: NhanVien.
 ALTER TABLE NhanVien
@@ -1322,7 +1323,7 @@ ALTER TABLE YeuCauPheDuyet
     ADD CONSTRAINT chkYeuCauPheDuyethanhDong CHECK (
         hanhDong IN (
             N'Kích hoạt loại phòng',
-            N'Thay đổi giá dịch vụ',
+            N'Thay đổi giá dịch vụ', N'Thêm danh mục dịch vụ kho',
             N'Hoàn tiền thanh toán',
             N'Hoàn tiền đặt cọc',
             N'Xóa hóa đơn',
@@ -1355,6 +1356,7 @@ ALTER TABLE PhieuDatPhong
     ADD CONSTRAINT chkPhieuDatPhongtrangThai CHECK (
         trangThai IN (
             N'Bản nháp',
+            N'Chờ thanh toán',
             N'Đã xác nhận',
             N'Đã thanh toán cọc',
             N'Đã nhận phòng',
@@ -1363,3 +1365,32 @@ ALTER TABLE PhieuDatPhong
             N'Không đến'
         )
     );
+
+
+-- =============================================================================
+-- YeuCauKho: yêu cầu phối hợp Buồng phòng / Kho.
+-- =============================================================================
+CREATE TABLE YeuCauKho (
+    maYeuCauKho BIGINT IDENTITY NOT NULL,
+    maDichVu NVARCHAR(10) NOT NULL,
+    loai NVARCHAR(20) NOT NULL,
+    soLuong INT NOT NULL,
+    maPhong NVARCHAR(10),
+    nguoiGui NVARCHAR(10) NOT NULL,
+    lyDo NVARCHAR(255) NOT NULL,
+    khoaChongTrung NVARCHAR(100) NOT NULL,
+    trangThai NVARCHAR(20) NOT NULL DEFAULT N'Chờ duyệt',
+    nguoiDuyet NVARCHAR(10),
+    ghiChuDuyet NVARCHAR(255),
+    ngayGui DATETIME2(6) NOT NULL,
+    ngayDuyet DATETIME2(6),
+    CONSTRAINT pkYeuCauKho PRIMARY KEY(maYeuCauKho),
+    CONSTRAINT ukYeuCauKho UNIQUE(nguoiGui,khoaChongTrung),
+    CONSTRAINT fkYeuCauKho01 FOREIGN KEY(maDichVu) REFERENCES DichVu(maDichVu),
+    CONSTRAINT fkYeuCauKho02 FOREIGN KEY(maPhong) REFERENCES Phong(maPhong),
+    CONSTRAINT fkYeuCauKho03 FOREIGN KEY(nguoiGui) REFERENCES NhanVien(maNhanVien),
+    CONSTRAINT fkYeuCauKho04 FOREIGN KEY(nguoiDuyet) REFERENCES NhanVien(maNhanVien),
+    CONSTRAINT chkYeuCauKho01 CHECK(loai IN(N'Cấp hàng',N'Trả hàng',N'Báo hỏng')),
+    CONSTRAINT chkYeuCauKho02 CHECK(soLuong>0),
+    CONSTRAINT chkYeuCauKho03 CHECK(trangThai IN(N'Chờ duyệt',N'Đã duyệt',N'Từ chối'))
+);

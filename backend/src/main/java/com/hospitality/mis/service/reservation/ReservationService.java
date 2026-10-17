@@ -10,6 +10,7 @@ import com.hospitality.mis.middleware.security.*;
 import com.hospitality.mis.service.billing.BillingService;
 import com.hospitality.mis.service.governance.*;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.*;
@@ -24,25 +25,36 @@ public class ReservationService {
     private final DurableIdempotencyService idempotency;
     private final HotelServiceBookingService serviceBookings;
     private final Clock clock;
+    private final long holdMinutes;
     public ReservationService(ReservationDatabase database,BillingService billing,AuditService audit,
-            DurableIdempotencyService idempotency,HotelServiceBookingService serviceBookings,Clock clock){
+            DurableIdempotencyService idempotency,HotelServiceBookingService serviceBookings,Clock clock,
+            @Value("${hotel.booking.deposit-hold-minutes:10}") long holdMinutes){
         this.database=database;this.billing=billing;this.audit=audit;this.idempotency=idempotency;
-        this.serviceBookings=serviceBookings;this.clock=clock;
+        this.serviceBookings=serviceBookings;this.clock=clock;this.holdMinutes=holdMinutes;
     }
     @Transactional public ReservationDtos.Response create(ReservationDtos.CreateRequest request,String actor){return create(request,actor,request==null?null:request.idempotencyKey());}
     @Transactional public ReservationDtos.Response create(ReservationDtos.CreateRequest request,String suppliedActor,String headerKey){
         String actor=operator(suppliedActor);
         if(request==null||request.guestId()==null||request.rentalType()==null)throw error("INVALID_REQUEST","Thiếu nội dung đặt phòng");
         if(!actor.equals(request.employeeId()))throw error("ACTOR_MISMATCH","Actor không khớp nhân viên của booking");
+        if(request.depositCollected()&&request.bookingSource()!=null&&!"DIRECT".equalsIgnoreCase(request.bookingSource()))
+            throw error("INVALID_REQUEST","Chỉ đặt phòng tại quầy mới được ghi nhận đã thu cọc khi tạo");
         validateRooms(request.rooms());
         if(request.rooms().size()>3)throw error("ROOM_LIMIT_EXCEEDED","Mỗi lượt lưu trú chỉ được đặt tối đa 3 phòng");
         String key=effectiveKey(request.idempotencyKey(),headerKey);
-        BigDecimal deposit=request.deposit()==null?BigDecimal.ZERO:request.deposit();
-        String hash=IdempotencySupport.fingerprint("CREATE|"+request.guestId()+"|"+actor+"|"+deposit.stripTrailingZeros().toPlainString()+"|"+request.rentalType()+"|"+request.bookingSource()+"|"+canonicalRooms(request.rooms()));
+        BigDecimal deposit=request.deposit();
+        String createPayload="CREATE|"+request.guestId()+"|"+actor+"|"+deposit+"|"+request.rentalType()+"|"+request.bookingSource()+"|"+canonicalRooms(request.rooms())
+            +(request.depositCollected()?"|DEPOSIT_COLLECTED":"");
+        String hash=IdempotencySupport.fingerprint(createPayload);
         return idempotency.executeWithReplay("reservation-create",key,actor,hash,()->{
-            long id=database.create(request.guestId(),actor,null,request.rentalType(),deposit,key,request.rooms(),actor,LocalDateTime.now(clock),
-                deposit.signum()>0?ReservationStatus.DEPOSIT_PAID:ReservationStatus.CONFIRMED,null,null,null,null,request.bookingSource());
-            billing.registerDeposit(id,actor);return database.get(id).response();
+            LocalDateTime now=LocalDateTime.now(clock);
+            long id=database.create(request.guestId(),actor,null,request.rentalType(),deposit,key,request.rooms(),actor,now,
+                ReservationStatus.PENDING_PAYMENT,CustomerPaymentMethod.PAY_AT_HOTEL,null,now.plusMinutes(holdMinutes),null,request.bookingSource());
+            if(request.depositCollected()){
+                command("receive-deposit",id,null,null,null,null,null,null,null,null,actor);
+                billing.registerDeposit(id,actor);
+            }
+            return database.get(id).response();
         },()->database.byKey(key).response());
     }
     @Transactional(readOnly=true) public ReservationDtos.Response get(Long id){return database.get(id).response();}
@@ -81,9 +93,10 @@ public class ReservationService {
         String bound=operator(actor);return mutate("reservation-extend",key,bound,"EXTEND|"+id+"|"+(request==null?null:request.newExpectedCheckOut()),()->{
             command("extend",id,null,null,request==null?null:request.newExpectedCheckOut(),null,null,null,null,null,bound);return get(id);});
     }
-    @Transactional public ReservationDtos.Response confirm(Long id,String actor,String key){
-        String bound=operator(actor);return mutate("reservation-confirm",key,bound,"CONFIRM|"+id,()->{
-            command("confirm",id,null,null,null,null,null,null,null,null,bound);billing.registerDeposit(id,bound);return get(id);});
+    @Transactional public ReservationDtos.Response receiveDeposit(Long id,String actor,String key){
+        String bound=operator(actor);return mutate("reservation-receive-deposit",key,bound,"RECEIVE_DEPOSIT|"+id,()->{
+            command("receive-deposit",id,null,null,null,null,null,null,null,null,bound);
+            billing.registerDeposit(id,bound);return get(id);});
     }
     @Transactional public ReservationDtos.Response update(Long id,ReservationDtos.UpdateRequest request,String actor,String key){
         String bound=operator(actor);
@@ -106,7 +119,7 @@ public class ReservationService {
         if(request==null||request.serviceId()==null||request.quantity()==null||request.quantity()<=0)throw error("INVALID_REQUEST","Thiếu thông tin dịch vụ");
         String hash="SERVICE|"+id+"|"+request.serviceId()+"|"+request.quantity()+"|"+request.usedAt()+"|"+request.roomId()+"|"+request.mealPeriod();
         return mutate("reservation-service",key,bound,hash,()->{
-            if(Set.of("BREAKFAST","LNDRYSTD","MAMREST","POOL").contains(request.serviceId())){
+            if(Set.of("BREAKFAST","LNDRYSTD","MAMREST","POOL").contains(request.serviceId()) || database.resourceService(request.serviceId())){
                 var booking=get(id);if(booking.status()!=ReservationStatus.CHECKED_IN)throw error("INVALID_STATE","Chỉ booking đang ở mới được dùng dịch vụ");
                 String room=request.roomId()==null?booking.rooms().get(0).roomId():request.roomId();
                 serviceBookings.recordAtFrontDesk(new HotelServiceBookingService.Request(id,room,request.serviceId(),

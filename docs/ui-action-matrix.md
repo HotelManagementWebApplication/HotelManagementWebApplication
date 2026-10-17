@@ -18,7 +18,7 @@ Backend permissions remain authoritative.
 | Customer portal | `frontend/src/features/customer/CustomerPortal.tsx` and its `components/` | Public visitor or authenticated customer |
 | Front desk | `frontend/src/features/front-desk/FrontDeskPMS.tsx` | `FRONT_DESK` |
 | Housekeeping | `frontend/src/features/housekeeping/HousekeepingStation.tsx` | `HOUSEKEEPING` |
-| Kitchen and inventory | `frontend/src/features/kitchen/KitchenInventory.tsx` | `KITCHEN` |
+| Kitchen and inventory | `frontend/src/features/kitchen-inventory/KitchenInventory.tsx` | `KITCHEN` |
 | Maintenance | `frontend/src/features/maintenance/MaintenanceStation.tsx` | `TECHNICAL` |
 | Accounting | `frontend/src/features/accounting/AccountingStation.tsx` | `ACCOUNTING` |
 | Management | `frontend/src/features/management/ManagerDashboard.tsx` | `MANAGER` and `DIRECTOR` |

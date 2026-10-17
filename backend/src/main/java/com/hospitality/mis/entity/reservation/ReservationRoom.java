@@ -1,9 +1,7 @@
 package com.hospitality.mis.entity.reservation;
-import com.hospitality.mis.dao.room.RoomStatusConverter;
 
 
 import com.hospitality.mis.entity.room.Room;
-import com.hospitality.mis.entity.room.RoomStatus;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -24,8 +22,8 @@ public class ReservationRoom {
     @Column(name = "thoiDiemTraPhong", nullable = false) private LocalDateTime checkOut;
     /** Thời điểm trả phòng trước mọi lần gia hạn. Được giữ bất biến để tính phí độc lập cho từng phòng. */
     @Column(name = "thoiDiemTraPhongBanDau", nullable = false) private LocalDateTime originalCheckOut;
-    @Convert(converter = com.hospitality.mis.dao.room.RoomStatusConverter.class)
-    @Column(name = "trangThai", nullable = false, length = 30) private RoomStatus status = RoomStatus.RESERVED;
+    @Convert(converter = com.hospitality.mis.persistence.VietnameseEnumConverters.ReservationRoomStatusConverter.class)
+    @Column(name = "trangThai", nullable = false, length = 30) private ReservationRoomStatus status = ReservationRoomStatus.DRAFT;
     /** Số lần đổi phòng đã thực hiện cho dòng đặt phòng. */
     @Column(name = "soLanChuyenPhong", nullable = false) private int transferCount;
     @Column(name = "soLuongKhach", nullable = false) private int guestCount = 1;
@@ -34,7 +32,7 @@ public class ReservationRoom {
     public LocalDateTime getCheckIn() { return checkIn; }
     public LocalDateTime getCheckOut() { return checkOut; }
     public LocalDateTime getOriginalCheckOut() { return originalCheckOut == null ? checkOut : originalCheckOut; }
-    public RoomStatus getStatus() { return status; }
+    public ReservationRoomStatus getStatus() { return status; }
     public int getTransferCount() { return transferCount; }
     public int getGuestCount() { return guestCount; }
     public void setGuestCount(int value) { guestCount = value; }
@@ -47,7 +45,7 @@ public class ReservationRoom {
         if (originalCheckOut == null) originalCheckOut = value;
     }
     public void setOriginalCheckOut(LocalDateTime value) { originalCheckOut = value; }
-    public void setStatus(RoomStatus value) { status = value; }
+    public void setStatus(ReservationRoomStatus value) { status = value; }
     /** Tăng số lần đổi phòng sau khi nghiệp vụ chuyển phòng hoàn tất. */
     public void incrementTransferCount() { transferCount++; }
 

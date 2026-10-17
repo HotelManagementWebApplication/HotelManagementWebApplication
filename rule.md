@@ -32,6 +32,15 @@
 
 - Giới hạn số phòng khách được đặt được định nghĩa tại `customer-policy.md` mục 3.
 - Mọi thao tác đặt phòng phải bảo toàn khả dụng phòng và ngăn đặt chồng (overlap).
+- Booking `DRAFT` và chi tiết `DRAFT` không chiếm phòng. Booking `PENDING_PAYMENT`
+  dùng chi tiết `TEMPORARILY_HELD` tới hạn cọc. Nhận đủ cọc chuyển booking sang
+  `DEPOSIT_PAID` và chi tiết sang `RESERVED`; hết hạn chuyển booking/chi tiết sang
+  `CANCELLED`, cọc `EXPIRED`. Chính sách thời hạn và kênh thu nằm ở `customer-policy.md` mục 5.
+- Khách chỉ tạo booking VNPay trên portal. Lễ tân tạo yêu cầu tiền mặt tại quầy;
+  tạo yêu cầu không ghi giao dịch tiền. Thao tác `receive-deposit` xác nhận thực thu,
+  chuyển trạng thái, tạo giao dịch/biên lai/audit trong cùng transaction và chống ghi trùng.
+- Khả dụng tương lai xét lịch lưu trú; trạng thái đang có khách hoặc đang dọn
+  hiện tại không tự chặn mọi ngày tương lai. Check-in thực tế vẫn bắt buộc phòng sẵn sàng.
 - Việc chuyển trạng thái phải hợp lệ theo state machine hiện hành; không được bỏ qua trạng thái hoặc cập nhật tùy ý.
 - Phải gắn thao tác với actor đã xác thực, hỗ trợ idempotency, và dùng khóa SQL Server phù hợp để kiểm tra/cập nhật khả dụng một cách nguyên tử.
 - Các kiểm tra khả dụng, chuyển trạng thái, ghi dữ liệu liên quan và sự kiện audit phải nằm trong ranh giới transaction thích hợp.
@@ -121,9 +130,11 @@ Cập nhật ngày 12/09/2026:
 - Điều khoản, quyền lợi và giá khách hàng nhìn thấy được định nghĩa duy nhất trong `customer-policy.md` mục 8.
 - Dịch vụ khách sạn thuộc khách sạn; bỏ mô hình đối tác thuê mặt bằng, nhượng quyền, voucher và quyết toán hoa hồng thương mại. Công nợ với nhà cung cấp hàng hóa/vật tư vẫn được theo dõi.
 - Chỉ CUSTOMER có booking hợp lệ mới được đặt dịch vụ trên web. Endpoint public chỉ công bố DTO của dịch vụ đang hoạt động.
-- Phần sử dụng trong hạn mức miễn phí phải có giá phải thu bằng `0`. Phần vượt hạn mức phải tính theo giá đã niêm yết, nêu rõ trên hóa đơn. Dịch vụ tính phí do khách sạn vận hành được cộng vào hóa đơn phòng và thanh toán lúc checkout.
-- Chỉ cho phép đặt trước dịch vụ sau khi booking được xác nhận đã thanh toán cọc. Đơn đặt dịch vụ gắn với reservation/phòng, có trạng thái ban đầu `CONFIRMED`, và chỉ chuyển sang `USED` khi reservation đã `CHECKED_IN`.
-- Khi booking phòng bị hủy, chuyển `NO_SHOW` hoặc checkout, các dịch vụ chưa dùng tự động chuyển `CANCELLED`. Chỉ dịch vụ đã dùng mới được cộng vào hóa đơn.
+- Áp dụng điều khoản thanh toán trước, giữ chỗ 10 phút và không hoàn tiền dịch vụ tại `customer-policy.md` mục 8. Dịch vụ miễn phí xác nhận ngay; dịch vụ có phần tính phí bắt đầu `PENDING_PAYMENT`, thanh toán hợp lệ chuyển `CONFIRMED`, hết hạn chuyển `EXPIRED`. Chỉ chuyển `USED` khi reservation đã `CHECKED_IN`.
+- Một nguồn SQL kiểm tra khả dụng cho khách đặt và cho Kho xem. Tài nguyên chiếm một đơn vị trong khoảng bắt đầu/kết thúc đã lưu; thay đổi thời lượng không tính lại đơn cũ. Hai gói giặt dùng chung sức chứa máy. Vật tư tiêu hao giữ theo số lượng cho tới khi sử dụng/hủy/hết hạn.
+- Khi booking bị hủy, `NO_SHOW` hoặc checkout, các dịch vụ chưa dùng chuyển `CANCELLED`; tổng hóa đơn vẫn giữ các dịch vụ đã dùng hoặc đã trả tiền, và khấu trừ các khoản thực thu.
+- Kho & Dịch vụ gồm hàng hóa/vật tư và dịch vụ. Tạo danh mục mới cần đề xuất và quản lý duyệt; tồn thấp là thấp hơn ngưỡng an toàn cấu hình. Buồng phòng gửi số lượng/lý do cấp, trả hoặc báo hỏng; Kho xử lý. Báo hỏng không nhập lại hàng vào tồn dùng được.
+- Lễ tân kiểm đếm và gửi bàn giao; kế toán được chỉ định chỉ xem và xác nhận tiếp nhận. Không có biểu mẫu đếm tiền tại kế toán.
 - Khi tạo booking, lưu tổng số khách của từng phòng để kiểm tra quyền lợi theo số khách; không bắt buộc tách người lớn và trẻ em.
 - Giá niêm yết ban đầu và đơn giá áp dụng cho khách được quản lý theo `customer-policy.md` mục 8. Các lần đổi giá tiếp theo tuân thủ quy trình duyệt giá dịch vụ.
 

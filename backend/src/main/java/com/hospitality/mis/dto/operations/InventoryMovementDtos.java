@@ -38,7 +38,10 @@ public final class InventoryMovementDtos {
                            /** Thời điểm phát sinh. */
                            LocalDateTime occurredAt,
                            /** Lý do. */
-                           String reason) {}
+                           String reason,
+                           String actorName,
+                           Long stockBefore,
+                           Long stockAfter) {}
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record ReportResponse(String serviceId, LocalDateTime from, LocalDateTime to, int received,
                                  int issued, int wasted, int returned, int adjusted, int netChange) {}

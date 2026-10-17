@@ -30,7 +30,7 @@ class CustomerReservationExpiryServiceTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE hanhDong=N'CUSTOMER_EXTENSION_PAYMENT_EXPIRED' AND maDoiTuong=CONVERT(NVARCHAR(100),?)",Integer.class,id)).isEqualTo(1);
     }
     @Test void expiredDraftCancelsHoldAndAttemptTogether(){
-        long id=reservation("Bản nháp","EXP-draft");room(id,"EXP-B",LocalDateTime.of(2026,10,10,14,0),LocalDateTime.of(2026,10,12,12,0));
+        long id=reservation("Chờ thanh toán","EXP-draft");room(id,"EXP-B",LocalDateTime.of(2026,10,10,14,0),LocalDateTime.of(2026,10,12,12,0));
         jdbc.update("UPDATE PhieuDatPhong SET trangThaiThanhToanCoc=N'Chờ thanh toán',thoiDiemHetHanThanhToanCoc='2026-10-01' WHERE maPhieuDatPhong=?",id);attempt(id,"EXP-DRAFT-ATTEMPT");
         service.expireHolds();
         assertThat(jdbc.queryForMap("SELECT trangThai,trangThaiThanhToanCoc FROM PhieuDatPhong WHERE maPhieuDatPhong=?",id)).containsEntry("trangThai","Đã hủy").containsEntry("trangThaiThanhToanCoc","Đã hết hạn");

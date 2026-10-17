@@ -16,6 +16,8 @@ public class FinanceController {
     /** Dịch vụ ghi nhận và tra cứu các sổ liệu tài chính; controller truyền tên người xác thực khi nghiệp vụ yêu cầu. */
     private final FinanceService service;
     public FinanceController(FinanceService service) { this.service = service; }
+    @PostMapping("/cash-handovers/{id}/confirm") @PreAuthorize("hasRole('ACCOUNTING')")
+    public void confirmHandover(@PathVariable long id){service.confirmHandover(id);}
     @GetMapping("/cash-handovers/balance") @PreAuthorize("@departmentAccess.allows(authentication, 'CASH_HANDOVER_WRITE')")
     public FinanceDtos.CashBalanceResponse cashBalance(){return service.cashBalance();}
     @GetMapping("/cash-handovers/recipients") @PreAuthorize("@departmentAccess.allows(authentication, 'CASH_HANDOVER_WRITE')")
@@ -26,7 +28,7 @@ public class FinanceController {
      * Chỉ CASH_HANDOVER_WRITE được phép; quyền này không mở rộng sang chi phí hay công nợ.
      * Idempotency-Key bắt buộc cho retry/double-click.
      */
-    @PostMapping("/cash-handovers") @PreAuthorize("@departmentAccess.allows(authentication, 'CASH_HANDOVER_WRITE')") public FinanceDtos.CashHandoverResponse handover(@Valid @RequestBody FinanceDtos.CashHandoverRequest request, @RequestHeader("Idempotency-Key") String key) { return service.handover(request, SecurityActor.currentActor(), key); }
+    @PostMapping("/cash-handovers") @PreAuthorize("hasRole('FRONT_DESK')") public FinanceDtos.CashHandoverResponse handover(@Valid @RequestBody FinanceDtos.CashHandoverRequest request, @RequestHeader("Idempotency-Key") String key) { return service.handover(request, SecurityActor.currentActor(), key); }
     /**
      * Lễ tân đọc lại các biên bản mà chính mình đã giao hoặc nhận, không mở quyền xem sổ tài chính chung.
      */

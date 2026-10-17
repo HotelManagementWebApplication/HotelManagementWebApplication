@@ -10,7 +10,8 @@ import {
   Star,
 } from "lucide-react";
 import type { CustomerReservation, HotelServiceBooking, HotelServiceBookingRequest } from "../../../shared/types/customer";
-import { apiErrorMessage } from "../../../shared/api/client";
+import { ApiError, apiErrorMessage } from "../../../shared/api/client";
+import {customerApi} from "../../../shared/api/customer";
 import { localDateValue } from "../../../shared/utils/localDate";
 
 export interface FnbService {
@@ -24,7 +25,17 @@ export interface FnbService {
   img: string;
   tag: string;
   tagColor: string;
+  durationMinutes?:number;
 }
+
+const customerServiceErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof ApiError) {
+    if (error.code === "SERVICE_OUTSIDE_STAY") return "Giờ sử dụng dịch vụ phải nằm trong thời gian bạn ở khách sạn.";
+    if (error.code === "SERVICE_OUTSIDE_MEAL_HOURS") return "Giờ bạn chọn nằm ngoài thời gian phục vụ. Vui lòng chọn giờ khác.";
+    if (error.code === "DEPOSIT_NOT_PAID") return "Bạn cần thanh toán tiền cọc phòng trước khi đặt dịch vụ.";
+  }
+  return apiErrorMessage(error, fallback);
+};
 
 export const FNB_CATEGORIES = [
   { id: "all", label: "TẤT CẢ TRẢI NGHIỆM" },
@@ -131,7 +142,7 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
       const updated = await onCancelBooking(bookingId);
       setExistingBookings(rows => rows.map(row => row.id === bookingId ? updated : row));
       setBookingsError("");
-    } catch { setBookingsError("Không thể hủy dịch vụ. Dịch vụ đã sử dụng không thể hủy."); }
+    } catch { setBookingsError("Không thể hủy dịch vụ này. Dịch vụ đã sử dụng rồi nên không thể hủy."); }
     finally { setCancellingId(null); }
   };
 
@@ -151,6 +162,7 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
     setBookingError("");
   };
 
+  const quantityLimit=selectedService&&["lượt","chuyến","ngày","đêm","giờ","lần"].includes(selectedService.unit)?1:20;
   const handleConfirmReservation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated) {
@@ -161,12 +173,12 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
     if (!selectedService || !selectedStay || !selectedRoom || bookingLoading) return;
     const count = Number(quantity);
     const scheduled = `${date}T${time}:00`;
-    if (!Number.isInteger(count) || count < 1 || count > 20) {
-      setBookingError("Số suất/lần phải là số nguyên từ 1 đến 20.");
+    if (!Number.isInteger(count) || count < 1 || count > quantityLimit) {
+      setBookingError("Vui lòng chọn số lượng từ 1 đến 20.");
       return;
     }
     if (!date || !time || !availableTimes.includes(time) || scheduled < selectedRoom.expected_check_in || scheduled >= selectedRoom.expected_check_out) {
-      setBookingError("Chọn giờ phục vụ phù hợp với bữa ăn, còn trong kỳ lưu trú và chưa qua thời điểm sử dụng.");
+      setBookingError("Vui lòng chọn giờ còn phục vụ và nằm trong thời gian bạn ở khách sạn.");
       return;
     }
     setBookingError("");
@@ -181,7 +193,7 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
         setBookingSuccess(true);
       }
     } catch (error) {
-      setBookingError(apiErrorMessage(error, "Không thể đặt dịch vụ. Vui lòng thử lại."));
+      setBookingError(customerServiceErrorMessage(error, "Không thể đặt dịch vụ. Vui lòng thử lại."));
       setBookingSuccess(false);
     } finally {
       setServiceBookingLoading(false);
@@ -280,15 +292,24 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
           <div className="rounded-2xl border border-[#E7E2D6] bg-white p-5 sm:p-7 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div><p className="text-[11px] tracking-[0.2em] uppercase text-[#8C6D37] font-semibold">Kỳ lưu trú của bạn</p><h2 className="font-display text-2xl text-[#1C1917]">Dịch vụ đã đặt</h2></div>
-              <select aria-label="Chọn booking để xem dịch vụ" value={selectedStay?.id ?? ""} onChange={event => { setSelectedReservationId(Number(event.target.value)); setSelectedRoomId(""); }} className="rounded-xl border border-[#E2DDD4] bg-[#FAF8F5] px-3 py-2 text-sm text-[#1C1917]">
-                {eligibleReservations.map(stay => <option key={stay.id} value={stay.id}>Booking #{stay.id}</option>)}
+              <select aria-label="Chọn đặt phòng để xem dịch vụ" value={selectedStay?.id ?? ""} onChange={event => { setSelectedReservationId(Number(event.target.value)); setSelectedRoomId(""); }} className="rounded-xl border border-[#E2DDD4] bg-[#FAF8F5] px-3 py-2 text-sm text-[#1C1917]">
+                {eligibleReservations.map(stay => <option key={stay.id} value={stay.id}>Đặt phòng #{stay.id}</option>)}
               </select>
             </div>
             {bookingsError && <p role="alert" className="mt-3 text-sm text-red-700">{bookingsError}</p>}
-            {existingBookings.length === 0 ? <p className="mt-4 text-sm text-[#78716C]">Chưa có dịch vụ đặt trước cho booking này.</p> : (
+            {existingBookings.length === 0 ? <p className="mt-4 text-sm text-[#78716C]">Bạn chưa đặt dịch vụ nào cho lần lưu trú này.</p> : (
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 {existingBookings.map(booking => <div key={booking.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E7E2D6] bg-[#FAF8F5] p-4">
-                  <div className="min-w-0"><p className="font-semibold text-sm">{services.find(service => service.id === booking.service_id)?.title ?? booking.service_id} · Phòng {booking.room_id}</p><p className="mt-1 text-xs text-[#78716C]">{booking.scheduled_at.replace("T", " ").slice(0, 16)} · {booking.quantity} suất/lần · {booking.status === "CONFIRMED" ? "Đã đặt" : booking.status === "USED" ? "Đã sử dụng" : "Đã hủy"}</p><p className="mt-1 text-xs text-[#8C6D37]">Miễn phí {booking.free_quantity}/{booking.quantity} · Phải trả {booking.amount_due.toLocaleString("vi-VN")} ₫ khi checkout nếu đã dùng</p></div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm">{services.find(service => service.id === booking.service_id)?.title ?? booking.service_id} · Phòng {booking.room_id}</p>
+                    <p className="mt-1 text-xs text-[#78716C]">
+                      {booking.scheduled_at.replace("T", " ").slice(0, 16)} · {booking.quantity} {services.find(service => service.id === booking.service_id)?.unit ?? "lượt"} · {booking.status === "CONFIRMED" ? "Đã đặt" : booking.status === "USED" ? "Đã sử dụng" : booking.status === "PENDING_PAYMENT" ? "Chờ bạn thanh toán" : booking.status === "EXPIRED" ? "Đã hết thời gian thanh toán" : "Đã hủy"}
+                    </p>
+                    <p className="mt-1 text-xs text-[#8C6D37]">
+                      Được miễn phí: {booking.free_quantity}/{booking.quantity} · Cần thanh toán: {booking.amount_due.toLocaleString("vi-VN")} ₫. Khoản đã trả không được hoàn lại nếu bạn tự hủy hoặc không đến sử dụng.
+                    </p>
+                  </div>
+                  {booking.status === "PENDING_PAYMENT" && <button onClick={async () => { try { const checkout = await customerApi.payService(booking.id); window.location.assign(checkout.payment_url); } catch (e) { setBookingError(apiErrorMessage(e, "Không thể thanh toán. Vui lòng thử lại.")); } }}>Thanh toán trực tuyến</button>}
                   {booking.status === "CONFIRMED" && <button type="button" disabled={cancellingId === booking.id} onClick={() => void cancelBooking(booking.id)} className="rounded-lg border border-[#B8944A] px-3 py-2 text-xs font-semibold text-[#8C6D37] disabled:opacity-50">{cancellingId === booking.id ? "Đang hủy…" : "Hủy dịch vụ"}</button>}
                 </div>)}
               </div>
@@ -466,13 +487,13 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
                     {svc.price > 0 ? (
                       <div>
                         <span className="text-[10px] uppercase tracking-wider text-[#8C827A] block">
-                          Giá niêm yết · phần vượt hạn mức
+                          Giá dịch vụ
                         </span>
                         <span className="text-sm sm:text-base font-semibold text-[#1C1917]">
                           {svc.price.toLocaleString("vi-VN")} ₫
                           <span className="text-xs font-light text-[#78716C]"> / {svc.unit}</span>
                         </span>
-                        {["POOL", "LNDRYSTD", "BREAKFAST", "MAMREST"].includes(svc.id) && <span className="text-[11px] text-emerald-700 block mt-1">Miễn phí trong hạn mức cho khách lưu trú theo đêm</span>}
+                        {["POOL", "LNDRYSTD", "BREAKFAST", "MAMREST"].includes(svc.id) && <span className="text-[11px] text-emerald-700 block mt-1">Khách ở qua đêm có thể được miễn phí một số dịch vụ. Nếu có phí, số tiền sẽ hiện trước khi thanh toán.</span>}
                       </div>
                     ) : (
                       <span className="text-xs uppercase tracking-wider font-semibold text-[#8C6D37]">Chưa niêm yết giá</span>
@@ -518,8 +539,8 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
                 <h3 className="font-display text-2xl text-[#1C1917] mb-2">
                   Đã xác nhận đặt dịch vụ
                 </h3>
-                <p className="text-xs text-[#78716C] mb-6">
-                  Dịch vụ sẽ được phục vụ trong kỳ lưu trú sau khi quý khách nhận phòng.
+                  <p className="text-xs text-[#78716C] mb-6">
+                    Dịch vụ sẽ được phục vụ trong thời gian bạn ở khách sạn, sau khi nhận phòng.
                 </p>
 
                 {serviceBooking && (
@@ -531,7 +552,7 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
                       #{serviceBooking.id}
                     </p>
                     <p className="text-xs mt-3 text-white/60">
-                      Miễn phí {serviceBooking.free_quantity}/{serviceBooking.quantity} · Dự kiến cộng hóa đơn {serviceBooking.amount_due.toLocaleString("vi-VN")} ₫
+                      Được miễn phí: {serviceBooking.free_quantity}/{serviceBooking.quantity} · Cần thanh toán: {serviceBooking.amount_due.toLocaleString("vi-VN")} ₫
                     </p>
                   </div>
                 )}
@@ -559,12 +580,12 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
                     <h3 className="mt-2 font-display text-3xl font-light sm:text-4xl">{selectedService?.title}</h3>
                     <p className="mt-4 text-sm font-light leading-7 text-white/80">{selectedService?.desc}</p>
                     <div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/20 pt-5 text-sm">
-                      <div><span className="block text-[10px] uppercase tracking-wider text-white/50">Giá niêm yết</span><strong>{selectedService ? `${selectedService.price.toLocaleString("vi-VN")} ₫` : "—"}</strong></div>
-                      <div><span className="block text-[10px] uppercase tracking-wider text-white/50">Đơn vị</span><strong>{selectedService?.unit || "lần"}</strong></div>
+                      <div><span className="block text-[10px] uppercase tracking-wider text-white/50">Giá dịch vụ</span><strong>{selectedService ? `${selectedService.price.toLocaleString("vi-VN")} ₫` : "—"}</strong></div>
+                      <div><span className="block text-[10px] uppercase tracking-wider text-white/50">Tính theo</span><strong>{selectedService?.unit || "lần"}</strong></div>
                     </div>
                     {selectedService && ["POOL", "LNDRYSTD", "BREAKFAST", "MAMREST"].includes(selectedService.id) && (
                       <div className="mt-5 rounded-xl border border-emerald-300/30 bg-emerald-950/45 p-3 text-xs leading-5 text-emerald-100 backdrop-blur-sm">
-                        Khách thuê theo đêm được áp dụng hạn mức miễn phí. Khách thuê theo giờ trả toàn bộ theo giá niêm yết.
+                        Khách ở qua đêm có thể được miễn phí một số dịch vụ. Số tiền cần trả, nếu có, sẽ hiện trước khi thanh toán.
                       </div>
                     )}
                   </div>
@@ -573,7 +594,7 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
               <form onSubmit={handleConfirmReservation} className="p-7 sm:p-9">
                 <div className="mb-6">
                   <p className="text-xs uppercase tracking-[0.25em] font-semibold text-[#8C6D37] mb-1">
-                    Đặt chỗ trải nghiệm
+                    Đặt dịch vụ
                   </p>
                   <h3 className="font-display text-2xl sm:text-3xl text-[#1C1917] font-light">
                     {selectedService?.title || featuredService?.title || "Dịch vụ đang được cập nhật"}
@@ -583,7 +604,7 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
                   {!isAuthenticated && (
                     <div className="mb-5 rounded-xl border border-[#D9C79E] bg-[#FAF5EB] p-4 text-sm text-[#6F552B]">
                       <p className="font-semibold">Bạn có thể xem đầy đủ thông tin dịch vụ.</p>
-                      <p className="mt-1 text-xs leading-5">Đăng nhập bằng tài khoản khách hàng và có booking đã thanh toán cọc để đặt trước.</p>
+                      <p className="mt-1 text-xs leading-5">Đăng nhập tài khoản khách hàng và thanh toán tiền cọc đặt phòng để đặt dịch vụ.</p>
                       <button type="button" onClick={onLogin} className="mt-3 rounded-lg bg-[#1C1917] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white">Đăng nhập để đặt</button>
                     </div>
                   )}
@@ -591,18 +612,18 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
                   {selectedService?.id === "POOL" && (
                     <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                       <p className="font-semibold">Hồ bơi không cần đặt trước trên website.</p>
-                      <p className="mt-1 text-xs leading-5">Khách theo đêm sử dụng miễn phí không giới hạn trong kỳ lưu trú theo số khách đăng ký. Khách theo giờ trả theo giá niêm yết.</p>
+                      <p className="mt-1 text-xs leading-5">Khách ở qua đêm được sử dụng miễn phí trong thời gian lưu trú, theo số khách đã đăng ký. Khách đặt phòng theo giờ thanh toán theo giá dịch vụ.</p>
                     </div>
                   )}
 
                   <div className="space-y-4">
                   <div>
-                    <label htmlFor="service-stay" className="text-xs uppercase tracking-wider font-semibold text-[#78716C] block mb-1.5">Booking đã xác nhận cọc</label>
+                    <label htmlFor="service-stay" className="text-xs uppercase tracking-wider font-semibold text-[#78716C] block mb-1.5">Đặt phòng đã thanh toán cọc</label>
                     <select id="service-stay" required value={selectedStay?.id ?? ""} onChange={event => { setSelectedReservationId(Number(event.target.value)); setSelectedRoomId(""); }}
                       className="w-full px-4 py-3 rounded-xl text-sm bg-white border border-[#E2DDD4] text-[#1C1917]">
-                      {eligibleReservations.map(stay => <option key={stay.id} value={stay.id}>Booking #{stay.id} · {stay.rental_type === "PACKAGE" ? "Theo đêm" : "Theo giờ"}</option>)}
+                      {eligibleReservations.map(stay => <option key={stay.id} value={stay.id}>Đặt phòng #{stay.id} · {stay.rental_type === "PACKAGE" ? "Qua đêm" : "Theo giờ"}</option>)}
                     </select>
-                    {eligibleReservations.length === 0 && <p className="text-sm text-amber-700 mt-2">Cần có booking đã thanh toán cọc để đặt dịch vụ.</p>}
+                    {eligibleReservations.length === 0 && <p className="text-sm text-amber-700 mt-2">Bạn cần đặt phòng và thanh toán tiền cọc trước khi đặt dịch vụ.</p>}
                   </div>
                   {selectedStay && <div>
                     <label htmlFor="service-room" className="text-xs uppercase tracking-wider font-semibold text-[#78716C] block mb-1.5">Phòng sử dụng dịch vụ</label>
@@ -650,27 +671,28 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
                       </select>
                     </div>
                     <div>
-                      <label htmlFor="service-quantity" className="text-xs uppercase tracking-wider font-semibold text-[#78716C] block mb-1.5">Số suất/lần</label>
-                      <input id="service-quantity" required type="number" min={1} max={20} step={1} value={quantity}
+                      <label htmlFor="service-quantity" className="text-xs uppercase tracking-wider font-semibold text-[#78716C] block mb-1.5">Số lượng</label>
+                      <input id="service-quantity" required type="number" min={1} max={quantityLimit} step={1} value={quantity}
                         onChange={event => setQuantity(event.target.value)}
                         className="w-full px-3 py-3 rounded-xl text-xs sm:text-sm bg-white border border-[#E2DDD4] text-[#1C1917]" />
                     </div>
                   </div>
 
+                  <p className="text-sm text-[#78716C]">Thời lượng mỗi lượt: {selectedService?.durationMinutes ?? 60} phút. Bạn có 10 phút để thanh toán; sau đó chỗ sẽ được mở lại. Dịch vụ miễn phí thì không cần thanh toán.</p>
                   {selectedService?.id === "MAMREST" && <div>
                     <label htmlFor="service-meal" className="text-xs uppercase tracking-wider font-semibold text-[#78716C] block mb-1.5">Bữa ăn</label>
                     <select id="service-meal" value={mealPeriod} onChange={event => { const period=event.target.value as "LUNCH" | "DINNER"; setMealPeriod(period); setTime(period === "LUNCH" ? "12:30" : "18:30"); }}
                       className="w-full px-4 py-3 rounded-xl text-sm bg-white border border-[#E2DDD4] text-[#1C1917]">
                       <option value="LUNCH">Bữa trưa</option><option value="DINNER">Bữa tối</option>
                     </select>
-                    <p className="text-xs text-[#78716C] mt-2">Khách thuê theo đêm: mỗi khách được miễn một bữa trưa và một bữa tối mỗi ngày. Phần vượt tính {selectedService.price.toLocaleString("vi-VN")} ₫/suất.</p>
+                    <p className="text-xs text-[#78716C] mt-2">Khách lưu trú qua đêm được miễn phí mỗi khách 1 bữa trưa và 1 bữa tối mỗi ngày. Mỗi suất gọi thêm có giá {selectedService.price.toLocaleString("vi-VN")} ₫.</p>
                   </div>}
 
-                  <p className="text-xs text-[#78716C]">Giá niêm yết: {selectedService?.price.toLocaleString("vi-VN") ?? "—"} ₫/{selectedService?.unit || "lần"}. Hệ thống áp dụng hạn mức miễn phí theo booking; phần phải trả được ghi khi dịch vụ đã sử dụng và quyết toán lúc trả phòng.</p>
+                  <p className="text-xs text-[#78716C]">Giá dịch vụ: {selectedService?.price.toLocaleString("vi-VN") ?? "—"} ₫/{selectedService?.unit || "lần"}. Một số dịch vụ được miễn phí khi bạn ở qua đêm. Nếu có phí phát sinh, số tiền sẽ hiện trước khi thanh toán. Khoản đã thanh toán không được hoàn lại nếu bạn tự hủy hoặc không đến sử dụng.</p>
 
                   {selectedStay?.rental_type === "HOURLY" && (
                     <p role="note" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium leading-5 text-amber-800">
-                      Booking theo giờ không có dịch vụ miễn phí. Toàn bộ số lượng đã sử dụng sẽ được cộng vào hóa đơn phòng.
+                      Đặt phòng theo giờ không có dịch vụ miễn phí kèm theo. Bạn cần thanh toán toàn bộ giá dịch vụ để xác nhận.
                     </p>
                   )}
 
@@ -692,7 +714,7 @@ export const LuxuryFnBView: React.FC<LuxuryFnBViewProps> = ({
                     disabled={bookingLoading || !isAuthenticated || !selectedStay || !selectedRoom || !selectedService || selectedService.id === "POOL" || selectedService.price <= 0 || !availableTimes.length}
                     className="w-full py-4 bg-[#1C1917] hover:bg-[#8C6D37] text-white text-xs font-semibold uppercase tracking-[0.2em] transition-all duration-300 rounded-xl shadow-md cursor-pointer mt-3 disabled:opacity-50 text-center"
                   >
-                    {bookingLoading ? "Đang xử lý..." : selectedService?.id === "POOL" ? "Không cần đặt trước" : "Xác nhận đặt dịch vụ"}
+                    {bookingLoading ? "Đang xử lý..." : selectedService?.id === "POOL" ? "Không cần đặt trước" : "Đặt dịch vụ"}
                   </button>
                   {bookingError && <p role="alert" className="text-sm text-red-700">{bookingError}</p>}
                 </div>

@@ -57,7 +57,7 @@ class SqlServerHousekeepingTaskTest {
     }
     @Test void durableReplayReturnsOriginalSnapshotAcrossServiceInstancesAndRoleScope(){
         var first=create("hkc-replay");update(first.id(),"IN_PROGRESS","hkc-mutate");
-        var newInstance=new HousekeepingService(database,clock);
+        var newInstance=new HousekeepingService(database,org.mockito.Mockito.mock(com.hospitality.mis.service.identity.EmployeeService.class),org.mockito.Mockito.mock(com.hospitality.mis.service.identity.EmployeeShiftService.class),clock);
         assertThat(newInstance.create(request(),MANAGER,"hkc-replay")).isEqualTo(first);
         code(()->housekeeping.create(new HousekeepingDtos.CreateRequest(ROOM,WORKER,"changed"),MANAGER,"hkc-replay"),"IDEMPOTENCY_KEY_CONFLICT");
         actor(OTHER,"ROLE_MANAGER");code(()->housekeeping.create(request(),OTHER,"hkc-replay"),"IDEMPOTENCY_KEY_CONFLICT");

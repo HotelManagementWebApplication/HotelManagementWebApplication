@@ -67,6 +67,18 @@ class SqlServerMaintenanceTest {
         assertThat(maintenance.byRoom("MNT-R")).extracting(MaintenanceDtos.Response::id).containsExactly("MNT-2","MNT-1");
         assertThat(maintenance.byRoom("MNT-R").get(0).description()).isNull();assertThat(maintenance.byRoom("missing")).isEmpty();
     }
+    @Test void futureMaintenanceBlocksOnlyItsScheduledDate(){
+        LocalDate scheduled=LocalDate.now().plusDays(3);
+        maintenance.create(new MaintenanceDtos.CreateRequest("MNT-FUTURE","MNT-R","inspect",scheduled,null),ACTOR);
+        assertThat(roomStatus()).isEqualTo("Sẵn sàng");
+        assertThat(available(scheduled)).isFalse();
+        assertThat(available(scheduled.plusDays(1))).isTrue();
+        code(()->update("MNT-FUTURE","DANG_BAO_TRI"),"MAINTENANCE_NOT_DUE");
+        assertThat(roomStatus()).isEqualTo("Sẵn sàng");
+        jdbc.update("UPDATE PhieuBaoTri SET ngayDuKien=CONVERT(date,SYSDATETIME()) WHERE maPhieuBaoTri=N'MNT-FUTURE'");
+        update("MNT-FUTURE","DANG_BAO_TRI");
+        assertThat(roomStatus()).isEqualTo("Đang bảo trì");
+    }
     @Test void twoConnectionsCannotCreateSameIdTwice()throws Exception{
         assertThat(race(()->maintenance.create(request("MNT-1"),ACTOR))).containsExactlyInAnyOrder("SUCCESS","MAINTENANCE_EXISTS");
         assertThat(maintenance.byRoom("MNT-R")).hasSize(1);assertThat(audits()).isEqualTo(1);assertThat(version()).isEqualTo(1);
@@ -84,8 +96,9 @@ class SqlServerMaintenanceTest {
         }
     }
     private static void actor(){SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(ACTOR,"","ROLE_TECHNICAL"));}
-    private MaintenanceDtos.CreateRequest request(String id){return new MaintenanceDtos.CreateRequest(id,"MNT-R","repair",LocalDate.of(2031,1,2),"description");}
+    private MaintenanceDtos.CreateRequest request(String id){return new MaintenanceDtos.CreateRequest(id,"MNT-R","repair",LocalDate.now(),"description");}
     private MaintenanceDtos.Response update(String id,String status){return maintenance.updateStatus(id,new MaintenanceDtos.StatusRequest(status),ACTOR);}
+    private boolean available(LocalDate date){return jdbc.queryForObject("SELECT dbo.fnKiemTraLichPhongTrong(?,CONVERT(datetime2,?),DATEADD(day,1,CONVERT(datetime2,?)),SYSDATETIME(),NULL)",Boolean.class,"MNT-R",date,date);}
     private String roomStatus(){return jdbc.queryForObject("SELECT trangThai FROM Phong WHERE maPhong=N'MNT-R'",String.class);}
     private long version(){return jdbc.queryForObject("SELECT phienBan FROM Phong WHERE maPhong=N'MNT-R'",Long.class);}
     private int audits(){return jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE nguoiThucHien=?",Integer.class,ACTOR);}

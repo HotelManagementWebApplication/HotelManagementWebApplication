@@ -3,7 +3,7 @@ import type {
   AcceptanceRequest, ChecklistResult, ChecklistResultRequest, ChecklistTemplate, ChecklistTemplateRequest,
   Equipment, EquipmentCreateRequest, EquipmentIncident, EquipmentIncidentHandoffRequest, EquipmentIncidentRequest,
   EquipmentUpdateRequest, HousekeepingInspection, HousekeepingInspectionRequest, HousekeepingTask,
-  HousekeepingTaskCreateRequest, HousekeepingTaskUpdateRequest, MaintenanceCreateRequest, MaintenanceStatusRequest,
+  HousekeepingShiftAssignment, HousekeepingTaskCreateRequest, HousekeepingTaskUpdateRequest, MaintenanceCreateRequest, MaintenanceStatusRequest,
   MaintenanceWorkOrder, Room, RoomAvailability, RoomIncidentRequest, RoomStatus, TechnicalWorkOrder, TechnicalWorkOrderCreateRequest,
   TechnicalWorkOrderStatus, TechnicalWorkOrderUpdateRequest,
   RoomMedia,
@@ -46,6 +46,7 @@ const uploadRoomImage = async (roomId: string, file: File): Promise<RoomMedia["i
 
 export const housekeepingTechnicalApi = {
   tasks: (params: { roomId?: string; assignee?: string; status?: HousekeepingTask["status"] } = {}) => apiClient.request<HousekeepingTask[]>(`/api/operations/housekeeping/tasks${query({ roomId: params.roomId, assignee: params.assignee, status: params.status })}`),
+  shiftAssignments: (shiftCode: string) => apiClient.request<HousekeepingShiftAssignment[]>(`/api/operations/housekeeping/assignments${query({ shiftCode })}`),
   createTask: (body: HousekeepingTaskCreateRequest, options?: MutationOptions) => apiClient.request<HousekeepingTask>("/api/operations/housekeeping/tasks", { method: "POST", body, idempotencyKey: key(options) }),
   updateTask: (id: number, body: HousekeepingTaskUpdateRequest, options?: MutationOptions) => apiClient.request<HousekeepingTask>(`/api/operations/housekeeping/tasks/${id}`, { method: "PATCH", body, idempotencyKey: key(options) }),
   checklistTemplates: () => apiClient.request<ChecklistTemplate[]>("/api/operations/housekeeping/checklist-templates"),

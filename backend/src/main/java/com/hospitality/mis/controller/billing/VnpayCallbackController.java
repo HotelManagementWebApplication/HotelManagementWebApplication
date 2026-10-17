@@ -40,6 +40,7 @@ public class VnpayCallbackController {
                 : "97".equals(result.responseCode()) ? "invalid" : "failed";
         URI location = UriComponentsBuilder.fromUriString(frontendResultUrl)
                 .queryParam("result", display)
+                .queryParamIfPresent("service_booking_id",java.util.Optional.ofNullable(result.serviceBookingId()))
                 .queryParamIfPresent("reservation_id", java.util.Optional.ofNullable(result.reservationId()))
                 .queryParamIfPresent("response_code", java.util.Optional.ofNullable(result.providerResponseCode()))
                 .build(true).toUri();

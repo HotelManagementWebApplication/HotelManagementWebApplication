@@ -295,7 +295,7 @@ describe("live backend E2E contract proof", () => {
     expectStatus(created, 201, "customer booking creation");
     const reservation = jsonObject(created.body, "customer booking response");
     expect(reservation.id, "customer booking id").toEqual(expect.any(Number));
-    expect(reservation.status).toBe("DRAFT");
+    expect(reservation.status).toBe("PENDING_PAYMENT");
     const deposit = jsonObject(reservation.deposit_payment, "customer deposit instruction");
     expect(deposit.status).toBe("PENDING");
     expect(deposit.payment_code).toEqual(expect.any(String));

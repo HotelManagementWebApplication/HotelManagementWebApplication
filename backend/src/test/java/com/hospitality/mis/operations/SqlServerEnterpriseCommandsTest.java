@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.*;
 class SqlServerEnterpriseCommandsTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired EnterpriseExtensionService service;
+    @Autowired com.hospitality.mis.service.operations.InventoryMovementService inventory;
     long guest,reservation,invoice;
     LocalDate day=LocalDate.of(2036,3,2);
 
@@ -31,7 +32,7 @@ class SqlServerEnterpriseCommandsTest {
         guest=jdbc.queryForObject("INSERT KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) OUTPUT INSERTED.maKhachLuuTru VALUES(N'Enterprise guest',N'0998111123',N'ENTGUEST')",Long.class);
         reservation=jdbc.queryForObject("INSERT PhieuDatPhong(maKhachLuuTru,nguonDatPhong,doanhThuGopOta,hoaHongOta) OUTPUT INSERTED.maPhieuDatPhong VALUES(?,N'BOOKING_COM',120000,20000)",Long.class,guest);
         invoice=jdbc.queryForObject("INSERT HoaDon(maPhieuDatPhong,tongTienPhong,soTienPhaiTra,trangThai) OUTPUT INSERTED.maHoaDon VALUES(?,108000,108000,N'Chưa thanh toán')",Long.class,reservation);
-        jdbc.update("INSERT MatHangTonKho(maMatHang,ten,danhMuc,donViTinh,soLuongHienTai) VALUES(N'ENT-STOCK',N'Enterprise stock',N'Đồ vải',N'bộ',10)");
+        jdbc.update("INSERT DichVu(maDichVu,ten,danhMuc,donViTinh,gia,soLuongTonKho) VALUES(N'ENT-STOCK',N'Enterprise stock',N'Vật dụng phòng',N'bộ',0,10)");
     }
     @AfterEach void cleanup() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
@@ -43,8 +44,8 @@ class SqlServerEnterpriseCommandsTest {
         jdbc.update("DELETE ChamCong WHERE maNhanVien=N'ENT01'");
         jdbc.update("DELETE DonNghiPhep WHERE maNhanVien=N'ENT01'");
         jdbc.update("DELETE NhanVien WHERE maNhanVien=N'ENT01'");
-        jdbc.update("DELETE BienDongTonKho WHERE maMatHang=N'ENT-STOCK'");
-        jdbc.update("DELETE MatHangTonKho WHERE maMatHang=N'ENT-STOCK'");
+        jdbc.update("DELETE BienDongKhoDichVu WHERE maDichVu=N'ENT-STOCK'");
+        jdbc.update("DELETE DichVu WHERE maDichVu=N'ENT-STOCK'");
         jdbc.update("DELETE TaiSanKyThuat WHERE maTaiSanKyThuat=N'ENT-ASSET'");
     }
 
@@ -97,16 +98,15 @@ class SqlServerEnterpriseCommandsTest {
         var result=service.leaves("APPROVED").stream().filter(r->r.id().equals(leave.id())).findFirst().orElseThrow();
         assertThat(result.approver()).isEqualTo("ENT01"); assertThat(result.decidedAt()).isNotNull();
     }
-    @Test void stockAdjustIsAbsoluteAndFailedIssueWritesNothing() {
-        assertThat(service.moveStock(stock("ADJUST",3),"ENT01").currentQuantity()).isEqualTo(3);
-        code(()->service.moveStock(stock("ISSUE",4),"ENT01"),"INSUFFICIENT_STOCK");
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM BienDongTonKho WHERE maMatHang=N'ENT-STOCK'",Integer.class)).isEqualTo(1);
-        assertThat(service.moveStock(stock("WASTE",1),"ENT01").currentQuantity()).isEqualTo(2);
-        code(()->service.moveStock(new EnterpriseDtos.StockMovementRequest("missing","ISSUE",1,null),"ENT01"),"STOCK_ITEM_NOT_FOUND");
+    @Test void unifiedStockAdjustmentAndFailedIssueAreAtomic() {
+        inventory.record(new com.hospitality.mis.dto.operations.InventoryMovementDtos.CreateRequest("ENT-STOCK",com.hospitality.mis.entity.operations.InventoryMovement.MovementType.ADJUST,-7,"test"),"ENT01","ent-adjust");
+        assertThat(jdbc.queryForObject("SELECT soLuongTonKho FROM DichVu WHERE maDichVu=N'ENT-STOCK'",Integer.class)).isEqualTo(3);
+        code(()->inventory.record(new com.hospitality.mis.dto.operations.InventoryMovementDtos.CreateRequest("ENT-STOCK",com.hospitality.mis.entity.operations.InventoryMovement.MovementType.ISSUE,4,"test"),"ENT01","ent-issue"),"INSUFFICIENT_STOCK");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM BienDongKhoDichVu WHERE maDichVu=N'ENT-STOCK'",Integer.class)).isEqualTo(1);
     }
     @Test void concurrentStockIssuesDoNotOverspend() throws Exception {
-        assertThat(race(()-> {service.moveStock(stock("ISSUE",7),"ENT01");return "SUCCESS";})).containsExactlyInAnyOrder("SUCCESS","INSUFFICIENT_STOCK");
-        assertThat(jdbc.queryForObject("SELECT soLuongHienTai FROM MatHangTonKho WHERE maMatHang=N'ENT-STOCK'",Integer.class)).isEqualTo(3);
+        assertThat(race(()-> {inventory.record(new com.hospitality.mis.dto.operations.InventoryMovementDtos.CreateRequest("ENT-STOCK",com.hospitality.mis.entity.operations.InventoryMovement.MovementType.ISSUE,7,"test"),"ENT01",java.util.UUID.randomUUID().toString());return "SUCCESS";})).containsExactlyInAnyOrder("SUCCESS","INSUFFICIENT_STOCK");
+        assertThat(jdbc.queryForObject("SELECT soLuongTonKho FROM DichVu WHERE maDichVu=N'ENT-STOCK'",Integer.class)).isEqualTo(3);
     }
     @Test void assetCommandsPersistValuesAndNotFoundContract() {
         var asset=service.createAsset(new EnterpriseDtos.TechnicalAssetRequest("ENT-ASSET","Pump","Pump","BUILDING",null,1,"Lobby","Brand",day,day.plusMonths(1),null,new BigDecimal("120000"),"note"));
@@ -116,7 +116,6 @@ class SqlServerEnterpriseCommandsTest {
     }
     private EnterpriseDtos.VatInvoiceRequest vatRequest(){return new EnterpriseDtos.VatInvoiceRequest(invoice,"INDIVIDUAL","A & B <guest>",null,null,null,null);}
     private EnterpriseDtos.AttendanceInput attendance(String employee){return new EnterpriseDtos.AttendanceInput(employee,day,day.atTime(8,0),day.atTime(17,0),"PRESENT","MANUAL","event-1",null);}
-    private EnterpriseDtos.StockMovementRequest stock(String type,int quantity){return new EnterpriseDtos.StockMovementRequest("ENT-STOCK",type,quantity,"test");}
     private void code(Runnable operation,String expected){assertThatThrownBy(operation::run).isInstanceOf(DomainException.class).extracting("code").isEqualTo(expected);}
     private List<String> race(Callable<String> operation)throws Exception {
         var start=new CountDownLatch(1);

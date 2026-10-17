@@ -109,6 +109,7 @@ SELECT
     danhMuc,
     moTa,
     duongDanAnh
+, thoiLuongPhut,laTaiNguyen
 FROM dbo.DichVu
 WHERE dangHoatDong = 1;
 GO
@@ -160,11 +161,11 @@ SELECT
     chiTiet.soLuongKhach,
     phong.ten AS tenPhong,
     loai.ten AS tenLoaiPhong,
-    loai.giaTheoNgay,
-    loai.giaTheoGio,
+    COALESCE(chiTiet.giaTheoNgayDaChot, loai.giaTheoNgay) AS giaTheoNgay,
+    COALESCE(chiTiet.giaTheoGioDaChot, loai.giaTheoGio) AS giaTheoGio,
     dbo.fnTinhTongTienPhong(
-        loai.giaTheoNgay,
-        loai.giaTheoGio,
+        COALESCE(chiTiet.giaTheoNgayDaChot, loai.giaTheoNgay),
+        COALESCE(chiTiet.giaTheoGioDaChot, loai.giaTheoGio),
         chiTiet.thoiDiemNhanPhong,
         chiTiet.thoiDiemTraPhong,
         CASE WHEN phieu.hinhThucThue = N'Theo giờ' THEN 1 ELSE 0 END,
@@ -250,7 +251,7 @@ SELECT
         WHEN chiTiet.trangThai = N'Đã giữ phòng' THEN chiTiet.thoiDiemNhanPhong
     END) AS thoiDiemNhanPhongDangGiu,
     hoaDon.maHoaDon,
-    COALESCE(hoaDon.soTienPhaiTra, 0) AS soTienPhaiTra
+    COALESCE(dbo.fnTinhSoDuHoaDon(hoaDon.maHoaDon), 0) AS soTienPhaiTra
 FROM dbo.PhieuDatPhong phieu
 JOIN dbo.KhachLuuTru khach
     ON khach.maKhachLuuTru = phieu.maKhachLuuTru
@@ -300,23 +301,6 @@ GO
 -- =============================================================================
 -- vwTonKhoHienTai
 -- =============================================================================
-CREATE VIEW dbo.vwTonKhoHienTai
-AS
-SELECT
-    maMatHang,
-    ten,
-    danhMuc,
-    donViTinh,
-    soLuongHienTai,
-    nguongAnToan,
-    maDichVu,
-    dangHoatDong,
-    CAST(CASE
-        WHEN soLuongHienTai <= nguongAnToan THEN 1
-        ELSE 0
-    END AS BIT) AS duoiNguongAnToan
-FROM dbo.MatHangTonKho;
-GO
 
 -- =============================================================================
 -- vwCongViecBuongPhong
@@ -391,7 +375,7 @@ GO
 
 -- =============================================================================
 -- vwDoanhThuTheoNgay
--- Cộng bút toán đã chốt theo ngày: ghi có tăng, ghi nợ giảm doanh thu ròng.
+-- Chỉ cộng doanh thu đã ghi nhận; thu tiền, biên lai, tiền cọc và chi phí là dòng tiền riêng.
 -- =============================================================================
 CREATE VIEW dbo.vwDoanhThuTheoNgay
 AS
@@ -411,6 +395,7 @@ SELECT
     END) AS doanhThuRong
 FROM dbo.ButToanTaiChinh
 WHERE daChotSo = 1
+    AND loaiButToan = N'REVENUE_RECOGNIZED'
 GROUP BY CAST(thoiDiemPhatSinh AS DATE);
 GO
 
@@ -431,11 +416,14 @@ SELECT
     datDichVu.soLuongMienPhi,
     datDichVu.donGia,
     datDichVu.buoiAn,
-    datDichVu.trangThai,
+    CASE WHEN datDichVu.trangThai=N'Chờ thanh toán' AND datDichVu.hanThanhToan<=CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATETIME2(6)) THEN N'Hết hạn' ELSE datDichVu.trangThai END COLLATE Vietnamese_100_CS_AS AS trangThai,
     datDichVu.ghiChu,
     datDichVu.khoaYeuCau,
     datDichVu.maBamYeuCau,
-    datDichVu.nguoiTao
+    datDichVu.nguoiTao,
+    datDichVu.thoiDiemKetThuc, datDichVu.hanThanhToan, datDichVu.soTienDaThanhToan,
+    datDichVu.maThamChieuThanhToan,datDichVu.maGiaoDichVnpay,datDichVu.maPhanHoiThanhToan,datDichVu.thoiDiemThanhToan,
+    datDichVu.thoiDiemTao
 FROM dbo.DatDichVuKhachSan datDichVu
 LEFT JOIN dbo.DichVu dichVu
     ON dichVu.maDichVu = datDichVu.maDichVu;
@@ -939,7 +927,7 @@ SELECT
     soTienThucTe,
     soTienThucTe - soTienDuKien AS chenhLech,
     thoiDiemBanGiao,
-    ghiChu
+    ghiChu, nguoiXacNhan,thoiDiemXacNhan
 FROM dbo.BanGiaoTienCa;
 GO
 
@@ -1224,6 +1212,7 @@ SELECT
     soLuongTonKho,
     nguongAnToan,
     dangHoatDong
+, thoiLuongPhut,laTaiNguyen
 FROM dbo.DichVu;
 GO
 
@@ -1282,7 +1271,7 @@ GO
 -- vwSoDuTienCoc
 -- Mỗi dòng là một giao dịch cọc hoàn tất và số dư sau các khoản hoàn của nó.
 -- REFUND_OF:<mã giao dịch>:... gắn hoàn tiền với đúng lần thu cọc và phương thức gốc.
--- Cọc được nhận diện qua DEPOSIT:..., mã sự kiện ngoài hoặc người thực hiện PAYMENT_GATEWAY.
+-- Cọc được nhận diện qua DEPOSIT:..., hoặc sự kiện ngoài không thuộc tiền dịch vụ (SVC:...).
 -- =============================================================================
 CREATE VIEW dbo.vwSoDuTienCoc
 AS
@@ -1305,8 +1294,14 @@ WHERE tienCoc.loai = N'Thanh toán'
     AND tienCoc.trangThai = N'Đã hoàn tất'
     AND (
         tienCoc.maThamChieu LIKE N'DEPOSIT:%'
-        OR tienCoc.maSuKienBenNgoai IS NOT NULL
-        OR tienCoc.maNguoiThucHien = N'PAYMENT_GATEWAY'
+        OR (
+            tienCoc.maSuKienBenNgoai IS NOT NULL
+            AND tienCoc.maSuKienBenNgoai NOT LIKE N'SVC:%'
+        )
+        OR (
+            tienCoc.maNguoiThucHien = N'PAYMENT_GATEWAY'
+            AND COALESCE(tienCoc.maSuKienBenNgoai, N'') NOT LIKE N'SVC:%'
+        )
     );
 GO
 
@@ -1350,4 +1345,23 @@ SELECT
     thoiDiemChuyenPhong,
     lyDo
 FROM dbo.ChuyenPhong;
+GO
+
+
+CREATE VIEW dbo.vwYeuCauKho AS
+SELECT r.*,d.ten,d.donViTinh FROM dbo.YeuCauKho r JOIN dbo.DichVu d ON d.maDichVu=r.maDichVu;
+GO
+
+CREATE VIEW dbo.vwTieuThuDichVu AS
+SELECT N'BOOKING:'+CONVERT(NVARCHAR(30),b.maDatDichVuKhachSan) AS maLuot,
+    b.maDichVu,COALESCE(b.thoiDiemSuDung,b.thoiDiemDuKien) AS thoiDiem,
+    b.soLuong,b.soLuongMienPhi,b.donGia,
+    CONVERT(DECIMAL(19,2),(CONVERT(BIGINT,b.soLuong)-b.soLuongMienPhi)*b.donGia) AS thanhTien
+FROM dbo.DatDichVuKhachSan b WHERE b.trangThai=N'Đã sử dụng'
+UNION ALL
+SELECT N'DIRECT:'+CONVERT(NVARCHAR(30),s.maPhieuDatPhong)+N':'+s.maDichVu+N':'+CONVERT(NVARCHAR(10),s.ngaySuDung,23),
+    s.maDichVu,CONVERT(DATETIME2(6),s.ngaySuDung),s.soLuong,
+    CASE WHEN s.donGia=0 THEN s.soLuong ELSE 0 END,s.donGia,
+    CONVERT(DECIMAL(19,2),CONVERT(BIGINT,s.soLuong)*s.donGia)
+FROM dbo.SuDungDichVu s;
 GO

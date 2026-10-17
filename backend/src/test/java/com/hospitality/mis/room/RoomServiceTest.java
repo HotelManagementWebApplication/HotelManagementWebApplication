@@ -44,8 +44,11 @@ class RoomServiceTest {
     @Test void availabilityCombinesPhysicalStateAndHalfOpenOverlap(){
         LocalDateTime from=LocalDateTime.now().plusDays(5).truncatedTo(java.time.temporal.ChronoUnit.MICROS),to=from.plusDays(1);booking(from,to);
         jdbc.update("UPDATE Phong SET trangThai=N'Đang dọn phòng' WHERE maPhong=N'RSP-02'");
-        assertThat(service.availability(from,to,"RSP-T")).extracting(r->r.available()).containsExactly(false,false);
-        assertThat(service.availability(to,to.plusHours(1),"RSP-T")).extracting(r->r.available()).containsExactly(true,false);
+        // A room being cleaned now can still be booked for a future, non-overlapping stay.
+        assertThat(service.availability(from,to,"RSP-T")).extracting(r->r.available()).containsExactly(false,true);
+        // The first booking ends exactly at `to`, so the half-open interval allows
+        // the next stay; the second room is only being cleaned now, five days ahead.
+        assertThat(service.availability(to,to.plusHours(1),"RSP-T")).extracting(r->r.available()).containsExactly(true,true);
     }
     @Test void intervalValidationAndMissingRoomHaveStableErrors(){
         var now=LocalDateTime.now();code(()->service.availability(now,now,null),"INVALID_INTERVAL");

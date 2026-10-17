@@ -40,7 +40,7 @@ public class PublicGuestPortalService {
         try{availabilityPolicy.validateInterval(from,to);}catch(IllegalArgumentException error){throw new DomainException("INVALID_INTERVAL","Thời gian nhận phải trước thời gian trả");}
         return catalog.rooms(type).stream().map(r->new PublicGuestDtos.RoomAvailability(r.id(),r.name(),r.typeId(),r.typeCode(),r.typeName(),r.marketingName(),
                 r.typeDescription(),r.tagline(),r.marketingDescription(),r.description(),r.dailyPrice(),r.hourlyPrice(),r.area(),r.view(),r.bedType(),r.floor(),
-                publicStatus(r.status()),availabilityPolicy.isAvailable(r.status(),overlaps.overlap(r.id(),from,to,LocalDateTime.now(clock))),
+                publicStatus(r.status()),!overlaps.overlap(r.id(),from,to,LocalDateTime.now(clock)),
                 catalog.images(r).stream().findFirst().orElse(null),catalog.amenities(r.typeId()),r.maxOccupancy())).toList();
     }
 

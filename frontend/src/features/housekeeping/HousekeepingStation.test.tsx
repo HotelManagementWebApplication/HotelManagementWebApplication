@@ -1,3 +1,5 @@
+import {kitchenAccountingApi} from "../../shared/api/kitchenAccounting";
+import {stockRequestsApi} from "../../shared/api/stockRequests";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import HousekeepingStation from "./HousekeepingStation";
@@ -84,8 +86,8 @@ describe("HousekeepingStation Operational Interface", () => {
   ];
 
   const mockLinen = [
-    { id: "l1", name: "Ga trải giường King", unit: "bộ", current_quantity: 45, safety_threshold: 20, service_id: null, active: true, category: "LINEN" },
-    { id: "l5", name: "Khăn tắm lớn", unit: "cái", current_quantity: 15, safety_threshold: 40, service_id: null, active: true, category: "TOWELS" },
+    { id: "l1", name: "Ga trải giường King", unit: "bộ", stock: 45, safety_threshold: 20, service_id: null, active: true, category: "room-amenity" },
+    { id: "l5", name: "Khăn tắm lớn", unit: "cái", stock: 15, safety_threshold: 40, service_id: null, active: true, category: "room-amenity" },
   ];
 
   beforeEach(() => {
@@ -99,7 +101,7 @@ describe("HousekeepingStation Operational Interface", () => {
       { id: 1, name: "Thay ga trải giường", active: true },
       { id: 2, name: "Lau sàn phòng tắm", active: true },
     ]);
-    vi.spyOn(enterpriseApi, "linen").mockResolvedValue(mockLinen as any);
+    vi.spyOn(kitchenAccountingApi, "services").mockResolvedValue(mockLinen as any);
 
     vi.spyOn(housekeepingTechnicalApi, "checklistResults").mockResolvedValue([
       { id: 1, task_id: 101, item: "Thay ga trải giường", passed: false, note: null, completed_by: "EMP01", completed_at: "2026-09-20T08:05:00" },
@@ -165,15 +167,15 @@ describe("HousekeepingStation Operational Interface", () => {
       handoff_note: "Buồng phòng nhắc kỹ thuật xử lý sự cố",
     } as any);
 
-    vi.spyOn(enterpriseApi, "moveLinen").mockResolvedValue({
+    vi.spyOn(stockRequestsApi, "create").mockResolvedValue({
       id: "l1",
       name: "Ga trải giường King",
       unit: "bộ",
-      current_quantity: 50,
+      stock: 50,
       safety_threshold: 20,
       service_id: null,
       active: true,
-      category: "LINEN",
+      category: "room-amenity",
     } as any);
   });
 
@@ -413,7 +415,7 @@ describe("HousekeepingStation Operational Interface", () => {
     });
   });
 
-  it("performs stock issue and receipt in Linen screen via enterpriseApi.moveLinen", async () => {
+  it("performs stock issue and receipt in Linen screen via stockRequestsApi.create", async () => {
     render(<HousekeepingStation onBack={onBack} />);
 
     const linenNav = screen.getByRole("button", { name: /Đồ vải & Vật tư ca/i });
@@ -421,23 +423,24 @@ describe("HousekeepingStation Operational Interface", () => {
 
     expect(await screen.findByText("Kho đồ vải & Vật tư")).toBeDefined();
 
-    // Click "Nhập thêm" on first linen card
-    const receiveBtns = await screen.findAllByText("Nhập thêm");
+    // Click "Yêu cầu cấp" on first linen card
+    const receiveBtns = await screen.findAllByText("Yêu cầu cấp");
     expect(receiveBtns.length).toBeGreaterThan(0);
     fireEvent.click(receiveBtns[0]);
 
-    expect(screen.getByText(/Nhập kho:/i)).toBeDefined();
+    expect(screen.getByText(/Yêu cầu cấp:/i)).toBeDefined();
 
-    // Click "Lưu tồn kho"
-    const saveStockBtn = screen.getByRole("button", { name: "Lưu tồn kho" });
+    fireEvent.change(screen.getByPlaceholderText("Ví dụ: Nhập bổ sung đồ vải mới"),{target:{value:"Bổ sung cho phòng"}});
+    // Click "Gửi yêu cầu"
+    const saveStockBtn = screen.getByRole("button", { name: "Gửi yêu cầu" });
     fireEvent.click(saveStockBtn);
 
     await waitFor(() => {
-      expect(enterpriseApi.moveLinen).toHaveBeenCalledWith(
+      expect(stockRequestsApi.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          item_id: "l1",
-          movement_type: "RECEIVE",
-        })
+          service_id: "l1",
+          kind: "ISSUE",
+        }),expect.any(String)
       );
     });
   });
@@ -469,7 +472,7 @@ describe("HousekeepingStation Operational Interface", () => {
     vi.spyOn(housekeepingTechnicalApi, "tasks").mockResolvedValue([]);
     vi.spyOn(housekeepingTechnicalApi, "rooms").mockResolvedValue([]);
     vi.spyOn(housekeepingTechnicalApi, "incidents").mockResolvedValue([]);
-    vi.spyOn(enterpriseApi, "linen").mockResolvedValue([]);
+    vi.spyOn(kitchenAccountingApi, "services").mockResolvedValue([]);
 
     render(<HousekeepingStation onBack={onBack} />);
 

@@ -74,6 +74,7 @@ describe("ManagerDashboard Interface and Acceptance Workflow", () => {
     // Mock expenses
     vi.spyOn(kitchenAccountingApi, "expenses").mockResolvedValue([]);
     vi.spyOn(kitchenAccountingApi, "approvals").mockResolvedValue([]);
+    vi.spyOn(kitchenAccountingApi, "services").mockResolvedValue([]);
     vi.spyOn(enterpriseApi, "leaves").mockResolvedValue([]);
     vi.spyOn(kitchenAccountingApi, "ledger").mockResolvedValue({items: [], page: 0, size: 100, totalElements: 0, totalPages: 0});
     vi.spyOn(kitchenAccountingApi, "reconciliation").mockResolvedValue({recognized_revenue: 0, net_total: 0, total_payments: 0, total_refunds: 0} as any);

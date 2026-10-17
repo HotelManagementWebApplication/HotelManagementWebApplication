@@ -30,15 +30,28 @@ public class ServiceInventoryDatabase {
         } catch(JsonProcessingException error){throw new IllegalStateException("Không thể đọc kết quả inventory",error);}
         catch(DataAccessException error){
             for(Throwable cause=error;cause!=null;cause=cause.getCause())if(cause instanceof SQLException sql){
-                String code=switch(sql.getErrorCode()){case 51501->"SERVICE_NOT_FOUND";case 51006->"INSUFFICIENT_STOCK";case 51005->"IDEMPOTENCY_KEY_CONFLICT";case 51503->"IDEMPOTENCY_REQUEST_IN_PROGRESS";case 51504->"INVALID_INVENTORY_QUANTITY";default->null;};
+                String code=switch(sql.getErrorCode()){case 51501->"SERVICE_NOT_FOUND";case 51505->"INVENTORY_NOT_MANAGED";case 51006->"INSUFFICIENT_STOCK";case 51005->"IDEMPOTENCY_KEY_CONFLICT";case 51503->"IDEMPOTENCY_REQUEST_IN_PROGRESS";case 51504->"INVALID_INVENTORY_QUANTITY";default->null;};
                 if(code!=null)throw new DomainException(code,sql.getMessage());
             }
             throw error;
         }
     }
     public List<InventoryMovementDtos.Response> list(String id){
-        return jdbc.query("SELECT maBienDongKhoDichVu,maDichVu,loai,soLuong,maNguoiThucHien,thoiDiemPhatSinh,lyDo FROM dbo.vwBienDongKhoDichVu WHERE maDichVu=? ORDER BY thoiDiemPhatSinh DESC,maBienDongKhoDichVu DESC",
-            (r,n)->new InventoryMovementDtos.Response(r.getLong(1),r.getString(2),types.convertToEntityAttribute(r.getString(3)),r.getInt(4),r.getString(5),r.getTimestamp(6).toLocalDateTime(),r.getString(7)),id);
+        return jdbc.query("""
+            WITH movements AS (
+                SELECT *,CAST(CASE WHEN loai IN(N'Xuất kho',N'Hao hụt') THEN -soLuong ELSE soLuong END AS BIGINT) AS signedQuantity
+                FROM dbo.vwBienDongKhoDichVu WHERE maDichVu=?
+            ), running AS (
+                SELECT *,SUM(signedQuantity) OVER(ORDER BY thoiDiemPhatSinh DESC,maBienDongKhoDichVu DESC ROWS UNBOUNDED PRECEDING) AS netToHere
+                FROM movements
+            )
+            SELECT m.maBienDongKhoDichVu,m.maDichVu,m.loai,m.soLuong,m.maNguoiThucHien,m.thoiDiemPhatSinh,m.lyDo,n.hoVaTen,
+                CAST(s.soLuongTonKho AS BIGINT)-m.netToHere AS stockBefore,
+                CAST(s.soLuongTonKho AS BIGINT)-m.netToHere+m.signedQuantity AS stockAfter
+            FROM running m JOIN dbo.vwTonKhoDichVu s ON s.maDichVu=m.maDichVu
+            LEFT JOIN dbo.vwNhanVien n ON n.maNhanVien=m.maNguoiThucHien
+            ORDER BY m.thoiDiemPhatSinh DESC,m.maBienDongKhoDichVu DESC
+            """,(r,n)->new InventoryMovementDtos.Response(r.getLong(1),r.getString(2),types.convertToEntityAttribute(r.getString(3)),r.getInt(4),r.getString(5),r.getTimestamp(6).toLocalDateTime(),r.getString(7),r.getString(8),r.getLong(9),r.getLong(10)),id);
     }
     public int[] totals(String id,LocalDateTime from,LocalDateTime to){
         return jdbc.queryForObject("""

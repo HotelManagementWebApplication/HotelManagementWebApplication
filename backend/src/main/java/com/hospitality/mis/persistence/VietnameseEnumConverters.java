@@ -29,6 +29,7 @@ import com.hospitality.mis.entity.reservation.CancellationOutcome;
 import com.hospitality.mis.entity.reservation.DepositPaymentStatus;
 import com.hospitality.mis.entity.reservation.CustomerPaymentMethod;
 import com.hospitality.mis.entity.reservation.ReservationStatus;
+import com.hospitality.mis.entity.reservation.ReservationRoomStatus;
 import com.hospitality.mis.entity.room.RoomTypeCatalogStatus;
 
 import jakarta.persistence.AttributeConverter;
@@ -118,12 +119,21 @@ public final class VietnameseEnumConverters {
     @Converter public static final class ReservationStatusConverter implements AttributeConverter<ReservationStatus, String> {
         private final EnumMapping<ReservationStatus> mapping;
         public ReservationStatusConverter() { mapping = new EnumMapping<>(ReservationStatus.class,
-                value(ReservationStatus.DRAFT, "Bản nháp"), value(ReservationStatus.DEPOSIT_PAID, "Đã thanh toán cọc"),
+                value(ReservationStatus.DRAFT, "Bản nháp"), value(ReservationStatus.PENDING_PAYMENT, "Chờ thanh toán"),
+                value(ReservationStatus.DEPOSIT_PAID, "Đã thanh toán cọc"),
                 value(ReservationStatus.CONFIRMED, "Đã xác nhận"), value(ReservationStatus.CHECKED_IN, "Đã nhận phòng"),
                 value(ReservationStatus.CHECKED_OUT, "Đã trả phòng"), value(ReservationStatus.CANCELLED, "Đã hủy"),
                 value(ReservationStatus.NO_SHOW, "Không đến")); }
         @Override public String convertToDatabaseColumn(ReservationStatus value) { return mapping.convertToDatabaseColumn(value); }
         @Override public ReservationStatus convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
+    }
+    @Converter public static final class ReservationRoomStatusConverter implements AttributeConverter<ReservationRoomStatus, String> {
+        private final EnumMapping<ReservationRoomStatus> mapping = new EnumMapping<>(ReservationRoomStatus.class,
+                value(ReservationRoomStatus.DRAFT, "Bản nháp"), value(ReservationRoomStatus.TEMPORARILY_HELD, "Giữ tạm phòng"),
+                value(ReservationRoomStatus.RESERVED, "Đã giữ phòng"), value(ReservationRoomStatus.OCCUPIED, "Đang có khách"),
+                value(ReservationRoomStatus.RETURNED, "Đã trả phòng"), value(ReservationRoomStatus.CANCELLED, "Đã hủy"));
+        @Override public String convertToDatabaseColumn(ReservationRoomStatus value) { return mapping.convertToDatabaseColumn(value); }
+        @Override public ReservationRoomStatus convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
     }
     @Converter public static final class DepositPaymentStatusConverter implements AttributeConverter<DepositPaymentStatus, String> {
         private final EnumMapping<DepositPaymentStatus> mapping;
@@ -145,7 +155,7 @@ public final class VietnameseEnumConverters {
         public VnpayPaymentStatusConverter() { mapping = new EnumMapping<>(VnpayPaymentStatus.class,
                 value(VnpayPaymentStatus.PENDING, "Chờ thanh toán"), value(VnpayPaymentStatus.SUCCEEDED, "Thành công"),
                 value(VnpayPaymentStatus.FAILED, "Thất bại"), value(VnpayPaymentStatus.EXPIRED, "Đã hết hạn"),
-                value(VnpayPaymentStatus.CANCELLED, "Đã hủy")); }
+                value(VnpayPaymentStatus.REQUIRES_REVIEW, "Cần đối soát"), value(VnpayPaymentStatus.CANCELLED, "Đã hủy")); }
         @Override public String convertToDatabaseColumn(VnpayPaymentStatus value) { return mapping.convertToDatabaseColumn(value); }
         @Override public VnpayPaymentStatus convertToEntityAttribute(String value) { return mapping.convertToEntityAttribute(value); }
     }

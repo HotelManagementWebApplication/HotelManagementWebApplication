@@ -1,61 +1,45 @@
 # web-hotel-mis
 
-Hotel MIS for one hotel: a Spring Boot API, React/TypeScript web app, Microsoft
-SQL Server schema, and a customer RAG-agent service. This repository is the source of
-truth for application code and database migrations.
+Hệ thống quản lý khách sạn cho một khách sạn, gồm API Spring Boot, ứng dụng web React/TypeScript, cơ sở dữ liệu Microsoft SQL Server và dịch vụ trợ lý khách hàng dùng RAG. Kho mã này lưu mã nguồn ứng dụng và các migration cơ sở dữ liệu.
 
-## Repository map
+## Cấu trúc kho mã
 
 ```text
-backend/              Spring Boot API, tests, and Flyway migrations
-frontend/             React/TypeScript customer and staff screens
-database/demo/        Manual local demo seed/reset files
-agent/                FastAPI customer assistant, RAG, API tools, policies, and evals
-rule.md              Internal product, implementation, and operating rules
-customer-policy.md   Approved customer-facing terms indexed by the chatbot
-docs/                 Architecture, API contract, operations plan, and guides
-.github/workflows/    CI configuration
-docker-compose.yml    Local SQL Server and Qdrant services
+backend/              API Spring Boot, bộ kiểm thử và migration Flyway
+frontend/             Giao diện khách hàng và nhân viên viết bằng React/TypeScript
+database/demo/        Tệp dữ liệu mẫu và đặt lại dữ liệu thủ công cho máy local
+agent/                Dịch vụ trợ lý khách hàng FastAPI, RAG, công cụ API, chính sách và đánh giá
+rule.md               Quy tắc nội bộ về sản phẩm, triển khai và vận hành
+customer-policy.md    Điều khoản đã duyệt dành cho khách hàng, được lập chỉ mục cho chatbot
+docs/                 Tài liệu kiến trúc, hợp đồng API, vận hành và hướng dẫn
+.github/workflows/    Cấu hình CI
+docker-compose.yml    Dịch vụ SQL Server và Qdrant chạy local
 ```
 
-## Data and runtime boundaries
+## Ranh giới dữ liệu và môi trường chạy
 
-- The backend API is the only business-data writer. Frontend and agent code do
-  not connect directly to SQL Server.
-- Exactly six Flyway files under `backend/src/main/resources/db/migration/`
-  own database changes: V1 schema, V2 indexes, V3 functions, V4 views, V5
-  procedures, V6 triggers. Never create V7+ or auxiliary DDL files; see root `AGENTS.md`.
-  Hibernate validates mappings; it does not create or update schema.
-- Demo reset scripts are destructive and local-only. Read
-  [`database/demo/README.md`](database/demo/README.md) before using them; never
-  point them at shared or production data.
-- Production credentials and secrets belong in a secret manager, not in source
-  files, `.env` files, or command history.
+- API backend là nơi duy nhất được ghi dữ liệu nghiệp vụ. Frontend và agent không kết nối trực tiếp tới SQL Server.
+- Chỉ có đúng sáu tệp Flyway trong `backend/src/main/resources/db/migration/` được định nghĩa thay đổi cơ sở dữ liệu: V1 schema, V2 indexes, V3 functions, V4 views, V5 stored procedures và V6 triggers. Không tạo V7 trở đi hoặc tệp DDL phụ; xem `AGENTS.md` ở thư mục gốc.
+- Các script đặt lại dữ liệu mẫu có thể xóa dữ liệu và chỉ được dùng local. Đọc [`database/demo/README.md`](database/demo/README.md) trước khi chạy; không trỏ chúng vào dữ liệu dùng chung hoặc production.
+- Thông tin xác thực và bí mật của production phải được lưu trong secret manager, không lưu trong mã nguồn, tệp `.env` hay lịch sử lệnh.
 
-## Local development
+## Phát triển local
 
-The local RAG stack uses the persistent Qdrant volume
-`web-hotel-mis_hotel-qdrant`. Start only Qdrant when preparing or re-indexing
-the customer policy:
+Stack RAG local sử dụng volume Qdrant có lưu dữ liệu `web-hotel-mis_hotel-qdrant`. Khi chuẩn bị hoặc lập chỉ mục lại chính sách khách hàng, chỉ khởi động Qdrant:
 
 ```powershell
 Set-Location C:\web-hotel-mis
 docker compose up -d qdrant
 ```
 
-For the complete local dependency set, start the existing SQL Server services,
-Qdrant and the customer agent. The init service only creates `QLKS` when it does
-not reset or delete the database. Do not use `docker compose down -v` because it
-removes the named data volumes.
+Để khởi động đầy đủ các dịch vụ phụ thuộc local, chạy SQL Server hiện có, Qdrant và customer agent. Dịch vụ init chỉ tạo `QLKS` nếu không đặt lại hoặc xóa cơ sở dữ liệu. Không chạy `docker compose down -v` vì lệnh này xóa các volume dữ liệu có tên.
 
 ```powershell
 Set-Location C:\web-hotel-mis
 docker compose up -d --build sqlserver sqlserver-init qdrant agent
 ```
 
-Create the agent environment from the repository root. The conditional copy
-keeps an existing local `.env`; open it in an editor and enter the Gemini key
-there, never in a command or shell history:
+Tạo môi trường cho agent từ thư mục gốc. Lệnh sao chép có điều kiện sẽ giữ nguyên `.env` local nếu tệp đã tồn tại. Mở tệp bằng trình soạn thảo rồi nhập Gemini key vào đó; không nhập key trong lệnh hoặc lịch sử shell:
 
 ```powershell
 Set-Location C:\web-hotel-mis
@@ -66,31 +50,23 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 notepad .env
 ```
 
-The template documents `AI_PROVIDER=gemini`, the approved model pair
-`gemini-3.5-flash-lite` and `gemini-embedding-2`, 768-dimensional embeddings,
-Qdrant, the backend URL, CORS origins, and agent port 8090. Gemini is the only
-runtime provider: the account and key must authenticate successfully for the
-configured models. A 401 from the current environment credential means setup
-is blocked until a valid key is entered; it must not be treated as working.
-There is no offline website fallback. Mocks are for tests only.
+Mẫu cấu hình mô tả `AI_PROVIDER=gemini`, cặp model đã duyệt `gemini-3.5-flash-lite` và `gemini-embedding-2`, embedding 768 chiều, Qdrant, URL backend, các CORS origin và cổng agent 8090. Gemini là provider duy nhất khi chạy thực tế; tài khoản và key phải xác thực thành công với các model đã cấu hình. Nếu thông tin xác thực hiện tại trả về lỗi 401 thì việc thiết lập đang bị chặn cho đến khi nhập key hợp lệ; không được xem đó là trạng thái hoạt động. Website không có chế độ dự phòng offline. Chỉ dùng mock trong kiểm thử.
 
-Index the one approved source from `agent/`; the installed console script is
-the project entry point declared in `agent/pyproject.toml`:
+Lập chỉ mục nguồn đã được duyệt từ thư mục `agent/`. Điểm vào của dự án là console script được khai báo trong `agent/pyproject.toml`:
 
 ```powershell
 Set-Location C:\web-hotel-mis\agent
 .\.venv\Scripts\index-customer-policy.exe
 ```
 
-Run the backend, agent, and frontend in separate terminals:
+Chạy backend, agent và frontend trong các terminal riêng:
 
 ```powershell
 Set-Location C:\web-hotel-mis\backend
 mvn spring-boot:run
 ```
 
-The backend listens on 8080. This command does not reset or delete SQL Server
-data. It uses the existing Flyway validation and local database lifecycle.
+Backend lắng nghe tại cổng 8080. Lệnh này không đặt lại hoặc xóa dữ liệu SQL Server. Ứng dụng dùng quy trình kiểm tra Flyway hiện có và vòng đời cơ sở dữ liệu local.
 
 ```powershell
 Set-Location C:\web-hotel-mis\agent
@@ -103,16 +79,11 @@ npm ci
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-The frontend Vite proxy sends `/api` and `/media` to port 8080 and `/agent-api`
-to port 8090. Set `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` only when using a
-database other than the local Compose service.
+Vite proxy chuyển `/api` và `/media` tới cổng 8080, còn `/agent-api` tới cổng 8090. Chỉ đặt `DB_URL`, `DB_USERNAME` và `DB_PASSWORD` khi dùng cơ sở dữ liệu khác dịch vụ Compose local.
 
-After changing `customer-policy.md`, run the same index command again. Indexing
-compares each chunk's content hash: unchanged chunks are not re-embedded,
-changed or new chunks are embedded, and chunks removed from the policy are
-deleted from Qdrant. `rule.md` is never indexed.
+Sau khi thay đổi `customer-policy.md`, chạy lại lệnh lập chỉ mục nói trên. Quy trình so sánh hash nội dung của từng đoạn: đoạn không đổi sẽ không được tạo embedding lại; đoạn mới hoặc đã sửa sẽ được tạo embedding; đoạn bị xóa khỏi chính sách sẽ bị xóa khỏi Qdrant. `rule.md` không bao giờ được lập chỉ mục.
 
-Inspect the collection and exact point count without starting another service:
+Xem collection và số lượng point chính xác mà không cần khởi động thêm dịch vụ:
 
 ```powershell
 $collection = "customer_policy"
@@ -125,13 +96,11 @@ Invoke-RestMethod -Method Post `
   ConvertTo-Json -Depth 5
 ```
 
-Local/demo SMTP uses the owner-managed fallback values in `application.yml`.
-Those two lines are deliberately protected by `AGENTS.md`, `rule.md` and a
-regression test; do not change them without an explicit owner request.
+SMTP local/demo dùng các giá trị dự phòng do chủ sở hữu quản lý trong `application.yml`. Hai dòng cấu hình này được bảo vệ có chủ ý bởi `AGENTS.md`, `rule.md` và một regression test; không thay đổi nếu chưa có yêu cầu rõ ràng từ chủ sở hữu.
 
 ## VNPay Sandbox
 
-Sau khi VNPay gửi thông tin sandbox, đặt biến môi trường trước khi chạy backend:
+Sau khi VNPay gửi thông tin sandbox, đặt các biến môi trường trước khi chạy backend:
 
 ```powershell
 $env:VNPAY_TMN_CODE = "<vnp_TmnCode>"
@@ -142,50 +111,22 @@ cd backend
 mvn spring-boot:run
 ```
 
-`VNPAY_RETURN_URL` phải là HTTPS public để VNPay gọi Return/IPN. Máy này đã có
-`cloudflared`; có thể dùng Quick Tunnel khi thử nhanh:
+`VNPAY_RETURN_URL` phải là địa chỉ HTTPS công khai để VNPay gọi Return/IPN. Máy này đã có `cloudflared`; có thể dùng Quick Tunnel để thử nhanh:
 
 ```powershell
 cloudflared tunnel --url http://localhost:8080
 ```
 
-Lấy URL `https://...trycloudflare.com` được in ra, ghép đường dẫn Return ở trên,
-rồi khởi động lại backend với biến môi trường mới. Nếu cần URL không đổi, tạo
-Named Tunnel trong tài khoản Cloudflare và cấu hình hostname cố định. Trên trang
-quản trị sandbox, IPN URL là
-`https://<public-backend-host>/api/public/payments/vnpay/ipn`.
+Lấy URL `https://...trycloudflare.com` được in ra, ghép với đường dẫn Return ở trên, rồi khởi động lại backend với biến môi trường mới. Nếu cần URL cố định, tạo Named Tunnel trong tài khoản Cloudflare và cấu hình hostname tương ứng. Trên trang quản trị sandbox, IPN URL là:
 
-Backend không gửi `vnp_BankCode`, vì vậy cổng VNPay tự hiển thị QR, ATM/tài khoản
-ngân hàng, thẻ quốc tế và ví. Số tiền gửi sang VNPay là đúng 50% tiền phòng;
-booking được giữ 30 phút và mỗi lần “Thanh toán lại” tạo một `vnp_TxnRef` mới
-trên cùng booking.
+```text
+https://<public-backend-host>/api/public/payments/vnpay/ipn
+```
 
-The project has completed its SQL Server cutover. Docker Compose contains the
-SQL Server services and the persistent Qdrant service; the disposable demo
-database is `QLKS`.
+Backend không gửi `vnp_BankCode`, vì vậy cổng VNPay tự hiển thị phương thức thanh toán được sandbox hỗ trợ. Tiền cọc là 50% tiền phòng; booking giữ tạm 10 phút. Các giá trị `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET` và URL callback phải được cấu hình qua môi trường; không đặt credential hoặc URL tunnel dùng một lần trong tài liệu/kho mã.
 
-## Verification and canonical docs
+## Kiểm tra và tài liệu tham chiếu
 
-CI configuration lives in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
-See [architecture](docs/architecture.md), the
-[API contract](docs/api-contract.md), the
-[frontend surface inventory](docs/ui-action-matrix.md), and the
-[database access and acceptance evidence](docs/database-access-matrix.md).
-Live E2E setup
-and disposable-database requirements are documented in
-[`frontend/e2e/README.md`](frontend/e2e/README.md).
+Cấu hình CI nằm trong [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Xem thêm tài liệu [kiến trúc](docs/architecture.md), [hợp đồng API](docs/api-contract.md), [danh mục giao diện và thao tác](docs/ui-action-matrix.md) và [ma trận truy cập cơ sở dữ liệu](docs/database-access-matrix.md).
 
-$TUNNEL_URL = "https://reflected-kills-himself-large.trycloudflare.com"
-
-$env:JWT_SECRET = "mamh-demo-jwt-secret-2026-local-key-very-long"
-
-$env:CORS_ALLOWED_ORIGINS = "http://localhost:5173,https://mam-hotel.vercel.app"
-
-$env:VNPAY_TMN_CODE = "A9O5JZ0G"
-$env:VNPAY_HASH_SECRET = "ZSJNHRBJAJBLTFFRRIIZFRNQWYPDIJBH"
-
-$env:VNPAY_RETURN_URL = "https://reflected-kills-himself-large.trycloudflare.com/api/public/payments/vnpay/return"
-$env:VNPAY_FRONTEND_RESULT_URL = "https://mam-hotel.vercel.app/payment/vnpay-result"
-
-Set-Location C:\web-hotel-mis\backend
-mvn spring-boot:run
+Hướng dẫn thiết lập E2E trực tiếp và các yêu cầu đối với cơ sở dữ liệu dùng một lần được ghi trong [`frontend/e2e/README.md`](frontend/e2e/README.md).

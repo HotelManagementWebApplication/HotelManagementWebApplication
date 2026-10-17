@@ -133,7 +133,7 @@ class SqlServerFrontDeskDashboardAcceptanceTest {
                              LocalDateTime checkOut, String depositStatus) {
         jdbc.update("SET IDENTITY_INSERT PhieuDatPhong ON; insert into PhieuDatPhong(maPhieuDatPhong, maKhachLuuTru, trangThai, hinhThucThue, trangThaiThanhToanCoc) values (?,?,?,?,?); SET IDENTITY_INSERT PhieuDatPhong OFF",
                 id, guestId, status, "Theo gói", depositStatus);
-        jdbc.update("insert into ChiTietDatPhong(maPhieuDatPhong, maPhong, thoiDiemNhanPhong, thoiDiemTraPhong, thoiDiemTraPhongBanDau) values (?,?,?,?,?)",
+        jdbc.update("insert into ChiTietDatPhong(maPhieuDatPhong, maPhong, thoiDiemNhanPhong, thoiDiemTraPhong, thoiDiemTraPhongBanDau, trangThai) values (?,?,?,?,?,N'Đã giữ phòng')",
                 id, room, checkIn, checkOut, checkOut);
     }
 

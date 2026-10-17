@@ -13,8 +13,9 @@ import java.time.LocalDate;
 @RestController
 public class HotelServiceBookingController {
     private final HotelServiceBookingService service;
+    private final com.hospitality.mis.service.billing.VnpayPaymentService payments;
 
-    public HotelServiceBookingController(HotelServiceBookingService service) { this.service = service; }
+    public HotelServiceBookingController(HotelServiceBookingService service,com.hospitality.mis.service.billing.VnpayPaymentService payments) { this.service=service;this.payments=payments; }
 
     @PostMapping("/api/customer/service-bookings")
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -23,6 +24,11 @@ public class HotelServiceBookingController {
                                                      @RequestHeader("Idempotency-Key") String key) {
         return service.bookForCustomer(request, key);
     }
+
+    @PostMapping("/api/customer/service-bookings/{id}/payment") @PreAuthorize("hasRole('CUSTOMER')")
+    public com.hospitality.mis.dto.billing.VnpayPaymentDtos.CheckoutResponse checkout(@PathVariable long id,jakarta.servlet.http.HttpServletRequest request){return payments.createServiceCheckout(id,request.getRemoteAddr());}
+    @GetMapping("/api/customer/service-bookings/{id}/payment") @PreAuthorize("hasRole('CUSTOMER')")
+    public HotelServiceBookingService.Response payment(@PathVariable long id){return payments.servicePayment(id);}
 
     @GetMapping("/api/customer/service-bookings")
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -38,16 +44,16 @@ public class HotelServiceBookingController {
 
     @GetMapping("/api/operations/restaurant/service-bookings")
     @PreAuthorize("@departmentAccess.allows(authentication, 'RESTAURANT_ORDER_READ')")
-    public List<HotelServiceBookingService.Response> restaurantBookings(
+    public List<HotelServiceBookingService.Response> coordinatedBookings(
             @RequestParam(name = "date", required = false) LocalDate date,
             @RequestParam(name = "status", required = false) String status) {
-        return service.restaurantBookings(date, status);
+        return service.coordinatedBookings(date, status);
     }
 
     @PostMapping("/api/operations/restaurant/service-bookings/{id}/use")
     @PreAuthorize("@departmentAccess.allows(authentication, 'RESTAURANT_ORDER_WRITE')")
     public HotelServiceBookingService.Response useRestaurantBooking(@PathVariable long id) {
-        return service.markRestaurantUsed(id, SecurityActor.currentActor());
+        return service.markCoordinatedServiceUsed(id, SecurityActor.currentActor());
     }
 
     @PostMapping("/api/customer/service-bookings/{id}/cancel")

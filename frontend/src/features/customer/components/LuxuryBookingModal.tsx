@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Room } from "../../../shared/types/domain";
 import { getRoomFullName } from "../roomProfiles";
-import { X, Calendar, Clock, Users, ShieldCheck, Wallet, Banknote } from "lucide-react";
+import { X, Calendar, Clock, Users, ShieldCheck, Wallet } from "lucide-react";
 
 interface LuxuryBookingModalProps {
   room: Room;
@@ -19,7 +19,7 @@ interface LuxuryBookingModalProps {
     hourlyCheckOut?: string;
     guests: number;
     email: string;
-    paymentMethod: "vnpay" | "hotel";
+    paymentMethod: "vnpay";
   }) => Promise<void>;
   loading?: boolean;
   isAuthenticated?: boolean;
@@ -82,7 +82,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
   const [guestId, setGuestId] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"vnpay" | "hotel">("vnpay");
+  const paymentMethod = "vnpay" as const;
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
@@ -389,31 +389,11 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
           {/* Payment Method */}
           <div>
             <label className="text-xs text-[#78716C] mb-2 block font-medium">
-              Phương thức thanh toán bảo đảm
+              Thanh toán cọc online
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[
-                { id: "vnpay", label: "Thanh toán qua VNPay", note: "QR, ATM, thẻ quốc tế hoặc ví", icon: Wallet },
-                { id: "hotel", label: "Thanh toán tại khách sạn", note: "Chờ lễ tân xác nhận giữ phòng", icon: Banknote },
-              ].map((m) => {
-                const Icon = m.icon;
-                const isSelected = paymentMethod === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setPaymentMethod(m.id as any)}
-                    className={`py-3.5 px-3 rounded-xl text-xs font-semibold flex items-start text-left gap-1.5 transition cursor-pointer border ${
-                      isSelected
-                        ? "bg-[#1C1917] text-white border-[#1C1917]"
-                        : "bg-[#FAF8F5] text-[#57534E] border-[#E2DDD4] hover:bg-[#F0ECE4]"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2"><Icon size={16} /><span>{m.label}</span></span>
-                    <span className={`text-[10px] font-normal ${isSelected ? "text-white/70" : "text-[#78716C]"}`}>{m.note}</span>
-                  </button>
-                );
-              })}
+            <div className="p-4 rounded-xl border border-[#E2DDD4] bg-[#FAF8F5] text-sm text-[#57534E]">
+              <p className="flex items-center gap-2 font-semibold text-[#1C1917]"><Wallet size={16} />Đặt cọc qua VNPay</p>
+              <p className="mt-2 text-xs leading-relaxed">Phòng được giữ tạm 10 phút để thanh toán cọc 50%. Phần còn lại thanh toán tại khách sạn. Hết hạn chưa thanh toán, phòng sẽ được mở lại.</p>
             </div>
           </div>
 
@@ -455,9 +435,7 @@ export const LuxuryBookingModal: React.FC<LuxuryBookingModalProps> = ({
                 ? "Đang xử lý đặt chỗ..."
                 : isAuthenticated === false
                 ? "Đăng nhập để đặt phòng"
-                : paymentMethod === "vnpay"
-                ? "Tiếp tục đến cổng VNPay"
-                : "Gửi yêu cầu cho lễ tân"}
+                : "Tiếp tục đến cổng VNPay"}
             </span>
           </button>
         </form>

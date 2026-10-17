@@ -54,10 +54,10 @@ suy đoán và sẽ hướng khách liên hệ khách sạn để xác nhận.
   phụ thu (nếu có) phải được khách sạn xác nhận trước.
 - Khách tự gửi yêu cầu gia hạn thêm đêm trên đơn đặt phòng trước giờ nhận phòng
   **hơn 48 giờ**. Phần thêm phải bắt đầu đúng tại giờ checkout hiện tại, không
-  được tạo ngày trống ở giữa. Tiền cọc đã trả tiếp tục áp dụng cho các đêm cũ;
-  khách thanh toán bổ sung 50% tiền phòng của các đêm mới theo giá hiện tại từ
-  API. Gia hạn chỉ hoàn tất sau khi hệ thống xác nhận phòng còn trống, sẵn sàng
-  và nhận đủ cọc bổ sung.
+  được tạo ngày trống ở giữa. Giá phòng đã chốt của booking tiếp tục áp dụng
+  cho thời gian gia hạn; khách thanh toán bổ sung 50% tiền phòng theo giá đó.
+  Gia hạn chỉ hoàn tất sau khi hệ thống xác nhận phòng còn trống, sẵn sàng và
+  nhận đủ cọc bổ sung.
 - Khách chỉ được đổi ngày trước giờ nhận phòng **hơn 48 giờ**, phải giữ nguyên
   số đêm đã đặt và không phát sinh thêm tiền cọc. Nếu muốn tăng số đêm, khách
   dùng chức năng gia hạn. Lịch mới chỉ có hiệu lực khi database xác nhận tất cả
@@ -113,6 +113,11 @@ Thời hạn được tính ngược từ giờ nhận phòng theo lịch đã x
 ## 5. Tiền đặt cọc, hóa đơn và thanh toán
 
 - Tiền đặt cọc bằng 50% giá phòng.
+- Đặt phòng trên trang khách hàng chỉ thanh toán cọc online qua VNPay. Phòng được
+  giữ tạm 10 phút; nhận đủ cọc mới xác nhận booking, hết hạn chưa trả thì nhả phòng.
+  Phần còn lại thanh toán tại khách sạn.
+- Khách nộp cọc tiền mặt trực tiếp qua lễ tân. Yêu cầu tại quầy cũng giữ tạm
+  10 phút; lễ tân chỉ xác nhận đã thu cọc sau khi thực sự nhận đủ tiền.
 - Tiền đặt cọc đã thanh toán được trừ vào tổng hóa đơn; khách không phải trả lại
   khoản này lần thứ hai.
 - Tổng tiền cuối cùng có thể gồm tiền phòng, phụ thu, dịch vụ/minibar, bồi
@@ -175,19 +180,22 @@ Mức bồi thường thiết bị bị hư hỏng được tính theo tuổi th
   - MaM Restaurant miễn phí 1 bữa trưa và 1 bữa tối mỗi ngày cho mỗi khách.
 - Khách thuê theo giờ không có các quyền lợi miễn phí trên; dịch vụ sử dụng
   được tính theo giá niêm yết.
-- Phần sử dụng trong hạn mức miễn phí không tính tiền. Phần vượt hạn mức tính
-  theo giá niêm yết và được ghi rõ trên hóa đơn. Dịch vụ tính phí do khách sạn
-  vận hành được cộng vào hóa đơn phòng và thanh toán lúc checkout.
-- Khách có thể đặt trước dịch vụ sau khi booking được xác nhận đã thanh toán
-  tiền đặt cọc. Dịch vụ chưa sử dụng sẽ bị hủy khi booking phòng bị hủy, khách
-  không đến nhận phòng hoặc đã checkout. Chỉ dịch vụ đã sử dụng mới được tính
-  vào hóa đơn.
-- Trên website, khách mở đơn đặt phòng của mình, chọn **Đặt thêm dịch vụ**,
-  chọn phòng, dịch vụ, thời gian nằm trong kỳ lưu trú và số lượng. MaM
-  Restaurant yêu cầu chọn bữa trưa hoặc bữa tối; hồ bơi chỉ hiển thị thông tin
-  và không nhận đặt trước. Nếu backend chấp nhận, yêu cầu dịch vụ có trạng thái
-  **Đã xác nhận**. Khách có thể hủy dịch vụ chưa sử dụng trong đơn đặt phòng;
-  dịch vụ đã sử dụng không thể hủy.
+- Phần trong hạn mức miễn phí có giá phải trả bằng 0. Khách đặt trên website
+  phải thanh toán trước 100% phần tính phí qua VNPay. Hệ thống giữ chỗ 10 phút;
+  chưa thanh toán đúng hạn thì lượt đặt hết hạn và trả lại khả dụng.
+- Chỉ đặt dịch vụ sau khi booking phòng được xác nhận đã thanh toán cọc. Khách
+  chọn phòng, dịch vụ, giờ bắt đầu trong kỳ lưu trú và số lượng tính tiền.
+  Mỗi dịch vụ có thời lượng riêng; giờ kết thúc do hệ thống tính. Một lượt đặt
+  tài nguyên chiếm một máy/sân/phòng/xe, kể cả khi đơn giá tính theo kg hoặc khách.
+- MaM Restaurant yêu cầu bữa trưa hoặc bữa tối; hồ bơi chỉ hiển thị thông tin,
+  không nhận đặt trước. Dịch vụ miễn phí xác nhận ngay; dịch vụ tính phí chỉ
+  xác nhận sau khi backend nhận thanh toán hợp lệ.
+- Khách tự hủy, không đến hoặc không sử dụng dịch vụ đã trả tiền thì không được
+  hoàn tiền. Dịch vụ chưa dùng tự hủy khi booking phòng bị hủy, không đến hoặc
+  checkout. Khoản dịch vụ đã thanh toán vẫn ghi trên hóa đơn và được khấu trừ
+  số đã thu để không thu lại lúc checkout. Dịch vụ đã sử dụng không thể hủy.
+- Hệ thống kiểm tra dữ liệu, giá và khả dụng trước khi nhận đặt. Các gói giặt
+  nhanh và giặt tiêu chuẩn cùng sử dụng sức chứa của nhóm máy giặt chung.
 
 - Đơn giá hiện hành của dịch vụ được tra từ danh mục dịch vụ đang hoạt động qua
   API trước khi khách xác nhận. Giá này áp dụng cho khách thuê theo giờ và phần
@@ -324,13 +332,15 @@ ngân sách, sau đó dùng API để đưa ra các lựa chọn còn khả dụ
 3. Khách phải đăng nhập tài khoản để gửi booking. Họ tên, số điện thoại và giấy
    tờ đại diện được lấy từ hồ sơ; email xác nhận có thể được nhập trong biểu
    mẫu.
-4. Backend kiểm tra hạng phòng đang hoạt động, trạng thái sẵn sàng, sức chứa và
-   lịch trùng trước khi tạo đơn. Việc thấy một thẻ phòng trên trang không thay
+4. Backend kiểm tra hạng phòng đang hoạt động, sức chứa, lịch lưu trú và các
+   hạn chế vận hành trước khi tạo đơn. Phòng đang có khách có thể đặt cho lượt
+   sau nếu lịch không trùng; check-in thực tế vẫn yêu cầu phòng đã dọn và sẵn sàng. Việc thấy một thẻ phòng trên trang không thay
    thế bước kiểm tra cuối này.
-5. Với VNPay, booking được giữ trong thời hạn thanh toán hiển thị trên đơn để
-   khách hoàn tất cọc 50%. Thanh toán thành công mới xác nhận cọc.
-6. Với lựa chọn thanh toán tại khách sạn, website gửi yêu cầu chờ lễ tân xác
-   nhận; phòng chưa được xem là đã giữ chỉ vì khách đã bấm gửi.
+5. Website giữ tạm phòng 10 phút để khách thanh toán cọc 50% qua VNPay. Chỉ
+   xác nhận booking khi hệ thống xác minh thanh toán thành công; hết hạn chưa
+   thanh toán thì yêu cầu hết hiệu lực và phòng được mở lại.
+6. Website không có lựa chọn cọc tiền mặt. Khách muốn nộp tiền mặt thực hiện
+   trực tiếp qua lễ tân tại khách sạn.
 
 ### Theo dõi và thay đổi booking
 
@@ -349,8 +359,7 @@ ngân sách, sau đó dùng API để đưa ra các lựa chọn còn khả dụ
 
 ### Thanh toán bảo đảm và thanh toán cuối kỳ
 
-VNPay hoặc lựa chọn thanh toán tại khách sạn trong biểu mẫu là phương thức bảo
-đảm booking. Tiền còn lại và các khoản phát sinh được quyết toán khi checkout
+Tiền cọc online qua VNPay hoặc tiền mặt thực thu tại quầy là khoản bảo đảm booking. Tiền còn lại và các khoản phát sinh được quyết toán khi checkout
 bằng các phương thức khách sạn hỗ trợ tại mục 5. Hai bước này không được mô tả
 như cùng một lần thanh toán.
 

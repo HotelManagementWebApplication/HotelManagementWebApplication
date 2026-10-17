@@ -24,6 +24,7 @@ export interface EmployeeProfileDropdownProps {
   onClose: () => void;
   onLogout: () => void;
   currentRoleLabel?: string;
+  roleLabelOverride?: string;
   departmentName?: string;
   align?: "top-right" | "bottom-left" | "bottom-right" | "right";
 }
@@ -179,6 +180,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
   onClose,
   onLogout,
   currentRoleLabel,
+  roleLabelOverride,
   departmentName,
   align = "top-right",
 }) => {
@@ -243,7 +245,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
   };
 
   const displayName = profile?.full_name || currentRoleLabel || "Nhân viên";
-  const displayRole = roleMeta.label;
+  const displayRole = roleLabelOverride || roleMeta.label;
   const displayDepartment = departmentName || roleMeta.department;
   const displayInitials = displayName
     .split(" ")
@@ -301,7 +303,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
       ref={dropdownRef}
       role="dialog"
       aria-label="Cửa sổ thông tin nhân viên"
-      className={`absolute ${alignmentClass} w-[340px] sm:w-[380px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden flex flex-col text-[#0F172A] animate-in fade-in zoom-in-95 duration-150`}
+      className={`absolute ${alignmentClass} w-[340px] max-w-[calc(100vw-24px)] sm:w-[380px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden flex flex-col text-[#0F172A] animate-in fade-in zoom-in-95 duration-150`}
       style={{
         boxShadow: "0 20px 45px -10px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08)",
       }}

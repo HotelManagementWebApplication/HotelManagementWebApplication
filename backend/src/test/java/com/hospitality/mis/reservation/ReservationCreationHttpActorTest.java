@@ -12,7 +12,7 @@ class ReservationCreationHttpActorTest extends ReservationSqlFixture {
     @Test void authenticatedActorCreatesAndRetryKeepsOneBooking()throws Exception{
         String request=body("HCT-FD");
         for(int i=0;i<2;i++)mvc.perform(post("/api/reservations").contentType(APPLICATION_JSON).content(request))
-            .andExpect(status().isCreated()).andExpect(jsonPath("$.guest_id").value(guest)).andExpect(jsonPath("$.employee_id").value("HCT-FD")).andExpect(jsonPath("$.status").value("DEPOSIT_PAID"));
+            .andExpect(status().isCreated()).andExpect(jsonPath("$.guest_id").value(guest)).andExpect(jsonPath("$.employee_id").value("HCT-FD")).andExpect(jsonPath("$.status").value("PENDING_PAYMENT"));
         assertThat(count()).isEqualTo(1);
     }
     @Test void spoofedActorAndAnonymousCannotWrite()throws Exception{

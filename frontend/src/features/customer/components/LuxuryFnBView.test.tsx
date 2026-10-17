@@ -52,16 +52,16 @@ describe("LuxuryFnBView service discovery", () => {
     fireEvent.change(screen.getByLabelText("Bữa ăn"),{target:{value:"DINNER"}});
     expect(time.value).toBe("18:30");
     expect([...time.options].map(o=>o.value)).toEqual(["18:00","18:30","19:00","19:30","20:00","20:30","21:00","21:30","22:00"]);
-    fireEvent.click(screen.getByRole("button",{name:"Xác nhận đặt dịch vụ"}));
+    fireEvent.click(screen.getByRole("button",{name:"Đặt dịch vụ"}));
     await waitFor(() => expect(book).toHaveBeenCalledWith(expect.objectContaining({meal_period:"DINNER",scheduled_at:"2035-01-11T18:30:00",quantity:1})));
   });
   it.each(["-2","0","1.5","21",""])("rejects invalid quantity %s without clamping or writing", async value => {
     const book=vi.fn(); renderRestaurant({onBookService:book});
-    fireEvent.change(screen.getByLabelText("Số suất/lần"),{target:{value}});
-    fireEvent.submit(screen.getByRole("button",{name:"Xác nhận đặt dịch vụ"}).closest("form")!);
-    expect(screen.getByRole("alert").textContent).toContain("Số suất/lần phải là số nguyên từ 1 đến 20");
+    fireEvent.change(screen.getByLabelText("Số lượng"),{target:{value}});
+    fireEvent.submit(screen.getByRole("button",{name:"Đặt dịch vụ"}).closest("form")!);
+    expect(screen.getByRole("alert").textContent).toContain("Vui lòng chọn số lượng từ 1 đến 20.");
     expect(book).not.toHaveBeenCalled();
-    expect((screen.getByLabelText("Số suất/lần") as HTMLInputElement).value).toBe(value);
+    expect((screen.getByLabelText("Số lượng") as HTMLInputElement).value).toBe(value);
   });
   it("rejects the exact checkout boundary and dates outside the stay", () => {
     const book=vi.fn(); renderRestaurant({onBookService:book});
@@ -70,13 +70,13 @@ describe("LuxuryFnBView service discovery", () => {
     expect([...time.options].map(o=>o.value)).toEqual(["11:30"]);
     fireEvent.change(screen.getByLabelText("Ngày"),{target:{value:"2035-01-13"}});
     fireEvent.submit(time.closest("form")!);
-    expect(screen.getByRole("alert").textContent).toContain("Chọn giờ phục vụ phù hợp");
+    expect(screen.getByRole("alert").textContent).toContain("Vui lòng chọn giờ còn phục vụ");
     expect(book).not.toHaveBeenCalled();
   });
   it("shows backend business errors in the form and makes the close button accessible", async () => {
     const close=vi.fn(); renderRestaurant({setTableModal:close,onBookService:vi.fn().mockRejectedValue(new ApiError(422,{code:"SERVICE_OUTSIDE_STAY",message:"Thời gian dịch vụ phải nằm trong kỳ lưu trú"}))});
-    fireEvent.click(screen.getByRole("button",{name:"Xác nhận đặt dịch vụ"}));
-    expect(await screen.findByRole("alert")).toHaveProperty("textContent","Thời gian dịch vụ phải nằm trong kỳ lưu trú");
+    fireEvent.click(screen.getByRole("button",{name:"Đặt dịch vụ"}));
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent","Giờ sử dụng dịch vụ phải nằm trong thời gian bạn ở khách sạn.");
     fireEvent.click(screen.getByRole("button",{name:"Đóng đặt dịch vụ"}));
     expect(close).toHaveBeenCalledWith(false);
   });
@@ -118,7 +118,7 @@ describe("LuxuryFnBView service discovery", () => {
         }]}
       />,
     );
-    expect(screen.getByText(/Booking theo giờ không có dịch vụ miễn phí/i)).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Xác nhận đặt dịch vụ" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByText(/Đặt phòng theo giờ không có dịch vụ miễn phí/i)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Đặt dịch vụ" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

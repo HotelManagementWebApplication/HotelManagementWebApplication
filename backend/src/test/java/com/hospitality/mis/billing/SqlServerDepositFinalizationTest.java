@@ -60,7 +60,7 @@ class SqlServerDepositFinalizationTest extends ReservationSqlFixture {
         jdbc.update("INSERT TaiKhoanKhachHang(maKhachLuuTru,soDienThoai,matKhau) VALUES(?,N'0901111112',N'test')",guest);
         long customer=jdbc.queryForObject("SELECT maTaiKhoanKhachHang FROM TaiKhoanKhachHang WHERE maKhachLuuTru=?",Long.class,guest);
         LocalDateTime at=LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
-        return reservations.create(guest,null,customer,ReservationDtos.RentalType.PACKAGE,null,key(),List.of(new ReservationDtos.RoomStay("HCT-R1",now.plusDays(4),now.plusDays(5))),"HCT-CUST",at,ReservationStatus.DRAFT,CustomerPaymentMethod.VNPAY,"HCT-CODE",at.plusMinutes(15),null,"DIRECT");
+        return reservations.create(guest,null,customer,ReservationDtos.RentalType.PACKAGE,null,key(),List.of(new ReservationDtos.RoomStay("HCT-R1",now.plusDays(4),now.plusDays(5))),"HCT-CUST",at,ReservationStatus.PENDING_PAYMENT,CustomerPaymentMethod.VNPAY,"HCT-CODE",at.plusMinutes(15),null,"DIRECT");
     }
     private String sign(DepositPaymentWebhookDtos.Request r)throws Exception{
         Mac mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec("hct-secret".getBytes(java.nio.charset.StandardCharsets.UTF_8),"HmacSHA256"));

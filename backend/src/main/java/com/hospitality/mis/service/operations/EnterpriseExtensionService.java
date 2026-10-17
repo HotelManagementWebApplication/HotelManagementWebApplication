@@ -27,8 +27,6 @@ public class EnterpriseExtensionService {
     private static final VietnameseCodeConverters.AttendanceSourceConverter ATTENDANCE_SOURCE = new VietnameseCodeConverters.AttendanceSourceConverter();
     private static final VietnameseCodeConverters.LeaveTypeConverter LEAVE_TYPE = new VietnameseCodeConverters.LeaveTypeConverter();
     private static final VietnameseCodeConverters.LeaveStatusConverter LEAVE_STATUS = new VietnameseCodeConverters.LeaveStatusConverter();
-    private static final VietnameseCodeConverters.StockCategoryConverter STOCK_CATEGORY = new VietnameseCodeConverters.StockCategoryConverter();
-    private static final VietnameseCodeConverters.StockMovementTypeConverter STOCK_MOVEMENT = new VietnameseCodeConverters.StockMovementTypeConverter();
     private static final VietnameseCodeConverters.TechnicalAssetStatusConverter ASSET_STATUS = new VietnameseCodeConverters.TechnicalAssetStatusConverter();
     private static final VietnameseCodeConverters.TechnicalAssetLocationTypeConverter ASSET_LOCATION_TYPE = new VietnameseCodeConverters.TechnicalAssetLocationTypeConverter();
     private final EnterpriseDatabase database;
@@ -144,18 +142,6 @@ public class EnterpriseExtensionService {
     }
 
     @Transactional(readOnly = true)
-    public List<EnterpriseDtos.StockItemResponse> linen() {
-        return database.linen(this::stockRow);
-    }
-
-    public EnterpriseDtos.StockItemResponse moveStock(EnterpriseDtos.StockMovementRequest request, String actor) {
-        String type = request.movementType().trim().toUpperCase();
-        if(!List.of("RECEIVE","RETURN","ISSUE","WASTE","ADJUST").contains(type)) throw new DomainException("INVALID_STOCK_MOVEMENT","Loại biến động tồn kho không hợp lệ");
-        database.moveStock(request,STOCK_MOVEMENT.convertToDatabaseColumn(type),actor,LocalDateTime.now());
-        return database.stock(request.itemId(),this::stockRow).stream().findFirst().orElse(null);
-    }
-
-    @Transactional(readOnly = true)
     public List<EnterpriseDtos.TechnicalAssetResponse> assets() {
         return database.assets(this::assetRow);
     }
@@ -181,7 +167,6 @@ public class EnterpriseExtensionService {
     }
     private EnterpriseDtos.AttendanceResponse attendanceRow(java.sql.ResultSet rs, int n) throws java.sql.SQLException { return new EnterpriseDtos.AttendanceResponse(rs.getLong(1), rs.getString(2), rs.getDate(3).toLocalDate(), ts(rs, 4), ts(rs, 5), ATTENDANCE_STATUS.convertToEntityAttribute(rs.getString(6)), ATTENDANCE_SOURCE.convertToEntityAttribute(rs.getString(7)), rs.getString(8), rs.getString(9)); }
     private EnterpriseDtos.LeaveResponse leaveRow(java.sql.ResultSet rs, int n) throws java.sql.SQLException { return new EnterpriseDtos.LeaveResponse(rs.getLong(1), rs.getString(2), LEAVE_TYPE.convertToEntityAttribute(rs.getString(3)), rs.getDate(4).toLocalDate(), rs.getDate(5).toLocalDate(), rs.getString(6), rs.getString(7), LEAVE_STATUS.convertToEntityAttribute(rs.getString(8)), rs.getString(9), rs.getString(10), ts(rs, 11), ts(rs, 12)); }
-    private EnterpriseDtos.StockItemResponse stockRow(java.sql.ResultSet rs, int n) throws java.sql.SQLException { return new EnterpriseDtos.StockItemResponse(rs.getString(1), rs.getString(2), STOCK_CATEGORY.convertToEntityAttribute(rs.getString(3)), rs.getString(4), rs.getInt(5), rs.getInt(6), rs.getString(7), rs.getBoolean(8)); }
     private EnterpriseDtos.TechnicalAssetResponse assetRow(java.sql.ResultSet rs, int n) throws java.sql.SQLException { return new EnterpriseDtos.TechnicalAssetResponse(rs.getString(1), rs.getString(2), rs.getString(3), ASSET_LOCATION_TYPE.convertToEntityAttribute(rs.getString(4)), rs.getString(5), (Integer) rs.getObject(6), rs.getString(7), rs.getString(8), date(rs, 9), date(rs, 10), ASSET_STATUS.convertToEntityAttribute(rs.getString(11)), rs.getBigDecimal(12), rs.getString(13), rs.getBoolean(14)); }
     private static String code(String value) { return value == null ? null : value.trim().toUpperCase(java.util.Locale.ROOT); }
     private static LocalDateTime ts(java.sql.ResultSet rs, int index) throws java.sql.SQLException { var value = rs.getTimestamp(index); return value == null ? null : value.toLocalDateTime(); }

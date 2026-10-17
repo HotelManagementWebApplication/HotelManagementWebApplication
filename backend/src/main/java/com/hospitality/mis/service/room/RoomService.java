@@ -27,7 +27,7 @@ public class RoomService {
     public List<RoomDtos.Availability> availability(LocalDateTime from,LocalDateTime to,String type){
         if(from==null||to==null||!from.isBefore(to))throw new DomainException("INVALID_INTERVAL","Thời gian nhận phải trước thời gian trả");
         var now=LocalDateTime.now(clock);
-        return rooms.search(type,null).stream().map(room->new RoomDtos.Availability(room.id(),room.roomTypeId(),room.roomTypeName(),room.dailyPrice(),room.floor(),!room.status().blocksAvailability()&&!rooms.overlap(room.id(),from,to,now))).toList();
+        return rooms.search(type,null).stream().map(room->new RoomDtos.Availability(room.id(),room.roomTypeId(),room.roomTypeName(),room.dailyPrice(),room.floor(),!rooms.overlap(room.id(),from,to,now))).toList();
     }
     @Transactional
     public RoomDtos.Response updateStatus(String id,RoomStatus status,String suppliedActor){
