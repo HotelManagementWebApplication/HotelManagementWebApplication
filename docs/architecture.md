@@ -11,9 +11,7 @@ Employee React app ---> JWT/RBAC application API <--- agent typed API tools
                                       v
                               Database adapters -> SQL Server
 
-Chat UI -> Agent orchestrator
-                       |
-                       +-> RAG index: SOP, policy, forms, manuals
+Chat UI -> Agent orchestrator -> RAG index: approved customer-policy.md
 ```
 
 The backend API is the only business-data boundary and the only SQL Server writer.
@@ -22,9 +20,9 @@ they never reuse employee responses or expose guest, reservation, invoice or
 internal operational data.
 The agent must never connect directly to SQL Server or generate production SQL.
 Live room availability, booking, invoice, inventory and cash data are
-structured business data and must be read or changed through authenticated API
-tools. RAG is reserved for versioned documents and policies, with source
-citations and access control.
+structured business data and must be read or changed through allow-listed
+backend APIs. Customer answers retrieve only the approved root
+`customer-policy.md`; internal operating rules are not indexed for customers.
 
 ## Flyway schema history
 

@@ -93,6 +93,8 @@ public class VnpayPaymentService {
         Long reservationId = attempt.reservationId();
         if (!amountMatches(attempt.amount(), query.get("vnp_Amount")))
             return new CallbackOutcome("04", "Invalid amount", reservationId, false, query.get("vnp_ResponseCode"));
+        if (attempt.status() == VnpayPaymentStatus.REQUIRES_REVIEW)
+            return new CallbackOutcome("02", "Payment requires review", reservationId, false, query.get("vnp_ResponseCode"));
         if (attempt.status() == VnpayPaymentStatus.SUCCEEDED)
             return new CallbackOutcome("02", "Order already confirmed", reservationId, true, query.get("vnp_ResponseCode"));
         boolean paid = "00".equals(query.get("vnp_ResponseCode"))
@@ -116,8 +118,10 @@ public class VnpayPaymentService {
                     providerTransaction,trim(query.get("vnp_BankCode")),trim(query.get("vnp_CardType")),bankReference,
                     "VNPAY:" + providerTransaction,method,now);
         } catch (DomainException invalid) {
-            if (Set.of("RESERVATION_NOT_PAYABLE","PAYMENT_CODE_EXPIRED","DEPOSIT_ALREADY_PAID").contains(invalid.getCode()))
-                return new CallbackOutcome("02", "Order already confirmed", reservationId, false, query.get("vnp_ResponseCode"));
+            if (Set.of("RESERVATION_NOT_PAYABLE","PAYMENT_CODE_EXPIRED","DEPOSIT_ALREADY_PAID","OVERBOOKING").contains(invalid.getCode())) {
+                database.review(merchantReference,attempt.amount(),providerTransaction,trim(query.get("vnp_BankCode")),trim(query.get("vnp_CardType")),now);
+                return new CallbackOutcome("02", "Payment requires review", reservationId, false, query.get("vnp_ResponseCode"));
+            }
             throw invalid;
         }
         if(!completed.replay())events.publishEvent(new BookingDepositPaidEvent(completed.email(), reservationId, attempt.amount(),

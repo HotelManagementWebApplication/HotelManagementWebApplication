@@ -26,6 +26,7 @@ These owner decisions apply even when a session has no prior conversation contex
    not override this decision with an unsolicited security cleanup.
 4. Preserve `MailConfigurationTest` as a regression guard for both SMTP lines.
 5. Before changing database migrations or SMTP configuration, read rule.md, especially section 16, and this file.
+6. Preserve the configured local/demo values for `VNPAY_TMN_CODE` and `VNPAY_HASH_SECRET`; do not delete, blank, rotate, redact, move, or replace them unless the owner explicitly asks for that exact change. Before any commit or push, inspect the exact outgoing files and make sure no file containing secret keys or credentials is staged or pushed. In particular, never push `backend/src/main/resources/application.yml` while it contains owner-managed secrets; do not include it merely because other safe edits were made to the same file.
 
 
 ## Working rules

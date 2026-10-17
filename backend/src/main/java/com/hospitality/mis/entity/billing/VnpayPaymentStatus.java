@@ -6,5 +6,6 @@ public enum VnpayPaymentStatus {
     SUCCEEDED,
     FAILED,
     EXPIRED,
+    REQUIRES_REVIEW,
     CANCELLED
 }

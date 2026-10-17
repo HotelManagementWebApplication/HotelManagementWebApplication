@@ -47,6 +47,10 @@ public class DepositPaymentDatabase {
                 reference,externalEvent,method,"VNPAY",now));
     }
 
+    public Attempt review(String merchant,BigDecimal amount,String providerTransaction,String bank,String card,LocalDateTime now){
+        return attempt(call("review",null,null,merchant,null,amount,"00",providerTransaction,bank,card,null,null,null,"VNPAY",now));
+    }
+
     public Completion finalizeWebhook(String paymentCode,BigDecimal amount,String reference,String externalEvent,
                                       LocalDateTime now){
         return completion(call("finalize",null,null,null,paymentCode,amount,null,null,null,null,reference,
@@ -104,7 +108,7 @@ public class DepositPaymentDatabase {
     private void translate(DataAccessException error){
         for(Throwable cause=error;cause!=null;cause=cause.getCause())if(cause instanceof SQLException sql){
             String code=switch(sql.getErrorCode()){
-                case 53301->"RESERVATION_NOT_FOUND";case 53302,53307->"RESERVATION_NOT_PAYABLE";
+                case 51004->"OVERBOOKING";case 53301->"RESERVATION_NOT_FOUND";case 53302,53307->"RESERVATION_NOT_PAYABLE";
                 case 53303->"PAYMENT_CODE_EXPIRED";case 53304->"PAYMENT_AMOUNT_MISMATCH";
                 case 53305->"VNPAY_PAYMENT_NOT_FOUND";case 53306->"PAYMENT_CODE_NOT_FOUND";
                 case 53308->"DEPOSIT_ALREADY_PAID";case 53309->"PAYMENT_BUSY";

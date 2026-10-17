@@ -75,6 +75,7 @@ class SqlServerMigrationTest {
                     "V4__views.sql", "V5__stored_procedures.sql", "V6__triggers.sql");
         }
         assertDatabaseObjects("FN", Set.of(
+                "fnKiemTraLichPhongTrong",
                 "fnKiemTraPhongTrong", "fnTinhTongTienPhong", "fnTinhTongTienDichVu",
                 "fnTinhSoDuHoaDon", "fnKiemTraTrungCaLamViec"));
         assertDatabaseObjects("V", Set.of(
@@ -333,10 +334,10 @@ class SqlServerMigrationTest {
             }
 
             assertThat(actualTables).hasSize(53);
-            assertColumnCount(statement, 514);
+            assertColumnCount(statement, 516);
             assertConstraintCount(statement, "FOREIGN KEY", 60);
             assertConstraintCount(statement, "UNIQUE", 31);
-            assertConstraintCount(statement, "CHECK", 146);
+            assertConstraintCount(statement, "CHECK", 147);
 
             try (var result = statement.executeQuery("select constraint_name from information_schema.table_constraints "
                     + "where table_schema='dbo' and LTRIM(RTRIM(constraint_type)) <> 'PRIMARY KEY'")) {

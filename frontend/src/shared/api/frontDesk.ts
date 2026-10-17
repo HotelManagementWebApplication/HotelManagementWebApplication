@@ -17,6 +17,7 @@ const query = (params: Record<string, unknown>) => {
 export const membershipHistoryPath = (guestId: number) => `/api/guests/${guestId}/membership-history`;
 
 export const frontDeskApi = {
+  depositWarnings: () => apiClient.request<{id:number;topic:string;payload:string}[]>("/api/governance/notifications/outbox?role=FRONT_DESK"),
   dashboard: (params: { date?: string; q?: string; status?: string; page?: number; size?: number } = {}) => apiClient.request<Dashboard>(`/api/front-desk/dashboard${query(params)}`),
   guests: (q?: string) => apiClient.request<Guest[]>(`/api/guests${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   guest: (id: number) => apiClient.request<Guest>(`/api/guests/${id}`),
@@ -24,8 +25,8 @@ export const frontDeskApi = {
   createGuest: (body: GuestCreate) => apiClient.request<Guest>("/api/guests", { method: "POST", body }),
   reservations: (params: { status?: string; guest_id?: number; page?: number; size?: number } = {}) => apiClient.request<Page<Reservation>>(`/api/reservations${query(params)}`),
   reservation: (id: number) => apiClient.request<Reservation>(`/api/reservations/${id}`),
-  createReservation: (body: ReservationCreate) => apiClient.request<Reservation>("/api/reservations", { method: "POST", body, idempotencyKey: key() }),
-  confirm: (id: number, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/confirm`, undefined, "POST", idempotencyKey),
+  createReservation: (body: ReservationCreate) => apiClient.request<Reservation>("/api/reservations", { method: "POST", body, idempotencyKey: body.idempotency_key ?? key() }),
+  receiveDeposit: (id: number, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/receive-deposit`, undefined, "POST", idempotencyKey),
   cancel: (id: number, reason: string, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/cancel`, { reason }, "POST", idempotencyKey),
   noShow: (id: number, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/no-show`, undefined, "POST", idempotencyKey),
   checkIn: (id: number, body: CheckInRequest = {}, idempotencyKey?: string) => mutate<Reservation>(`/api/reservations/${id}/check-in`, body, "POST", idempotencyKey),

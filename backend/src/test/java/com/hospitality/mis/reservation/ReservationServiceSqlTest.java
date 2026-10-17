@@ -59,6 +59,7 @@ class ReservationServiceSqlTest extends ReservationSqlFixture {
             key()
         );
         var booking = service.create(request, "HCT-FD");
+        service.receiveDeposit(booking.id(),"HCT-FD",key());
         service.checkIn(booking.id(), new ReservationDtos.CheckInRequest(now), "HCT-FD", key());
         service.checkOut(booking.id(), new ReservationDtos.CheckOutRequest(now.plusHours(hours), PaymentMethod.CASH), "HCT-FD", key());
         assertThat(jdbc.queryForObject("SELECT soLanLuuTruHoanThanh FROM KhachLuuTru WHERE maKhachLuuTru=?", Integer.class, guest)).isZero();

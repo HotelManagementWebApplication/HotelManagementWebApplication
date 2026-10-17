@@ -518,7 +518,7 @@ VALUES
  N'Làm phẳng trang phục công tác hoặc dạ tiệc trong thời gian ngắn.',
  N'https://images.unsplash.com/photo-1556909212-d5b604d0c90d?w=600&h=400&fit=crop&auto=format'),
 (N'MAMREST', N'MaM Restaurant', 250000.00, N'suất', 120, 30, 1, N'Nhà hàng cao cấp',
- N'Bữa trưa hoặc bữa tối tại MaM Restaurant. Khách thuê theo gói ngày-đêm được miễn một bữa trưa và một bữa tối mỗi ngày cho từng khách trong booking.',
+ N'Bữa trưa hoặc bữa tối tại MaM Restaurant. Khách lưu trú qua đêm được miễn phí một bữa trưa và một bữa tối mỗi ngày cho mỗi khách.',
  N'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=520&fit=crop&auto=format'),
 (N'DECOR', N'Set trang trí Lãng mạn / Kỷ niệm', 1200000.00, N'bộ', 8, 3, 1, N'Dịch vụ tại phòng',
  N'Hoa tươi, nến thơm, champagne và thảm cánh hoa hồng cho dịp đặc biệt.',
@@ -702,7 +702,7 @@ VALUES (
     ),
     @demoNow,
     270000.00,
-    N'Bản nháp',
+    N'Chờ thanh toán',
     N'Theo giờ',
     NULL,
     NULL,
@@ -710,7 +710,7 @@ VALUES (
     N'DEMO-RES-005',
     0,
     N'DEMO-DEP-005',
-    DATEADD(MINUTE, 30, @demoNow),
+    DATEADD(MINUTE, 10, @demoNow),
     N'Chờ thanh toán'
 ),
 -- Booking 6: Booking phòng 1401 đã thanh toán cọc VNPay.
@@ -795,7 +795,7 @@ VALUES (
     DATEADD(SECOND, 54000, CAST(DATEADD(DAY, 1, CAST(@demoNow AS date)) AS datetime2)),
     DATEADD(SECOND, 64800, CAST(DATEADD(DAY, 1, CAST(@demoNow AS date)) AS datetime2)),
     DATEADD(SECOND, 64800, CAST(DATEADD(DAY, 1, CAST(@demoNow AS date)) AS datetime2)),
-    N'Đã giữ phòng',
+    N'Giữ tạm phòng',
     0,
     1
 ),
@@ -827,7 +827,7 @@ END;
 INSERT INTO YeuCauThanhToanVnpay
     (maPhieuDatPhong, maThamChieuMerchant, soTien, trangThai, thoiDiemTao, thoiDiemHetHan, thoiDiemHoanTat, maGiaoDichVnpay, maNganHang, loaiThe, maPhanHoi)
 VALUES
-    (5, N'DEMO-DEP-005', 270000.00, N'Chờ thanh toán', @demoNow, DATEADD(MINUTE, 30, @demoNow), NULL, NULL, NULL, NULL, NULL),
+    (5, N'DEMO-DEP-005', 270000.00, N'Chờ thanh toán', @demoNow, DATEADD(MINUTE, 10, @demoNow), NULL, NULL, NULL, NULL, NULL),
     (6, N'DEMO-DEP-006', 3900000.00, N'Thành công', DATEADD(MINUTE, -10, @demoNow), DATEADD(MINUTE, 20, @demoNow), @demoNow, N'DEMO-VNPAY-006', N'NCB', N'ATM', N'00');
 
 -- Booking demo 5 và 6 có mã thanh toán cọc: gắn kênh VNPay cho luồng thanh toán online.

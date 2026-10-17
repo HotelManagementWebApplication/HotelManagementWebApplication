@@ -1,10 +1,10 @@
 import type { CustomerProfileDto } from "./api";
 
 export type RentalType = "HOURLY" | "PACKAGE";
-export type ReservationStatus = "DRAFT" | "DEPOSIT_PAID" | "CONFIRMED" | "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED" | "NO_SHOW";
+export type ReservationStatus = "DRAFT" | "PENDING_PAYMENT" | "DEPOSIT_PAID" | "CONFIRMED" | "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED" | "NO_SHOW";
 export type DepositPaymentStatus = "NOT_REQUIRED" | "PENDING" | "PAID" | "EXPIRED";
-export type CustomerPaymentMethod = "VNPAY" | "PAY_AT_HOTEL";
-export type VnpayPaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "EXPIRED" | "CANCELLED";
+export type CustomerPaymentMethod = "VNPAY";
+export type VnpayPaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "EXPIRED" | "REQUIRES_REVIEW" | "CANCELLED";
 
 export interface CustomerRegistrationRequest { phone: string; password: string; full_name: string; identity_number: string; email?: string; otp?: string; }
 export interface CustomerLoginRequest { phone: string; password: string; }

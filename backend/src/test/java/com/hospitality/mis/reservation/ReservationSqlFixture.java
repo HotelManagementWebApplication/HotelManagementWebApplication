@@ -42,6 +42,8 @@ public abstract class ReservationSqlFixture {
         cleanupSql();SecurityContextHolder.clearContext();
     }
     private void cleanupSql(){
+        jdbc.update("DELETE HangDoiThongBao WHERE khoaChongLap IN(SELECT N'VNPAY-REVIEW:'+CONVERT(NVARCHAR(20),maYeuCauThanhToanVnpay) FROM YeuCauThanhToanVnpay WHERE maThamChieuMerchant LIKE N'HCT-%')");
+        jdbc.update("DELETE YeuCauThanhToanVnpay WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE maKhachLuuTru IN(SELECT maKhachLuuTru FROM KhachLuuTru WHERE soGiayToTuyThan=N'HCT-ID'))");
         jdbc.update("DELETE ButToanTaiChinh WHERE maNguoiThucHien LIKE N'HCT-%' OR (loaiNguon=N'PAYMENT_TRANSACTION' AND maNguon IN(SELECT CONVERT(NVARCHAR(100),maGiaoDichThanhToan) FROM GiaoDichThanhToan WHERE maHoaDon IN(SELECT maHoaDon FROM HoaDon WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE maKhachLuuTru IN(SELECT maKhachLuuTru FROM KhachLuuTru WHERE soGiayToTuyThan=N'HCT-ID'))))) OR (loaiNguon=N'RECEIPT' AND maNguon IN(SELECT CONVERT(NVARCHAR(100),maBienLai) FROM BienLai WHERE maHoaDon IN(SELECT maHoaDon FROM HoaDon WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE maKhachLuuTru IN(SELECT maKhachLuuTru FROM KhachLuuTru WHERE soGiayToTuyThan=N'HCT-ID')))))");
         jdbc.update("DELETE BienLai WHERE maHoaDon IN(SELECT maHoaDon FROM HoaDon WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE maKhachLuuTru IN(SELECT maKhachLuuTru FROM KhachLuuTru WHERE soGiayToTuyThan=N'HCT-ID')))");
         jdbc.update("DELETE GiaoDichThanhToan WHERE maHoaDon IN(SELECT maHoaDon FROM HoaDon WHERE maPhieuDatPhong IN(SELECT maPhieuDatPhong FROM PhieuDatPhong WHERE maKhachLuuTru IN(SELECT maKhachLuuTru FROM KhachLuuTru WHERE soGiayToTuyThan=N'HCT-ID')))");
@@ -65,8 +67,9 @@ public abstract class ReservationSqlFixture {
     protected ReservationDtos.Response create(LocalDateTime start,int hours,boolean hourly,String...rooms){
         BigDecimal deposit=BigDecimal.valueOf(2400000L*rooms.length*(long)Math.ceil(hours/24.0)/2);
         if(hourly)deposit=BigDecimal.valueOf(100000L*Math.max(3,hours)*rooms.length/2);
-        return service.create(new ReservationDtos.CreateRequest(guest,"HCT-FD",deposit,hourly?ReservationDtos.RentalType.HOURLY:ReservationDtos.RentalType.PACKAGE,
+        var pending=service.create(new ReservationDtos.CreateRequest(guest,"HCT-FD",deposit,hourly?ReservationDtos.RentalType.HOURLY:ReservationDtos.RentalType.PACKAGE,
             Arrays.stream(rooms).map(r->new ReservationDtos.RoomStay(r,start,start.plusHours(hours))).toList(),key()),"HCT-FD");
+        return service.receiveDeposit(pending.id(),"HCT-FD",key());
     }
     protected static String key(){return UUID.randomUUID().toString();}
 }

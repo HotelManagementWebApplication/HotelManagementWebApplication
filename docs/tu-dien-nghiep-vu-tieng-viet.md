@@ -43,7 +43,7 @@ hoa hồng thương mại của đối tác.
 | `Repository` / `DAO` | Bộ truy cập dữ liệu | Đọc và ghi database theo yêu cầu của service |
 | `Database` | Cơ sở dữ liệu | Nơi lưu dữ liệu thật của hệ thống |
 | `Migration` | Phiên bản thay đổi database | Script tạo bảng, thêm cột hoặc cập nhật cấu trúc |
-| `Flyway` | Công cụ quản lý cấu trúc | Database demo chạy đúng chuỗi `V1`–`V5`; không tạo migration bổ sung, theo `AGENTS.md` |
+| `Flyway` | Công cụ quản lý cấu trúc | Database demo chạy đúng chuỗi `V1`–`V6`; không tạo migration bổ sung, theo `AGENTS.md` |
 | `Schema` | Bộ cấu trúc database | Trong dự án hiện tại là schema `QLKS` |
 | `Transaction` | Giao dịch nguyên tử | Một chuỗi thao tác thành công toàn bộ hoặc hoàn tác toàn bộ |
 | `Validation` | Kiểm tra hợp lệ | Chặn dữ liệu thiếu, sai định dạng hoặc sai giới hạn |
@@ -92,7 +92,8 @@ hoa hồng thương mại của đối tác.
 
 | Mã | Tiếng Việt | Ý nghĩa và điều kiện |
 |---|---|---|
-| `DRAFT` | Bản nháp / chờ hoàn tất | Booking mới tạo nhưng chưa đủ điều kiện xác nhận. Booking online thường bắt đầu ở đây và chờ tiền cọc. |
+| `DRAFT` | Bản nháp | Chưa xác nhận và không giữ phòng. |
+| `PENDING_PAYMENT` | Chờ nộp cọc | Phòng giữ tạm tới hạn; chưa có tiền thực thu. Chi tiết phòng là `TEMPORARILY_HELD`. |
 | `DEPOSIT_PAID` | Đã thanh toán tiền cọc | Cổng thanh toán hoặc nhân viên đã xác nhận tiền cọc. Đây là một trạng thái đủ điều kiện để lễ tân theo dõi khách đến. |
 | `CONFIRMED` | Đã xác nhận | Booking đã được khách sạn xác nhận. |
 | `CHECKED_IN` | Đã nhận phòng | Khách đã đến và được nhận phòng. |
@@ -103,14 +104,14 @@ hoa hồng thương mại của đối tác.
 Luồng thông thường:
 
 ```text
-Đặt online -> DRAFT -> Thanh toán cọc -> DEPOSIT_PAID
+Đặt online/tại quầy -> PENDING_PAYMENT -> Nhận đủ cọc -> DEPOSIT_PAID
                                       -> Lễ tân thấy khách đến
 DEPOSIT_PAID/CONFIRMED -> CHECKED_IN -> CHECKED_OUT
                          -> CANCELLED hoặc NO_SHOW nếu không tiếp tục
 ```
 
 Quy tắc hiện tại của màn hình “Khách đến hôm nay” là đúng theo nghiệp vụ:
-chỉ lấy booking `CONFIRMED` hoặc `DEPOSIT_PAID`. Booking `DRAFT` còn đang chờ
+chỉ lấy booking `CONFIRMED` hoặc `DEPOSIT_PAID`. Booking `DRAFT` chưa giữ phòng và `PENDING_PAYMENT` đang chờ
 cọc không hiển thị ở danh sách khách đến.
 
 ### 5.2. Trạng thái tiền cọc (`DepositPaymentStatus`)

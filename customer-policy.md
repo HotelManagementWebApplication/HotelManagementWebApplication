@@ -54,10 +54,10 @@ suy đoán và sẽ hướng khách liên hệ khách sạn để xác nhận.
   phụ thu (nếu có) phải được khách sạn xác nhận trước.
 - Khách tự gửi yêu cầu gia hạn thêm đêm trên đơn đặt phòng trước giờ nhận phòng
   **hơn 48 giờ**. Phần thêm phải bắt đầu đúng tại giờ checkout hiện tại, không
-  được tạo ngày trống ở giữa. Tiền cọc đã trả tiếp tục áp dụng cho các đêm cũ;
-  khách thanh toán bổ sung 50% tiền phòng của các đêm mới theo giá hiện tại từ
-  API. Gia hạn chỉ hoàn tất sau khi hệ thống xác nhận phòng còn trống, sẵn sàng
-  và nhận đủ cọc bổ sung.
+  được tạo ngày trống ở giữa. Giá phòng đã chốt của booking tiếp tục áp dụng
+  cho thời gian gia hạn; khách thanh toán bổ sung 50% tiền phòng theo giá đó.
+  Gia hạn chỉ hoàn tất sau khi hệ thống xác nhận phòng còn trống, sẵn sàng và
+  nhận đủ cọc bổ sung.
 - Khách chỉ được đổi ngày trước giờ nhận phòng **hơn 48 giờ**, phải giữ nguyên
   số đêm đã đặt và không phát sinh thêm tiền cọc. Nếu muốn tăng số đêm, khách
   dùng chức năng gia hạn. Lịch mới chỉ có hiệu lực khi database xác nhận tất cả
@@ -113,6 +113,11 @@ Thời hạn được tính ngược từ giờ nhận phòng theo lịch đã x
 ## 5. Tiền đặt cọc, hóa đơn và thanh toán
 
 - Tiền đặt cọc bằng 50% giá phòng.
+- Đặt phòng trên trang khách hàng chỉ thanh toán cọc online qua VNPay. Phòng được
+  giữ tạm 10 phút; nhận đủ cọc mới xác nhận booking, hết hạn chưa trả thì nhả phòng.
+  Phần còn lại thanh toán tại khách sạn.
+- Khách nộp cọc tiền mặt trực tiếp qua lễ tân. Yêu cầu tại quầy cũng giữ tạm
+  10 phút; lễ tân chỉ xác nhận đã thu cọc sau khi thực sự nhận đủ tiền.
 - Tiền đặt cọc đã thanh toán được trừ vào tổng hóa đơn; khách không phải trả lại
   khoản này lần thứ hai.
 - Tổng tiền cuối cùng có thể gồm tiền phòng, phụ thu, dịch vụ/minibar, bồi
@@ -327,13 +332,15 @@ ngân sách, sau đó dùng API để đưa ra các lựa chọn còn khả dụ
 3. Khách phải đăng nhập tài khoản để gửi booking. Họ tên, số điện thoại và giấy
    tờ đại diện được lấy từ hồ sơ; email xác nhận có thể được nhập trong biểu
    mẫu.
-4. Backend kiểm tra hạng phòng đang hoạt động, trạng thái sẵn sàng, sức chứa và
-   lịch trùng trước khi tạo đơn. Việc thấy một thẻ phòng trên trang không thay
+4. Backend kiểm tra hạng phòng đang hoạt động, sức chứa, lịch lưu trú và các
+   hạn chế vận hành trước khi tạo đơn. Phòng đang có khách có thể đặt cho lượt
+   sau nếu lịch không trùng; check-in thực tế vẫn yêu cầu phòng đã dọn và sẵn sàng. Việc thấy một thẻ phòng trên trang không thay
    thế bước kiểm tra cuối này.
-5. Với VNPay, booking được giữ trong thời hạn thanh toán hiển thị trên đơn để
-   khách hoàn tất cọc 50%. Thanh toán thành công mới xác nhận cọc.
-6. Với lựa chọn thanh toán tại khách sạn, website gửi yêu cầu chờ lễ tân xác
-   nhận; phòng chưa được xem là đã giữ chỉ vì khách đã bấm gửi.
+5. Website giữ tạm phòng 10 phút để khách thanh toán cọc 50% qua VNPay. Chỉ
+   xác nhận booking khi hệ thống xác minh thanh toán thành công; hết hạn chưa
+   thanh toán thì yêu cầu hết hiệu lực và phòng được mở lại.
+6. Website không có lựa chọn cọc tiền mặt. Khách muốn nộp tiền mặt thực hiện
+   trực tiếp qua lễ tân tại khách sạn.
 
 ### Theo dõi và thay đổi booking
 
@@ -352,8 +359,7 @@ ngân sách, sau đó dùng API để đưa ra các lựa chọn còn khả dụ
 
 ### Thanh toán bảo đảm và thanh toán cuối kỳ
 
-VNPay hoặc lựa chọn thanh toán tại khách sạn trong biểu mẫu là phương thức bảo
-đảm booking. Tiền còn lại và các khoản phát sinh được quyết toán khi checkout
+Tiền cọc online qua VNPay hoặc tiền mặt thực thu tại quầy là khoản bảo đảm booking. Tiền còn lại và các khoản phát sinh được quyết toán khi checkout
 bằng các phương thức khách sạn hỗ trợ tại mục 5. Hai bước này không được mô tả
 như cùng một lần thanh toán.
 

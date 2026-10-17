@@ -282,7 +282,9 @@ BEGIN
             maPhong NVARCHAR(10) PRIMARY KEY,
             thoiDiemNhanPhong DATETIME2(6) NOT NULL,
             thoiDiemTraPhong DATETIME2(6) NOT NULL,
-            soLuongKhach INT NOT NULL
+            soLuongKhach INT NOT NULL,
+            giaTheoNgayDaChot DECIMAL(12, 2) NULL,
+            giaTheoGioDaChot DECIMAL(12, 2) NULL
         );
         INSERT INTO @phong(
             maPhong,
@@ -337,7 +339,7 @@ BEGIN
                 SELECT 1
                 FROM dbo.Phong
                 WHERE maPhong = @maPhongKhoa
-                    AND trangThai IN (N'Đang dọn phòng', N'Đang bảo trì', N'Ngừng sử dụng')
+                    AND trangThai IN (N'Đang bảo trì', N'Ngừng sử dụng')
             )
             BEGIN
                 CLOSE khoaPhong;
@@ -395,22 +397,37 @@ BEGIN
                 THROW 53406, N'Loại phòng chưa được phê duyệt', 1;
         END;
 
-        -- 4. Tính tiền cọc bắt buộc từ giá phòng; khách đặt online dùng số tiền này.
+        -- Chốt giá khi tạo booking. Phòng đã được khóa ở bước trên nên việc
+        -- duyệt đổi loại phòng không thể thay giá giữa lúc đọc và lưu booking.
+        UPDATE phongYeuCau
+        SET giaTheoNgayDaChot = loaiPhong.giaTheoNgay,
+            giaTheoGioDaChot = loaiPhong.giaTheoGio
+        FROM @phong AS phongYeuCau
+        JOIN dbo.Phong AS phong WITH (UPDLOCK, HOLDLOCK)
+            ON phong.maPhong = phongYeuCau.maPhong
+        JOIN dbo.LoaiPhong AS loaiPhong WITH (HOLDLOCK)
+            ON loaiPhong.maLoaiPhong = phong.maLoaiPhong;
+
+        -- 4. Tính tiền cọc từ giá đã chốt cho từng phòng.
         DECLARE @cocBatBuoc DECIMAL(12, 2);
-        SELECT @cocBatBuoc = ROUND(SUM(dbo.fnTinhTongTienPhong(loaiPhong.giaTheoNgay, loaiPhong.giaTheoGio, phongYeuCau.thoiDiemNhanPhong, phongYeuCau.thoiDiemTraPhong, CASE
+        SELECT @cocBatBuoc = ROUND(SUM(dbo.fnTinhTongTienPhong(phongYeuCau.giaTheoNgayDaChot, phongYeuCau.giaTheoGioDaChot, phongYeuCau.thoiDiemNhanPhong, phongYeuCau.thoiDiemTraPhong, CASE
             WHEN @hinhThucThue = N'Theo giờ' THEN 1
             ELSE 0
         END, 3)) * 0.5, 2)
         FROM @phong phongYeuCau
-        JOIN dbo.Phong phong
-            ON phong.maPhong = phongYeuCau.maPhong
-        JOIN dbo.LoaiPhong loaiPhong
-            ON loaiPhong.maLoaiPhong = phong.maLoaiPhong;
-        IF @maTaiKhoanKhachHang IS NOT NULL
+        ;
+        IF @maTaiKhoanKhachHang IS NOT NULL OR @tienDatCoc IS NULL
             SET @tienDatCoc = @cocBatBuoc;
         ELSE IF @kiemTraCoc = 1
             AND @tienDatCoc <> @cocBatBuoc
             THROW 53407, N'Tiền cọc phải bằng 50% giá phòng', 1;
+
+        IF @maTaiKhoanKhachHang IS NOT NULL AND @phuongThucBaoDam <> N'VNPay'
+            THROW 53411, N'Khách đặt trên website phải thanh toán cọc VNPay', 1;
+        IF @trangThaiKhoiTao = N'Chờ thanh toán'
+            AND (@hetHan IS NULL OR @hetHan <= @thoiDiemHienTai OR @tienDatCoc <= 0
+                 OR @phuongThucBaoDam IS NULL)
+            THROW 53411, N'Yêu cầu thu cọc phải có hạn giữ phòng và số tiền hợp lệ', 1;
 
         -- 5. Lưu booking và chi tiết các phòng sau khi mọi kiểm tra đã đạt.
         INSERT INTO dbo.PhieuDatPhong(
@@ -444,7 +461,7 @@ BEGIN
             @diaChiEmail,
             @nguon,
             CASE
-                WHEN @phuongThucBaoDam = N'VNPay' THEN N'Chờ thanh toán'
+                WHEN @trangThaiKhoiTao = N'Chờ thanh toán' THEN N'Chờ thanh toán'
                 WHEN @maTaiKhoanKhachHang IS NULL
                     AND @tienDatCoc > 0 THEN N'Đã thanh toán'
                 ELSE N'Không yêu cầu'
@@ -457,6 +474,8 @@ BEGIN
             thoiDiemNhanPhong,
             thoiDiemTraPhong,
             thoiDiemTraPhongBanDau,
+            giaTheoNgayDaChot,
+            giaTheoGioDaChot,
             trangThai,
             soLuongKhach
         )
@@ -465,7 +484,11 @@ BEGIN
             thoiDiemNhanPhong,
             thoiDiemTraPhong,
             thoiDiemTraPhong,
-            N'Đã giữ phòng',
+            giaTheoNgayDaChot,
+            giaTheoGioDaChot,
+            CASE WHEN @trangThaiKhoiTao = N'Bản nháp' THEN N'Bản nháp'
+                 WHEN @trangThaiKhoiTao = N'Chờ thanh toán' THEN N'Giữ tạm phòng'
+                 ELSE N'Đã giữ phòng' END,
             soLuongKhach
         FROM @phong;
 
@@ -549,6 +572,30 @@ BEGIN
             @khoaSuKien NVARCHAR(100),
             @soTienYeuCauThanhToan DECIMAL(12, 2);
 
+        -- Preserve verified money reported after a hold expired, without reclaiming a room.
+        IF @lenh=N'review'
+        BEGIN
+            SELECT @maYeuCauThanhToanDaCo=maYeuCauThanhToanVnpay,@maPhieuDatPhong=maPhieuDatPhong,@trangThai=trangThai,@soTienDuKien=soTien
+            FROM dbo.YeuCauThanhToanVnpay WITH(UPDLOCK,HOLDLOCK) WHERE maThamChieuMerchant=@maThamChieuDonViThanhToan;
+            IF @maYeuCauThanhToanDaCo IS NULL OR @soTien<>@soTienDuKien OR @maPhanHoi<>N'00'
+                THROW 53304,N'Thông tin giao dịch cần đối soát không hợp lệ',1;
+            IF @trangThai NOT IN(N'Thành công',N'Cần đối soát')
+            BEGIN
+                UPDATE dbo.YeuCauThanhToanVnpay SET trangThai=N'Cần đối soát',maPhanHoi=@maPhanHoi,
+                    maGiaoDichVnpay=@maGiaoDichNhaCungCap,maNganHang=@maNganHang,loaiThe=@loaiThe,
+                    thoiDiemHoanTat=@thoiDiemHienTai,phienBan=phienBan+1 WHERE maYeuCauThanhToanVnpay=@maYeuCauThanhToanDaCo;
+                DECLARE @noiDungDoiSoat NVARCHAR(MAX)=(SELECT @maPhieuDatPhong reservation_id,@soTien amount,
+                    @maThamChieuDonViThanhToan merchant_reference,@maGiaoDichNhaCungCap provider_transaction FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
+                INSERT dbo.HangDoiThongBao(chuDe,vaiTroNguoiNhan,noiDung,trangThai,khoaChongLap,thoiDiemCoTheGui,thoiDiemTao)
+                VALUES(N'DEPOSIT_PAYMENT_REVIEW',N'Lễ tân',@noiDungDoiSoat,N'Chờ gửi',N'VNPAY-REVIEW:'+CONVERT(NVARCHAR(20),@maYeuCauThanhToanDaCo),@thoiDiemHienTai,@thoiDiemHienTai);
+                INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,duLieuSau,lyDo)
+                VALUES(N'VNPAY',N'DEPOSIT_PAYMENT_REQUIRES_REVIEW',N'RESERVATION',CONVERT(NVARCHAR(100),@maPhieuDatPhong),@noiDungDoiSoat,N'Không tự xác nhận lại booking không còn nhận cọc');
+            END;
+            COMMIT TRANSACTION;
+            SELECT * FROM dbo.vwYeuCauThanhToanVnpay WHERE maYeuCauThanhToanVnpay=@maYeuCauThanhToanDaCo;
+            RETURN;
+        END;
+
         -- Tạo bản ghi mới.
         IF @lenh = N'create'
         BEGIN
@@ -568,7 +615,7 @@ BEGIN
                 THROW 53301, N'Không tìm thấy booking', 1;
             IF @trangThaiDatCoc <> N'Chờ thanh toán'
                 OR NOT (
-                    @trangThaiDatPhong = N'Bản nháp'
+                    @trangThaiDatPhong = N'Chờ thanh toán'
                     OR (
                         @loaiThayDoiChoXacNhan IS NOT NULL
                         AND @trangThaiDatPhong IN (N'Đã xác nhận', N'Đã thanh toán cọc')
@@ -768,6 +815,8 @@ BEGIN
             IF @trangThai <> N'Chờ thanh toán'
                 THROW 53307, N'Yêu cầu thanh toán không còn hiệu lực', 1;
         END;
+        IF @trangThaiDatPhong <> N'Chờ thanh toán' AND @loaiThayDoiChoXacNhan IS NULL
+            THROW 53307,N'Booking không còn chờ thanh toán cọc',1;
         IF @trangThaiDatPhong IN (N'Đã hủy', N'Không đến')
             THROW 53307, N'Booking không còn nhận thanh toán cọc', 1;
         IF @trangThaiDatCoc = N'Đã thanh toán'
@@ -778,6 +827,22 @@ BEGIN
         IF @soTien IS NULL
             OR @soTien <> @soTienDuKien
             THROW 53304, N'Số tiền cọc không khớp booking', 1;
+        -- Serialize payment finalization with every allocator of these rooms.
+        DECLARE @phongThanhToan NVARCHAR(10), @phongThanhToanDaKhoa NVARCHAR(10);
+        DECLARE khoaPhongThanhToan CURSOR LOCAL FAST_FORWARD FOR
+            SELECT maPhong FROM dbo.ChiTietDatPhong WHERE maPhieuDatPhong=@maPhieuDatPhong ORDER BY maPhong;
+        OPEN khoaPhongThanhToan;
+        FETCH NEXT FROM khoaPhongThanhToan INTO @phongThanhToan;
+        WHILE @@FETCH_STATUS=0
+        BEGIN
+            SELECT @phongThanhToanDaKhoa=maPhong FROM dbo.Phong WITH(UPDLOCK,HOLDLOCK) WHERE maPhong=@phongThanhToan;
+            FETCH NEXT FROM khoaPhongThanhToan INTO @phongThanhToan;
+        END;
+        CLOSE khoaPhongThanhToan;
+        DEALLOCATE khoaPhongThanhToan;
+        IF EXISTS(SELECT 1 FROM dbo.ChiTietDatPhong WHERE maPhieuDatPhong=@maPhieuDatPhong
+            AND dbo.fnKiemTraPhongTrong(maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,@thoiDiemHienTai,@maPhieuDatPhong)=0)
+            THROW 51004,N'Phòng không còn khả dụng để xác nhận cọc',1;
         SELECT @maHoaDon = maHoaDon
         FROM dbo.HoaDon WITH (UPDLOCK, HOLDLOCK)
         WHERE maPhieuDatPhong = @maPhieuDatPhong;
@@ -891,7 +956,7 @@ BEGIN
             @phuongThucThanhToan,
             1
         );
-        IF @trangThaiDatPhong = N'Bản nháp'
+        IF @trangThaiDatPhong = N'Chờ thanh toán'
             SET @trangThaiDatPhong = N'Đã thanh toán cọc';
         UPDATE dbo.PhieuDatPhong
         SET trangThai = @trangThaiDatPhong,
@@ -919,6 +984,8 @@ BEGIN
             tienDatCocBoSung = 0,
             phienBan = phienBan + 1
         WHERE maPhieuDatPhong = @maPhieuDatPhong;
+        UPDATE dbo.ChiTietDatPhong SET trangThai=N'Đã giữ phòng'
+        WHERE maPhieuDatPhong=@maPhieuDatPhong AND trangThai=N'Giữ tạm phòng';
         IF @maYeuCauThanhToanDaCo IS NOT NULL
         BEGIN
             UPDATE dbo.YeuCauThanhToanVnpay
@@ -1277,7 +1344,10 @@ BEGIN
                     AND loai = N'Thanh toán'
                     AND (
                         maThamChieu LIKE N'DEPOSIT:%'
-                        OR maSuKienBenNgoai IS NOT NULL
+                        OR (
+                            maSuKienBenNgoai IS NOT NULL
+                            AND maSuKienBenNgoai NOT LIKE N'SVC:%'
+                        )
                     )
             )
             BEGIN
@@ -1304,6 +1374,8 @@ BEGIN
         -- Ghi nhận tiền cọc.
         IF @lenh = N'deposit'
         BEGIN
+            IF NOT EXISTS(SELECT 1 FROM dbo.PhieuDatPhong WHERE maPhieuDatPhong=@maPhieuDatPhong AND trangThai=N'Đã thanh toán cọc' AND phuongThucBaoDam=N'Tại khách sạn')
+                THROW 53411,N'Chưa xác nhận thực thu cọc tiền mặt tại quầy',1;
             INSERT dbo.GiaoDichThanhToan(
                 maHoaDon,
                 soTien,
@@ -1438,17 +1510,17 @@ BEGIN
 
             -- Tách tiền phòng gốc, tiền gia hạn và phụ thu trả muộn; chưa trừ giảm giá VIP.
             SELECT @tongTienPhong = COALESCE(SUM(CASE
-                WHEN chiTiet.thoiDiemTraPhongBanDau > chiTiet.thoiDiemNhanPhong THEN dbo.fnTinhTongTienPhong(loaiPhong.giaTheoNgay, loaiPhong.giaTheoGio, chiTiet.thoiDiemNhanPhong, chiTiet.thoiDiemTraPhongBanDau, CASE
+                WHEN chiTiet.thoiDiemTraPhongBanDau > chiTiet.thoiDiemNhanPhong THEN dbo.fnTinhTongTienPhong(COALESCE(chiTiet.giaTheoNgayDaChot, loaiPhong.giaTheoNgay), COALESCE(chiTiet.giaTheoGioDaChot, loaiPhong.giaTheoGio), chiTiet.thoiDiemNhanPhong, chiTiet.thoiDiemTraPhongBanDau, CASE
                     WHEN @hinhThucThue = N'Theo giờ' THEN 1
                     ELSE 0
                 END, 3)
                 ELSE 0
             END), 0),
-                @tongTienGiaHan = COALESCE(SUM(ROUND(loaiPhong.giaTheoNgay / 24.0, 2) * CEILING(DATEDIFF_BIG(MINUTE, chiTiet.thoiDiemTraPhongBanDau, chiTiet.thoiDiemTraPhong) / 60.0)), 0),
+                @tongTienGiaHan = COALESCE(SUM(ROUND(COALESCE(chiTiet.giaTheoNgayDaChot, loaiPhong.giaTheoNgay) / 24.0, 2) * CEILING(DATEDIFF_BIG(MINUTE, chiTiet.thoiDiemTraPhongBanDau, chiTiet.thoiDiemTraPhong) / 60.0)), 0),
                 @phuThuTraMuon = COALESCE(SUM(CASE
                     WHEN @thoiDiemThaoTac <= DATEADD(MINUTE, 20, chiTiet.thoiDiemTraPhong) THEN 0
-                    WHEN CAST(@thoiDiemThaoTac AS DATE) > CAST(chiTiet.thoiDiemTraPhong AS DATE) THEN loaiPhong.giaTheoNgay
-                    ELSE ROUND(loaiPhong.giaTheoNgay * CASE
+                    WHEN CAST(@thoiDiemThaoTac AS DATE) > CAST(chiTiet.thoiDiemTraPhong AS DATE) THEN COALESCE(chiTiet.giaTheoNgayDaChot, loaiPhong.giaTheoNgay)
+                    ELSE ROUND(COALESCE(chiTiet.giaTheoNgayDaChot, loaiPhong.giaTheoNgay) * CASE
                         WHEN CAST(@thoiDiemThaoTac AS TIME) <= '14:00' THEN 0.15
                         WHEN CAST(@thoiDiemThaoTac AS TIME) <= '16:00' THEN 0.20
                         WHEN CAST(@thoiDiemThaoTac AS TIME) <= '18:00' THEN 0.50
@@ -1534,7 +1606,7 @@ BEGIN
             UPDATE dbo.DatDichVuKhachSan
             SET trangThai = N'Đã hủy'
             WHERE maPhieuDatPhong = @maPhieuDatPhong
-                AND trangThai = N'Đã xác nhận';
+                AND trangThai IN (N'Đã xác nhận', N'Chờ thanh toán');
             UPDATE dbo.KhachLuuTru
             SET tongChiTieu = tongChiTieu + @tongTienPhong + @tongTienDichVu + @phuThuTraMuon + @tongTienGiaHan + @tongTienBoiThuong - @soTienGiamGia,
                 phienBan = phienBan + 1
@@ -1546,18 +1618,34 @@ BEGIN
             IF @hinhThucThue = N'Theo gói'
             BEGIN
                 UPDATE dbo.KhachLuuTru
-                SET soLanLuuTruHoanThanh = soLanLuuTruHoanThanh + 1,
-                    hangThanhVien = CASE
-                        WHEN soLanLuuTruHoanThanh + 1 >= 50 THEN N'Bạch kim'
-                        WHEN soLanLuuTruHoanThanh + 1 >= 25 THEN N'Vàng'
-                        WHEN soLanLuuTruHoanThanh + 1 >= 10 THEN N'Bạc'
-                        ELSE N'Tiêu chuẩn'
-                    END
+                SET soLanLuuTruHoanThanh = soLanLuuTruHoanThanh + 1
                 WHERE maKhachLuuTru = @maKhachLuuTru;
-                SELECT @hangThanhVienMoi = hangThanhVien
+                -- Chỉ thăng hạng khi vừa đạt mốc; lượt trả muộn phải giữ nguyên tác động hạ hạng.
+                SELECT @hangThanhVienMoi = CASE soLanLuuTruHoanThanh
+                    WHEN 10 THEN N'Bạc'
+                    WHEN 25 THEN N'Vàng'
+                    WHEN 50 THEN N'Bạch kim'
+                    ELSE NULL
+                END
                 FROM dbo.KhachLuuTru
                 WHERE maKhachLuuTru = @maKhachLuuTru;
-                IF @hangThanhVienMoi <> @hangThanhVien
+                IF @phuThuTraMuon = 0
+                    AND @hangThanhVienMoi IS NOT NULL
+                    AND CASE @hangThanhVienMoi
+                        WHEN N'Bạc' THEN 1
+                        WHEN N'Vàng' THEN 2
+                        WHEN N'Bạch kim' THEN 3
+                        ELSE 0
+                    END > CASE @hangThanhVien
+                        WHEN N'Bạc' THEN 1
+                        WHEN N'Vàng' THEN 2
+                        WHEN N'Bạch kim' THEN 3
+                        ELSE 0
+                    END
+                BEGIN
+                    UPDATE dbo.KhachLuuTru
+                    SET hangThanhVien = @hangThanhVienMoi
+                    WHERE maKhachLuuTru = @maKhachLuuTru;
                     INSERT dbo.LichSuHangThanhVien(
                         maKhachLuuTru,
                         hangCu,
@@ -1572,6 +1660,7 @@ BEGIN
                         N'COMPLETED_STAY',
                         @thoiDiemHienTai
                     );
+                END;
             END;
 
             -- Làm tròn tổng tiền và ghi bút toán doanh thu cùng audit checkout.
@@ -2005,7 +2094,7 @@ BEGIN
             WHERE trangThaiThanhToanCoc = N'Chờ thanh toán'
                 AND thoiDiemHetHanThanhToanCoc <= @thoiDiemHienTai
                 AND (
-                    trangThai = N'Bản nháp'
+                    trangThai = N'Chờ thanh toán'
                     OR loaiThayDoiDangCho IS NOT NULL
                 )
             ORDER BY maPhieuDatPhong;
@@ -2068,7 +2157,7 @@ BEGIN
                     N'ADDITIONAL_DEPOSIT_TIMEOUT'
                 );
             END
-            ELSE IF @trangThaiDatPhong = N'Bản nháp'
+            ELSE IF @trangThaiDatPhong = N'Chờ thanh toán'
             BEGIN
                 UPDATE dbo.PhieuDatPhong
                 SET trangThai = N'Đã hủy', trangThaiThanhToanCoc = N'Đã hết hạn', phienBan = phienBan + 1
@@ -2201,35 +2290,23 @@ BEGIN
         CLOSE duyetKhoaPhong;
         DEALLOCATE duyetKhoaPhong;
 
-        -- Xác nhận đặt phòng.
-        IF @lenh = N'confirm'
+        -- Lễ tân chỉ xác nhận sau khi thực sự nhận đủ số tiền cọc đã báo.
+        IF @lenh = N'receive-deposit'
         BEGIN
-            IF @trangThaiDatPhong <> N'Bản nháp'
-                THROW 53410, N'Trạng thái đặt phòng không hợp lệ', 1;
-            IF @phuongThucDatCoc = N'VNPay'
-                AND @trangThaiDatCoc <> N'Đã thanh toán'
-                THROW 53411, N'Booking VNPay phải thanh toán cọc trước khi xác nhận', 1;
-            IF EXISTS (
-                SELECT 1
-                FROM dbo.ChiTietDatPhong chiTiet
-                JOIN dbo.Phong phong
-                    ON phong.maPhong = chiTiet.maPhong
-                WHERE chiTiet.maPhieuDatPhong = @maPhieuDatPhong
-                    AND (
-                        phong.trangThai IN (N'Đang có khách', N'Đang dọn phòng', N'Đang bảo trì', N'Ngừng sử dụng')
-                        OR dbo.fnKiemTraPhongTrong(chiTiet.maPhong, chiTiet.thoiDiemNhanPhong, chiTiet.thoiDiemTraPhong, @thoiDiemHienTai, @maPhieuDatPhong) = 0
-                    )
-            )
+            IF @trangThaiDatPhong <> N'Chờ thanh toán' OR @trangThaiDatCoc <> N'Chờ thanh toán'
+                THROW 53410, N'Booking không còn chờ thu cọc', 1;
+            IF @phuongThucDatCoc <> N'Tại khách sạn' OR @tienDatCocTruoc <= 0
+                THROW 53411, N'Chỉ ghi nhận tiền mặt cho yêu cầu nộp cọc tại quầy', 1;
+            IF NOT EXISTS(SELECT 1 FROM dbo.PhieuDatPhong WHERE maPhieuDatPhong=@maPhieuDatPhong
+                AND thoiDiemHetHanThanhToanCoc>@thoiDiemHienTai)
+                THROW 53303, N'Yêu cầu thu cọc đã hết hạn. Kiểm tra lại phòng trước khi tạo yêu cầu mới.', 1;
+            IF EXISTS(SELECT 1 FROM dbo.ChiTietDatPhong WHERE maPhieuDatPhong=@maPhieuDatPhong
+                AND dbo.fnKiemTraPhongTrong(maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,@thoiDiemHienTai,@maPhieuDatPhong)=0)
                 THROW 51004, N'Phòng không còn khả dụng để xác nhận', 1;
-            UPDATE dbo.PhieuDatPhong
-            SET trangThai = N'Đã xác nhận', phienBan = phienBan + 1
-            WHERE maPhieuDatPhong = @maPhieuDatPhong;
-            UPDATE phong
-            SET trangThai = N'Đã giữ phòng', phienBan = phienBan + 1
-            FROM dbo.Phong phong
-            JOIN dbo.ChiTietDatPhong chiTiet
-                ON chiTiet.maPhong = phong.maPhong
-            WHERE chiTiet.maPhieuDatPhong = @maPhieuDatPhong;
+            UPDATE dbo.PhieuDatPhong SET trangThai=N'Đã thanh toán cọc',phienBan=phienBan+1
+            WHERE maPhieuDatPhong=@maPhieuDatPhong;
+            UPDATE dbo.ChiTietDatPhong SET trangThai=N'Đã giữ phòng'
+            WHERE maPhieuDatPhong=@maPhieuDatPhong;
         END
 
         -- Nhận phòng.
@@ -2444,7 +2521,7 @@ BEGIN
             IF @lenh = N'customer-extend'
             BEGIN
                 DECLARE @tienDatCocBoSung DECIMAL(12, 2);
-                SELECT @tienDatCocBoSung = ROUND(SUM(dbo.fnTinhTongTienPhong(loaiPhong.giaTheoNgay, loaiPhong.giaTheoGio, @thoiDiemTraPhongTruoc, @thoiDiemThaoTac, 0, 3)) * 0.5, 2)
+                SELECT @tienDatCocBoSung = ROUND(SUM(dbo.fnTinhTongTienPhong(COALESCE(chiTiet.giaTheoNgayDaChot, loaiPhong.giaTheoNgay), COALESCE(chiTiet.giaTheoGioDaChot, loaiPhong.giaTheoGio), @thoiDiemTraPhongTruoc, @thoiDiemThaoTac, 0, 3)) * 0.5, 2)
                 FROM dbo.ChiTietDatPhong chiTiet
                 JOIN dbo.Phong phong
                     ON phong.maPhong = chiTiet.maPhong
@@ -2482,7 +2559,7 @@ BEGIN
         END
         ELSE IF @lenh IN (N'cancel', N'no-show')
         BEGIN
-            IF @trangThaiDatPhong NOT IN (N'Bản nháp', N'Đã xác nhận', N'Đã thanh toán cọc')
+            IF @trangThaiDatPhong NOT IN (N'Bản nháp', N'Chờ thanh toán', N'Đã xác nhận', N'Đã thanh toán cọc')
                 THROW 53410, N'Trạng thái đặt phòng không hợp lệ', 1;
             IF @maTaiKhoanKhachHang IS NOT NULL
                 AND @loaiThayDoiChoXacNhan IS NOT NULL
@@ -2502,7 +2579,7 @@ BEGIN
             ELSE
             BEGIN
                 SET @trangThaiDatPhong = N'Đã hủy';
-                IF @thoiDiemHienTai >= DATEADD(HOUR, - 48, @thoiDiemNhanPhongTruoc)
+                IF @trangThaiDatCoc = N'Đã thanh toán' AND @thoiDiemHienTai >= DATEADD(HOUR, - 48, @thoiDiemNhanPhongTruoc)
                     SET @huyDatPhongMuon = 1;
             END;
             UPDATE dbo.PhieuDatPhong
@@ -2523,7 +2600,7 @@ BEGIN
             UPDATE dbo.DatDichVuKhachSan
             SET trangThai = N'Đã hủy'
             WHERE maPhieuDatPhong = @maPhieuDatPhong
-                AND trangThai = N'Đã xác nhận';
+                AND trangThai IN (N'Đã xác nhận', N'Chờ thanh toán');
             UPDATE dbo.YeuCauThanhToanVnpay
             SET trangThai = N'Đã hủy', thoiDiemHoanTat = @thoiDiemHienTai, phienBan = phienBan + 1
             WHERE maPhieuDatPhong = @maPhieuDatPhong
@@ -2575,7 +2652,22 @@ BEGIN
         BEGIN
             IF @trangThaiDatPhong <> N'Đã nhận phòng'
                 THROW 53410, N'Chỉ booking đang ở mới được dùng dịch vụ', 1;
-            DECLARE @giaDichVu DECIMAL(12, 2), @tonKhoDichVu INT, @dichVuConHoatDong BIT;
+            DECLARE @giaDichVu DECIMAL(12, 2), @tonKhoDichVu INT, @dichVuConHoatDong BIT,
+                @conTheSuDungDichVu BIGINT, @maNguonTonKhoDichVu NVARCHAR(10),
+                @khoaTonKhoDichVu INT, @taiNguyenTonKhoDichVu NVARCHAR(255);
+            SELECT @maNguonTonKhoDichVu = COALESCE(maNguonTaiNguyen, maDichVu)
+            FROM dbo.DichVu
+            WHERE maDichVu = @maDichVu;
+            IF @maNguonTonKhoDichVu IS NULL
+                THROW 53429, N'Không tìm thấy dịch vụ', 1;
+            SET @taiNguyenTonKhoDichVu = N'service-booking:' + @maNguonTonKhoDichVu;
+            EXEC @khoaTonKhoDichVu = sys.sp_getapplock
+                @Resource = @taiNguyenTonKhoDichVu,
+                @LockMode = 'Exclusive',
+                @LockOwner = 'Transaction',
+                @LockTimeout = 10000;
+            IF @khoaTonKhoDichVu < 0
+                THROW 51005, N'Dịch vụ đang được xử lý, vui lòng thử lại', 1;
             SELECT @giaDichVu = gia,
                 @tonKhoDichVu = soLuongTonKho,
                 @dichVuConHoatDong = dangHoatDong
@@ -2589,7 +2681,13 @@ BEGIN
             IF @soLuong IS NULL
                 OR @soLuong <= 0
                 THROW 51008, N'Số lượng phải lớn hơn 0', 1;
-            IF @tonKhoDichVu < @soLuong
+            SELECT @conTheSuDungDichVu = conLai
+            FROM dbo.fnKhaDungDichVu(
+                COALESCE(@thoiDiemHienTai, @thoiDiemThaoTac, SYSDATETIME()),
+                CONVERT(DATETIME2(6), '9999-12-31T23:59:59.999999')
+            )
+            WHERE maDichVu = @maDichVu;
+            IF @tonKhoDichVu < @soLuong OR COALESCE(@conTheSuDungDichVu, 0) < @soLuong
                 THROW 51006, N'Tồn kho không đủ', 1;
             DECLARE @ngaySuDungDichVu DATE = CAST(COALESCE(@thoiDiemThaoTac, @thoiDiemHienTai) AS DATE);
             IF EXISTS (
@@ -2621,7 +2719,10 @@ BEGIN
                 );
             UPDATE dbo.DichVu
             SET soLuongTonKho = soLuongTonKho - @soLuong
-            WHERE maDichVu = @maDichVu;
+            WHERE maDichVu = @maDichVu
+                AND soLuongTonKho >= @soLuong;
+            IF @@ROWCOUNT <> 1
+                THROW 51006, N'Tồn kho không đủ', 1;
             INSERT dbo.BienDongKhoDichVu(
                 maDichVu,
                 loai,
@@ -2654,7 +2755,7 @@ BEGIN
         VALUES (
             @nguoiThucHien,
             CASE @lenh
-                WHEN N'confirm' THEN N'RESERVATION_CONFIRMED'
+                WHEN N'receive-deposit' THEN N'RESERVATION_CASH_DEPOSIT_RECEIVED'
                 WHEN N'check-in' THEN N'RESERVATION_CHECKED_IN'
                 WHEN N'extend' THEN N'RESERVATION_EXTENDED'
                 WHEN N'update' THEN N'RESERVATION_UPDATED'
@@ -2743,12 +2844,16 @@ BEGIN
             @tra DATETIME2(6),
             @traGoc DATETIME2(6),
             @soKhach INT,
-            @soLan INT;
+            @soLan INT,
+            @giaTheoNgayDaChot DECIMAL(12, 2),
+            @giaTheoGioDaChot DECIMAL(12, 2);
         SELECT @nhan = thoiDiemNhanPhong,
             @tra = thoiDiemTraPhong,
             @traGoc = thoiDiemTraPhongBanDau,
             @soKhach = soLuongKhach,
-            @soLan = soLanChuyenPhong
+            @soLan = soLanChuyenPhong,
+            @giaTheoNgayDaChot = giaTheoNgayDaChot,
+            @giaTheoGioDaChot = giaTheoGioDaChot
         FROM dbo.ChiTietDatPhong WITH (UPDLOCK, HOLDLOCK)
         WHERE maPhieuDatPhong = @maPhieuDatPhong
             AND maPhong = @maPhongCu
@@ -2780,6 +2885,8 @@ BEGIN
             thoiDiemNhanPhong,
             thoiDiemTraPhong,
             thoiDiemTraPhongBanDau,
+            giaTheoNgayDaChot,
+            giaTheoGioDaChot,
             trangThai,
             soLanChuyenPhong,
             soLuongKhach
@@ -2793,6 +2900,8 @@ BEGIN
                 WHEN @traGoc > @thoiDiemChuyen THEN @traGoc
                 ELSE @thoiDiemChuyen
             END,
+            @giaTheoNgayDaChot,
+            @giaTheoGioDaChot,
             N'Đang có khách',
             0,
             @soKhach
@@ -4788,13 +4897,34 @@ BEGIN
             UPDATE dbo.PhieuBaoTri
             SET trangThai = @trangThaiMoi
             WHERE maPhieuBaoTri = @maPhieuBaoTri;
-            DECLARE @trangThaiPhong NVARCHAR(30) = CASE
-                WHEN @trangThaiMoi = N'Đã hoàn thành' THEN N'Sẵn sàng'
-                ELSE N'Đang bảo trì'
-            END;
+            DECLARE @trangThaiPhong NVARCHAR(30) = N'Đang bảo trì';
+            IF @trangThaiMoi = N'Đã hoàn thành'
+                AND NOT EXISTS (
+                    SELECT 1 FROM dbo.PhieuBaoTri
+                    WHERE maPhong = @maPhong
+                        AND maPhieuBaoTri <> @maPhieuBaoTri
+                        AND trangThai <> N'Đã hoàn thành'
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM dbo.PhieuCongViecKyThuat
+                    WHERE maPhong = @maPhong
+                        AND trangThai <> N'Đã bàn giao phòng'
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM dbo.SuCoThietBi
+                    WHERE maPhong = @maPhong
+                        AND trangThaiBanGiao <> N'Đã xử lý'
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM dbo.NhiemVuBuongPhong
+                    WHERE maPhong = @maPhong
+                        AND trangThai <> N'Sẵn sàng'
+                )
+                SET @trangThaiPhong = N'Sẵn sàng';
             UPDATE dbo.Phong
             SET trangThai = @trangThaiPhong, phienBan = phienBan + 1
             WHERE maPhong = @maPhong
+                AND trangThai = N'Đang bảo trì'
                 AND trangThai <> @trangThaiPhong;
             INSERT dbo.NhatKyKiemSoat(
                 nguoiThucHien,
@@ -5884,7 +6014,7 @@ BEGIN
                     THROW 51917, N'Phòng còn work order kỹ thuật chưa hoàn tất', 1;
                 IF @trangThaiPhong = N'Đang có khách'
                     THROW 51702, N'Không thể release phòng đang có khách', 1;
-                IF dbo.fnKiemTraPhongTrong(@maPhong, @thoiDiemHienTai, DATEADD(MICROSECOND, 1, @thoiDiemHienTai), @thoiDiemHienTai, NULL) = 0
+                IF dbo.fnKiemTraLichPhongTrong(@maPhong, @thoiDiemHienTai, DATEADD(MICROSECOND, 1, @thoiDiemHienTai), @thoiDiemHienTai, NULL) = 0
                     THROW 51918, N'Phòng đang có booking hoặc lưu trú hoạt động', 1;
                 IF @maThietBi IS NOT NULL
                 BEGIN
@@ -8161,7 +8291,7 @@ BEGIN
         ELSE
             THROW 52806, N'Chuyển trạng thái phòng không hợp lệ', 1;
         IF @trangThaiMoi = N'Sẵn sàng'
-            AND dbo.fnKiemTraPhongTrong(@maPhong, @thoiDiemHienTai, DATEADD(MICROSECOND, 1, @thoiDiemHienTai), @thoiDiemHienTai, NULL) = 0
+            AND dbo.fnKiemTraLichPhongTrong(@maPhong, @thoiDiemHienTai, DATEADD(MICROSECOND, 1, @thoiDiemHienTai), @thoiDiemHienTai, NULL) = 0
             THROW 52807, N'Phòng đang có booking hoạt động', 1;
         UPDATE dbo.Phong
         SET trangThai = @trangThaiMoi, phienBan = phienBan + 1
@@ -8688,21 +8818,26 @@ AS
 BEGIN
  SET NOCOUNT ON;SET XACT_ABORT ON;
  BEGIN TRY BEGIN TRANSACTION;
-  DECLARE @reservation BIGINT,@service NVARCHAR(10),@state NVARCHAR(20),@due DECIMAL(12,2),@paid DECIMAL(12,2),
+  DECLARE @reservation BIGINT,@reservationStatus NVARCHAR(30),@service NVARCHAR(10),@state NVARCHAR(20),@due DECIMAL(12,2),@paid DECIMAL(12,2),
    @expiry DATETIME2(6),@invoice BIGINT,@lock INT,@resource NVARCHAR(255),@existingMerchant NVARCHAR(100);
   SELECT @service=maDichVu,@reservation=maPhieuDatPhong FROM dbo.DatDichVuKhachSan WHERE maDatDichVuKhachSan=@id;
   IF @service IS NULL THROW 51101,N'Không tìm thấy lượt đặt dịch vụ',1;
   SELECT @resource=N'service-booking:'+COALESCE(maNguonTaiNguyen,maDichVu) FROM dbo.DichVu WHERE maDichVu=@service;
   EXEC @lock=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
   IF @lock<0 THROW 51005,N'Thanh toán đang được xử lý',1;
-  IF NOT EXISTS(SELECT 1 FROM dbo.PhieuDatPhong WITH(UPDLOCK,HOLDLOCK) WHERE maPhieuDatPhong=@reservation
-   AND (@customer IS NULL OR maTaiKhoanKhachHang=@customer))
+  SELECT @reservationStatus=trangThai
+  FROM dbo.PhieuDatPhong WITH(UPDLOCK,HOLDLOCK)
+  WHERE maPhieuDatPhong=@reservation
+   AND (@customer IS NULL OR maTaiKhoanKhachHang=@customer);
+  IF @reservationStatus IS NULL
    THROW 51001,N'Không tìm thấy đặt phòng của khách',1;
   SELECT @state=trangThai,@due=donGia*(soLuong-soLuongMienPhi),@paid=soTienDaThanhToan,
    @expiry=hanThanhToan,@existingMerchant=maThamChieuThanhToan
   FROM dbo.DatDichVuKhachSan WITH(UPDLOCK,HOLDLOCK) WHERE maDatDichVuKhachSan=@id;
   IF @merchant IS NULL
   BEGIN
+   IF @reservationStatus NOT IN(N'Đã thanh toán cọc',N'Đã xác nhận',N'Đã nhận phòng')
+    THROW 51112,N'Đặt phòng không còn hiệu lực để thanh toán dịch vụ',1;
    IF @state<>N'Chờ thanh toán' OR @expiry<=@now THROW 51112,N'Lượt đặt đã hết thời hạn thanh toán',1;
    IF @existingMerchant IS NULL UPDATE dbo.DatDichVuKhachSan
     SET maThamChieuThanhToan=N'SVC-'+CONVERT(NVARCHAR(20),@id) WHERE maDatDichVuKhachSan=@id;
@@ -8713,6 +8848,17 @@ BEGIN
   IF @paid>0 BEGIN COMMIT;RETURN;END;
   UPDATE dbo.DatDichVuKhachSan SET maPhanHoiThanhToan=@response WHERE maDatDichVuKhachSan=@id;
   IF @success=0 BEGIN COMMIT;RETURN;END;
+  IF @reservationStatus NOT IN(N'Đã thanh toán cọc',N'Đã xác nhận',N'Đã nhận phòng')
+  BEGIN
+   -- Giao dịch đã thành công sau khi booking đóng; giữ thông tin để đối soát, không xác nhận lại dịch vụ.
+   UPDATE dbo.DatDichVuKhachSan
+   SET maGiaoDichVnpay=@provider,maPhanHoiThanhToan=N'PARENT_CLOSED',thoiDiemThanhToan=@now
+   WHERE maDatDichVuKhachSan=@id;
+   INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,lyDo)
+   VALUES(N'VNPAY',N'SERVICE_PAYMENT_PARENT_CLOSED',N'SERVICE_BOOKING',CONVERT(NVARCHAR(30),@id),
+    CONCAT(N'amount=',CONVERT(NVARCHAR(40),@amount),N';provider=',LEFT(COALESCE(@provider,N''),100)));
+   COMMIT;RETURN;
+  END
   IF @state<>N'Chờ thanh toán' OR @expiry<=@now
   BEGIN
    -- Record the signed late event for manual reconciliation; never steal a released slot.

@@ -121,7 +121,7 @@ class DepartmentAuthorizationMatrixTest {
             java.math.BigDecimal.ZERO, null, null, null, List.of(), null,
             null, "DIRECT", java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO,
             java.math.BigDecimal.ZERO, "NOT_APPLICABLE", List.of(), null,
-            com.hospitality.mis.entity.reservation.DepositPaymentStatus.NOT_REQUIRED));
+            com.hospitality.mis.entity.reservation.DepositPaymentStatus.NOT_REQUIRED, null));
         when(mock21.get(any(), any(), any(), anyInt(), anyInt())).thenReturn(
             new com.hospitality.mis.dto.operations.FrontDeskDashboardDtos.Response(
                 java.time.LocalDate.now(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
@@ -221,7 +221,7 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/reservations/1/service-bookings/1/use", "MANAGER,FRONT_DESK", "{}"),
             new Endpoint("POST", "/api/reservations", "MANAGER,FRONT_DESK", "{\"guest_id\":1,\"employee_id\":\"actor\",\"deposit\":0,\"rental_type\":\"PACKAGE\",\"rooms\":[{\"room_id\":\"101\",\"expected_check_in\":\"2026-10-01T12:00:00\",\"expected_check_out\":\"2026-10-02T12:00:00\"}]}"),
             new Endpoint("POST", "/api/reservations/1/check-in", "MANAGER,FRONT_DESK", "{}"),
-            new Endpoint("POST", "/api/reservations/1/confirm", "MANAGER,FRONT_DESK", "{}"),
+            new Endpoint("POST", "/api/reservations/1/receive-deposit", "MANAGER,FRONT_DESK", "{}"),
             new Endpoint("GET", "/api/reservations/1/timeline", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,TECHNICAL", "{}"),
             new Endpoint("POST", "/api/reservations/1/check-out", "MANAGER,FRONT_DESK", "{}"),
             new Endpoint("POST", "/api/reservations/1/cancel", "MANAGER,FRONT_DESK", "{\"reason\":\"Cancelled\"}"),

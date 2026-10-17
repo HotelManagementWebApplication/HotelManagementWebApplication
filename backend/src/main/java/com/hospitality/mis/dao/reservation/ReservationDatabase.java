@@ -96,7 +96,7 @@ public class ReservationDatabase {
             hourly?ReservationDtos.RentalType.HOURLY:ReservationDtos.RentalType.PACKAGE,money(r,"tienDatCoc"),date(r,"thoiDiemDat"),actualIn,actualOut,lines,
             str(r,"lyDoHuy"),cancellations.convertToEntityAttribute(str(r,"ketQuaHuy")),sources.convertToEntityAttribute(str(r,"nguonDatPhong")),
             money(r,"doanhThuGopOta"),money(r,"hoaHongOta"),money(r,"doanhThuGopOta").subtract(money(r,"hoaHongOta")),ota.convertToEntityAttribute(str(r,"trangThaiDoiSoatOta")),
-            usages,methods.convertToEntityAttribute(str(r,"phuongThucBaoDam")),deposits.convertToEntityAttribute(str(r,"trangThaiThanhToanCoc")));
+            usages,methods.convertToEntityAttribute(str(r,"phuongThucBaoDam")),deposits.convertToEntityAttribute(str(r,"trangThaiThanhToanCoc")),date(r,"thoiDiemHetHanThanhToanCoc"));
         Number customer=num(r,"maTaiKhoanKhachHang");
         return new Snapshot(response,customer==null?null:customer.longValue(),str(r,"maThanhToanDatCoc"),date(r,"thoiDiemHetHanThanhToanCoc"),str(r,"loaiThayDoiDangCho"),
             date(r,"thoiDiemNhanPhongTruocThayDoi"),date(r,"thoiDiemTraPhongTruocThayDoi"),money(r,"tienDatCocBoSung"),num(r,"phienBan").longValue(),customerRooms);
@@ -109,7 +109,7 @@ public class ReservationDatabase {
                 case 53401->"GUEST_BOOKING_BLOCKED";case 53402->"CUSTOMER_ACCOUNT_NOT_FOUND";case 53403->"ROOM_NOT_FOUND";
                 case 53404->"INVALID_GUEST_COUNT";case 53405->"CHECK_IN_MUST_BE_FUTURE";case 53406->"ROOM_TYPE_NOT_ACTIVE";
                 case 53407->"INVALID_DEPOSIT";case 53408->"RESERVATION_NOT_FOUND";case 53409->"INVALID_RESERVATION";
-                case 53410->"INVALID_STATE";case 53411->"DEPOSIT_PAYMENT_REQUIRED";case 53412->"EARLY_CHECK_IN";case 53413->"INVALID_CHECK_IN_TIME";
+                case 53410->"INVALID_STATE";case 53303->"PAYMENT_EXPIRED";case 53411->"DEPOSIT_PAYMENT_REQUIRED";case 53412->"EARLY_CHECK_IN";case 53413->"INVALID_CHECK_IN_TIME";
                 case 53415->"INVALID_EXTENSION";case 53416->"EXTENSION_TOO_LATE";case 53417->"ROOM_SET_IMMUTABLE";
                 case 53418->"RESERVATION_NOT_CHANGEABLE";case 53419->"PACKAGE_BOOKING_REQUIRED";case 53420->"CHANGE_ALREADY_PENDING";
                 case 53421->"MIXED_STAY_DATES";case 53422->"CHANGE_TOO_LATE";case 53423->"EXTENSION_MUST_BE_CONTIGUOUS";

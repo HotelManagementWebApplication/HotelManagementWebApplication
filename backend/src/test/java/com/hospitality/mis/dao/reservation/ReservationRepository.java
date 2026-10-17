@@ -139,7 +139,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      */
     @Query("select count(rr) > 0 from ReservationRoom rr where rr.room.id = :roomId and rr.checkIn < :to and rr.checkOut > :from and rr.status <> :cancelledRoom and rr.reservation.status not in :ignoredReservations and (rr.reservation.status <> com.hospitality.mis.entity.reservation.ReservationStatus.DRAFT or rr.reservation.customerAccount is null or (rr.reservation.depositPaymentStatus = com.hospitality.mis.entity.reservation.DepositPaymentStatus.PENDING and rr.reservation.depositPaymentExpiresAt > :now))")
     boolean hasOverlap(@Param("roomId") String roomId, @Param("from") LocalDateTime from,
-                       @Param("to") LocalDateTime to, @Param("cancelledRoom") RoomStatus cancelledRoom,
+                       @Param("to") LocalDateTime to, @Param("cancelledRoom") com.hospitality.mis.entity.reservation.ReservationRoomStatus cancelledRoom,
                        @Param("ignoredReservations") List<ReservationStatus> ignoredReservations,
                        @Param("now") LocalDateTime now);
 
@@ -167,7 +167,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
                                            @Param("to") LocalDateTime to,
 
-                                           @Param("cancelledRoom") RoomStatus cancelledRoom,
+                                           @Param("cancelledRoom") com.hospitality.mis.entity.reservation.ReservationRoomStatus cancelledRoom,
                                            @Param("ignoredReservations") List<ReservationStatus> ignoredReservations,
                                            @Param("now") LocalDateTime now);
 

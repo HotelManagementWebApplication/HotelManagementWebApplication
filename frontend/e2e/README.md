@@ -87,7 +87,7 @@ SELECT maPhieuCongViecKyThuat FROM PhieuCongViecKyThuat
 WHERE vatTuSuDung = 'E2E_FIXTURE_TECHNICAL_ORDER';
 ```
 
-`frontend/e2e/specs/live-contract.test.ts` exercises eight live HTTP scenarios
+`frontend/e2e/specs/live-contract.test.ts` exercises seven live HTTP scenarios
 covering public/customer, front desk, housekeeping/technical/manager, kitchen,
 accounting/director and HR/admin behavior. It is not a browser-driven UI
 suite; report it as live HTTP/role E2E, not UI E2E.
@@ -182,7 +182,7 @@ npm run test:e2e
 
 The exact test command is run from `frontend` while the backend is running
 against the same schema. A truthful successful result has
-`configured=8 skipped=0 blocked=0` and all eight tests pass. A missing variable
+`configured=7 skipped=0 blocked=0` and all seven tests pass. A missing variable
 produces `[E2E][SKIP]`; skipped tests are not passes. An unavailable configured
 backend or response/state mismatch fails the relevant test. Do not report live
 E2E proof unless the command actually ran with no skips and passed. The

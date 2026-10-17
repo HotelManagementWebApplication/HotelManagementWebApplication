@@ -189,11 +189,11 @@ public class ReservationController {
 
     }
 
-    @PostMapping("/{id}/confirm")
+    @PostMapping("/{id}/receive-deposit")
     @PreAuthorize("@departmentAccess.allows(authentication, 'RESERVATION_WRITE')")
-    public ReservationDtos.Response confirm(@PathVariable Long id,
+    public ReservationDtos.Response receiveDeposit(@PathVariable Long id,
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
-        return service.confirm(id, SecurityActor.currentActor(), idempotencyKey);
+        return service.receiveDeposit(id, SecurityActor.currentActor(), idempotencyKey);
     }
 
     @GetMapping("/{id}/timeline")

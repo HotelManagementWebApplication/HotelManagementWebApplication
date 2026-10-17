@@ -99,7 +99,7 @@ ELSE
 ```
 
 
-## Kịch bản Kho & Dịch vụ và kế toán sau tích hợp fix
+## Kịch bản demo Kho & Dịch vụ và kế toán
 
 - Vật tư, đồ vải dùng chung danh mục `DichVu` và sổ `BienDongKhoDichVu`.
   Nước `WATER330` thấp hơn ngưỡng 80; có yêu cầu cấp 24 chai, trả 3 vỏ gối

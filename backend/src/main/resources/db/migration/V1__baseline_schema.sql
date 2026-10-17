@@ -234,7 +234,9 @@ CREATE TABLE ChiTietDatPhong (
     thoiDiemNhanPhong DATETIME2(6) NOT NULL,
     thoiDiemTraPhong DATETIME2(6) NOT NULL,
     thoiDiemTraPhongBanDau DATETIME2(6) NOT NULL,
-    trangThai NVARCHAR(30) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Đã giữ phòng',
+    giaTheoNgayDaChot DECIMAL(12, 2),
+    giaTheoGioDaChot DECIMAL(12, 2),
+    trangThai NVARCHAR(30) COLLATE Vietnamese_100_CS_AS NOT NULL DEFAULT N'Bản nháp',
     soLanChuyenPhong INT NOT NULL DEFAULT 0,
     soLuongKhach INT NOT NULL DEFAULT 1,
     CONSTRAINT pkChiTietDatPhong PRIMARY KEY (maPhieuDatPhong, maPhong),
@@ -245,7 +247,11 @@ CREATE TABLE ChiTietDatPhong (
     CONSTRAINT chkChiTietDatPhong02 CHECK (thoiDiemTraPhongBanDau >= thoiDiemNhanPhong AND thoiDiemTraPhong >= thoiDiemTraPhongBanDau),
     CONSTRAINT chkChiTietDatPhong03 CHECK (soLanChuyenPhong >= 0),
     CONSTRAINT chkChiTietDatPhong04 CHECK (soLuongKhach > 0),
-    CONSTRAINT chkChiTietDatPhong05 CHECK (trangThai IN (N'Sẵn sàng', N'Đang có khách', N'Đang dọn phòng', N'Đang bảo trì', N'Ngừng sử dụng', N'Đã giữ phòng', N'Đã trả phòng', N'Đã hủy'))
+    CONSTRAINT chkChiTietDatPhong05 CHECK (trangThai IN (N'Bản nháp', N'Giữ tạm phòng', N'Đã giữ phòng', N'Đang có khách', N'Đã trả phòng', N'Đã hủy')),
+    CONSTRAINT chkChiTietDatPhong06 CHECK (
+        (giaTheoNgayDaChot IS NULL AND giaTheoGioDaChot IS NULL)
+        OR (giaTheoNgayDaChot >= 0 AND giaTheoGioDaChot >= 0)
+    )
 );
 
 
@@ -511,7 +517,7 @@ CREATE TABLE YeuCauThanhToanVnpay (
     CONSTRAINT chkYeuCauThanhToanVnpay01 CHECK (soTien > 0),
     CONSTRAINT chkYeuCauThanhToanVnpay02 CHECK (thoiDiemHetHan > thoiDiemTao),
     CONSTRAINT chkYeuCauThanhToanVnpay03 CHECK (phienBan >= 0),
-    CONSTRAINT chkYeuCauThanhToanVnpay04 CHECK (trangThai IN (N'Chờ thanh toán', N'Thành công', N'Thất bại', N'Đã hết hạn', N'Đã hủy'))
+    CONSTRAINT chkYeuCauThanhToanVnpay04 CHECK (trangThai IN (N'Chờ thanh toán', N'Thành công', N'Thất bại', N'Đã hết hạn', N'Đã hủy', N'Cần đối soát'))
 );
 
 
@@ -1350,6 +1356,7 @@ ALTER TABLE PhieuDatPhong
     ADD CONSTRAINT chkPhieuDatPhongtrangThai CHECK (
         trangThai IN (
             N'Bản nháp',
+            N'Chờ thanh toán',
             N'Đã xác nhận',
             N'Đã thanh toán cọc',
             N'Đã nhận phòng',

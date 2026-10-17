@@ -32,6 +32,15 @@
 
 - Giới hạn số phòng khách được đặt được định nghĩa tại `customer-policy.md` mục 3.
 - Mọi thao tác đặt phòng phải bảo toàn khả dụng phòng và ngăn đặt chồng (overlap).
+- Booking `DRAFT` và chi tiết `DRAFT` không chiếm phòng. Booking `PENDING_PAYMENT`
+  dùng chi tiết `TEMPORARILY_HELD` tới hạn cọc. Nhận đủ cọc chuyển booking sang
+  `DEPOSIT_PAID` và chi tiết sang `RESERVED`; hết hạn chuyển booking/chi tiết sang
+  `CANCELLED`, cọc `EXPIRED`. Chính sách thời hạn và kênh thu nằm ở `customer-policy.md` mục 5.
+- Khách chỉ tạo booking VNPay trên portal. Lễ tân tạo yêu cầu tiền mặt tại quầy;
+  tạo yêu cầu không ghi giao dịch tiền. Thao tác `receive-deposit` xác nhận thực thu,
+  chuyển trạng thái, tạo giao dịch/biên lai/audit trong cùng transaction và chống ghi trùng.
+- Khả dụng tương lai xét lịch lưu trú; trạng thái đang có khách hoặc đang dọn
+  hiện tại không tự chặn mọi ngày tương lai. Check-in thực tế vẫn bắt buộc phòng sẵn sàng.
 - Việc chuyển trạng thái phải hợp lệ theo state machine hiện hành; không được bỏ qua trạng thái hoặc cập nhật tùy ý.
 - Phải gắn thao tác với actor đã xác thực, hỗ trợ idempotency, và dùng khóa SQL Server phù hợp để kiểm tra/cập nhật khả dụng một cách nguyên tử.
 - Các kiểm tra khả dụng, chuyển trạng thái, ghi dữ liệu liên quan và sự kiện audit phải nằm trong ranh giới transaction thích hợp.

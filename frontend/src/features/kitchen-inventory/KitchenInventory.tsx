@@ -1633,9 +1633,9 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
           <div style={{ flex:1 }} />
           <StockNotifications usage={liveUsage} onSeeAll={()=>setPage("transactions")}/>
           <div style={{ position:"relative" }}>
-            <div
+            <button type="button" aria-label="Mở hồ sơ nhân viên" aria-expanded={topProfileOpen} aria-haspopup="dialog"
               onClick={()=>setTopProfileOpen(p=>!p)}
-              style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer" }}
+              style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",border:0,background:"transparent",padding:4 }}
               title="Hồ sơ nhân viên"
             >
               <div style={{ width:30,height:30,borderRadius:99,
@@ -1644,12 +1644,12 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
                 fontSize:11,fontWeight:700,color:"#FFF" }}>
                 {userProfile?.full_name ? userProfile.full_name.slice(0, 2).toUpperCase() : "VK"}
               </div>
-              <div>
+              <div className="warehouse-profile-copy">
                 <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || "Võ Minh Kho và Dịch vụ"}</p>
                 <p style={{ fontSize:10,color:"#94A3B8" }}>{profileRoleLabel}</p>
               </div>
               <ChevronDown size={12} style={{ color:"#94A3B8" }} />
-            </div>
+            </button>
             <EmployeeProfileDropdown
               isOpen={topProfileOpen}
               onClose={()=>setTopProfileOpen(false)}

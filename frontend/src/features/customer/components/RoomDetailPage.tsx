@@ -77,7 +77,7 @@ export const RoomDetailPage: React.FC<RoomDetailPageProps> = ({ room, onBack, on
         <div className="flex items-center gap-4 text-xs">
           <span className="text-emerald-600 font-medium flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Phòng sẵn sàng đón tiếp
+            {room.availableForBooking === true ? "Còn phòng theo lịch đã chọn" : room.availableForBooking === false ? "Hết phòng theo lịch đã chọn" : "Chọn lịch để kiểm tra phòng trống"}
           </span>
         </div>
       </div>

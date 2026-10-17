@@ -56,22 +56,17 @@ const localInputAfter = (value: string, milliseconds: number) => {
 
 const getReservationStatusMeta = (reservation: CustomerReservation) => {
   const status = reservation.status;
+  if (reservation.deposit_payment?.status === "EXPIRED" && ["PENDING_PAYMENT", "CANCELLED"].includes(status))
+    return { label: "Hết hạn nộp cọc", badgeClass: "bg-stone-50 text-stone-700 border-stone-300", dotClass: "bg-stone-400", desc: "Thời hạn nộp cọc đã hết; phòng không còn được giữ." };
   switch (status?.toUpperCase()) {
-    case "DRAFT":
-      if (reservation.deposit_payment?.status === "NOT_REQUIRED") {
-        return {
-          label: "Chờ lễ tân xác nhận",
-          badgeClass: "bg-amber-50 text-amber-800 border-amber-300",
-          dotClass: "bg-amber-500",
-          desc: "Yêu cầu chưa giữ phòng; lễ tân sẽ kiểm tra khả dụng trước khi xác nhận.",
-        };
-      }
+    case "PENDING_PAYMENT":
       return {
-        label: "Chờ thanh toán cọc",
-        badgeClass: "bg-amber-50 text-amber-800 border-amber-300",
-        dotClass: "bg-amber-500",
-        desc: "Đơn đang giữ phòng, vui lòng hoàn tất tiền cọc qua VNPay.",
+        label: reservation.deposit_payment?.status === "EXPIRED" ? "Hết hạn nộp cọc" : "Chờ thanh toán cọc",
+        badgeClass: "bg-amber-50 text-amber-800 border-amber-300", dotClass: "bg-amber-500",
+        desc: reservation.deposit_payment?.status === "EXPIRED" ? "Thời hạn nộp cọc đã hết; phòng không còn được giữ." : "Phòng được giữ tạm 10 phút để thanh toán cọc online.",
       };
+    case "DRAFT":
+      return { label: "Bản nháp · chưa giữ phòng", badgeClass: "bg-stone-50 text-stone-700 border-stone-300", dotClass: "bg-stone-400", desc: "Bản nháp chưa được xác nhận và không giữ phòng." };
     case "DEPOSIT_PAID":
       return {
         label: "Đã cọc · Chờ nhận phòng",
@@ -869,7 +864,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
                 Hiện tại / Sắp tới (
                 {
                   reservations.filter((r) =>
-                    ["DRAFT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(r.status)
+                    ["DRAFT", "PENDING_PAYMENT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(r.status)
                   ).length
                 }
                 )
@@ -900,7 +895,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
               </div>
             ) : reservations.filter((r) => {
                 if (bookingFilter === "active") {
-                  return ["DRAFT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(r.status);
+                  return ["DRAFT", "PENDING_PAYMENT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(r.status);
                 }
                 if (bookingFilter === "past") {
                   return ["CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(r.status);
@@ -926,7 +921,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
               reservations
                 .filter((r) => {
                   if (bookingFilter === "active") {
-                    return ["DRAFT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(r.status);
+                    return ["DRAFT", "PENDING_PAYMENT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(r.status);
                   }
                   if (bookingFilter === "past") {
                     return ["CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(r.status);
@@ -1144,7 +1139,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
                                 <span>Dịch vụ & Trải nghiệm đã đặt ({servicesCount})</span>
                               </div>
 
-                              {onNavigateToServices && ["DRAFT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(res.status) && (
+                              {onNavigateToServices && ["DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(res.status) && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1203,7 +1198,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
                                 <p className="text-[11px] text-stone-500">
                                   Quý khách chưa đặt dịch vụ ẩm thực hoặc trải nghiệm kèm theo đơn này.
                                 </p>
-                                {onNavigateToServices && ["DRAFT", "DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(res.status) && (
+                                {onNavigateToServices && ["DEPOSIT_PAID", "CONFIRMED", "CHECKED_IN"].includes(res.status) && (
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1248,7 +1243,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
                             </div>
 
                             {/* Retry VNPay trên cùng booking trong thời gian giữ phòng. */}
-                            {!res.pending_change && (res.status === "DRAFT" || res.deposit_payment?.status === "PENDING") && res.deposit_payment?.payment_code && (
+                            {!res.pending_change && res.deposit_payment?.status === "PENDING" && res.deposit_payment?.payment_code && (
                               <div className="mt-2 p-2.5 bg-white rounded-lg border border-amber-200 text-[11px] space-y-2 text-amber-900">
                                 <div className="flex justify-between items-center text-[10px] text-stone-500 pt-0.5">
                                   <span>{res.pending_change ? "Cọc bổ sung qua VNPay:" : "Tiền cọc qua VNPay:"}</span>
@@ -1373,7 +1368,7 @@ export const CustomerProfileDropdown: React.FC<CustomerProfileDropdownProps> = (
                             </div>
                           ) : null}
 
-                          {!res.pending_change && ["DRAFT", "DEPOSIT_PAID", "CONFIRMED"].includes(res.status) && (() => {
+                          {!res.pending_change && ["DRAFT", "PENDING_PAYMENT", "DEPOSIT_PAID", "CONFIRMED"].includes(res.status) && (() => {
                             const policy = cancellationPolicy(res);
                             return (
                               <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-3">

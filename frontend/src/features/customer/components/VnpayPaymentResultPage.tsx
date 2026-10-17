@@ -74,7 +74,8 @@ export function VnpayPaymentResultPage({ isAuthenticated, onLogin }: Props) {
     return () => controller.abort();
   }, [isAuthenticated, refresh]);
 
-  const paid = reservation?.deposit_payment?.status === "PAID" || attempt?.status === "SUCCEEDED";
+  const requiresReview = attempt?.status === "REQUIRES_REVIEW";
+  const paid = !requiresReview && (reservation?.deposit_payment?.status === "PAID" || attempt?.status === "SUCCEEDED");
   useEffect(() => {
     if (!isAuthenticated || paid || attempt?.status !== "PENDING" || pollingTimedOut) return;
 
@@ -124,7 +125,7 @@ export function VnpayPaymentResultPage({ isAuthenticated, onLogin }: Props) {
 
   const pending = attempt?.status === "PENDING" && !pollingTimedOut;
   const timedOut = Boolean(pollingTimedOut && attempt?.status === "PENDING" && !paid);
-  const canRetry = Boolean(reservation && reservation.status === "DRAFT"
+  const canRetry = Boolean(!requiresReview && reservation && reservation.status === "PENDING_PAYMENT"
     && reservation.deposit_payment?.status === "PENDING"
     && (!reservation.deposit_payment.expires_at || new Date(reservation.deposit_payment.expires_at).getTime() > Date.now()));
 
@@ -170,8 +171,8 @@ export function VnpayPaymentResultPage({ isAuthenticated, onLogin }: Props) {
 
   const Icon = paid ? CheckCircle2 : pending ? Clock3 : AlertCircle;
   const iconClass = paid ? "bg-emerald-50 text-emerald-600" : pending ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600";
-  const title = paid ? "Thanh toán cọc thành công" : pending ? "Đang xác nhận giao dịch" : timedOut ? "Hết thời gian chờ kết quả giao dịch" : "Thanh toán chưa hoàn tất";
-  const description = paid
+  const title = requiresReview ? "Thanh toán cần đối soát" : paid ? "Thanh toán cọc thành công" : pending ? "Đang xác nhận giao dịch" : timedOut ? "Hết thời gian chờ kết quả giao dịch" : "Thanh toán chưa hoàn tất";
+  const description = requiresReview ? "VNPay đã báo thanh toán nhưng yêu cầu giữ phòng không còn hiệu lực. Khách sạn đã nhận thông báo để đối soát và xử lý khoản tiền. Vui lòng liên hệ lễ tân; phòng chưa được xác nhận lại." : paid
     ? "VNPay đã xác nhận khoản cọc. Phòng được giữ và booking đã đồng bộ sang lễ tân."
     : pending
     ? "Hệ thống đang chờ phản hồi từ VNPay. Trang này sẽ tự cập nhật."

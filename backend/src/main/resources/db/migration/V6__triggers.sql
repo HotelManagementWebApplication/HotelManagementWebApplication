@@ -35,6 +35,7 @@ GO
 --   trgDatDichVuDungKhungGioBuaAn
 --   trgDatDichVuTrongKyLuuTru
 --   trgDatDichVuChiDungKhiDangO
+--   trgChiTietDatPhongChotGia
 
 -- =============================================================================
 -- trgBienLaiBaoDamTienThu
@@ -82,6 +83,32 @@ BEGIN
         WHERE COALESCE(tongBienLai.tongTien, 0) > COALESCE(tongTienThu.tongTien, 0)
     )
         THROW 53601, N'Tổng biên lai vượt tiền đã thu theo hóa đơn và phương thức', 1;
+END;
+GO
+
+-- =============================================================================
+-- trgChiTietDatPhongChotGia
+-- Các chi tiết phòng được tạo trực tiếp (demo/test/legacy) chốt giá từ loại phòng
+-- tại thời điểm insert. Luồng booking chính truyền giá đã chốt tường minh ở V5.
+-- =============================================================================
+CREATE TRIGGER dbo.trgChiTietDatPhongChotGia ON dbo.ChiTietDatPhong
+AFTER INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE chiTiet
+    SET giaTheoNgayDaChot = COALESCE(chiTiet.giaTheoNgayDaChot, loaiPhong.giaTheoNgay),
+        giaTheoGioDaChot = COALESCE(chiTiet.giaTheoGioDaChot, loaiPhong.giaTheoGio)
+    FROM dbo.ChiTietDatPhong AS chiTiet
+    JOIN inserted AS moi
+        ON moi.maPhieuDatPhong = chiTiet.maPhieuDatPhong
+        AND moi.maPhong = chiTiet.maPhong
+    JOIN dbo.Phong AS phong
+        ON phong.maPhong = chiTiet.maPhong
+    JOIN dbo.LoaiPhong AS loaiPhong
+        ON loaiPhong.maLoaiPhong = phong.maLoaiPhong
+    WHERE chiTiet.giaTheoNgayDaChot IS NULL
+        OR chiTiet.giaTheoGioDaChot IS NULL;
 END;
 GO
 

@@ -1073,6 +1073,11 @@ function IncidentsScreen({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [remindBusyId, setRemindBusyId] = useState<string | null>(null);
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (successTimeoutRef.current !== null) clearTimeout(successTimeoutRef.current);
+  }, []);
 
   useEffect(() => {
     if (prefillRoom) {
@@ -1102,7 +1107,9 @@ function IncidentsScreen({
       setNewType("");
       setNewDesc("");
       onClearPrefill?.();
-      setTimeout(() => {
+      if (successTimeoutRef.current !== null) clearTimeout(successTimeoutRef.current);
+      successTimeoutRef.current = setTimeout(() => {
+        successTimeoutRef.current = null;
         setShowForm(false);
         setSuccessMsg(null);
       }, 1500);
@@ -1120,7 +1127,11 @@ function IncidentsScreen({
         await onRemindTechnical(inc);
       }
       setSuccessMsg(`Đã gửi cập nhật nhắc nhở xử lý sự cố P.${inc.room} đến bộ phận Kỹ thuật!`);
-      setTimeout(() => setSuccessMsg(null), 2500);
+      if (successTimeoutRef.current !== null) clearTimeout(successTimeoutRef.current);
+      successTimeoutRef.current = setTimeout(() => {
+        successTimeoutRef.current = null;
+        setSuccessMsg(null);
+      }, 2500);
     } catch (err: any) {
       alert("Không thể gửi nhắc nhở kỹ thuật.");
     } finally {
@@ -1308,6 +1319,11 @@ function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (ite
   const [movementBusy, setMovementBusy] = useState(false);
   const [movementError, setMovementError] = useState<string | null>(null);
   const [movementSuccess, setMovementSuccess] = useState<string | null>(null);
+  const movementSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (movementSuccessTimeoutRef.current !== null) clearTimeout(movementSuccessTimeoutRef.current);
+  }, []);
 
   // Exclude minibar from categories as requested
   const cats = ["all", "linen", "towels", "amenities"];
@@ -1377,7 +1393,9 @@ function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (ite
     try {
       await onMove(movement.item.id, movement.type==="RECEIVE"?"ISSUE":"RETURN", quantity, movementReason.trim() || (movement.type === "RECEIVE" ? "Yêu cầu cấp hàng" : "Trả hàng về kho"));
       setMovementSuccess(`Yêu cầu ${movement.type === "RECEIVE" ? "cấp" : "trả"} ${quantity} ${movement.item.unit} ${movement.item.item}; đã gửi Kho & Dịch vụ xử lý.`);
-      setTimeout(() => {
+      if (movementSuccessTimeoutRef.current !== null) clearTimeout(movementSuccessTimeoutRef.current);
+      movementSuccessTimeoutRef.current = setTimeout(() => {
+        movementSuccessTimeoutRef.current = null;
         setMovement(null);
         setMovementSuccess(null);
       }, 1500);

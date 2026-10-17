@@ -25,7 +25,7 @@ describe("front desk API contract", () => {
 
   it("generates a fresh header key for each retry-safe reservation mutation", async () => {
     await frontDeskApi.createReservation({ guest_id: 1, employee_id: "E1", deposit: 0, rental_type: "PACKAGE", rooms: [] });
-    await frontDeskApi.confirm(1);
+    await frontDeskApi.receiveDeposit(1);
     await frontDeskApi.transfer(1, { from_room_id: "101", to_room_id: "102" });
     const options = request.mock.calls.map(call => call[1] as { idempotencyKey?: string; method?: string; body?: unknown });
     expect(options.every(option => option.idempotencyKey)).toBe(true);

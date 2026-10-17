@@ -16,7 +16,7 @@ class ReservationSearchServiceTest {
     /** Repository mock dùng verify query scope và không query khi input invalid. */
     private final ReservationDatabase repository = mock(ReservationDatabase.class);
     /** Service thật chỉ dùng search dependencies; các port mutation không liên quan được để null. */
-    private final ReservationService service = new ReservationService(repository, null, null, null, null, java.time.Clock.systemUTC());
+    private final ReservationService service = new ReservationService(repository, null, null, null, null, java.time.Clock.systemUTC(), 10);
     /** Dọn authentication giữa các role case. */
     @AfterEach void clear() { SecurityContextHolder.clearContext(); }
     /** Given frontdesk, When list toàn cục, Then query không bị giới hạn theo creator ca hiện tại. */

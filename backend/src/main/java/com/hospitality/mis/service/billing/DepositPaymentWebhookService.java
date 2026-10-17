@@ -64,7 +64,7 @@ public class DepositPaymentWebhookService {
     }
 
     private String englishReservationStatus(String value) {
-        return switch(value){case "Bản nháp"->"DRAFT";case "Đã thanh toán cọc"->"DEPOSIT_PAID";
+        return switch(value){case "Bản nháp"->"DRAFT";case "Chờ thanh toán"->"PENDING_PAYMENT";case "Đã thanh toán cọc"->"DEPOSIT_PAID";
             case "Đã xác nhận"->"CONFIRMED";case "Đã nhận phòng"->"CHECKED_IN";
             case "Đã trả phòng"->"CHECKED_OUT";case "Đã hủy"->"CANCELLED";
             case "Không đến"->"NO_SHOW";default->value;};

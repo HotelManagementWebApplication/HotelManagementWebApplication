@@ -120,6 +120,6 @@ class ReservationControllerHttpScopeTest {
                 ReservationDtos.RentalType.PACKAGE, BigDecimal.ZERO, null, null, null, List.of(),
                 null, null, "DIRECT", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 "NOT_APPLICABLE", List.of(), null,
-                com.hospitality.mis.entity.reservation.DepositPaymentStatus.NOT_REQUIRED);
+                com.hospitality.mis.entity.reservation.DepositPaymentStatus.NOT_REQUIRED, null);
     }
 }

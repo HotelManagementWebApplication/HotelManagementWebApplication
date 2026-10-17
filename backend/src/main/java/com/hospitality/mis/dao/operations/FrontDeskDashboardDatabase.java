@@ -31,7 +31,7 @@ public class FrontDeskDashboardDatabase {
     }
     private FrontDeskDashboardDtos.ReservationItem reservation(ResultSet r,int n)throws SQLException{
         long id=r.getLong(1);
-        var activeRooms=jdbc.queryForList("SELECT maPhong FROM dbo.vwDatPhongChiTiet WHERE maPhieuDatPhong=? AND trangThaiPhongTrongDatPhong IN(N'Đã giữ phòng',N'Đang có khách') ORDER BY maPhong",String.class,id);
+        var activeRooms=jdbc.queryForList("SELECT maPhong FROM dbo.vwDatPhongChiTiet WHERE maPhieuDatPhong=? AND trangThaiPhongTrongDatPhong IN(N'Giữ tạm phòng',N'Đã giữ phòng',N'Đang có khách') ORDER BY maPhong",String.class,id);
         var deposit=deposits.convertToEntityAttribute(r.getString(9));
         return new FrontDeskDashboardDtos.ReservationItem(id,(Long)r.getObject(2),r.getString(3),r.getString(4),statuses.convertToEntityAttribute(r.getString(5)),dateTime(r,6),dateTime(r,7),activeRooms,r.getBigDecimal(8),deposit==null?null:deposit.name(),r.getBigDecimal(10));
     }

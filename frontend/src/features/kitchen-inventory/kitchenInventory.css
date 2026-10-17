@@ -12,7 +12,7 @@
   .warehouse-sidebar nav button { width: auto !important; flex-shrink: 0; white-space: nowrap; }
   .warehouse-header { padding: 0 12px !important; gap: 8px !important; }
   .warehouse-header > div:nth-child(2) { display: none; }
-  .warehouse-header > div:last-child > div > div:last-of-type { display: none; }
+  .warehouse-header .warehouse-profile-copy { display: none; }
   .warehouse-title { padding: 10px 12px !important; }
   .warehouse-title > div { gap: 12px; flex-wrap: wrap; }
   .warehouse-title p { font-size: 12px !important; }

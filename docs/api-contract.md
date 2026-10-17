@@ -153,7 +153,7 @@ permissions từ client.
 | `GET /api/public/rooms/availability` | Query bắt buộc `from`, `to`; tùy chọn `type`, `page`, `size` | Public; availability cùng metadata catalog và ảnh riêng theo phòng, `Cache-Control: no-store` |
 | `GET /api/public/services` | Query `page` default 0, `size` default 20 | Public; DTO gồm `category`, `description`, `image_url`; cache 30s |
 | `POST /api/public/payment-callbacks/deposit` | Body `provider_event_id`, `payment_code`, `amount`, `reference`, `status`; header `X-Payment-Signature` | Public provider route; HMAC hợp lệ mới được nhận |
-| `POST /api/customer/reservations` | Body `rental_type`, `rooms[]`, `idempotency_key`; room item `room_id`, `expected_check_in`, `expected_check_out`, `guest_count` | `CUSTOMER`; 201, room count follows `customer-policy.md` §3, guest lấy từ JWT |
+| `POST /api/customer/reservations` | Body `rental_type`, `payment_method` = `VNPAY`, `rooms[]`, `idempotency_key`; room item `room_id`, `expected_check_in`, `expected_check_out`, `guest_count` | `CUSTOMER`; 201 `PENDING_PAYMENT`; hạn cọc theo `customer-policy.md` §5; room count follows `customer-policy.md` §3, guest lấy từ JWT |
 | `GET /api/customer/reservations` | Không body | `CUSTOMER`; chỉ booking của customer |
 | `GET /api/customer/reservations/{id}` | Path `id` | `CUSTOMER`; ownership enforced |
 | `GET /api/customer/reservations/{id}/deposit-payment` | Path `id` | `CUSTOMER`; payment instruction của chính booking |
@@ -205,10 +205,10 @@ nhận.
 | Method và path | Query/body/header | Capability |
 |---|---|---|
 | `GET /api/front-desk/dashboard` | Query `date`, `q`, `status`, `page` default 0, `size` default 20 | `FRONT_DESK_DASHBOARD` |
-| `POST /api/reservations` | Body `guest_id`, `employee_id`, `deposit`, `rental_type`, `rooms[]`, optional `idempotency_key`; room `room_id`, `expected_check_in`, `expected_check_out`, `guest_count`; header optional | `RESERVATION_CREATE`; 201 |
+| `POST /api/reservations` | Body `guest_id`, `employee_id`, `rental_type`, `rooms[]`, optional `deposit` (số tiền dự kiến, không phải xác nhận đã nhận), `idempotency_key`; room `room_id`, `expected_check_in`, `expected_check_out`, `guest_count`; header optional | `RESERVATION_CREATE`; 201 `PENDING_PAYMENT`, tiền cọc do server tính; chưa ghi giao dịch tiền |
 | `GET /api/reservations` | Query `status`, `guest_id`, `page` default 0, `size` default 20 | `RESERVATION_READ`; page response |
 | `GET /api/reservations/{id}` | Path `id` | `RESERVATION_READ`; scope actor trừ global-read role |
-| `POST /api/reservations/{id}/confirm` | Không body; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE`; `DRAFT → CONFIRMED` |
+| `POST /api/reservations/{id}/receive-deposit` | Không body; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE`; `PENDING_PAYMENT → DEPOSIT_PAID`; chỉ nộp cọc tiền mặt tại quầy còn hạn; tạo giao dịch, biên lai và audit một lần trong cùng transaction |
 | `POST /api/reservations/{id}/check-in` | Body tùy chọn `at`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |
 | `POST /api/reservations/{id}/check-out` | Body `at`, `payment_method`; header bắt buộc `Idempotency-Key` | `RESERVATION_CHECKOUT`; trả invoice |
 | `POST /api/reservations/{id}/cancel` | Body `reason`; header bắt buộc `Idempotency-Key` | `RESERVATION_WRITE` |

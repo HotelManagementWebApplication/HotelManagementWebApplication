@@ -303,7 +303,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
       ref={dropdownRef}
       role="dialog"
       aria-label="Cửa sổ thông tin nhân viên"
-      className={`absolute ${alignmentClass} w-[340px] sm:w-[380px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden flex flex-col text-[#0F172A] animate-in fade-in zoom-in-95 duration-150`}
+      className={`absolute ${alignmentClass} w-[340px] max-w-[calc(100vw-24px)] sm:w-[380px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden flex flex-col text-[#0F172A] animate-in fade-in zoom-in-95 duration-150`}
       style={{
         boxShadow: "0 20px 45px -10px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08)",
       }}

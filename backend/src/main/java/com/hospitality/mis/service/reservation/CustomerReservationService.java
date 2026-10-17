@@ -27,7 +27,7 @@ public class CustomerReservationService {
     private final long holdMinutes;
     public CustomerReservationService(CustomerAccountDatabase accounts,ReservationDatabase database,
             HotelServiceBookingDatabase services,ReservationService reservations,DurableIdempotencyService idempotency,
-            Clock clock,@Value("${hotel.booking.deposit-hold-minutes:30}") long holdMinutes){
+            Clock clock,@Value("${hotel.booking.deposit-hold-minutes:10}") long holdMinutes){
         this.accounts=accounts;this.database=database;this.services=services;this.reservations=reservations;
         this.idempotency=idempotency;this.clock=clock;
         if(holdMinutes<=0)throw new IllegalArgumentException("deposit hold minutes must be positive");
@@ -40,6 +40,8 @@ public class CustomerReservationService {
         if(request==null||request.rooms()==null||request.rooms().isEmpty()||request.rentalType()==null||request.paymentMethod()==null)
             throw error("INVALID_REQUEST","Booking phải có phòng, hình thức thuê và thanh toán");
         if(request.rooms().size()>3)throw error("ROOM_LIMIT_EXCEEDED","Mỗi booking chỉ được đặt tối đa 3 phòng");
+        if(request.paymentMethod()!=CustomerPaymentMethod.VNPAY)
+            throw error("ONLINE_PAYMENT_REQUIRED","Đặt phòng trên website phải thanh toán cọc online. Nộp cọc tiền mặt trực tiếp qua lễ tân.");
         var rooms=request.rooms().stream().map(r->new ReservationDtos.RoomStay(r.roomId(),r.expectedCheckIn(),r.expectedCheckOut(),r.guestCount())).toList();
         ReservationService.validateRooms(rooms);
         String key=IdempotencySupport.requireKey(request.idempotencyKey());
@@ -48,9 +50,9 @@ public class CustomerReservationService {
                 +(request.confirmationEmail()==null?"":request.confirmationEmail().trim().toLowerCase(Locale.ROOT))+"|"+ReservationService.canonicalRooms(rooms));
         return idempotency.executeWithReplay("customer-reservation-create",key,actor,hash,()->{
             var account=accounts.find(customer).orElseThrow(()->error("CUSTOMER_ACCOUNT_NOT_FOUND","Không tìm thấy tài khoản khách hàng"));
-            LocalDateTime now=LocalDateTime.now(clock);boolean online=request.paymentMethod()==CustomerPaymentMethod.VNPAY;
+            LocalDateTime now=LocalDateTime.now(clock);
             long id=database.create(account.guestId(),null,customer,request.rentalType(),null,key,rooms,"customer:"+actor,now,
-                ReservationStatus.DRAFT,request.paymentMethod(),online?newPaymentCode():null,online?now.plusMinutes(holdMinutes):null,
+                ReservationStatus.PENDING_PAYMENT,CustomerPaymentMethod.VNPAY,newPaymentCode(),now.plusMinutes(holdMinutes),
                 request.confirmationEmail()==null?null:request.confirmationEmail().trim(),source);
             return response(database.customer(id,customer));
         },()->response(database.customer(database.byKey(key).response().id(),customer)));
@@ -83,7 +85,7 @@ public class CustomerReservationService {
         var r=snapshot.response();var status=r.depositPaymentStatus();
         if(status==DepositPaymentStatus.PENDING&&snapshot.expiresAt()!=null&&!snapshot.expiresAt().isAfter(LocalDateTime.now(clock)))status=DepositPaymentStatus.EXPIRED;
         String instruction=snapshot.pendingType()!=null?"Thanh toán phần cọc bổ sung để hoàn tất gia hạn; booking gốc vẫn được giữ.":
-            r.customerPaymentMethod()==CustomerPaymentMethod.PAY_AT_HOTEL?"Yêu cầu đang chờ lễ tân xác nhận; phòng chưa được giữ trước khi xác nhận.":"Thanh toán 50% tiền cọc qua cổng VNPay để xác nhận giữ phòng.";
+            "Phòng được giữ tạm 10 phút. Thanh toán 50% tiền cọc qua VNPay để xác nhận; phần còn lại thanh toán tại khách sạn.";
         var payment=new CustomerReservationDtos.PaymentInstruction(snapshot.paymentCode(),snapshot.pendingType()==null?r.deposit():snapshot.additionalDeposit(),status,snapshot.expiresAt(),instruction);
         var bookings=services.reservationServices(r.id());
         BigDecimal total=snapshot.customerRooms().stream().map(CustomerReservationDtos.RoomLine::totalPrice).reduce(BigDecimal.ZERO,BigDecimal::add)

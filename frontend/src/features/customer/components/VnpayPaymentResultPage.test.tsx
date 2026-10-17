@@ -7,7 +7,7 @@ import type { CustomerReservation, VnpayPaymentAttempt } from "../../../shared/t
 describe("VnpayPaymentResultPage fake-timer polling regression tests", () => {
   const baseReservation: CustomerReservation = {
     id: 101,
-    status: "DRAFT",
+    status: "PENDING_PAYMENT",
     rental_type: "PACKAGE",
     deposit_amount: 500000,
     booked_at: "2026-10-09T08:00:00",
