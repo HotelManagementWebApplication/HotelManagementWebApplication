@@ -42,12 +42,12 @@ def create_app(
             if chat_service is not None:
                 application.state.chat_service = chat_service
             else:
+                resolved_settings.validate_runtime_credentials()
                 policy_path = Path(__file__).resolve().parents[2] / "customer-policy.md"
                 if policy_path.name != "customer-policy.md":
                     raise RuntimeError("customer policy source is not configured")
                 api_key = resolved_settings.gemini_api_key
-                if api_key is None:
-                    raise RuntimeError("GEMINI_API_KEY is required when AI_PROVIDER=gemini")
+                assert api_key is not None
                 gemini = GeminiProvider(
                     api_key=api_key.get_secret_value(),
                     generation_model=resolved_settings.gemini_generation_model,
