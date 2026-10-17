@@ -22,6 +22,7 @@ import { RoomDetailPage } from "./components/RoomDetailPage";
 import { LuxuryBookingModal } from "./components/LuxuryBookingModal";
 import { LuxuryFnBView, type FnbService } from "./components/LuxuryFnBView";
 import { CustomerProfileDropdown } from "./components/CustomerProfileDropdown";
+import ServicePaymentResultPage from "./components/ServicePaymentResultPage";
 import { VnpayPaymentResultPage } from "./components/VnpayPaymentResultPage";
 import { localDateValue } from "../../shared/utils/localDate";
 import { getRoomFullName } from "./roomProfiles";
@@ -237,6 +238,7 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
             subtitle: service.unit ? `${service.name} · ${service.unit}` : service.name,
             price: service.price,
             unit: service.unit,
+            durationMinutes:service.duration_minutes,
             desc: service.description ?? "",
             img: service.image_url || "",
             tag: service.price === 0 ? "Chưa niêm yết" : service.unit || "Dịch vụ",
@@ -466,7 +468,8 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
         serviceRequestRef.current = { body, key: `service-${crypto.randomUUID()}` };
       }
       const result = await customerApi.bookService(request, serviceRequestRef.current.key);
-      serviceRequestRef.current = null;
+      if(result.status==="PENDING_PAYMENT"){const checkout=await customerApi.payService(result.id);window.location.assign(checkout.payment_url);}
+      serviceRequestRef.current=null;
       return result;
     } catch (error) {
       if (
@@ -493,6 +496,9 @@ export default function CustomerPortal({ onBack, onLogin, onLogout, isAuthentica
     }
   }, []);
 
+  if (window.location.pathname === "/payment/vnpay-result" && new URLSearchParams(window.location.search).has("service_booking_id")) {
+    return <ServicePaymentResultPage onBack={()=>window.location.assign("/")} />;
+  }
   if (window.location.pathname === "/payment/vnpay-result") {
     return <VnpayPaymentResultPage isAuthenticated={isAuthenticated} onLogin={onLogin} />;
   }

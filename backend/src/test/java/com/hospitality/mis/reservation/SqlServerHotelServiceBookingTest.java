@@ -56,22 +56,21 @@ class SqlServerHotelServiceBookingTest {
         jdbc.update("DELETE DichVu WHERE maDichVu IN('MAMREST','BREAKFAST','LNDRYSTD')");
     }
 
-    @Test void restaurantQueueContainsOnlyFoodOrdersForSelectedDateAndCanFilterStatus() {
+    @Test void coordinationQueueIncludesLaundryAndCanFilterStatus() {
         var lunch=book("MAMREST",2,"LUNCH","queue-1",now);
-        var breakfast=book("BREAKFAST",1,null,"queue-2",now.minusHours(4));
-        staff();
-        service.markUsed(reservation,breakfast.id(),"KITCHEN");
-        book("LNDRYSTD",1,null,"queue-3",now.minusHours(3));
+        var breakfast=book("BREAKFAST",1,null,"queue-2",now);
+        staff();service.markUsed(reservation,breakfast.id(),"KITCHEN");
+        var laundry=book("LNDRYSTD",1,null,"queue-3",now.plusHours(1));
         jdbc.update("UPDATE DichVu SET danhMuc=N'Giặt ủi' WHERE maDichVu=N'LNDRYSTD'");
-        assertThat(service.restaurantBookings(now.toLocalDate(),null)).extracting(HotelServiceBookingService.Response::id).containsExactly(breakfast.id(),lunch.id());
-        assertThat(service.restaurantBookings(now.toLocalDate()," confirmed ")).extracting(HotelServiceBookingService.Response::id).containsExactly(lunch.id());
+        assertThat(service.coordinatedBookings(now.toLocalDate(),null)).extracting(HotelServiceBookingService.Response::id).containsExactly(lunch.id(),breakfast.id(),laundry.id());
+        assertThat(service.coordinatedBookings(now.toLocalDate()," confirmed ")).extracting(HotelServiceBookingService.Response::id).containsExactly(lunch.id(),laundry.id());
     }
 
     @Test void markingRestaurantOrderUsedPersistsStatusStockMovementAndAudit() {
         var booked=book("MAMREST",2,"LUNCH","used-1",now);
         staff();
-        assertThat(service.markRestaurantUsed(booked.id(),"KITCHEN").status()).isEqualTo("USED");
-        assertThat(service.markRestaurantUsed(booked.id(),"KITCHEN").status()).isEqualTo("USED");
+        assertThat(service.markCoordinatedServiceUsed(booked.id(),"KITCHEN").status()).isEqualTo("USED");
+        assertThat(service.markCoordinatedServiceUsed(booked.id(),"KITCHEN").status()).isEqualTo("USED");
         assertThat(stock("MAMREST")).isEqualTo(8);
         assertThat(count("BienDongKhoDichVu")).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE hanhDong=N'HOTEL_SERVICE_USED' AND maDoiTuong=?",Integer.class,String.valueOf(reservation))).isEqualTo(1);
@@ -120,12 +119,13 @@ class SqlServerHotelServiceBookingTest {
     }
 
     @Test void cancellationDoesNotBillUnusedService() {
-        var used=book("BREAKFAST",3,null,"total-used",now);
+        book("BREAKFAST",2,null,"total-free",now);
         book("BREAKFAST",1,null,"total-cancel",now);
-        staff(); service.markUsed(reservation,used.id(),"KITCHEN");
+        staff();
+        service.recordAtFrontDesk(new HotelServiceBookingService.Request(reservation,"SB-ROOM","BREAKFAST",null,1,null,null),"total-desk","KITCHEN");
         service.cancelForReservation(reservation,"KITCHEN");
         assertThat(service.usedTotal(reservation)).isEqualByComparingTo("150000");
-        assertThat(database.list(reservation,null)).extracting(HotelServiceBookingService.Response::status).containsExactly("USED","CANCELLED");
+        assertThat(database.list(reservation,null)).extracting(HotelServiceBookingService.Response::status).containsExactly("CANCELLED","CANCELLED","USED");
     }
 
     @Test void concurrentRequestsDoNotAllocateFreeAllowanceTwice() throws Exception {
@@ -144,6 +144,7 @@ class SqlServerHotelServiceBookingTest {
         assertCode(()->book("MAMREST",1,"DINNER","invalid-dinner",now),"SERVICE_OUTSIDE_MEAL_HOURS");
         assertThat(count("DatDichVuKhachSan")).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE hanhDong=N'HOTEL_SERVICE_BOOKED' AND maDoiTuong=?",Integer.class,String.valueOf(reservation))).isZero();
+        service=new HotelServiceBookingService(database,Clock.fixed(now.withHour(10).atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant(),ZoneId.of("Asia/Ho_Chi_Minh")));
         assertThat(book("MAMREST",1,"LUNCH","valid-lunch-start",now.withHour(11).withMinute(30)).status()).isEqualTo("CONFIRMED");
         assertThat(book("MAMREST",1,"LUNCH","valid-lunch-end",now.withHour(14)).status()).isEqualTo("CONFIRMED");
         assertThat(book("MAMREST",1,"DINNER","valid-dinner-start",now.withHour(18)).status()).isEqualTo("CONFIRMED");

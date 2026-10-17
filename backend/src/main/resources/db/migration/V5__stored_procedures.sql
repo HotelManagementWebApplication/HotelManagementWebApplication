@@ -2882,6 +2882,11 @@ BEGIN
                 AND @maPhieu <> @maPhieuDuKien
             )
             THROW 51101, N'Không tìm thấy dịch vụ trong booking', 1;
+        DECLARE @serviceLock INT,@serviceResource NVARCHAR(255);
+        SELECT @serviceResource=N'service-booking:'+COALESCE(d.maNguonTaiNguyen,d.maDichVu)
+        FROM dbo.DatDichVuKhachSan b JOIN dbo.DichVu d ON d.maDichVu=b.maDichVu WHERE b.maDatDichVuKhachSan=@maDatDichVuKhachSan;
+        EXEC @serviceLock=sys.sp_getapplock @Resource=@serviceResource,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @serviceLock<0 THROW 51005,N'Dịch vụ đang được xử lý',1;
         SELECT @trangThaiPhong = trangThai
         FROM dbo.PhieuDatPhong WITH (UPDLOCK, HOLDLOCK)
         WHERE maPhieuDatPhong = @maPhieu;
@@ -2899,9 +2904,11 @@ BEGIN
             RETURN;
         END;
         IF @trangThai <> N'Đã xác nhận'
-            THROW 51002, N'Dịch vụ đã bị hủy', 1;
+            THROW 51002, N'Dịch vụ chưa được xác nhận hoặc đã kết thúc', 1;
         IF @duKien > @thoiDiemHienTai
             THROW 51102, N'Chưa đến thời gian sử dụng dịch vụ', 1;
+        IF (SELECT laTaiNguyen FROM dbo.DichVu WHERE maDichVu=@maDichVu)=0
+        BEGIN
         UPDATE dbo.DichVu WITH (UPDLOCK, HOLDLOCK)
         SET soLuongTonKho = soLuongTonKho - @soLuong
         WHERE maDichVu = @maDichVu
@@ -2909,9 +2916,11 @@ BEGIN
             AND soLuongTonKho >= @soLuong;
         IF @@ROWCOUNT <> 1
             THROW 51006, N'Dịch vụ đã hết khả dụng', 1;
+        END;
         UPDATE dbo.DatDichVuKhachSan
         SET trangThai = N'Đã sử dụng', thoiDiemSuDung = @thoiDiemHienTai, nguoiXacNhanSuDung = @nguoiThucHien
         WHERE maDatDichVuKhachSan = @maDatDichVuKhachSan;
+        IF (SELECT laTaiNguyen FROM dbo.DichVu WHERE maDichVu=@maDichVu)=0
         INSERT dbo.BienDongKhoDichVu(
             maDichVu,
             loai,
@@ -2988,7 +2997,7 @@ BEGIN
         WHERE maDatDichVuKhachSan = @maDatDichVuKhachSan;
         IF @trangThai = N'Đã sử dụng'
             THROW 51002, N'Dịch vụ đã sử dụng không thể hủy', 1;
-        IF @trangThai = N'Đã xác nhận'
+        IF @trangThai IN (N'Đã xác nhận',N'Chờ thanh toán')
         BEGIN
             UPDATE dbo.DatDichVuKhachSan
             SET trangThai = N'Đã hủy'
@@ -3022,66 +3031,6 @@ GO
 -- uspDieuChinhTonKho
 -- Cập nhật tồn kho mặt hàng và ghi biến động; không cho tồn kho âm.
 -- =============================================================================
-CREATE PROCEDURE dbo.uspDieuChinhTonKho
-    @maMatHang NVARCHAR(30),
-    @loaiBienDong NVARCHAR(20),
-    @soLuong INT,
-    @nguoiThucHien NVARCHAR(50),
-    @lyDo NVARCHAR(255),
-    @thoiDiem DATETIME2(6)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    BEGIN TRY
-        BEGIN TRANSACTION;
-        IF @soLuong <= 0
-            THROW 51008, N'Số lượng phải lớn hơn 0', 1;
-        DECLARE @hienTai INT, @tiep INT;
-        SELECT @hienTai = soLuongHienTai
-        FROM dbo.MatHangTonKho WITH (UPDLOCK, HOLDLOCK)
-        WHERE maMatHang = @maMatHang
-            AND dangHoatDong = 1;
-        IF @hienTai IS NULL
-            THROW 51205, N'Không tìm thấy mặt hàng tồn kho', 1;
-        SET @tiep = CASE
-            WHEN @loaiBienDong IN (N'Nhập kho', N'Hoàn kho') THEN @hienTai + @soLuong
-            WHEN @loaiBienDong IN (N'Xuất kho', N'Hao hụt') THEN @hienTai - @soLuong
-            WHEN @loaiBienDong = N'Điều chỉnh' THEN @soLuong
-        END;
-        IF @tiep IS NULL
-            THROW 51209, N'Loại biến động tồn kho không hợp lệ', 1;
-        IF @tiep < 0
-            THROW 51006, N'Tồn kho đồ vải không đủ', 1;
-        UPDATE dbo.MatHangTonKho
-        SET soLuongHienTai = @tiep
-        WHERE maMatHang = @maMatHang;
-        INSERT dbo.BienDongTonKho(
-            maMatHang,
-            loaiBienDong,
-            soLuong,
-            maNguoiThucHien,
-            thoiDiemPhatSinh,
-            lyDo
-        )
-        VALUES (
-            @maMatHang,
-            @loaiBienDong,
-            @soLuong,
-            @nguoiThucHien,
-            @thoiDiem,
-            @lyDo
-        );
-        COMMIT TRANSACTION;
-    END TRY
-    BEGIN CATCH
-        IF @@TRANCOUNT > 0
-            ROLLBACK TRANSACTION;
-        THROW;
-    END CATCH;
-END;
-GO
 
 -- =============================================================================
 -- uspPhanCongCa
@@ -3232,6 +3181,13 @@ BEGIN
             RETURN;
         END;
 
+        DECLARE @lock INT,@pool NVARCHAR(10),@resource NVARCHAR(255);
+        SELECT @pool=COALESCE(maNguonTaiNguyen,maDichVu) FROM dbo.DichVu WHERE maDichVu=@maDichVu;
+        SET @resource=N'service-booking:'+COALESCE(@pool,@maDichVu);
+        EXEC @lock=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+        IF @lock<0 THROW 51005,N'Dịch vụ đang được đặt, vui lòng thử lại',1;
+        UPDATE dbo.DatDichVuKhachSan SET trangThai=N'Hết hạn'
+        WHERE maDichVu=@maDichVu AND trangThai=N'Chờ thanh toán' AND hanThanhToan<=@hienTai;
         -- Khóa booking và chi tiết phòng rồi kiểm tra chủ tài khoản/kỳ lưu trú.
         DECLARE @trangThaiDatPhong NVARCHAR(30),
             @hinhThucThue NVARCHAR(20),
@@ -3273,9 +3229,9 @@ BEGIN
         IF @duKien < @thoiDiemNhanPhong
             OR @duKien >= @thoiDiemTraPhong
             THROW 51108, N'Thời gian dịch vụ phải nằm trong kỳ lưu trú', 1;
-        DECLARE @giaDichVu DECIMAL(12, 2), @tonKhoDichVu INT;
+        DECLARE @giaDichVu DECIMAL(12, 2), @tonKhoDichVu INT,@phut INT,@resourceType BIT,@ketThuc DATETIME2(6);
         SELECT @giaDichVu = gia,
-            @tonKhoDichVu = soLuongTonKho
+            @tonKhoDichVu = soLuongTonKho,@phut=thoiLuongPhut,@resourceType=laTaiNguyen
         FROM dbo.DichVu WITH (UPDLOCK, HOLDLOCK)
         WHERE maDichVu = @maDichVu
             AND dangHoatDong = 1;
@@ -3283,9 +3239,17 @@ BEGIN
             THROW 51109, N'Dịch vụ không còn phục vụ', 1;
         IF @giaDichVu <= 0
             THROW 51110, N'Dịch vụ chưa có giá niêm yết', 1;
-        IF @tonKhoDichVu < @soLuong
+        IF @resourceType=0 AND @tonKhoDichVu < @soLuong
             THROW 51006, N'Dịch vụ đã hết khả dụng', 1;
 
+        IF @maTaiKhoan IS NOT NULL AND @duKien<@hienTai
+            THROW 51108,N'Không đặt dịch vụ trong quá khứ',1;
+        SET @ketThuc=DATEADD(MINUTE,@phut,@duKien);
+        IF @ketThuc>@thoiDiemTraPhong THROW 51108,N'Dịch vụ kết thúc ngoài kỳ lưu trú',1;
+        DECLARE @available BIGINT;
+        SELECT @available=conLai FROM dbo.fnKhaDungDichVu(@duKien,@ketThuc) WHERE maDichVu=@maDichVu;
+        IF @available IS NULL OR @available<CASE WHEN @resourceType=1 THEN 1 ELSE @soLuong END
+            THROW 51006,N'Dịch vụ đã hết chỗ trong khoảng giờ này',1;
         -- Tính hạn mức miễn phí theo hình thức thuê, dịch vụ và số khách.
         DECLARE @dinhMucMienPhi INT = CASE
             WHEN @hinhThucThue = N'Theo gói' THEN CASE
@@ -3313,7 +3277,7 @@ BEGIN
                             AND @buoiAn IS NULL
                         )
                     )
-                    AND trangThai IN (N'Đã xác nhận', N'Đã sử dụng');
+                    AND (trangThai IN (N'Đã xác nhận', N'Đã sử dụng') OR (trangThai=N'Chờ thanh toán' AND hanThanhToan>@hienTai));
                 IF @maDichVu IN (N'BREAKFAST', N'LNDRYSTD')
                     SELECT @soLuongMienPhiDaDung = COALESCE(SUM(soLuong), 0)
                     FROM dbo.SuDungDichVu
@@ -3340,7 +3304,7 @@ BEGIN
             soLuongMienPhi,
             donGia,
             trangThai,
-            ghiChu,
+            ghiChu,thoiDiemKetThuc,hanThanhToan,
             khoaYeuCau,
             maBamYeuCau,
             nguoiTao
@@ -3354,8 +3318,8 @@ BEGIN
             @soLuong,
             @soLuongMienPhi,
             @giaDichVu,
-            N'Đã xác nhận',
-            @ghiChu,
+            CASE WHEN @maTaiKhoan IS NOT NULL AND @soLuong>@soLuongMienPhi THEN N'Chờ thanh toán' ELSE N'Đã xác nhận' END,
+            @ghiChu,@ketThuc,CASE WHEN @maTaiKhoan IS NOT NULL AND @soLuong>@soLuongMienPhi THEN DATEADD(MINUTE,10,@hienTai) END,
             @khoa,
             @bam,
             @nguoiThucHien
@@ -3412,7 +3376,7 @@ BEGIN
         UPDATE dbo.DatDichVuKhachSan
         SET trangThai = N'Đã hủy'
         WHERE maPhieuDatPhong = @maPhieu
-            AND trangThai = N'Đã xác nhận';
+            AND trangThai IN (N'Đã xác nhận',N'Chờ thanh toán');
         SET @soLuong = @@ROWCOUNT;
         IF @soLuong > 0
             INSERT dbo.NhatKyKiemSoat(
@@ -4340,7 +4304,8 @@ CREATE PROCEDURE dbo.uspGhiBienDongKhoDichVu
     @khoaChongTrung NVARCHAR(100),
     @maBamYeuCau NVARCHAR(64),
     @maNhomKhoa SMALLINT,
-    @thoiDiemHienTai DATETIME2(6)
+    @thoiDiemHienTai DATETIME2(6),
+    @traKetQua BIT=1
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -4360,6 +4325,8 @@ BEGIN
         WHERE maDichVu = @dichVu;
         IF @tonKhoHienTai IS NULL
             THROW 51501, N'Không tìm thấy dịch vụ', 1;
+        IF EXISTS(SELECT 1 FROM dbo.DichVu WHERE maDichVu=@dichVu AND laTaiNguyen=1)
+            THROW 51504,N'Tài nguyên dịch vụ phải đổi bằng cấu hình sức chứa',1;
         IF NOT EXISTS (
             SELECT 1
             FROM dbo.NhomKhoaChongTrung WITH (UPDLOCK, HOLDLOCK)
@@ -4386,7 +4353,7 @@ BEGIN
             IF @loaiPhanHoi <> N'com.hospitality.mis.dto.operations.InventoryMovementDtos$Response'
                 THROW 51005, N'Kiểu kết quả idempotency không khớp', 1;
             COMMIT TRANSACTION;
-            SELECT @phanHoiJson AS phanHoiJson;
+            IF @traKetQua=1 SELECT @phanHoiJson AS phanHoiJson;
             RETURN;
         END;
         IF @soLuong = 0
@@ -4404,6 +4371,8 @@ BEGIN
             THROW 51006, N'Tồn kho không đủ', 1;
         IF CONVERT(BIGINT, @tonKhoHienTai) + @soLuongDieuChinh > 2147483647
             THROW 51504, N'Số lượng tồn vượt giới hạn', 1;
+        IF CONVERT(BIGINT,@tonKhoHienTai)+@soLuongDieuChinh < (SELECT COALESCE(SUM(CONVERT(BIGINT,soLuong)),0) FROM dbo.DatDichVuKhachSan WHERE maDichVu=@dichVu AND (trangThai=N'Đã xác nhận' OR (trangThai=N'Chờ thanh toán' AND hanThanhToan>@thoiDiemHienTai)))
+            THROW 51006,N'Tồn đã được giữ cho khách đặt dịch vụ',1;
         UPDATE dbo.DichVu
         SET soLuongTonKho = CONVERT(BIGINT, @tonKhoHienTai) + @soLuongDieuChinh
         WHERE maDichVu = @dichVu;
@@ -4478,7 +4447,7 @@ BEGIN
             @thoiDiemHienTai
         );
         COMMIT TRANSACTION;
-        SELECT @phanHoiJson AS phanHoiJson;
+        IF @traKetQua=1 SELECT @phanHoiJson AS phanHoiJson;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0
@@ -8540,7 +8509,7 @@ BEGIN
         WHERE maDichVu = @maDichVu;
 
         -- Tạo bản ghi mới.
-        IF @lenh = N'create'
+        IF @lenh IN (N'create', N'create-stock')
         BEGIN
             IF @daTonTai IS NOT NULL
                 THROW 53001, N'Mã dịch vụ đã tồn tại', 1;
@@ -8554,7 +8523,7 @@ BEGIN
                 duongDanAnh,
                 soLuongTonKho,
                 nguongAnToan,
-                dangHoatDong
+                dangHoatDong,laTaiNguyen
             )
             VALUES (
                 @maDichVu,
@@ -8566,7 +8535,8 @@ BEGIN
                 @duongDanAnh,
                 0,
                 @nguongTonKho,
-                1
+                CASE WHEN @lenh = N'create-stock' THEN 0 ELSE 1 END,
+                CASE WHEN @danhMuc IN(N'Món ăn',N'Thức uống',N'Vật dụng phòng') THEN 0 ELSE 1 END
             );
         END
 
@@ -8613,5 +8583,183 @@ BEGIN
             ROLLBACK TRANSACTION;
         THROW;
     END CATCH;
+END;
+GO
+
+-- Yêu cầu kho: người gửi không tự quyết định; quyết định và biến động cùng transaction.
+CREATE PROCEDURE dbo.uspLenhYeuCauKho
+ @lenh NVARCHAR(20),@id BIGINT,@dichVu NVARCHAR(10),@soLuong INT,@phong NVARCHAR(10),
+ @actor NVARCHAR(50),@lyDo NVARCHAR(255),@khoa NVARCHAR(100),@now DATETIME2(6),@loai NVARCHAR(20)
+AS
+BEGIN
+ SET NOCOUNT ON;SET XACT_ABORT ON;
+ BEGIN TRY
+  BEGIN TRANSACTION;
+  IF @lenh NOT IN(N'create',N'approve',N'reject') THROW 53704,N'Lệnh kho không hợp lệ',1;
+  IF @lenh=N'create' AND NOT EXISTS(SELECT 1 FROM dbo.NhanVien WHERE maNhanVien=@actor AND vaiTro=N'Buồng phòng')
+   THROW 53705,N'Chỉ Buồng phòng được gửi yêu cầu',1;
+  IF @lenh<>N'create' AND NOT EXISTS(SELECT 1 FROM dbo.NhanVien WHERE maNhanVien=@actor AND vaiTro=N'Nhà bếp')
+   THROW 53705,N'Chỉ Kho & Dịch vụ được xử lý',1;
+  IF @lenh<>N'create' SELECT @dichVu=maDichVu FROM dbo.YeuCauKho WHERE maYeuCauKho=@id;
+  DECLARE @ton INT,@nguoiGui NVARCHAR(50),@state NVARCHAR(20);
+  SELECT @ton=soLuongTonKho FROM dbo.DichVu WITH(UPDLOCK,HOLDLOCK) WHERE maDichVu=@dichVu
+   AND danhMuc IN(N'Món ăn',N'Thức uống',N'Vật dụng phòng');
+  IF @ton IS NULL THROW 53701,N'Không tìm thấy vật tư/hàng hóa',1;
+  IF @lenh=N'create'
+  BEGIN
+   IF @soLuong IS NULL OR @soLuong<1 OR NULLIF(LTRIM(RTRIM(@lyDo)),N'') IS NULL OR
+    NULLIF(@khoa,N'') IS NULL OR @loai NOT IN(N'Cấp hàng',N'Trả hàng',N'Báo hỏng')
+    THROW 53706,N'Thiếu loại yêu cầu, số lượng hoặc lý do',1;
+   IF @phong IS NOT NULL AND NOT EXISTS(SELECT 1 FROM dbo.Phong WHERE maPhong=@phong)
+    THROW 53707,N'Không tìm thấy phòng',1;
+   SELECT @id=maYeuCauKho FROM dbo.YeuCauKho WITH(UPDLOCK,HOLDLOCK) WHERE nguoiGui=@actor AND khoaChongTrung=@khoa;
+   IF @id IS NOT NULL
+   BEGIN
+    IF NOT EXISTS(SELECT 1 FROM dbo.YeuCauKho WHERE maYeuCauKho=@id AND maDichVu=@dichVu AND soLuong=@soLuong AND
+     loai=@loai AND ISNULL(maPhong,N'')=ISNULL(@phong,N'') AND lyDo=@lyDo)
+     THROW 53702,N'Khóa yêu cầu đã dùng với nội dung khác',1;
+   END
+   ELSE BEGIN
+    INSERT dbo.YeuCauKho(maDichVu,loai,soLuong,maPhong,nguoiGui,lyDo,khoaChongTrung,ngayGui)
+    VALUES(@dichVu,@loai,@soLuong,@phong,@actor,@lyDo,@khoa,@now);SET @id=SCOPE_IDENTITY();
+    INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,lyDo)
+    VALUES(@actor,N'STOCK_REQUESTED',N'STOCK_REQUEST',CONVERT(NVARCHAR(30),@id),@lyDo);
+   END
+  END
+  ELSE BEGIN
+   SELECT @nguoiGui=nguoiGui,@state=trangThai,@soLuong=soLuong,@loai=loai FROM dbo.YeuCauKho WITH(UPDLOCK,HOLDLOCK) WHERE maYeuCauKho=@id;
+   IF @state IS NULL THROW 53703,N'Không tìm thấy yêu cầu',1;
+   IF @nguoiGui=@actor THROW 53705,N'Người gửi không tự xử lý yêu cầu',1;
+   DECLARE @decision NVARCHAR(20)=CASE WHEN @lenh=N'approve' THEN N'Đã duyệt' ELSE N'Từ chối' END;
+   IF @state NOT IN(N'Chờ duyệt',@decision) THROW 53704,N'Yêu cầu đã được xử lý',1;
+   IF @state=N'Chờ duyệt'
+   BEGIN
+    IF @lenh=N'reject' AND NULLIF(LTRIM(RTRIM(@lyDo)),N'') IS NULL THROW 53706,N'Cần lý do từ chối',1;
+    IF @lenh=N'approve' AND @loai<>N'Báo hỏng'
+    BEGIN
+     DECLARE @movement NVARCHAR(20)=CASE WHEN @loai=N'Cấp hàng' THEN N'Xuất kho' ELSE N'Hoàn kho' END;
+     DECLARE @key NVARCHAR(35)=N'stock-request-'+CONVERT(NVARCHAR(20),@id),
+      @hash NVARCHAR(64)=CONVERT(NVARCHAR(64),HASHBYTES('SHA2_256',CONVERT(NVARCHAR(20),@id)),2),@bucket SMALLINT=0,
+      @reason NVARCHAR(255)=@loai+N' #'+CONVERT(NVARCHAR(20),@id)+N' cho '+@nguoiGui;
+     EXEC dbo.uspGhiBienDongKhoDichVu @dichVu,@movement,@soLuong,@actor,@reason,@key,@hash,@bucket,@now,0;
+    END
+    UPDATE dbo.YeuCauKho SET trangThai=@decision,nguoiDuyet=@actor,ghiChuDuyet=@lyDo,ngayDuyet=@now WHERE maYeuCauKho=@id;
+    INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,lyDo)
+    VALUES(@actor,N'STOCK_REQUEST_'+@lenh,N'STOCK_REQUEST',CONVERT(NVARCHAR(30),@id),@lyDo);
+   END
+  END
+  COMMIT;SELECT * FROM dbo.vwYeuCauKho WHERE maYeuCauKho=@id;
+ END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK;THROW;END CATCH;
+END;
+GO
+
+-- Thời lượng duy nhất cho một lượt; lịch sử lưu sẵn thoiDiemKetThuc, không diễn giải lại.
+CREATE PROCEDURE dbo.uspCauHinhDichVu
+ @id NVARCHAR(10),@capacity INT,@minutes INT,@actor NVARCHAR(50),@reason NVARCHAR(255)
+AS
+BEGIN
+ SET NOCOUNT ON;SET XACT_ABORT ON;
+ BEGIN TRY BEGIN TRANSACTION;
+  DECLARE @lock INT,@pool NVARCHAR(10),@resource NVARCHAR(255);
+  SELECT @pool=COALESCE(maNguonTaiNguyen,maDichVu) FROM dbo.DichVu WHERE maDichVu=@id AND laTaiNguyen=1;
+  IF @pool IS NULL THROW 53802,N'Không tìm thấy dịch vụ tài nguyên',1;
+  SET @resource=N'service-booking:'+@pool;
+  EXEC @lock=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+  IF @lock<0 THROW 53801,N'Dịch vụ đang được đặt',1;
+  IF @capacity<1 OR @minutes<1 OR @minutes>10080 OR NULLIF(LTRIM(RTRIM(@reason)),N'') IS NULL
+   THROW 53802,N'Cấu hình dịch vụ không hợp lệ',1;
+  IF EXISTS(SELECT 1 FROM dbo.fnKhaDungDichVu(CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATETIME2(6)),CONVERT(DATETIME2,'9999-12-31')) WHERE maDichVu=@id AND daDat>@capacity)
+   THROW 53801,N'Số tài nguyên thấp hơn số đã được giữ chỗ',1;
+  UPDATE dbo.DichVu SET soLuongTonKho=@capacity WHERE maDichVu=@pool;
+  UPDATE dbo.DichVu SET thoiLuongPhut=@minutes WHERE maDichVu=@id AND laTaiNguyen=1;
+  IF @@ROWCOUNT<>1 THROW 53802,N'Không tìm thấy dịch vụ tài nguyên',1;
+  INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,lyDo)
+  VALUES(@actor,N'SERVICE_CAPACITY_CHANGED',N'SERVICE',@id,@reason);
+  COMMIT;
+ END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK;THROW;END CATCH;
+END;
+GO
+
+-- Backend-only provider finalization. Amount, owner, expiry and repeat events are checked under the booking lock.
+CREATE PROCEDURE dbo.uspThanhToanDichVu
+ @id BIGINT,@customer BIGINT,@merchant NVARCHAR(100),@amount DECIMAL(12,2),
+ @provider NVARCHAR(100),@response NVARCHAR(20),@success BIT,@now DATETIME2(6)
+AS
+BEGIN
+ SET NOCOUNT ON;SET XACT_ABORT ON;
+ BEGIN TRY BEGIN TRANSACTION;
+  DECLARE @reservation BIGINT,@service NVARCHAR(10),@state NVARCHAR(20),@due DECIMAL(12,2),@paid DECIMAL(12,2),
+   @expiry DATETIME2(6),@invoice BIGINT,@lock INT,@resource NVARCHAR(255),@existingMerchant NVARCHAR(100);
+  SELECT @service=maDichVu,@reservation=maPhieuDatPhong FROM dbo.DatDichVuKhachSan WHERE maDatDichVuKhachSan=@id;
+  IF @service IS NULL THROW 51101,N'Không tìm thấy lượt đặt dịch vụ',1;
+  SELECT @resource=N'service-booking:'+COALESCE(maNguonTaiNguyen,maDichVu) FROM dbo.DichVu WHERE maDichVu=@service;
+  EXEC @lock=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
+  IF @lock<0 THROW 51005,N'Thanh toán đang được xử lý',1;
+  IF NOT EXISTS(SELECT 1 FROM dbo.PhieuDatPhong WITH(UPDLOCK,HOLDLOCK) WHERE maPhieuDatPhong=@reservation
+   AND (@customer IS NULL OR maTaiKhoanKhachHang=@customer))
+   THROW 51001,N'Không tìm thấy đặt phòng của khách',1;
+  SELECT @state=trangThai,@due=donGia*(soLuong-soLuongMienPhi),@paid=soTienDaThanhToan,
+   @expiry=hanThanhToan,@existingMerchant=maThamChieuThanhToan
+  FROM dbo.DatDichVuKhachSan WITH(UPDLOCK,HOLDLOCK) WHERE maDatDichVuKhachSan=@id;
+  IF @merchant IS NULL
+  BEGIN
+   IF @state<>N'Chờ thanh toán' OR @expiry<=@now THROW 51112,N'Lượt đặt đã hết thời hạn thanh toán',1;
+   IF @existingMerchant IS NULL UPDATE dbo.DatDichVuKhachSan
+    SET maThamChieuThanhToan=N'SVC-'+CONVERT(NVARCHAR(20),@id) WHERE maDatDichVuKhachSan=@id;
+   COMMIT;RETURN;
+  END
+  IF @existingMerchant IS NULL OR @existingMerchant<>@merchant OR @amount<>@due
+   THROW 51113,N'Tham chiếu hoặc số tiền dịch vụ không khớp',1;
+  IF @paid>0 BEGIN COMMIT;RETURN;END;
+  UPDATE dbo.DatDichVuKhachSan SET maPhanHoiThanhToan=@response WHERE maDatDichVuKhachSan=@id;
+  IF @success=0 BEGIN COMMIT;RETURN;END;
+  IF @state<>N'Chờ thanh toán' OR @expiry<=@now
+  BEGIN
+   -- Record the signed late event for manual reconciliation; never steal a released slot.
+   UPDATE dbo.DatDichVuKhachSan SET maGiaoDichVnpay=@provider,maPhanHoiThanhToan=N'LATE',
+    thoiDiemThanhToan=@now,trangThai=CASE WHEN trangThai=N'Chờ thanh toán' THEN N'Hết hạn' ELSE trangThai END
+   WHERE maDatDichVuKhachSan=@id;
+   INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,lyDo)
+   VALUES(N'VNPAY',N'SERVICE_PAYMENT_LATE',N'SERVICE_BOOKING',CONVERT(NVARCHAR(30),@id),@provider);
+   COMMIT;RETURN;
+  END
+  SELECT @invoice=maHoaDon FROM dbo.HoaDon WITH(UPDLOCK,HOLDLOCK) WHERE maPhieuDatPhong=@reservation;
+  IF @invoice IS NULL THROW 51113,N'Booking chưa có hóa đơn đặt cọc',1;
+  UPDATE dbo.DatDichVuKhachSan SET trangThai=N'Đã xác nhận',soTienDaThanhToan=@amount,
+   maGiaoDichVnpay=@provider,thoiDiemThanhToan=@now WHERE maDatDichVuKhachSan=@id;
+  UPDATE dbo.HoaDon SET tongTienDichVu=tongTienDichVu+@amount,phienBan=phienBan+1 WHERE maHoaDon=@invoice;
+  INSERT dbo.GiaoDichThanhToan(maHoaDon,soTien,phuongThuc,loai,trangThai,maThamChieu,thoiDiemPhatSinh,maNguoiThucHien,khoaChongTrung,maSuKienBenNgoai)
+  VALUES(@invoice,@amount,N'Chuyển khoản ngân hàng',N'Thanh toán',N'Đã hoàn tất',@provider,@now,N'VNPAY',@merchant,N'SVC:'+@provider);
+  DECLARE @payment BIGINT=SCOPE_IDENTITY(),@receipt NVARCHAR(40)=N'SVC-VNPAY-'+CONVERT(NVARCHAR(20),@id);
+  INSERT dbo.BienLai(soBienLai,maHoaDon,soTien,phuongThuc,thoiDiemPhatHanh,nguoiPhatHanh)
+  VALUES(@receipt,@invoice,@amount,N'Chuyển khoản ngân hàng',@now,N'VNPAY');
+  DECLARE @receiptId BIGINT=SCOPE_IDENTITY();
+  INSERT dbo.ButToanTaiChinh(loaiButToan,loaiNguon,maNguon,chieuButToan,soTien,maNguoiThucHien,thoiDiemPhatSinh,ghiChu,daChotSo)
+  VALUES(N'PAYMENT_RECEIVED',N'PAYMENT_TRANSACTION',CONVERT(NVARCHAR(100),@payment),N'Ghi nợ',@amount,N'VNPAY',@now,N'SERVICE_PREPAYMENT',1),
+   (N'RECEIPT_ISSUED',N'RECEIPT',CONVERT(NVARCHAR(100),@receiptId),N'Ghi nợ',@amount,N'VNPAY',@now,N'SERVICE_PREPAYMENT',1);
+  INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,lyDo)
+  VALUES(N'VNPAY',N'SERVICE_PAID',N'SERVICE_BOOKING',CONVERT(NVARCHAR(30),@id),@provider);
+  COMMIT;
+ END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK;THROW;END CATCH;
+END;
+GO
+
+CREATE PROCEDURE dbo.uspXacNhanBanGiao @id BIGINT,@actor NVARCHAR(50),@now DATETIME2(6)
+AS
+BEGIN
+ SET NOCOUNT ON;SET XACT_ABORT ON;
+ BEGIN TRY BEGIN TRANSACTION;
+  IF NOT EXISTS(SELECT 1 FROM dbo.NhanVien WHERE maNhanVien=@actor AND vaiTro=N'Kế toán')
+   THROW 52316,N'Chỉ kế toán được xác nhận bàn giao',1;
+  DECLARE @receiver NVARCHAR(50),@confirmed NVARCHAR(50);
+  SELECT @receiver=nguoiNhanBanGiao,@confirmed=nguoiXacNhan FROM dbo.BanGiaoTienCa WITH(UPDLOCK,HOLDLOCK) WHERE maBanGiaoTienCa=@id;
+  IF @receiver IS NULL OR @receiver<>@actor THROW 52316,N'Chỉ người nhận được chỉ định mới được xác nhận',1;
+  IF @confirmed IS NULL BEGIN
+   UPDATE dbo.BanGiaoTienCa SET nguoiXacNhan=@actor,thoiDiemXacNhan=@now WHERE maBanGiaoTienCa=@id;
+   INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong)
+   VALUES(@actor,N'CASH_HANDOVER_CONFIRMED',N'CASH_HANDOVER',CONVERT(NVARCHAR(30),@id));
+  END
+  COMMIT;
+ END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK;THROW;END CATCH;
 END;
 GO

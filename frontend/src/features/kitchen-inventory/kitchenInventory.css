@@ -1,0 +1,24 @@
+.warehouse-module { min-height: 0; }
+.warehouse-module button:focus-visible,
+.warehouse-module input:focus-visible,
+.warehouse-module select:focus-visible,
+.warehouse-module textarea:focus-visible { outline: 2px solid #2563eb !important; outline-offset: 2px; }
+@media (max-width: 760px) {
+  .warehouse-module { flex-direction: column; height: 100dvh !important; }
+  .warehouse-sidebar { width: 100% !important; border-bottom: 1px solid #e2e8f0; }
+  .warehouse-sidebar > div:first-child { display: none; }
+  .warehouse-sidebar > div:last-child { display: none; }
+  .warehouse-sidebar nav { display: flex; overflow-x: auto; padding: 6px !important; flex: none !important; }
+  .warehouse-sidebar nav button { width: auto !important; flex-shrink: 0; white-space: nowrap; }
+  .warehouse-header { padding: 0 12px !important; gap: 8px !important; }
+  .warehouse-header > div:nth-child(2) { display: none; }
+  .warehouse-header > div:last-child > div > div:last-of-type { display: none; }
+  .warehouse-title { padding: 10px 12px !important; }
+  .warehouse-title > div { gap: 12px; flex-wrap: wrap; }
+  .warehouse-title p { font-size: 12px !important; }
+  .warehouse-kpis { display: grid !important; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px !important; padding: 8px 12px !important; }
+  .warehouse-kpis > div { padding: 8px !important; gap: 8px !important; min-width: 0; }
+  .warehouse-kpis > div > div:first-child { width: 28px !important; height: 28px !important; }
+  .warehouse-kpis > div p { font-size: 11px !important; }
+  .warehouse-kpis > div p:last-child { font-size: 16px !important; overflow-wrap: anywhere; }
+}

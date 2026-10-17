@@ -414,8 +414,9 @@ Chỉ khách có booking phòng đã xác nhận cọc mới được đặt tr�
 khách ngoài không được đặt. Dịch vụ chỉ được ghi nhận `USED` sau khi booking
 `CHECKED_IN`. Mỗi lượt đặt gắn với `reservation_id`, `room_id`, số lượng và
 thời gian sử dụng. `free_quantity` là phần nằm trong hạn mức; chỉ phần vượt
-hạn mức đã dùng mới tính vào hóa đơn phòng. Hủy booking phòng tự hủy dịch vụ
-chưa dùng. Hồ bơi chỉ xem thông tin trên web, không đặt trước.
+hạn mức được tính phí theo chính sách thanh toán trước. Khoản đã trả được giữ
+trên hóa đơn kể cả khi khách hủy hoặc không dùng, và khấu trừ tiền đã thu khi checkout.
+Hủy booking phòng tự hủy dịch vụ chưa dùng. Hồ bơi chỉ xem thông tin trên web, không đặt trước.
 
 Quyền lợi, định mức miễn phí và giá dịch vụ áp dụng cho khách được định nghĩa
 duy nhất tại `customer-policy.md` mục 8.
@@ -426,9 +427,11 @@ duy nhất tại `customer-policy.md` mục 8.
 |---|---|
 | `Table booking` | Đặt bàn |
 | `Appointment` | Đặt lịch hẹn, ví dụ lịch spa |
-| `CONFIRMED` | Dịch vụ đã đặt và giữ hạn mức miễn phí |
+| `PENDING_PAYMENT` | Giữ chỗ tối đa 10 phút để khách thanh toán phần tính phí |
+| `EXPIRED` | Hết hạn thanh toán, đã trả lại khả dụng |
+| `CONFIRMED` | Lượt miễn phí hoặc lượt đã thanh toán hợp lệ, đã xác nhận |
 | `USED` | Lễ tân xác nhận đã sử dụng; phần trả phí vào hóa đơn phòng |
-| `CANCELLED` | Dịch vụ đã hủy; hạn mức được giải phóng |
+| `CANCELLED` | Lượt đã hủy; khoản đã thanh toán không hoàn theo chính sách khách hàng |
 | `Supplier debt` | Công nợ nhà cung cấp hàng hóa/vật tư |
 
 ## 10. Vận hành buồng phòng và kỹ thuật

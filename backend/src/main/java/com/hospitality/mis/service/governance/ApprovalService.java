@@ -17,7 +17,8 @@ import java.util.*;
 
 @Service
 public class ApprovalService {
-    private static final Set<String> ACTIONS=Set.of("INVOICE_DELETE","DEPOSIT_REFUND","PRICE_OVERRIDE","PAYMENT_REFUND","BILLING_ADJUSTMENT","ROOM_TYPE_ACTIVATE","SERVICE_PRICE_CHANGE");
+    public ApprovalDtos.Response findRequired(Long id){return database.find(id).orElseThrow(()->new DomainException("APPROVAL_NOT_FOUND","Không tìm thấy yêu cầu"));}
+    private static final Set<String> ACTIONS=Set.of("INVOICE_DELETE","DEPOSIT_REFUND","PRICE_OVERRIDE","PAYMENT_REFUND","BILLING_ADJUSTMENT","ROOM_TYPE_ACTIVATE","SERVICE_PRICE_CHANGE","SERVICE_CATALOG_CREATE");
     private final ApprovalDatabase database;
     private final DurableIdempotencyService idempotency;
     private final Clock clock;
@@ -49,6 +50,9 @@ public class ApprovalService {
     @Transactional public List<ApprovalDtos.Response> list(String status){database.expire(Instant.now(clock));return database.list(selected(status),null,null);}
     @Transactional public List<ApprovalDtos.Response> requestedServicePriceChanges(String requester){
         String actor=SecurityActor.requireBoundActor(requester);database.expire(Instant.now(clock));return database.list(null,actor,"SERVICE_PRICE_CHANGE");
+    }
+    @Transactional public List<ApprovalDtos.Response> requestedCatalogAdditions(String requester){
+        String actor=SecurityActor.requireBoundActor(requester);database.expire(Instant.now(clock));return database.list(null,actor,"SERVICE_CATALOG_CREATE");
     }
     @Transactional public List<ApprovalDtos.Response> requestedPaymentRefunds(){
         String actor=SecurityActor.currentActor();database.expire(Instant.now(clock));return database.list(null,actor,"PAYMENT_REFUND");

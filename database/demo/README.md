@@ -97,3 +97,21 @@ ELSE
   INSERT INTO NhanVien (maNhanVien, hoVaTen, matKhau, vaiTro, soDienThoai)
   VALUES (N'NV_ADMIN', N'Demo Admin', N'$env:DEMO_ADMIN_BCRYPT_HASH', N'Quản lý', N'0900000000');"
 ```
+
+
+## Kịch bản Kho & Dịch vụ và kế toán sau tích hợp fix
+
+- Vật tư, đồ vải dùng chung danh mục `DichVu` và sổ `BienDongKhoDichVu`.
+  Nước `WATER330` thấp hơn ngưỡng 80; có yêu cầu cấp 24 chai, trả 3 vỏ gối
+  sạch và thông báo 2 khăn hỏng. Kho phải nhập đủ hàng trước khi cấp; báo hỏng
+  không cộng lại tồn.
+- Giặt nhanh và tiêu chuẩn dùng chung 40 máy, thời lượng lần lượt 240/600 phút.
+  Có một đơn giặt 2 món chiếm một máy; cả hai gói đọc cùng khả dụng 39 máy.
+- Có sân tennis đang được dùng, đơn phòng họp giữ chỗ chờ thanh toán 10 phút,
+  đơn cầu lông khách đã trả tiền rồi hủy. Các khoản đã trả có payment, receipt
+  và ledger thực, được tạo bằng stored procedure nghiệp vụ.
+- Giữ các trạng thái demo hiện hành của lễ tân, nhân sự, buồng phòng và kỹ thuật.
+  Kế toán xem bàn giao, người nhận được chỉ định xác nhận; không đếm lại tiền.
+
+Thời gian demo được tính theo giờ Việt Nam tại lúc reset. Khả dụng thay đổi theo
+thời gian thực; đơn chờ thanh toán tự hết hiệu lực sau 10 phút.

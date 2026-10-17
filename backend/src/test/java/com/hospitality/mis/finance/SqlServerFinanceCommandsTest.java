@@ -58,6 +58,16 @@ class SqlServerFinanceCommandsTest {
         assertThat(service.handover(request,ACTOR,"FIN-handover")).isEqualTo(result);
         assertThat(service.listHandovers()).containsExactly(result);
     }
+
+    @Test void onlyDesignatedAccountantCanConfirmAndReplayDoesNotDuplicateAudit(){
+        var result=service.handover(new FinanceDtos.CashHandoverRequest("CONFIRM",ACTOR,"FIN-next",money("950000"),null),ACTOR,"FIN-confirm");
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("FIN-owner","n/a","ROLE_ACCOUNTING"));
+        code(()->service.confirmHandover(result.id()),"HANDOVER_CONFIRMATION_FORBIDDEN");
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("FIN-next","n/a","ROLE_ACCOUNTING"));
+        service.confirmHandover(result.id());service.confirmHandover(result.id());
+        assertThat(jdbc.queryForObject("SELECT nguoiXacNhan FROM BanGiaoTienCa WHERE maBanGiaoTienCa=?",String.class,result.id())).isEqualTo("FIN-next");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM NhatKyKiemSoat WHERE hanhDong='CASH_HANDOVER_CONFIRMED' AND maDoiTuong=?",Integer.class,""+result.id())).isEqualTo(1);
+    }
     @Test void secondPeriodDoesNotCountPreviouslyHandedCash(){
         service.handover(new FinanceDtos.CashHandoverRequest("MORNING",ACTOR,"FIN-next",money("950000"),null),ACTOR,"FIN-first");
         var next=service.handover(new FinanceDtos.CashHandoverRequest("AFTERNOON",ACTOR,"FIN-next",money("0"),null),ACTOR,"FIN-second");

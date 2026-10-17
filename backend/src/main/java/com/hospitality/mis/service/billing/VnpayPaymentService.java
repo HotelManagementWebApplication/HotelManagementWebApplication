@@ -30,6 +30,7 @@ public class VnpayPaymentService {
     private static final DateTimeFormatter VNPAY_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private final DepositPaymentDatabase database;
+    private final com.hospitality.mis.dao.reservation.HotelServiceBookingDatabase serviceBookings;
     private final ApplicationEventPublisher events;
     private final String tmnCode;
     private final String hashSecret;
@@ -37,13 +38,14 @@ public class VnpayPaymentService {
     private final String returnUrl;
     private Clock clock = Clock.system(BUSINESS_ZONE);
 
-    public VnpayPaymentService(DepositPaymentDatabase database,
+    public VnpayPaymentService(DepositPaymentDatabase database, com.hospitality.mis.dao.reservation.HotelServiceBookingDatabase serviceBookings,
                                ApplicationEventPublisher events,
                                @Value("${hotel.payment.vnpay.tmn-code:}") String tmnCode,
                                @Value("${hotel.payment.vnpay.hash-secret:}") String hashSecret,
                                @Value("${hotel.payment.vnpay.payment-url:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}") String paymentUrl,
                                @Value("${hotel.payment.vnpay.return-url:http://localhost:8080/api/public/payments/vnpay/return}") String returnUrl) {
         this.database = database;
+        this.serviceBookings=serviceBookings;
         this.events = events;
         this.tmnCode = tmnCode == null ? "" : tmnCode.trim();
         this.hashSecret = hashSecret == null ? "" : hashSecret.trim();
@@ -84,6 +86,7 @@ public class VnpayPaymentService {
             return new CallbackOutcome("97", "Invalid signature", null, false, query.get("vnp_ResponseCode"));
 
         String merchantReference = trim(query.get("vnp_TxnRef"));
+        if(merchantReference!=null&&merchantReference.startsWith("SVC-"))return processServiceCallback(query,merchantReference);
         DepositPaymentDatabase.Attempt attempt;
         try { attempt=database.find(merchantReference); }
         catch (DomainException missing) { return new CallbackOutcome("01", "Order not found", null, false, query.get("vnp_ResponseCode")); }
@@ -123,6 +126,39 @@ public class VnpayPaymentService {
                 reservationId, true, query.get("vnp_ResponseCode"));
     }
 
+    public VnpayPaymentDtos.CheckoutResponse createServiceCheckout(long bookingId,String clientIp){
+        requireConfigured();var principal=SecurityActor.currentPrincipal();
+        if(!principal.isCustomer())throw error("CUSTOMER_REQUIRED","Chỉ khách hàng được thanh toán");
+        long customer=Long.parseLong(principal.id());var now=LocalDateTime.now(clock);
+        serviceBookings.preparePayment(bookingId,customer,now);
+        var booking=serviceBookings.paymentBooking(bookingId,customer);
+        var attempt=new DepositPaymentDatabase.Attempt(booking.id(),booking.reservationId(),customer,booking.paymentReference(),
+            booking.amountDue(),VnpayPaymentStatus.PENDING,now,booking.paymentExpiresAt(),null,null,null,null,null,0);
+        return checkoutResponse(attempt,buildCheckoutUrl(attempt,normalizeIp(clientIp)));
+    }
+    public com.hospitality.mis.service.reservation.HotelServiceBookingService.Response servicePayment(long id){
+        var principal=SecurityActor.currentPrincipal();
+        if(!principal.isCustomer())throw error("CUSTOMER_REQUIRED","Chỉ khách hàng được xem thanh toán");
+        return serviceBookings.paymentBooking(id,Long.parseLong(principal.id()));
+    }
+    private CallbackOutcome processServiceCallback(Map<String,String> query,String merchant){
+        long id;try{id=Long.parseLong(merchant.substring(4));}catch(RuntimeException e){return new CallbackOutcome("01","Order not found",null,false,null);}
+        com.hospitality.mis.service.reservation.HotelServiceBookingService.Response booking;
+        try{booking=serviceBookings.find(id);}catch(DomainException missing){return new CallbackOutcome("01","Order not found",null,false,null,id);}
+        if(!amountMatches(booking.amountDue(),query.get("vnp_Amount")))
+            return new CallbackOutcome("04","Invalid amount",booking.reservationId(),false,null,id);
+        boolean paid="00".equals(query.get("vnp_ResponseCode"))&&"00".equals(query.get("vnp_TransactionStatus"));
+        if(paid && trim(query.get("vnp_TransactionNo"))==null)return new CallbackOutcome("04","Invalid transaction",booking.reservationId(),false,null,id);
+        boolean replay=booking.paidAmount().signum()>0;
+        try{
+            booking=serviceBookings.completePayment(id,merchant,booking.amountDue(),trim(query.get("vnp_TransactionNo")),
+                trim(query.get("vnp_ResponseCode")),paid,LocalDateTime.now(clock));
+        }catch(DomainException invalid){return new CallbackOutcome("02","Order not confirmed",booking.reservationId(),false,query.get("vnp_ResponseCode"),id);}
+        boolean accepted=booking.paidAmount().signum()>0;
+        return new CallbackOutcome(accepted?(replay?"02":"00"):paid?"02":"00",
+            accepted?"Confirm Success":"Order not confirmed",booking.reservationId(),accepted,query.get("vnp_ResponseCode"),id);
+    }
+
     private VnpayPaymentDtos.CheckoutResponse checkoutResponse(DepositPaymentDatabase.Attempt attempt, String checkoutUrl) {
         return new VnpayPaymentDtos.CheckoutResponse(attempt.id(), attempt.reservationId(),
                 attempt.merchantReference(), attempt.amount(), attempt.status(),
@@ -138,7 +174,7 @@ public class VnpayPaymentService {
         params.put("vnp_Amount", scaledAmount(attempt.amount()));
         params.put("vnp_CurrCode", "VND");
         params.put("vnp_TxnRef", attempt.merchantReference());
-        params.put("vnp_OrderInfo", "Dat coc phong BK-" + attempt.reservationId());
+        params.put("vnp_OrderInfo", attempt.merchantReference().startsWith("SVC-") ? "Thanh toan dich vu "+attempt.merchantReference() : "Dat coc phong BK-" + attempt.reservationId());
         params.put("vnp_OrderType", "other");
         params.put("vnp_Locale", "vn");
         params.put("vnp_ReturnUrl", returnUrl);
@@ -230,5 +266,7 @@ public class VnpayPaymentService {
 
     /** Kết quả xử lý dùng chung cho IPN JSON và trang Return chuyển hướng. */
     public record CallbackOutcome(String responseCode, String message, Long reservationId,
-                                  boolean paymentSucceeded, String providerResponseCode) {}
+                                  boolean paymentSucceeded, String providerResponseCode,Long serviceBookingId) {
+        public CallbackOutcome(String responseCode,String message,Long reservationId,boolean paymentSucceeded,String providerResponseCode){this(responseCode,message,reservationId,paymentSucceeded,providerResponseCode,null);}
+    }
 }

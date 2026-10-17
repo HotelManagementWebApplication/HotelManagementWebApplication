@@ -30,26 +30,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.jpa.hibernate.ddl-auto=validate"
 })
 @AutoConfigureMockMvc
+@org.springframework.transaction.annotation.Transactional
 class SqlServerServiceUnitIntegrationTest {
-    private static final String ACTOR = "sqlserver-unit-contract-kitchen";
+    private static final String ACTOR = "UT-K";
     private final List<String> createdIds = new ArrayList<>();
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper objectMapper;
     @Autowired JdbcTemplate jdbc;
 
-    @AfterEach
-    void cleanup() {
-        createdIds.forEach(id -> jdbc.update("DELETE FROM DichVu WHERE maDichVu = ?", id));
-        jdbc.update("DELETE FROM NhatKyKiemSoat WHERE nguoiThucHien = ?", ACTOR);
+    @org.junit.jupiter.api.BeforeEach void seedActors(){
+        jdbc.update("INSERT NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) VALUES('UT-K',N'Kho unit','unused',N'Nhà bếp','0997161234'),('UT-M',N'Quản lý unit','unused',N'Quản lý','0997161235')");
     }
 
     @Test
     @WithMockUser(username = ACTOR, roles = "KITCHEN")
     void createServiceNormalizesLegacyInputAliasesAndStoresExactVietnameseText() throws Exception {
         List<UnitCase> cases = List.of(
-                new UnitCase(null, "lần"),
-                new UnitCase(" ", "lần"),
+                new UnitCase("kg", "kg"),
+                new UnitCase("lon", "lon"),
                 new UnitCase("BOTTLE", "chai"),
                 new UnitCase("CHAI", "chai"),
                 new UnitCase("UNIT", "đơn vị"),
@@ -74,14 +73,14 @@ class SqlServerServiceUnitIntegrationTest {
         for (UnitCase unitCase : cases) {
             String id = "UTV" + String.format("%03d", index++);
             createdIds.add(id);
-            var request = new ServiceDtos.CreateRequest(id, "Đơn vị thử " + id,
-                    new BigDecimal("1000"), unitCase.input(), 0, 0);
-
-            mvc.perform(post("/api/services")
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsBytes(request)))
-                    .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.unit").value(unitCase.normalizedLabel()));
+            var request = new com.hospitality.mis.dto.billing.CatalogProposalDtos.Request("WAREHOUSE",id,"Đơn vị thử "+id,unitCase.input(),"room-amenity",new BigDecimal("1000"),"Cần vật tư",0);
+            String response=mvc.perform(post("/api/services/catalog-proposals")
+                .header("Idempotency-Key","unit-"+id).contentType(APPLICATION_JSON).content(objectMapper.writeValueAsBytes(request)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDING")).andReturn().getResponse().getContentAsString();
+            long approval=objectMapper.readTree(response).get("id").asLong();
+            mvc.perform(post("/api/governance/approvals/{id}/approve",approval)
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("UT-M").roles("MANAGER")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CONSUMED"));
 
             String persisted = jdbc.queryForObject(
                     "SELECT donViTinh FROM DichVu WHERE maDichVu = ?", String.class, id);
@@ -94,14 +93,10 @@ class SqlServerServiceUnitIntegrationTest {
     void unsupportedUnitIsRejectedBeforeDatabaseCheckCanBecomeConflict() throws Exception {
         String id = "UTVBAD";
         createdIds.add(id);
-        var request = new ServiceDtos.CreateRequest(id, "Đơn vị không hợp lệ",
-                new BigDecimal("1000"), "BOTTLE_PER_HOUR", 0, 0);
-
-        mvc.perform(post("/api/services")
-                        .contentType(APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsBytes(request)))
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.code").value("INVALID_SERVICE_UNIT"));
+        var request=new com.hospitality.mis.dto.billing.CatalogProposalDtos.Request("WAREHOUSE",id,"Đơn vị không hợp lệ","BOTTLE_PER_HOUR","room-amenity",new BigDecimal("1000"),"Cần vật tư",0);
+        mvc.perform(post("/api/services/catalog-proposals").header("Idempotency-Key","unit-bad")
+            .contentType(APPLICATION_JSON).content(objectMapper.writeValueAsBytes(request)))
+            .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("INVALID_CATALOG_PROPOSAL"));
 
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM DichVu WHERE maDichVu = ?", Integer.class, id)).isZero();

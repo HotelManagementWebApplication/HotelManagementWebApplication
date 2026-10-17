@@ -175,19 +175,22 @@ Mức bồi thường thiết bị bị hư hỏng được tính theo tuổi th
   - MaM Restaurant miễn phí 1 bữa trưa và 1 bữa tối mỗi ngày cho mỗi khách.
 - Khách thuê theo giờ không có các quyền lợi miễn phí trên; dịch vụ sử dụng
   được tính theo giá niêm yết.
-- Phần sử dụng trong hạn mức miễn phí không tính tiền. Phần vượt hạn mức tính
-  theo giá niêm yết và được ghi rõ trên hóa đơn. Dịch vụ tính phí do khách sạn
-  vận hành được cộng vào hóa đơn phòng và thanh toán lúc checkout.
-- Khách có thể đặt trước dịch vụ sau khi booking được xác nhận đã thanh toán
-  tiền đặt cọc. Dịch vụ chưa sử dụng sẽ bị hủy khi booking phòng bị hủy, khách
-  không đến nhận phòng hoặc đã checkout. Chỉ dịch vụ đã sử dụng mới được tính
-  vào hóa đơn.
-- Trên website, khách mở đơn đặt phòng của mình, chọn **Đặt thêm dịch vụ**,
-  chọn phòng, dịch vụ, thời gian nằm trong kỳ lưu trú và số lượng. MaM
-  Restaurant yêu cầu chọn bữa trưa hoặc bữa tối; hồ bơi chỉ hiển thị thông tin
-  và không nhận đặt trước. Nếu backend chấp nhận, yêu cầu dịch vụ có trạng thái
-  **Đã xác nhận**. Khách có thể hủy dịch vụ chưa sử dụng trong đơn đặt phòng;
-  dịch vụ đã sử dụng không thể hủy.
+- Phần trong hạn mức miễn phí có giá phải trả bằng 0. Khách đặt trên website
+  phải thanh toán trước 100% phần tính phí qua VNPay. Hệ thống giữ chỗ 10 phút;
+  chưa thanh toán đúng hạn thì lượt đặt hết hạn và trả lại khả dụng.
+- Chỉ đặt dịch vụ sau khi booking phòng được xác nhận đã thanh toán cọc. Khách
+  chọn phòng, dịch vụ, giờ bắt đầu trong kỳ lưu trú và số lượng tính tiền.
+  Mỗi dịch vụ có thời lượng riêng; giờ kết thúc do hệ thống tính. Một lượt đặt
+  tài nguyên chiếm một máy/sân/phòng/xe, kể cả khi đơn giá tính theo kg hoặc khách.
+- MaM Restaurant yêu cầu bữa trưa hoặc bữa tối; hồ bơi chỉ hiển thị thông tin,
+  không nhận đặt trước. Dịch vụ miễn phí xác nhận ngay; dịch vụ tính phí chỉ
+  xác nhận sau khi backend nhận thanh toán hợp lệ.
+- Khách tự hủy, không đến hoặc không sử dụng dịch vụ đã trả tiền thì không được
+  hoàn tiền. Dịch vụ chưa dùng tự hủy khi booking phòng bị hủy, không đến hoặc
+  checkout. Khoản dịch vụ đã thanh toán vẫn ghi trên hóa đơn và được khấu trừ
+  số đã thu để không thu lại lúc checkout. Dịch vụ đã sử dụng không thể hủy.
+- Hệ thống kiểm tra dữ liệu, giá và khả dụng trước khi nhận đặt. Các gói giặt
+  nhanh và giặt tiêu chuẩn cùng sử dụng sức chứa của nhóm máy giặt chung.
 
 - Đơn giá hiện hành của dịch vụ được tra từ danh mục dịch vụ đang hoạt động qua
   API trước khi khách xác nhận. Giá này áp dụng cho khách thuê theo giờ và phần

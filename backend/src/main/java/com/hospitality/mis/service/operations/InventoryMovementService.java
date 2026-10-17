@@ -22,6 +22,7 @@ public class InventoryMovementService {
     public InventoryMovementDtos.Response record(InventoryMovementDtos.CreateRequest request,String actor){return record(request,actor,null);}
     public InventoryMovementDtos.Response record(InventoryMovementDtos.CreateRequest request,String actor,String key){
         String boundActor=SecurityActor.requireBoundActor(actor);
+        if(request!=null&&request.type()==InventoryMovement.MovementType.RETURN)throw new DomainException("RETURN_APPROVAL_REQUIRED","Buồng phòng gửi yêu cầu; Kho duyệt trước khi cộng tồn.");
         if(request==null || request.type()==null || request.serviceId()==null || request.serviceId().isBlank())
             throw new DomainException("INVALID_INVENTORY_MOVEMENT","Movement phải có service_id và type");
         if(request.quantity()==0 || (request.type()!=InventoryMovement.MovementType.ADJUST && request.quantity()<0))

@@ -24,6 +24,7 @@ export interface EmployeeProfileDropdownProps {
   onClose: () => void;
   onLogout: () => void;
   currentRoleLabel?: string;
+  roleLabelOverride?: string;
   departmentName?: string;
   align?: "top-right" | "bottom-left" | "bottom-right" | "right";
 }
@@ -179,6 +180,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
   onClose,
   onLogout,
   currentRoleLabel,
+  roleLabelOverride,
   departmentName,
   align = "top-right",
 }) => {
@@ -243,7 +245,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
   };
 
   const displayName = profile?.full_name || currentRoleLabel || "Nhân viên";
-  const displayRole = roleMeta.label;
+  const displayRole = roleLabelOverride || roleMeta.label;
   const displayDepartment = departmentName || roleMeta.department;
   const displayInitials = displayName
     .split(" ")

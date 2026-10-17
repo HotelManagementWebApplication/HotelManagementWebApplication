@@ -18,6 +18,7 @@ import java.util.*;
 /** Reservation projections and SQL Server commands; no managed entity state. */
 @Repository
 public class ReservationDatabase {
+    public boolean resourceService(String id){return Boolean.TRUE.equals(jdbc.queryForObject("SELECT laTaiNguyen FROM dbo.vwDichVuNoiBo WHERE maDichVu=?",Boolean.class,id));}
     public record Snapshot(ReservationDtos.Response response,Long customerId,String paymentCode,
             LocalDateTime expiresAt,String pendingType,LocalDateTime previousCheckIn,
             LocalDateTime previousCheckOut,BigDecimal additionalDeposit,long version,

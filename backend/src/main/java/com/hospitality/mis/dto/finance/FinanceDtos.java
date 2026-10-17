@@ -66,11 +66,11 @@ public final class FinanceDtos {
                                        LocalDateTime handedOverAt,
                                        /** Ghi chú. */
                                        String note,
-                                       List<DenominationLine> denominations) {
+                                       List<DenominationLine> denominations,String confirmedBy,LocalDateTime confirmedAt) {
         public CashHandoverResponse(Long id, String shiftCode, String fromActor, String toActor,
                                     BigDecimal expectedAmount, BigDecimal actualAmount, BigDecimal variance,
                                     LocalDateTime handedOverAt, String note) {
-            this(id, shiftCode, fromActor, toActor, expectedAmount, actualAmount, variance, handedOverAt, note, List.of());
+            this(id, shiftCode, fromActor, toActor, expectedAmount, actualAmount, variance, handedOverAt, note, List.of(),null,null);
         }
     }
     /** Request ghi nhận một khoản chi phí dương theo nhóm và mô tả. */

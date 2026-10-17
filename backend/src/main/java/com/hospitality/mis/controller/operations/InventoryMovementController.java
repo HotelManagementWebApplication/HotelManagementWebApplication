@@ -37,7 +37,7 @@ public class InventoryMovementController {
      * để replay cùng một movement không tạo thêm bút toán.
      */
     @PostMapping 
-    @PreAuthorize("@departmentAccess.allows(authentication, 'INVENTORY_WRITE')")
+    @PreAuthorize("hasAnyRole('KITCHEN','MANAGER','ADMIN','DIRECTOR')")
     public InventoryMovementDtos.Response record(@PathVariable String serviceId,
             @Valid @RequestBody InventoryMovementDtos.CreateRequest request,
             @RequestHeader("Idempotency-Key") String idempotencyKey) { if (!serviceId.equals(request.serviceId())) {

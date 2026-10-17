@@ -30,15 +30,6 @@ public class ServiceCatalogService {
     @Transactional(readOnly=true)
     public List<ServiceDtos.Response> findAll(){return database.all();}
     @Transactional
-    public ServiceDtos.Response create(ServiceDtos.CreateRequest request,String actor){
-        if(database.find(request.id()).isPresent())throw new DomainException("SERVICE_EXISTS","Mã dịch vụ đã tồn tại");
-        String unit=normalizeUnit(request.unit()),category=normalizeCategory(request.category());
-        database.create(request,unit,category,LocalDateTime.now(clock));
-        if(request.openingStock()>0)inventoryMovements.record(new InventoryMovementDtos.CreateRequest(request.id(),com.hospitality.mis.entity.operations.InventoryMovement.MovementType.RECEIVE,request.openingStock(),"SERVICE_OPENING_STOCK"),actor,"service-create:"+request.id());
-        audit.record(actor,"SERVICE_CREATED","SERVICE",request.id(),null,request.name(),null);
-        return database.required(request.id());
-    }
-    @Transactional
     public ServiceDtos.Response restock(String id,ServiceDtos.StockRequest request,String actor,String key){
         inventoryMovements.record(new InventoryMovementDtos.CreateRequest(id,com.hospitality.mis.entity.operations.InventoryMovement.MovementType.RECEIVE,request.quantity(),"SERVICE_RESTOCK"),actor,key);
         return database.required(id);
@@ -68,15 +59,5 @@ public class ServiceCatalogService {
     public List<com.hospitality.mis.dto.governance.ApprovalDtos.Response> priceRequestsFor(String actor){return approvals.requestedServicePriceChanges(actor);}
     @Transactional(readOnly=true)
     public List<ServiceDtos.Response> lowStock(){return database.lowStock();}
-    private static String normalizeCategory(String value){
-        String category=value==null||value.isBlank()?"other":value.trim();
-        try{new VietnameseCodeConverters.ServiceCategoryConverter().convertToDatabaseColumn(category);return category;}
-        catch(IllegalArgumentException error){throw new DomainException("INVALID_SERVICE_CATEGORY","Nhóm dịch vụ không hợp lệ");}
-    }
-    private static String normalizeUnit(String value){
-        String unit=value==null||value.isBlank()?"lần":value.trim();
-        try{return new VietnameseCodeConverters.ServiceUnitConverter().convertToDatabaseColumn(unit);}
-        catch(IllegalArgumentException error){throw new DomainException("INVALID_SERVICE_UNIT","Đơn vị tính không được hỗ trợ");}
-    }
     private static String priceMutationPayload(BigDecimal price){return price.stripTrailingZeros().toPlainString();}
 }

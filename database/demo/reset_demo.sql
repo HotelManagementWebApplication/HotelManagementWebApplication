@@ -30,8 +30,6 @@ DECLARE @demoShiftStart DATETIME2(6) = CASE
 DELETE FROM HangDoiThongBao;
 DELETE FROM ChiTietTienBanGiao;
 DELETE FROM TaiSanKyThuat;
-DELETE FROM BienDongTonKho;
-DELETE FROM MatHangTonKho;
 DELETE FROM DonNghiPhep;
 DELETE FROM ChamCong;
 DELETE FROM HoaDonGiaTriGiaTang;
@@ -64,8 +62,10 @@ DELETE FROM HinhAnhLoaiPhong;
 DELETE FROM HinhAnhPhong;
 DELETE FROM LoaiPhongTienNghi;
 DELETE FROM TienNghi;
+DELETE FROM YeuCauKho;
 DELETE FROM BienDongKhoDichVu;
 DELETE FROM LichSuGiaDichVu;
+UPDATE DichVu SET maNguonTaiNguyen=NULL;
 DELETE FROM DichVu;
 DELETE FROM LichSuGiaLoaiPhong;
 DELETE FROM Phong;
@@ -114,7 +114,6 @@ DBCC CHECKIDENT (N'KiemTraBuongPhong', RESEED, 0);
 DBCC CHECKIDENT (N'PhieuCongViecKyThuat', RESEED, 0);
 DBCC CHECKIDENT (N'CaLamViecNhanVien', RESEED, 0);
 DBCC CHECKIDENT (N'ChiTietTienBanGiao', RESEED, 0);
-DBCC CHECKIDENT (N'BienDongTonKho', RESEED, 0);
 DBCC CHECKIDENT (N'DonNghiPhep', RESEED, 0);
 DBCC CHECKIDENT (N'ChamCong', RESEED, 0);
 DBCC CHECKIDENT (N'HoaDonGiaTriGiaTang', RESEED, 0);
@@ -1201,30 +1200,15 @@ VALUES
     (3, N'KITCHEN', N'Đổi ca trực', DATEADD(DAY, 5, CAST(@demoNow AS date)), DATEADD(DAY, 5, CAST(@demoNow AS date)), N'Đổi ca với đồng nghiệp.', N'Chờ phê duyệt', N'KITCHEN', NULL, NULL);
 SET IDENTITY_INSERT DonNghiPhep OFF;
 
-INSERT INTO MatHangTonKho
-    (maMatHang, ten, danhMuc, donViTinh, soLuongHienTai, nguongAnToan, maDichVu, dangHoatDong)
+-- Hàng vật tư và đồ vải thuộc cùng danh mục kho, không giữ tồn riêng theo nhân viên.
+INSERT INTO DichVu(maDichVu,ten,danhMuc,donViTinh,gia,soLuongTonKho,nguongAnToan,dangHoatDong,laTaiNguyen)
 VALUES
-    (N'LINEN-KING', N'Ga trải giường King', N'Đồ vải', N'bộ', 75, 45, NULL, 1),
-    (N'LINEN-TWIN', N'Ga trải giường Twin', N'Đồ vải', N'bộ', 110, 40, NULL, 1),
-    (N'LINEN-PILLOW', N'Vỏ gối sạch', N'Đồ vải', N'cái', 180, 60, NULL, 1),
-    (N'LINEN-TOWEL-L', N'Khăn tắm lớn sạch — kho buồng phòng', N'Khăn', N'cái', 165, 60, NULL, 1),
-    (N'LINEN-TOWEL-S', N'Khăn tắm nhỏ sạch — kho buồng phòng', N'Khăn', N'cái', 180, 60, NULL, 1),
-    (N'GENERAL-WATER', N'Nước suối minibar 330 ml', N'Minibar', N'chai', 240, 80, N'MINIBAR', 1);
-
-SET IDENTITY_INSERT BienDongTonKho ON;
-INSERT INTO BienDongTonKho (maBienDongTonKho, maMatHang, loaiBienDong, soLuong, maNguoiThucHien, lyDo)
-VALUES
-    (1, N'LINEN-KING', N'Nhập kho', 60, N'HOUSEKEEP', N'Nhập kho đồ vải đầu kỳ'),
-    (2, N'LINEN-TOWEL-L', N'Xuất kho', 5, N'HOUSEKEEP', N'Cấp cho ca buồng phòng hôm nay');
-SET IDENTITY_INSERT BienDongTonKho OFF;
-
--- Số dư sau biến động: ga King 75 + 60 nhập; khăn lớn 165 - 5 xuất.
-UPDATE MatHangTonKho
-SET soLuongHienTai = CASE maMatHang
-    WHEN N'LINEN-KING' THEN 135
-    WHEN N'LINEN-TOWEL-L' THEN 160
-    ELSE soLuongHienTai
-END;
+ (N'LINENKING',N'Ga trải giường King',N'Vật dụng phòng',N'bộ',0,135,45,0,0),
+ (N'LINENTWIN',N'Ga trải giường Twin',N'Vật dụng phòng',N'bộ',0,110,40,0,0),
+ (N'PILLOW',N'Vỏ gối sạch',N'Vật dụng phòng',N'cái',0,180,60,0,0),
+ (N'TOWELCLEAN',N'Khăn tắm lớn sạch luân chuyển',N'Vật dụng phòng',N'cái',0,160,60,0,0),
+ (N'TOWELSMALL',N'Khăn tắm nhỏ sạch',N'Vật dụng phòng',N'cái',0,180,60,0,0),
+ (N'WATER330',N'Nước suối minibar 330 ml',N'Thức uống',N'chai',12000,18,80,0,0);
 
 INSERT INTO TaiSanKyThuat
     (maTaiSanKyThuat, ten, danhMuc, loaiViTri, maPhong, tang, viTri, thuongHieuMau, ngayLapDat, ngayBaoTriTiepTheo, trangThai, giaTriBanDau, ghiChu)
@@ -1629,5 +1613,72 @@ IF EXISTS (
             + h.phiGiaHan + h.tongTienDieuChinh - h.tienGiamGia) / 1000.0, 0) * 1000)
 )
     THROW 51007, N'Dữ liệu demo: doanh thu checkout chưa khớp hóa đơn sau giảm giá.', 1;
+
+-- Cấu hình demo: một lượt chiếm một tài nguyên trong thời lượng của dịch vụ.
+UPDATE DichVu SET laTaiNguyen=CASE WHEN danhMuc IN(N'Món ăn',N'Thức uống',N'Vật dụng phòng')
+ OR maDichVu IN(N'BREAKFAST',N'MAMREST',N'MINIBAR',N'DECOR') THEN 0 ELSE 1 END,
+ thoiLuongPhut=CASE WHEN maDichVu IN(N'TENNIS',N'BADMINTON',N'PINGPONG',N'MEETING',N'BOARDROOM',N'LIMO') THEN 120
+ WHEN maDichVu=N'SPAFACIAL' THEN 75 WHEN maDichVu=N'LNDRYEXP' THEN 240 WHEN maDichVu=N'LNDRYSTD' THEN 600 ELSE 60 END;
+UPDATE DichVu SET soLuongTonKho=CASE maDichVu WHEN N'MEETING' THEN 2 WHEN N'BOARDROOM' THEN 1
+ WHEN N'TENNIS' THEN 2 WHEN N'BADMINTON' THEN 2 WHEN N'PINGPONG' THEN 2 WHEN N'LIMO' THEN 3
+ WHEN N'LNDRYEXP' THEN 40 WHEN N'LNDRYSTD' THEN 40 ELSE soLuongTonKho END
+WHERE laTaiNguyen=1;
+UPDATE DichVu SET donViTinh=N'lượt',gia=CASE WHEN maDichVu=N'TENNIS' THEN 400000
+ WHEN maDichVu=N'BADMINTON' THEN 300000 WHEN maDichVu=N'PINGPONG' THEN 200000 ELSE gia END
+WHERE maDichVu IN(N'TENNIS',N'BADMINTON',N'PINGPONG',N'MEETING',N'BOARDROOM');
+UPDATE b SET thoiDiemKetThuc=DATEADD(MINUTE,d.thoiLuongPhut,b.thoiDiemDuKien)
+FROM DatDichVuKhachSan b JOIN DichVu d ON d.maDichVu=b.maDichVu;
+INSERT YeuCauKho(maDichVu,loai,soLuong,nguoiGui,lyDo,khoaChongTrung,ngayGui)
+VALUES(N'WATER330',N'Cấp hàng',24,N'HOUSEKEEP',N'Bổ sung nước minibar cho ca hiện tại',N'demo-supply',@demoNow),
+ (N'PILLOW',N'Trả hàng',3,N'HOUSEKEEP',N'Vỏ gối sạch còn nguyên chưa sử dụng',N'demo-return',@demoNow),
+ (N'TOWELCLEAN',N'Báo hỏng',2,N'HOUSEKEEP',N'Khăn rách, báo Kho kiểm tra',N'demo-damage',@demoNow);
+
+UPDATE DichVu SET donViTaiNguyen=CASE WHEN maDichVu IN(N'TENNIS',N'BADMINTON') THEN N'sân' WHEN maDichVu=N'PINGPONG' THEN N'bàn' WHEN maDichVu IN(N'MEETING',N'BOARDROOM') THEN N'phòng' WHEN maDichVu IN(N'LNDRYEXP',N'LNDRYSTD',N'PRESSING') THEN N'máy' WHEN maDichVu IN(N'LIMO',N'CITYTOUR') THEN N'xe' WHEN maDichVu=N'EXTRABED' THEN N'giường' ELSE N'chỗ' END WHERE laTaiNguyen=1;
+
+-- Giặt nhanh và giặt tiêu chuẩn dùng chung 40 máy; thời lượng từng gói riêng.
+UPDATE dbo.DichVu SET maNguonTaiNguyen=N'LNDRYSTD' WHERE maDichVu=N'LNDRYEXP';
+
+
+-- Dữ liệu minh họa lượt đang dùng, giữ chỗ và đã hủy nhưng không hoàn tiền.
+-- Đi qua đúng các lệnh nghiệp vụ để hóa đơn, biên lai và ledger khớp nhau.
+DECLARE @serviceDemoReservation BIGINT,@serviceDemoCustomer BIGINT,@serviceDemoRoom NVARCHAR(10);
+SELECT TOP(1) @serviceDemoReservation=p.maPhieuDatPhong,@serviceDemoCustomer=p.maTaiKhoanKhachHang,@serviceDemoRoom=c.maPhong
+FROM PhieuDatPhong p JOIN ChiTietDatPhong c ON c.maPhieuDatPhong=p.maPhieuDatPhong
+JOIN HoaDon h ON h.maPhieuDatPhong=p.maPhieuDatPhong
+WHERE p.trangThai=N'Đã nhận phòng' AND p.maTaiKhoanKhachHang IS NOT NULL
+ AND c.thoiDiemNhanPhong<DATEADD(HOUR,-1,@demoNow) AND c.thoiDiemTraPhong>DATEADD(HOUR,12,@demoNow)
+ORDER BY p.maPhieuDatPhong;
+IF @serviceDemoReservation IS NOT NULL
+BEGIN
+ DECLARE @serviceDemoCreated DATETIME2(6)=DATEADD(MINUTE,-20,@demoNow),
+  @serviceDemoStart DATETIME2(6)=DATEADD(MINUTE,-15,@demoNow),@serviceDemoPaid DATETIME2(6)=DATEADD(MINUTE,-19,@demoNow),
+  @serviceDemoActor NVARCHAR(50)=N'customer:'+CONVERT(NVARCHAR(20),@serviceDemoCustomer),
+  @serviceDemoId BIGINT,@serviceDemoMerchant NVARCHAR(100),@serviceDemoAmount DECIMAL(12,2);
+ EXEC dbo.uspDatDichVuKhachSan @serviceDemoReservation,@serviceDemoRoom,N'TENNIS',@serviceDemoStart,1,NULL,
+  N'Demo: sân đang sử dụng',N'demo-service-active',N'demo-active',@serviceDemoActor,@serviceDemoCustomer,0,@serviceDemoCreated;
+ SELECT @serviceDemoId=maDatDichVuKhachSan,@serviceDemoAmount=donGia*(soLuong-soLuongMienPhi) FROM DatDichVuKhachSan WHERE khoaYeuCau=N'demo-service-active';
+ EXEC dbo.uspThanhToanDichVu @serviceDemoId,@serviceDemoCustomer,NULL,NULL,NULL,NULL,0,@serviceDemoCreated;
+ SET @serviceDemoMerchant=N'SVC-'+CONVERT(NVARCHAR(20),@serviceDemoId);
+ EXEC dbo.uspThanhToanDichVu @serviceDemoId,NULL,@serviceDemoMerchant,@serviceDemoAmount,N'DEMO-TENNIS-PAID',N'00',1,@serviceDemoPaid;
+ EXEC dbo.uspXacNhanSuDungDichVu @serviceDemoId,N'KITCHEN',@demoNow,@serviceDemoReservation;
+
+ EXEC dbo.uspDatDichVuKhachSan @serviceDemoReservation,@serviceDemoRoom,N'LNDRYEXP',@serviceDemoStart,2,NULL,
+  N'Demo: một lượt giặt 2 món chiếm một máy',N'demo-laundry-active',N'demo-laundry',@serviceDemoActor,@serviceDemoCustomer,0,@serviceDemoCreated;
+ SELECT @serviceDemoId=maDatDichVuKhachSan,@serviceDemoAmount=donGia*(soLuong-soLuongMienPhi) FROM DatDichVuKhachSan WHERE khoaYeuCau=N'demo-laundry-active';
+ EXEC dbo.uspThanhToanDichVu @serviceDemoId,@serviceDemoCustomer,NULL,NULL,NULL,NULL,0,@serviceDemoCreated;
+ SET @serviceDemoMerchant=N'SVC-'+CONVERT(NVARCHAR(20),@serviceDemoId);
+ EXEC dbo.uspThanhToanDichVu @serviceDemoId,NULL,@serviceDemoMerchant,@serviceDemoAmount,N'DEMO-LAUNDRY-PAID',N'00',1,@serviceDemoPaid;
+
+ SET @serviceDemoStart=DATEADD(HOUR,1,@demoNow);
+ EXEC dbo.uspDatDichVuKhachSan @serviceDemoReservation,@serviceDemoRoom,N'BOARDROOM',@serviceDemoStart,1,NULL,
+  N'Demo: giữ chỗ chờ thanh toán 10 phút',N'demo-service-pending',N'demo-pending',@serviceDemoActor,@serviceDemoCustomer,0,@demoNow;
+ EXEC dbo.uspDatDichVuKhachSan @serviceDemoReservation,@serviceDemoRoom,N'BADMINTON',@serviceDemoStart,1,NULL,
+  N'Demo: khách tự hủy sau khi thanh toán',N'demo-service-cancelled',N'demo-cancel',@serviceDemoActor,@serviceDemoCustomer,0,@demoNow;
+ SELECT @serviceDemoId=maDatDichVuKhachSan,@serviceDemoAmount=donGia*(soLuong-soLuongMienPhi) FROM DatDichVuKhachSan WHERE khoaYeuCau=N'demo-service-cancelled';
+ EXEC dbo.uspThanhToanDichVu @serviceDemoId,@serviceDemoCustomer,NULL,NULL,NULL,NULL,0,@demoNow;
+ SET @serviceDemoMerchant=N'SVC-'+CONVERT(NVARCHAR(20),@serviceDemoId);
+ EXEC dbo.uspThanhToanDichVu @serviceDemoId,NULL,@serviceDemoMerchant,@serviceDemoAmount,N'DEMO-CANCELLED-PAID',N'00',1,@demoNow;
+ EXEC dbo.uspHuyDatDichVu @serviceDemoId,@serviceDemoActor,@serviceDemoCustomer;
+END;
 
 COMMIT;

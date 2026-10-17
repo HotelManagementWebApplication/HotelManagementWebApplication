@@ -115,5 +115,5 @@ public final class PublicGuestDtos {
             String unit,
             String category,
             String description,
-            String imageUrl) {}
+            String imageUrl,int durationMinutes) {}
 }

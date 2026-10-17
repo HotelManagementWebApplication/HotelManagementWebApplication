@@ -32,11 +32,11 @@ public class HotelServiceBookingService {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Response(Long id, Long reservationId, String roomId, String serviceId, String serviceName,
                            LocalDateTime scheduledAt, int quantity, int freeQuantity, BigDecimal unitPrice,
-                           BigDecimal amountDue, String mealPeriod, String status, String note) {
+                           BigDecimal amountDue, String mealPeriod, String status, String note, LocalDateTime endsAt, LocalDateTime paymentExpiresAt, BigDecimal paidAmount, String paymentReference, String paymentResponse) {
         public Response(Long id, Long reservationId, String roomId, String serviceId, LocalDateTime scheduledAt,
                         int quantity, int freeQuantity, BigDecimal unitPrice, BigDecimal amountDue,
                         String mealPeriod, String status, String note) {
-            this(id,reservationId,roomId,serviceId,serviceId,scheduledAt,quantity,freeQuantity,unitPrice,amountDue,mealPeriod,status,note);
+            this(id,reservationId,roomId,serviceId,serviceId,scheduledAt,quantity,freeQuantity,unitPrice,amountDue,mealPeriod,status,note,scheduledAt.plusHours(1),null,BigDecimal.ZERO,null,null);
         }
     }
 
@@ -54,12 +54,12 @@ public class HotelServiceBookingService {
     public List<Response> staffBookings(long reservationId) { return database.list(reservationId,null); }
 
     @Transactional(readOnly = true)
-    public List<Response> restaurantBookings(LocalDate date, String status) {
+    public List<Response> coordinatedBookings(LocalDate date, String status) {
         String normalized = status==null || status.isBlank() ? null : databaseBookingStatus(status.trim().toUpperCase(Locale.ROOT));
-        return database.restaurant(date==null ? LocalDate.now(clock) : date,normalized);
+        return database.coordinatedBookings(date==null ? LocalDate.now(clock) : date,normalized);
     }
 
-    public Response markRestaurantUsed(long id, String actor) {
+    public Response markCoordinatedServiceUsed(long id, String actor) {
         SecurityActor.requireBoundActor(actor);
         return database.use(database.find(id).reservationId(),id,actor,LocalDateTime.now(clock));
     }
@@ -116,12 +116,13 @@ public class HotelServiceBookingService {
         if (name==null || name.isBlank()) name=rs.getString("maDichVu");
         return new Response(rs.getLong("maDatDichVuKhachSan"),rs.getLong("maPhieuDatPhong"),rs.getString("maPhong"),rs.getString("maDichVu"),
                 name,rs.getTimestamp("thoiDiemDuKien").toLocalDateTime(),quantity,free,price,price.multiply(BigDecimal.valueOf(quantity-free)),
-                mealPeriodCode(rs.getString("buoiAn")),bookingStatusCode(rs.getString("trangThai")),rs.getString("ghiChu"));
+                mealPeriodCode(rs.getString("buoiAn")),bookingStatusCode(rs.getString("trangThai")),rs.getString("ghiChu"),date(rs,"thoiDiemKetThuc"),date(rs,"hanThanhToan"),rs.getBigDecimal("soTienDaThanhToan"),rs.getString("maThamChieuThanhToan"),rs.getString("maPhanHoiThanhToan"));
     }
 
+    private static LocalDateTime date(java.sql.ResultSet r,String name)throws java.sql.SQLException{var value=r.getTimestamp(name);return value==null?null:value.toLocalDateTime();}
     public static String bookingStatusCode(String value) {
         if (value==null) return null;
-        return switch(value) { case "Đã xác nhận" -> "CONFIRMED"; case "Đã sử dụng" -> "USED"; case "Đã hủy" -> "CANCELLED";
+        return switch(value) { case "Chờ thanh toán" -> "PENDING_PAYMENT";case "Hết hạn" -> "EXPIRED";case "Đã xác nhận" -> "CONFIRMED"; case "Đã sử dụng" -> "USED"; case "Đã hủy" -> "CANCELLED";
             default -> throw new IllegalArgumentException("Trạng thái đặt dịch vụ không hợp lệ: "+value); };
     }
 
@@ -132,7 +133,7 @@ public class HotelServiceBookingService {
     }
 
     private static String databaseBookingStatus(String value) {
-        return switch(value) { case "CONFIRMED" -> "Đã xác nhận"; case "USED" -> "Đã sử dụng"; case "CANCELLED" -> "Đã hủy";
+        return switch(value) { case "PENDING_PAYMENT" -> "Chờ thanh toán";case "EXPIRED" -> "Hết hạn";case "CONFIRMED" -> "Đã xác nhận"; case "USED" -> "Đã sử dụng"; case "CANCELLED" -> "Đã hủy";
             default -> throw new DomainException("INVALID_STATUS","Trạng thái dịch vụ không hợp lệ"); };
     }
 

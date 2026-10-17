@@ -77,8 +77,8 @@ export interface HotelServiceBooking {
   unit_price: number;
   amount_due: number;
   meal_period: "LUNCH" | "DINNER" | null;
-  status: "CONFIRMED" | "USED" | "CANCELLED";
+  status: "PENDING_PAYMENT" | "EXPIRED" | "CONFIRMED" | "USED" | "CANCELLED";
   note: string | null;
-}
+ ends_at?:string; payment_expires_at?:string|null; paid_amount?:number; payment_reference?:string|null; payment_response?:string|null; }
 
 export type CustomerMe = CustomerProfileDto;

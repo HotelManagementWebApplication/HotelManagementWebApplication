@@ -12,12 +12,15 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 public final class HousekeepingDtos {
     private HousekeepingDtos() {}
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     @JsonIgnoreProperties(ignoreUnknown = false)
-    public record CreateRequest(@NotBlank String roomId, String assignee, String note) {}
+    public record CreateRequest(@NotBlank String roomId, String assignee, String note, LocalDate shiftDate, String shiftCode) {
+        public CreateRequest(String roomId,String assignee,String note){this(roomId,assignee,note,null,null);}
+    }
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     @JsonIgnoreProperties(ignoreUnknown = false)
     @JsonDeserialize(using = UpdateRequestDeserializer.class)
@@ -49,4 +52,8 @@ public final class HousekeepingDtos {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Response(Long id, String roomId, String assignee, String status, boolean checklistComplete,
                            boolean blockingIncident, String note, String assignedBy, LocalDateTime updatedAt) {}
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record AssignedRoom(Long taskId, String roomId, String status) {}
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record ShiftAssignmentResponse(String employeeId, String fullName, String shiftCode, java.util.List<AssignedRoom> rooms) {}
 }

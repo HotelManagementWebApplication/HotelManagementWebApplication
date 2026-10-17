@@ -103,13 +103,19 @@ class DepartmentAuthorizationMatrixTest {
     @MockBean HousekeepingInspectionService mock29;
     @MockBean HotelServiceBookingService mock30;
     @MockBean VnpayPaymentService mock31;
+    @MockBean com.hospitality.mis.service.billing.ServiceAvailabilityService mock32;
+    @MockBean com.hospitality.mis.service.billing.ServiceConsumptionService mock33;
+    @MockBean com.hospitality.mis.service.billing.CatalogProposalService mock34;
+    @MockBean com.hospitality.mis.service.operations.StockRequestService mock35;
+    @MockBean com.hospitality.mis.service.identity.PersonnelService mock36;
     @MockBean ApprovalAuthorization approvalAuthorization;
     /** Gom các business mock để reset invocation và chứng minh deny không gọi nghiệp vụ. */
-    private List<Object> businessMocks() { return List.of(mock0, mock1, mock2, mock3, mock4, mock5, mock6, mock7, mock8, mock9, mock10, mock11, mock12, mock13, mock14, mock15, mock16, mock17, mock18, mock19, mock20, mock21, mock22, mock23, mock24, mock25, mock26, mock27, mock28, mock29, mock30, mock31); }
+    private List<Object> businessMocks() { return List.of(mock0, mock1, mock2, mock3, mock4, mock5, mock6, mock7, mock8, mock9, mock10, mock11, mock12, mock13, mock14, mock15, mock16, mock17, mock18, mock19, mock20, mock21, mock22, mock23, mock24, mock25, mock26, mock27, mock28, mock29, mock30, mock31, mock32, mock33, mock34, mock35, mock36); }
 
     /** Stub response tối thiểu để matrix chỉ đo RBAC, không đo business rules. */
     @BeforeEach void responses() {
         when(approvalAuthorization.canApprove(anyLong(), anyString())).thenReturn(true);
+        when(mock7.findRequired(anyLong())).thenReturn(new com.hospitality.mis.dto.governance.ApprovalDtos.Response(1L,"actor","PRICE_OVERRIDE","1","{}",null,"test","LOW","PENDING",null,null,null,null,null,null));
         when(mock15.get(1L)).thenReturn(new ReservationDtos.Response(1L, 1L, "actor",
             ReservationStatus.CONFIRMED, ReservationDtos.RentalType.PACKAGE,
             java.math.BigDecimal.ZERO, null, null, null, List.of(), null,
@@ -152,7 +158,7 @@ class DepartmentAuthorizationMatrixTest {
     }
     /** Danh sách endpoint bảo vệ, là nguồn dữ liệu cho cả matrix và coverage check. */
     static List<Endpoint> endpoints() { return List.of(
-            new Endpoint("POST", "/api/auth/employees", "ADMIN,DIRECTOR,MANAGER", "{\"employee_id\":\"new\",\"full_name\":\"New\",\"password\":\"valid-password\",\"role\":\"FRONT_DESK\",\"phone\":\"0900000000\"}"),
+            new Endpoint("POST", "/api/auth/employees", "ADMIN", "{\"employee_id\":\"new\",\"full_name\":\"New\",\"password\":\"valid-password\",\"role\":\"FRONT_DESK\",\"phone\":\"0900000000\"}"),
             new Endpoint("GET", "/api/auth/employees", "ADMIN,DIRECTOR,MANAGER,HR,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/auth/employees/emp", "ADMIN,DIRECTOR,MANAGER,HR,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/auth/employees/emp/sessions", "ADMIN,DIRECTOR,MANAGER,HR,ACCOUNTING", "{}"),
@@ -236,12 +242,11 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/invoices/1/payments", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{\"amount\":100,\"method\":\"CASH\",\"type\":\"PAYMENT\"}"),
             new Endpoint("POST", "/api/invoices/1/receipts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{\"receipt_number\":\"R1\",\"amount\":100,\"method\":\"CASH\"}"),
             new Endpoint("GET", "/api/services", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
-            new Endpoint("POST", "/api/services", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,KITCHEN", "{\"id\":\"S1\",\"name\":\"Water\",\"price\":100,\"opening_stock\":1,\"safety_threshold\":0}"),
-            new Endpoint("POST", "/api/services/S1/stock", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{\"quantity\":1}"),
+            new Endpoint("POST", "/api/services/S1/stock", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{\"quantity\":1}"),
             new Endpoint("GET", "/api/services/low-stock", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
             new Endpoint("GET", "/api/services/S1/inventory-movements", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
             new Endpoint("GET", "/api/services/S1/inventory-movements/inventory-report", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
-            new Endpoint("POST", "/api/services/S1/inventory-movements", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{\"service_id\":\"S1\",\"type\":\"RECEIVE\",\"quantity\":1}"),
+            new Endpoint("POST", "/api/services/S1/inventory-movements", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{\"service_id\":\"S1\",\"type\":\"RECEIVE\",\"quantity\":1}"),
             new Endpoint("POST", "/api/services/S1/price/submit", "ADMIN,DIRECTOR,MANAGER,KITCHEN", "{\"price\":120,\"reason\":\"Cost update\"}"),
             new Endpoint("POST", "/api/services/S1/price/activate", "ADMIN,DIRECTOR,MANAGER", "{\"price\":120,\"reason\":\"Cost update\"}"),
             new Endpoint("GET", "/api/services/S1/price-history", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN", "{}"),
@@ -257,12 +262,12 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("GET", "/api/finance/partner-debts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/partner-debts/1/settlements", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/ledger", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
-            new Endpoint("POST", "/api/finance/partner-debts/1/settle", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"amount\":10}"),
+            new Endpoint("POST", "/api/finance/partner-debts/1/settle", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"method\":\"BANK_TRANSFER\",\"amount\":10}"),
             new Endpoint("GET", "/api/finance/reconciliation", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/payments", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
             new Endpoint("GET", "/api/finance/receipts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{}"),
-            new Endpoint("POST", "/api/finance/cash-handovers", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{\"shift_code\":\"SHIFT\",\"from_actor\":\"actor\",\"to_actor\":\"other\",\"actual_amount\":100}"),
-            new Endpoint("POST", "/api/finance/expenses", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"category\":\"Food\",\"description\":\"Food\",\"amount\":100}"),
+            new Endpoint("POST", "/api/finance/cash-handovers", "FRONT_DESK", "{\"shift_code\":\"SHIFT\",\"from_actor\":\"actor\",\"to_actor\":\"other\",\"actual_amount\":100}"),
+            new Endpoint("POST", "/api/finance/expenses", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"method\":\"BANK_TRANSFER\",\"category\":\"Food\",\"description\":\"Food\",\"amount\":100}"),
             new Endpoint("POST", "/api/finance/partner-debts", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING", "{\"partner_name\":\"Partner\",\"reference_code\":\"D1\",\"amount\":100}"),
             new Endpoint("GET", "/api/governance/approvals", "ADMIN,DIRECTOR,MANAGER", "{}"),
             new Endpoint("POST", "/api/governance/approvals", "ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK", "{\"action\":\"PRICE_OVERRIDE\",\"target_id\":\"1\",\"payload\":\"{}\",\"reason\":\"Review\"}"),
@@ -276,7 +281,7 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("GET", "/api/auth/customers/me", "CUSTOMER", "{}"),
             new Endpoint("PUT", "/api/auth/customers/me", "CUSTOMER", "{\"full_name\":\"Test\",\"identity_number\":\"123456789012\"}"),
             new Endpoint("POST", "/api/auth/customers/password", "CUSTOMER", "{\"password\":\"valid-password\"}"),
-            new Endpoint("POST", "/api/auth/employees/auto-provision", "ADMIN,DIRECTOR,MANAGER", "{\"role\":\"FRONT_DESK\",\"full_name\":\"Test\",\"phone\":\"0900000000\",\"email\":\"test@hotel.com\"}"),
+            new Endpoint("POST", "/api/auth/employees/auto-provision", "ADMIN", "{\"role\":\"FRONT_DESK\",\"full_name\":\"Test\",\"phone\":\"0900000000\",\"email\":\"test@hotel.com\"}"),
             new Endpoint("POST", "/api/customer/reservations", "CUSTOMER", "{\"rental_type\":\"PACKAGE\",\"rooms\":[{\"room_id\":\"101\",\"expected_check_in\":\"2026-10-01T12:00:00\",\"expected_check_out\":\"2026-10-02T12:00:00\"}],\"idempotency_key\":\"customer-key\",\"payment_method\":\"VNPAY\"}"),
             new Endpoint("GET", "/api/customer/reservations", "CUSTOMER", "{}"),
             new Endpoint("GET", "/api/customer/reservations/1", "CUSTOMER", "{}"),
@@ -288,6 +293,30 @@ class DepartmentAuthorizationMatrixTest {
             new Endpoint("POST", "/api/customer/service-bookings", "CUSTOMER", "{\"reservation_id\":1,\"room_id\":\"101\",\"service_id\":\"S1\",\"scheduled_at\":\"2026-10-01T12:00:00\",\"quantity\":1}"),
             new Endpoint("GET", "/api/customer/service-bookings?reservation_id=1", "CUSTOMER", "{}"),
             new Endpoint("POST", "/api/customer/service-bookings/1/cancel", "CUSTOMER", "{}"),
+            new Endpoint("GET","/api/services/availability","ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK,HOUSEKEEPING,KITCHEN,CUSTOMER","{}"),
+            new Endpoint("PUT","/api/services/S1/capacity","KITCHEN","{\"capacity\":2,\"minutes\":120,\"reason\":\"test\"}"),
+            new Endpoint("GET","/api/services/consumption?from=2026-10-01&to=2026-10-02","ADMIN,DIRECTOR,MANAGER,KITCHEN","{}"),
+            new Endpoint("POST","/api/services/catalog-proposals","KITCHEN","{\"kind\":\"WAREHOUSE\",\"id\":\"ITEM1\",\"name\":\"Test\",\"unit\":\"cái\",\"category\":\"room-amenity\",\"price\":100,\"reason\":\"test\"}"),
+            new Endpoint("GET","/api/services/catalog-proposals","KITCHEN","{}"),
+            new Endpoint("GET","/api/operations/stock-requests","HOUSEKEEPING,KITCHEN","{}"),
+            new Endpoint("GET","/api/operations/stock-requests/catalog","HOUSEKEEPING,KITCHEN","{}"),
+            new Endpoint("POST","/api/operations/stock-requests","HOUSEKEEPING","{\"kind\":\"ISSUE\",\"service_id\":\"ITEM1\",\"quantity\":1,\"reason\":\"test\"}"),
+            new Endpoint("POST","/api/operations/stock-requests/1/approve","KITCHEN","{}"),
+            new Endpoint("POST","/api/operations/stock-requests/1/reject","KITCHEN","{\"reason\":\"test\"}"),
+            new Endpoint("GET","/api/operations/housekeeping/assignments?shiftCode=MORNING","ADMIN,DIRECTOR,MANAGER","{}"),
+            new Endpoint("POST","/api/customer/service-bookings/1/payment","CUSTOMER","{}"),
+            new Endpoint("GET","/api/customer/service-bookings/1/payment","CUSTOMER","{}"),
+            new Endpoint("POST","/api/finance/cash-handovers/1/confirm","ACCOUNTING","{}"),
+            new Endpoint("GET","/api/finance/cash-handovers/balance","ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK","{}"),
+            new Endpoint("GET","/api/finance/cash-handovers/recipients","ADMIN,DIRECTOR,MANAGER,ACCOUNTING,FRONT_DESK","{}"),
+            new Endpoint("GET","/api/finance/refund-requests","ADMIN,DIRECTOR,MANAGER,ACCOUNTING","{}"),
+            new Endpoint("GET","/api/hr/personnel/profiles","HR,MANAGER,DIRECTOR,ADMIN","{}"),
+            new Endpoint("GET","/api/hr/personnel/profiles/emp","HR,MANAGER,DIRECTOR,ADMIN","{}"),
+            new Endpoint("PUT","/api/hr/personnel/profiles/emp","HR","{\"details\":{\"full_name\":\"Test User\"},\"version\":0,\"reason\":\"test\"}"),
+            new Endpoint("GET","/api/hr/personnel/onboarding","HR,MANAGER,DIRECTOR,ADMIN","{}"),
+            new Endpoint("PUT","/api/hr/personnel/onboarding/00000000-0000-0000-0000-000000000001","HR","{\"details\":{\"full_name\":\"Test User\"},\"proposed_role\":\"HOUSEKEEPING\",\"reason\":\"test\",\"version\":0}"),
+            new Endpoint("POST","/api/hr/personnel/onboarding/00000000-0000-0000-0000-000000000001/submit","HR","{\"version\":0}"),
+            new Endpoint("POST","/api/hr/personnel/onboarding/00000000-0000-0000-0000-000000000001/review","MANAGER,DIRECTOR","{\"decision\":\"APPROVE\",\"reason\":\"test\",\"version\":0}"),
             new Endpoint("POST", "/api/auth/logout", "ADMIN,DIRECTOR,MANAGER,HR,FRONT_DESK,ACCOUNTING,HOUSEKEEPING,TECHNICAL,KITCHEN,CUSTOMER,UNKNOWN", "{}")
     ); }
     /** Sinh role case, gồm UNKNOWN để bảo vệ default deny. */

@@ -55,14 +55,6 @@ public final class EnterpriseDtos {
                                @NotBlank String reason, String shiftSwapWith) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record StockItemResponse(String id, String name, String category, String unit,
-                                    int currentQuantity, int safetyThreshold, String serviceId,
-                                    boolean active) {}
-    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record StockMovementRequest(@NotBlank String itemId, @NotBlank String movementType,
-                                       @Positive int quantity, String reason) {}
-
-    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record TechnicalAssetResponse(String id, String name, String category, String locationType,
                                          String roomId, Integer floor, String location, String brandModel,
                                          LocalDate installedOn, LocalDate nextMaintenance, String status,

@@ -33,7 +33,7 @@ class VietnameseValueDictionaryContractTest {
             assertThat(convert(converter, apiValue)).as(description).isEqualTo(databaseValue);
             checked++;
         }
-        assertThat(checked).isEqualTo(239);
+        assertThat(checked).isEqualTo(243);
     }
 
     private static Path dictionaryPath() {

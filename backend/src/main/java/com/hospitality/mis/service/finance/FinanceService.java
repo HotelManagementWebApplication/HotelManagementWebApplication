@@ -52,6 +52,7 @@ public class FinanceService {
         String hash=IdempotencySupport.fingerprint("PARTNER_DEBT_SETTLEMENT|"+id+"|"+money(request.amount())+"|"+text(request.note())+"|"+request.method());
         return idempotency.execute("finance-partner-debt-settlement",key,principal,hash,FinanceDtos.PartnerDebtResponse.class,()->database.settle(id,request,principal,key,LocalDateTime.now(clock)));
     }
+    @Transactional public void confirmHandover(long id){database.confirmHandover(id,SecurityActor.currentActor(),LocalDateTime.now(clock));}
     @Transactional(readOnly=true) public List<FinanceDtos.CashHandoverResponse> listHandovers(){return database.handovers();}
     @Transactional(readOnly=true) public FinanceDtos.CashBalanceResponse cashBalance(){return database.cashBalance(SecurityActor.currentActor(),LocalDateTime.now(clock));}
     @Transactional(readOnly=true) public List<FinanceDtos.CashRecipient> cashRecipients(){return database.cashRecipients(SecurityActor.currentActor());}

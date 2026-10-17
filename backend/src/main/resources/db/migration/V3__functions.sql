@@ -138,7 +138,7 @@ BEGIN
         @tong = @tong + COALESCE(SUM(CAST(soLuong - soLuongMienPhi AS DECIMAL(19, 2)) * donGia), 0)
     FROM dbo.DatDichVuKhachSan
     WHERE maPhieuDatPhong = @maPhieuDatPhong
-        AND trangThai = N'Đã sử dụng';
+        AND (trangThai = N'Đã sử dụng' OR soTienDaThanhToan>0);
 
     RETURN @tong;
 END;
@@ -280,7 +280,7 @@ BEGIN
         @tong = COALESCE(SUM((soLuong - soLuongMienPhi) * donGia), 0)
     FROM dbo.DatDichVuKhachSan
     WHERE maPhieuDatPhong = @maPhieu
-        AND trangThai = N'Đã sử dụng';
+        AND (trangThai = N'Đã sử dụng' OR soTienDaThanhToan>0);
 
     RETURN @tong;
 END;
@@ -506,4 +506,33 @@ BEGIN
         ELSE 1.50
     END, 2);
 END;
+GO
+
+
+-- Single source for customer booking and the real-time warehouse display.
+-- A resource booking occupies one unit; consumables reserve their quantity.
+CREATE FUNCTION dbo.fnKhaDungDichVu(@tu DATETIME2(6),@den DATETIME2(6))
+RETURNS TABLE AS RETURN (
+ WITH Holds AS (
+  SELECT COALESCE(d.maNguonTaiNguyen,b.maDichVu) maDichVu,CASE WHEN d.laTaiNguyen=1 THEN b.thoiDiemDuKien ELSE CONVERT(DATETIME2,'0001-01-01') END thoiDiemDuKien,
+   CASE WHEN d.laTaiNguyen=1 THEN b.thoiDiemKetThuc ELSE CONVERT(DATETIME2,'9999-12-31') END thoiDiemKetThuc,
+   CASE WHEN d.laTaiNguyen=1 THEN CONVERT(BIGINT,1) ELSE CONVERT(BIGINT,b.soLuong) END qty
+  FROM dbo.DatDichVuKhachSan b JOIN dbo.DichVu d ON d.maDichVu=b.maDichVu
+  WHERE ((b.trangThai=N'Đã xác nhận' OR (b.trangThai=N'Đã sử dụng' AND d.laTaiNguyen=1)) OR
+   (b.trangThai=N'Chờ thanh toán' AND b.hanThanhToan>CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATETIME2(6))))
+ ), Points AS (
+  SELECT d.maDichVu,@tu atTime FROM dbo.DichVu d
+  UNION SELECT maDichVu,thoiDiemDuKien FROM Holds WHERE thoiDiemDuKien>@tu AND thoiDiemDuKien<@den
+ ), Peak AS (
+  SELECT p.maDichVu,MAX(a.busy) busy FROM Points p
+  CROSS APPLY(SELECT COALESCE(SUM(h.qty),0) busy FROM Holds h WHERE h.maDichVu=p.maDichVu AND
+   h.thoiDiemDuKien<=p.atTime AND h.thoiDiemKetThuc>p.atTime) a GROUP BY p.maDichVu
+ )
+ SELECT d.maDichVu,COALESCE(owner.soLuongTonKho,d.soLuongTonKho) congSuat,COALESCE(p.busy,0) daDat,
+  CASE WHEN COALESCE(owner.soLuongTonKho,d.soLuongTonKho)>COALESCE(p.busy,0) THEN COALESCE(owner.soLuongTonKho,d.soLuongTonKho)-COALESCE(p.busy,0) ELSE 0 END conLai,
+  d.thoiLuongPhut,d.laTaiNguyen,d.maNguonTaiNguyen,CASE WHEN d.laTaiNguyen=1 THEN d.donViTaiNguyen COLLATE Vietnamese_100_CS_AS ELSE d.donViTinh END donViKhaDung
+ FROM dbo.DichVu d LEFT JOIN dbo.DichVu owner ON owner.maDichVu=d.maNguonTaiNguyen
+ LEFT JOIN Peak p ON p.maDichVu=COALESCE(d.maNguonTaiNguyen,d.maDichVu)
+ WHERE d.dangHoatDong=1 AND @tu<@den
+);
 GO

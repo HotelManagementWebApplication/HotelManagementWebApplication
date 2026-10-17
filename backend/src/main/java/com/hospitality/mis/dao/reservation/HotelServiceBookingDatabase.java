@@ -15,7 +15,7 @@ import java.util.List;
 /** Persistence contract for hotel-operated services: views for reads, procedures for commands. */
 @Repository
 public class HotelServiceBookingDatabase {
-    private static final String READ="SELECT maDatDichVuKhachSan,maPhieuDatPhong,maPhong,maDichVu,tenDichVu,thoiDiemDuKien,soLuong,soLuongMienPhi,donGia,buoiAn,trangThai,ghiChu FROM dbo.vwDatDichVuKhachSan";
+    private static final String READ="SELECT maDatDichVuKhachSan,maPhieuDatPhong,maPhong,maDichVu,tenDichVu,thoiDiemDuKien,soLuong,soLuongMienPhi,donGia,buoiAn,trangThai,ghiChu,thoiDiemKetThuc,hanThanhToan,soTienDaThanhToan,maThamChieuThanhToan,maPhanHoiThanhToan FROM dbo.vwDatDichVuKhachSan";
     private final JdbcTemplate jdbc;
 
     public HotelServiceBookingDatabase(JdbcTemplate jdbc) { this.jdbc = jdbc; }
@@ -32,10 +32,9 @@ public class HotelServiceBookingDatabase {
                 (rs, n) -> HotelServiceBookingService.response(rs), reservationId);
     }
 
-    public List<HotelServiceBookingService.Response> restaurant(LocalDate date, String status) {
+    public List<HotelServiceBookingService.Response> coordinatedBookings(LocalDate date, String status) {
         return jdbc.query(READ+"""
                  WHERE CAST(thoiDiemDuKien AS DATE)=?
-                AND (maDichVu IN ('MAMREST','BREAKFAST') OR danhMuc=N'Nhà hàng cao cấp')
                 AND (? IS NULL OR trangThai=?) ORDER BY thoiDiemDuKien,maPhong,maDatDichVuKhachSan
                 """, (rs, n) -> HotelServiceBookingService.response(rs), date, status, status);
     }
@@ -79,6 +78,11 @@ public class HotelServiceBookingDatabase {
         return jdbc.queryForObject("SELECT dbo.fnTongDichVuKhachSanDaDung(?)", BigDecimal.class, reservationId);
     }
 
+    public void preparePayment(long id,long customer,LocalDateTime now){try{jdbc.update("EXEC dbo.uspThanhToanDichVu ?,?,NULL,NULL,NULL,NULL,0,?",id,customer,now);}catch(DataAccessException e){throw translate(e);}}
+    public HotelServiceBookingService.Response paymentBooking(long id,long customer){var b=find(id);list(b.reservationId(),customer);return b;}
+    public HotelServiceBookingService.Response completePayment(long id,String merchant,BigDecimal amount,String transaction,String response,boolean paid,LocalDateTime now){
+        try{jdbc.update("EXEC dbo.uspThanhToanDichVu ?,NULL,?,?,?,?,?,?",id,merchant,amount,transaction,response,paid,now);return find(id);}catch(DataAccessException e){throw translate(e);}
+    }
     private RuntimeException translate(DataAccessException error) {
         for (Throwable cause=error; cause!=null; cause=cause.getCause()) {
             if (!(cause instanceof SQLException sql)) continue;
@@ -97,6 +101,7 @@ public class HotelServiceBookingDatabase {
                 case 51108, 53610 -> "SERVICE_OUTSIDE_STAY";
                 case 51109 -> "SERVICE_NOT_FOUND";
                 case 51110 -> "SERVICE_PRICE_NOT_SET";
+                case 51112 -> "SERVICE_PAYMENT_EXPIRED";case 51113 -> "SERVICE_PAYMENT_MISMATCH";
                 case 53609 -> "SERVICE_OUTSIDE_MEAL_HOURS";
                 default -> null;
             };

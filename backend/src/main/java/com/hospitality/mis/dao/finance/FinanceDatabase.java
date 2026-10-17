@@ -19,7 +19,7 @@ import java.util.*;
 @Repository
 public class FinanceDatabase {
     public record LedgerTotal(FinancialLedgerEntry.Direction direction,BigDecimal amount){}
-    private static final String CASH="maBanGiaoTienCa,maCa,nguoiBanGiao,nguoiNhanBanGiao,soTienDuKien,soTienThucTe,chenhLech,thoiDiemBanGiao,ghiChu";
+    private static final String CASH="maBanGiaoTienCa,maCa,nguoiBanGiao,nguoiNhanBanGiao,soTienDuKien,soTienThucTe,chenhLech,thoiDiemBanGiao,ghiChu,nguoiXacNhan,thoiDiemXacNhan";
     private static final String EXPENSE="maKhoanChi,danhMuc,moTa,soTien,nguoiChiTra,thoiDiemChiTra,trangThai,phuongThucThanhToan";
     private static final String DEBT="maCongNoDoiTac,tenDoiTac,maThamChieu,soTien,soTienDaThanhToan,trangThai,thoiDiemGhiNhan";
     private static final String LEDGER="maButToanTaiChinh,loaiButToan,loaiNguon,maNguon,chieuButToan,soTien,maNguoiThucHien,thoiDiemPhatSinh,ghiChu,daChotSo";
@@ -30,13 +30,13 @@ public class FinanceDatabase {
     private final ExpenseStatusConverter expenseStatuses=new ExpenseStatusConverter();
     private final DebtStatusConverter debtStatuses=new DebtStatusConverter();
     private final LedgerDirectionConverter directions=new LedgerDirectionConverter();
-    private final RowMapper<FinanceDtos.CashHandoverResponse> cashRows=(r,n)->new FinanceDtos.CashHandoverResponse(r.getLong(1),shifts.convertToEntityAttribute(r.getString(2)),r.getString(3),r.getString(4),r.getBigDecimal(5),r.getBigDecimal(6),r.getBigDecimal(7),r.getTimestamp(8).toLocalDateTime(),r.getString(9),List.of());
+    private final RowMapper<FinanceDtos.CashHandoverResponse> cashRows=(r,n)->new FinanceDtos.CashHandoverResponse(r.getLong(1),shifts.convertToEntityAttribute(r.getString(2)),r.getString(3),r.getString(4),r.getBigDecimal(5),r.getBigDecimal(6),r.getBigDecimal(7),r.getTimestamp(8).toLocalDateTime(),r.getString(9),List.of(),r.getString(10),r.getTimestamp(11)==null?null:r.getTimestamp(11).toLocalDateTime());
     private final RowMapper<FinanceDtos.ExpenseResponse> expenseRows=(r,n)->new FinanceDtos.ExpenseResponse(r.getLong(1),r.getString(2),r.getString(3),r.getBigDecimal(4),r.getString(5),r.getTimestamp(6).toLocalDateTime(),expenseStatuses.convertToEntityAttribute(r.getString(7)),methods.convertToEntityAttribute(r.getString(8)));
     private final RowMapper<FinanceDtos.PartnerDebtResponse> debtRows=(r,n)->new FinanceDtos.PartnerDebtResponse(r.getLong(1),r.getString(2),r.getString(3),r.getBigDecimal(4),r.getBigDecimal(5),debtStatuses.convertToEntityAttribute(r.getString(6)),r.getTimestamp(7).toLocalDateTime());
     private final RowMapper<FinanceDtos.LedgerEntryResponse> ledgerRows=(r,n)->new FinanceDtos.LedgerEntryResponse(r.getLong(1),r.getString(2),r.getString(3),r.getString(4),directions.convertToEntityAttribute(r.getString(5)).name(),r.getBigDecimal(6),r.getString(7),r.getTimestamp(8).toLocalDateTime(),r.getString(9),r.getBoolean(10));
     public FinanceDatabase(JdbcTemplate jdbc,ObjectMapper mapper){this.jdbc=jdbc;this.mapper=mapper;}
     public List<FinanceDtos.CashRecipient> cashRecipients(String actor) {
-        return jdbc.query("SELECT maNhanVien,hoVaTen FROM dbo.vwNhanVien WHERE maNhanVien<>? AND duocKichHoat=1 AND taiKhoanKhongBiKhoa=1 AND trangThaiLamViec=N'Đang làm việc' AND vaiTro IN(N'Lễ tân',N'Kế toán',N'Quản lý',N'Giám đốc',N'Quản trị viên') ORDER BY hoVaTen,maNhanVien",
+        return jdbc.query("SELECT maNhanVien,hoVaTen FROM dbo.vwNhanVien WHERE maNhanVien<>? AND duocKichHoat=1 AND taiKhoanKhongBiKhoa=1 AND trangThaiLamViec=N'Đang làm việc' AND vaiTro=N'Kế toán' ORDER BY hoVaTen,maNhanVien",
                 (r,n)->new FinanceDtos.CashRecipient(r.getString(1),r.getString(2)),actor);
     }
     public FinanceDtos.CashBalanceResponse cashBalance(String actor,LocalDateTime now) {
@@ -54,6 +54,7 @@ public class FinanceDatabase {
         Long id=command("handover",null,actor,shifts.convertToDatabaseColumn(request.shiftCode().trim()),request.toActor().trim(),request.actualAmount(),lines,request.note(),key,now,null);
         return denominations(jdbc.queryForObject("SELECT "+CASH+" FROM dbo.vwBanGiaoTienCa WHERE maBanGiaoTienCa=?",cashRows,id));
     }
+    public void confirmHandover(long id,String actor,LocalDateTime now){try{jdbc.update("EXEC dbo.uspXacNhanBanGiao ?,?,?",id,actor,now);}catch(DataAccessException e){throw translate(e);}}
     public FinanceDtos.ExpenseResponse expense(FinanceDtos.ExpenseRequest request,String actor,String key,LocalDateTime now){
         Long id=command("expense",null,actor,request.category().trim(),request.description().trim(),request.amount(),null,null,key,now,methods.convertToDatabaseColumn(request.method()));
         return jdbc.queryForObject("SELECT "+EXPENSE+" FROM dbo.vwKhoanChi WHERE maKhoanChi=?",expenseRows,id);
@@ -70,7 +71,7 @@ public class FinanceDatabase {
     }
     private RuntimeException translate(DataAccessException error){
         for(Throwable cause=error;cause!=null;cause=cause.getCause())if(cause instanceof SQLException sql){
-            String code=switch(sql.getErrorCode()){case 52301->"INVALID_DENOMINATION";case 52302->"DENOMINATION_TOTAL_MISMATCH";case 52303->"PARTNER_DEBT_EXISTS";case 52304->"PARTNER_DEBT_NOT_FOUND";case 52305->"INVALID_DEBT_STATE";case 52306->"INVALID_DEBT_SETTLEMENT";case 52311->"HANDOVER_ALREADY_RECORDED";case 52312->"INVALID_HANDOVER_RECIPIENT";case 52313->"HANDOVER_VARIANCE_NOTE_REQUIRED";case 52314->"INVALID_PAYMENT_METHOD";case 52315->"INSUFFICIENT_CASH_BALANCE";default->null;};
+            String code=switch(sql.getErrorCode()){case 52316->"HANDOVER_CONFIRMATION_FORBIDDEN";case 52301->"INVALID_DENOMINATION";case 52302->"DENOMINATION_TOTAL_MISMATCH";case 52303->"PARTNER_DEBT_EXISTS";case 52304->"PARTNER_DEBT_NOT_FOUND";case 52305->"INVALID_DEBT_STATE";case 52306->"INVALID_DEBT_SETTLEMENT";case 52311->"HANDOVER_ALREADY_RECORDED";case 52312->"INVALID_HANDOVER_RECIPIENT";case 52313->"HANDOVER_VARIANCE_NOTE_REQUIRED";case 52314->"INVALID_PAYMENT_METHOD";case 52315->"INSUFFICIENT_CASH_BALANCE";default->null;};
             if(code!=null)return new DomainException(code,sql.getMessage());
         }
         return error;
@@ -80,7 +81,7 @@ public class FinanceDatabase {
     public List<FinanceDtos.PartnerDebtResponse> debts(){return jdbc.query("SELECT "+DEBT+" FROM dbo.vwCongNoDoiTac ORDER BY thoiDiemGhiNhan DESC,maCongNoDoiTac DESC",debtRows);}
     private FinanceDtos.CashHandoverResponse denominations(FinanceDtos.CashHandoverResponse row){
         var lines=jdbc.query("SELECT menhGia,soLuong FROM dbo.vwChiTietTienBanGiao WHERE maBanGiaoTienCa=? ORDER BY maChiTietTienBanGiao",(r,n)->new FinanceDtos.DenominationLine(r.getBigDecimal(1),r.getInt(2)),row.id());
-        return new FinanceDtos.CashHandoverResponse(row.id(),row.shiftCode(),row.fromActor(),row.toActor(),row.expectedAmount(),row.actualAmount(),row.variance(),row.handedOverAt(),row.note(),lines);
+        return new FinanceDtos.CashHandoverResponse(row.id(),row.shiftCode(),row.fromActor(),row.toActor(),row.expectedAmount(),row.actualAmount(),row.variance(),row.handedOverAt(),row.note(),lines,row.confirmedBy(),row.confirmedAt());
     }
     public Optional<FinanceDtos.PartnerDebtResponse> debt(Long id){return jdbc.query("SELECT "+DEBT+" FROM dbo.vwCongNoDoiTac WHERE maCongNoDoiTac=?",debtRows,id).stream().findFirst();}
     public List<FinanceDtos.DebtSettlementResponse> settlements(Long id){

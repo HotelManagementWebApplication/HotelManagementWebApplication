@@ -143,7 +143,7 @@ const printReceipt = (receipt: ReceiptDto, room: Room, invoice: Invoice, reserva
       const matchedRoom = reservationRooms.find(item => item.id === id);
       return matchedRoom ? `${matchedRoom.number} (${roomTypeLabel(matchedRoom.type)})` : id;
     });
-    const serviceBookingsUsed = serviceBookings.filter(item => item.status === "USED" && roomIds.has(item.room_id) && item.amount_due > 0);
+    const serviceBookingsUsed = serviceBookings.filter(item => (item.status === "USED" || (item.paid_amount??0)>0) && roomIds.has(item.room_id) && item.amount_due > 0);
     const bookedServiceTotal = serviceBookingsUsed.reduce((sum, item) => sum + item.amount_due, 0);
     const serviceUsageLines = reservation?.service_usages ?? [];
     const serviceUsageTotal = serviceUsageLines.reduce((sum, item) => sum + item.amount, 0);
@@ -821,9 +821,9 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred 
                   <div>
                     <strong style={{fontSize:12,color:"#0F172A"}}>{services.find(service => service.id === item.service_id)?.name ?? item.service_id} · {item.quantity} suất/lần</strong>
                     <p style={{fontSize:11,color:"#64748B",marginTop:3}}>{fmtDateTime(item.scheduled_at)}{item.meal_period ? ` · ${item.meal_period === "LUNCH" ? "Bữa trưa" : "Bữa tối"}` : ""}</p>
-                    <p style={{fontSize:11,color:"#475569",marginTop:3}}>Miễn phí {item.free_quantity}/{item.quantity} · Phải trả {item.amount_due.toLocaleString("vi-VN")} ₫</p>
+                    <p style={{fontSize:11,color:"#475569",marginTop:3}}>Miễn phí {item.free_quantity}/{item.quantity} · Giá dịch vụ {item.amount_due.toLocaleString("vi-VN")} ₫ · Đã trả {(item.paid_amount??0).toLocaleString("vi-VN")} ₫</p>
                   </div>
-                  {item.status === "CONFIRMED" ? <button type="button" disabled={!isCheckedIn || Boolean(busy) || new Date(item.scheduled_at).getTime() > Date.now()} onClick={() => void markServiceUsed(item.id)} style={{border:0,borderRadius:7,padding:"8px 10px",background:"#166534",color:"#FFF",fontSize:11,fontWeight:700,cursor:"pointer"}}>Xác nhận đã dùng</button> : <span style={{fontSize:11,color:item.status === "USED" ? "#166534" : "#64748B"}}>{item.status === "USED" ? "Đã sử dụng" : "Đã hủy"}</span>}
+                  {item.status === "CONFIRMED" ? <button type="button" disabled={!isCheckedIn || Boolean(busy) || new Date(item.scheduled_at).getTime() > Date.now()} onClick={() => void markServiceUsed(item.id)} style={{border:0,borderRadius:7,padding:"8px 10px",background:"#166534",color:"#FFF",fontSize:11,fontWeight:700,cursor:"pointer"}}>Xác nhận đã dùng</button> : <span style={{fontSize:11,color:item.status === "USED" ? "#166534" : "#64748B"}}>{item.status === "USED" ? "Đã sử dụng" : item.status === "PENDING_PAYMENT" ? "Chờ thanh toán" : item.status === "EXPIRED" ? "Hết hạn" : "Đã hủy"}</span>}
                 </div>
               ))}
             </div>}

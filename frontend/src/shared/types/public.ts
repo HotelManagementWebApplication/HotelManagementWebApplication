@@ -43,4 +43,5 @@ export interface PublicService {
   category: string;
   description: string | null;
   image_url: string | null;
+  duration_minutes?:number;
 }

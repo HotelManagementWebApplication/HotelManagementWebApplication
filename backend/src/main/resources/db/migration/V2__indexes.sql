@@ -173,7 +173,7 @@ CREATE INDEX idxSuKienDangNhapNhanVien01
 -- =============================================================================
 CREATE INDEX idxDonNghiPhep01 ON DonNghiPhep (trangThai, ngayBatDau);
 
-CREATE INDEX idxBienDongTonKho01 ON BienDongTonKho (maMatHang, thoiDiemPhatSinh);
+
 
 CREATE INDEX idxTaiSanKyThuat01 ON TaiSanKyThuat (loaiViTri, tang, trangThai);
 
@@ -190,3 +190,10 @@ CREATE INDEX idxDatDichVuKhachSan02
 CREATE UNIQUE INDEX ukHoSoNhanSuGiayTo ON HoSoNhanSu(soGiayToTuyThan) WHERE soGiayToTuyThan IS NOT NULL;
 CREATE UNIQUE INDEX ukDeNghiTiepNhanNhanVien ON DeNghiTiepNhanNhanVien(maNhanVien) WHERE maNhanVien IS NOT NULL;
 CREATE INDEX idxDeNghiTiepNhanNhanVien01 ON DeNghiTiepNhanNhanVien(trangThai,thoiDiemTao);
+
+
+-- Active service intervals and unique provider events.
+CREATE INDEX idxDatDichVuKhaDung ON dbo.DatDichVuKhachSan(maDichVu,trangThai,thoiDiemDuKien,thoiDiemKetThuc) INCLUDE(hanThanhToan);
+CREATE UNIQUE INDEX ukDichVuMerchant ON dbo.DatDichVuKhachSan(maThamChieuThanhToan) WHERE maThamChieuThanhToan IS NOT NULL;
+CREATE UNIQUE INDEX ukDichVuProvider ON dbo.DatDichVuKhachSan(maGiaoDichVnpay) WHERE maGiaoDichVnpay IS NOT NULL;
+GO

@@ -493,9 +493,9 @@ class SecurityIntegrationTest {
     @Test
 
     /** Given manager provision/reset, When đổi password, Then lưu BCrypt, không lộ password và revoke sessions. */
-    void managerProvisioningAndPasswordResetAlwaysUseBcryptAndRevokeSessions() throws Exception {
+    void adminProvisioningAndPasswordResetAlwaysUseBcryptAndRevokeSessions() throws Exception {
 
-        String managerToken = bearer(login("manager", "manager-password").get("access_token").asText());
+        String managerToken = bearer(login("admin", "admin-password").get("access_token").asText());
         mockMvc.perform(post("/api/auth/employees")
 
                         .header(AUTHORIZATION, managerToken)
@@ -555,7 +555,7 @@ class SecurityIntegrationTest {
         provision(managerToken, "m-direct", EmployeeRole.DIRECTOR, "0900000013")
                 .andExpect(status().isForbidden());
         provision(managerToken, "m-hr", EmployeeRole.HR, "0900000014")
-                .andExpect(status().isCreated());
+                .andExpect(status().isForbidden());
 
         reset(managerToken, "director")
                 .andExpect(status().isForbidden());
@@ -575,9 +575,9 @@ class SecurityIntegrationTest {
 
         String directorToken = bearer(login("director", "director-password").get("access_token").asText());
         provision(directorToken, "d-admin", EmployeeRole.ADMIN, "0900000017")
-                .andExpect(status().isCreated());
+                .andExpect(status().isForbidden());
         provision(directorToken, "d-direct", EmployeeRole.DIRECTOR, "0900000018")
-                .andExpect(status().isCreated());
+                .andExpect(status().isForbidden());
         reset(directorToken, "admin")
                 .andExpect(status().isNoContent());
         reset(directorToken, "director")

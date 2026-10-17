@@ -204,16 +204,6 @@ ShiftCode,NIGHT,Ca đêm,CaLamViecNhanVien.maCa,ShiftCodeConverter,30,"Mã ca MO
 ShiftCode,MORNING,Ca sáng,BanGiaoTienCa.maCa,ShiftCodeConverter,30,"Mã ca MORNING/AFTERNOON/NIGHT ánh xạ sang tiếng Việt; mã ca kỹ thuật an toàn khác được giữ nguyên"
 ShiftCode,AFTERNOON,Ca chiều,BanGiaoTienCa.maCa,ShiftCodeConverter,30,"Mã ca MORNING/AFTERNOON/NIGHT ánh xạ sang tiếng Việt; mã ca kỹ thuật an toàn khác được giữ nguyên"
 ShiftCode,NIGHT,Ca đêm,BanGiaoTienCa.maCa,ShiftCodeConverter,30,"Mã ca MORNING/AFTERNOON/NIGHT ánh xạ sang tiếng Việt; mã ca kỹ thuật an toàn khác được giữ nguyên"
-StockCategory,LINEN,Đồ vải,MatHangTonKho.danhMuc,StockCategoryConverter,30,
-StockCategory,TOWELS,Khăn,MatHangTonKho.danhMuc,StockCategoryConverter,30,
-StockCategory,AMENITIES,Đồ dùng,MatHangTonKho.danhMuc,StockCategoryConverter,30,
-StockCategory,MINIBAR,Minibar,MatHangTonKho.danhMuc,StockCategoryConverter,30,
-StockCategory,GENERAL,Khác,MatHangTonKho.danhMuc,StockCategoryConverter,30,
-StockMovementType,RECEIVE,Nhập kho,BienDongTonKho.loaiBienDong,StockMovementTypeConverter,20,
-StockMovementType,RETURN,Hoàn kho,BienDongTonKho.loaiBienDong,StockMovementTypeConverter,20,
-StockMovementType,ISSUE,Xuất kho,BienDongTonKho.loaiBienDong,StockMovementTypeConverter,20,
-StockMovementType,WASTE,Hao hụt,BienDongTonKho.loaiBienDong,StockMovementTypeConverter,20,
-StockMovementType,ADJUST,Điều chỉnh,BienDongTonKho.loaiBienDong,StockMovementTypeConverter,20,
 TechnicalAssetStatus,GOOD,Tốt,TaiSanKyThuat.trangThai,TechnicalAssetStatusConverter,30,
 TechnicalAssetStatus,MAINTENANCE_NEEDED,Cần bảo trì,TaiSanKyThuat.trangThai,TechnicalAssetStatusConverter,30,
 TechnicalAssetStatus,REPAIRING,Đang sửa chữa,TaiSanKyThuat.trangThai,TechnicalAssetStatusConverter,30,
@@ -249,3 +239,6 @@ ServiceUnit,cái,cái,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển th�
 ServiceUnit,gói,gói,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
 ServiceUnit,cuộn,cuộn,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
 ServiceUnit,tuýp,tuýp,DichVu.donViTinh,ServiceUnitConverter,20,Nhãn hiển thị tiếng Việt đã chuẩn hóa
+HotelServiceBookingStatus,PENDING_PAYMENT,Chờ thanh toán,DatDichVuKhachSan.trangThai,HotelServiceBookingService#databaseBookingStatus,20,
+HotelServiceBookingStatus,EXPIRED,Hết hạn,DatDichVuKhachSan.trangThai,HotelServiceBookingService#databaseBookingStatus,20,
+ServiceUnit,kg,kg,DichVu.donViTinh,ServiceUnitConverter,20,
