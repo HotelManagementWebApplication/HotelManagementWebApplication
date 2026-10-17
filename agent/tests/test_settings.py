@@ -78,9 +78,10 @@ class SettingsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "explicit origins"):
             Settings(agent_cors_origins=["*"])
 
-    def test_gemini_requires_api_key(self) -> None:
-        with self.assertRaisesRegex(ValidationError, "GEMINI_API_KEY is required"):
-            Settings(_env_file=None, ai_provider="gemini", gemini_api_key=None)
+    def test_gemini_credentials_are_checked_when_runtime_starts(self) -> None:
+        settings = Settings(_env_file=None, ai_provider="gemini", gemini_api_key=None)
+        with self.assertRaisesRegex(RuntimeError, "GEMINI_API_KEY is required"):
+            settings.validate_runtime_credentials()
 
     def test_offline_provider_is_not_a_runtime_option(self) -> None:
         with self.assertRaisesRegex(ValidationError, "AI_PROVIDER must be gemini"):

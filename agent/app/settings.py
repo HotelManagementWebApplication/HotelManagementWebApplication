@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -84,13 +84,11 @@ class Settings(BaseSettings):
             raise ValueError("QDRANT_COLLECTION contains invalid characters")
         return value
 
-    @model_validator(mode="after")
-    def require_provider_credentials(self) -> "Settings":
+    def validate_runtime_credentials(self) -> None:
         if self.ai_provider == "gemini" and (
             self.gemini_api_key is None or not self.gemini_api_key.get_secret_value().strip()
         ):
-            raise ValueError("GEMINI_API_KEY is required when AI_PROVIDER=gemini")
-        return self
+            raise RuntimeError("GEMINI_API_KEY is required when AI_PROVIDER=gemini")
 
 
 @lru_cache

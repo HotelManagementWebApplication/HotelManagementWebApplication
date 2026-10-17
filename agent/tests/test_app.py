@@ -32,6 +32,12 @@ class AgentAppTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.client_context.__exit__(None, None, None)
 
+    def test_production_startup_requires_gemini_key(self) -> None:
+        settings = Settings(_env_file=None, gemini_api_key=None)
+        with self.assertRaisesRegex(RuntimeError, "GEMINI_API_KEY is required"):
+            with TestClient(create_app(settings=settings)):
+                self.fail("The production app must not start without its Gemini key")
+
     def test_health(self) -> None:
         response = self.client.get("/health")
         self.assertEqual(200, response.status_code)

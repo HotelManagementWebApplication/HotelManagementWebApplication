@@ -35,7 +35,7 @@ class SqlServerServiceCapacityPaymentTest {
  long guest,owner,reservation,invoice;
  LocalDateTime now,start;
  @BeforeEach void seed(){
-  now=LocalDateTime.now();start=now.plusHours(1).withNano(0);
+  now=businessNow();start=now.plusHours(1).withNano(0);
   jdbc.update("INSERT LoaiPhong(maLoaiPhong,ten,giaTheoNgay) VALUES('CP-TYPE',N'Capacity test',100000)");
   jdbc.update("INSERT Phong(maPhong,maLoaiPhong,trangThai) VALUES('CP-ROOM','CP-TYPE',N'Đang có khách')");
   guest=jdbc.queryForObject("INSERT KhachLuuTru(hoVaTen,soDienThoai,soGiayToTuyThan) OUTPUT INSERTED.maKhachLuuTru VALUES(N'Capacity guest','0997123456','CAPGUEST')",Long.class);
@@ -103,7 +103,7 @@ class SqlServerServiceCapacityPaymentTest {
   assertThat(db.usedTotal(reservation)).isEqualByComparingTo("200000");
   assertThat(jdbc.queryForObject("SELECT dbo.fnTinhTongTienDichVu(?)",java.math.BigDecimal.class,reservation)).isEqualByComparingTo("200000");
   SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.TestingAuthenticationToken("CP-DESK","unused","ROLE_FRONT_DESK"));
-  var checkout=billing.checkOut(reservation,LocalDateTime.now(),com.hospitality.mis.entity.billing.PaymentMethod.CASH,"CP-DESK");
+  var checkout=billing.checkOut(reservation,businessNow(),com.hospitality.mis.entity.billing.PaymentMethod.CASH,"CP-DESK");
   assertThat(checkout.serviceTotal()).isEqualByComparingTo("200000");
   assertThat(checkout.payable()).isEqualByComparingTo(checkout.roomTotal().divide(java.math.BigDecimal.valueOf(1000)).setScale(0,java.math.RoundingMode.HALF_UP).multiply(java.math.BigDecimal.valueOf(1000)));
   assertThat(jdbc.queryForObject("SELECT soTienPhaiTra FROM HoaDon WHERE maHoaDon=?",java.math.BigDecimal.class,invoice)).isEqualByComparingTo(checkout.payable());
@@ -117,6 +117,7 @@ class SqlServerServiceCapacityPaymentTest {
   assertThatThrownBy(()->db.preparePayment(first.id(),owner+999,now)).isInstanceOf(DomainException.class);
  }
  private HotelServiceBookingService.Response book(String id,int qty,LocalDateTime at){return bookings.bookForCustomer(new HotelServiceBookingService.Request(reservation,"CP-ROOM",id,at,qty,null,null),UUID.randomUUID().toString());}
+ private static LocalDateTime businessNow(){return LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));}
  private long available(LocalDateTime at){return jdbc.queryForObject("SELECT conLai FROM fnKhaDungDichVu(?,?) WHERE maDichVu='CP-EXP'",Long.class,at,at.plusMinutes(1));}
  private void customer(){var jwt=Jwt.withTokenValue("capacity-test").header("alg","none").subject(""+owner).claim("principal_type","CUSTOMER").claim("principal_id",""+owner).build();SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt,List.of(new SimpleGrantedAuthority("ROLE_CUSTOMER")),""+owner));}
  private Map<String,String> callback(long id,String amount,String txn,boolean signed)throws Exception{

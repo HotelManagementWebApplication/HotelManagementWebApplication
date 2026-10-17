@@ -41,7 +41,7 @@ public abstract class BillingWorkflowAssertions {
         cleanup();
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             Employee employee = new Employee(); employee.setEmployeeId("clerk"); employee.setFullName("Clerk");
-            employee.setPassword("test-hash"); employee.setPhone("0900000091"); employee.setRole(EmployeeRole.FRONT_DESK); em.persist(employee);
+            employee.setPassword("test-hash"); employee.setPhone("0900001091"); employee.setRole(EmployeeRole.FRONT_DESK); em.persist(employee);
             Employee recipient = new Employee(); recipient.setEmployeeId("recipient"); recipient.setFullName("Cash Custodian");
             recipient.setPassword("test-hash"); recipient.setPhone("0900000093"); recipient.setRole(EmployeeRole.ACCOUNTING); em.persist(recipient);
             Guest guest = new Guest(); guest.setFullName("Billing Guest"); guest.setPhone("0900000092");
