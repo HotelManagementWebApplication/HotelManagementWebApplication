@@ -307,10 +307,14 @@ BEGIN
         JOIN dbo.ChiTietDatPhong phongDat
             ON phongDat.maPhieuDatPhong = dichVuDat.maPhieuDatPhong
             AND phongDat.maPhong = dichVuDat.maPhong
-        WHERE dichVuDat.thoiDiemDuKien < phongDat.thoiDiemNhanPhong
-            OR dichVuDat.thoiDiemDuKien >= phongDat.thoiDiemTraPhong
+        WHERE dichVuDat.trangThai IN (N'Chờ thanh toán', N'Đã xác nhận')
+            AND (
+                dichVuDat.thoiDiemDuKien < phongDat.thoiDiemNhanPhong
+                OR dichVuDat.thoiDiemDuKien >= phongDat.thoiDiemTraPhong
+                OR dichVuDat.thoiDiemKetThuc > phongDat.thoiDiemTraPhong
+            )
     )
-        THROW 53610, N'Thời gian dịch vụ phải nằm trong kỳ lưu trú', 1;
+        THROW 53610, N'Thời gian dịch vụ phải nằm trọn trong kỳ lưu trú', 1;
 END;
 GO
 

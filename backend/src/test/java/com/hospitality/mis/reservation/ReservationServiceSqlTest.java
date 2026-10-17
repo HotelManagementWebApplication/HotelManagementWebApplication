@@ -12,6 +12,19 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
 class ReservationServiceSqlTest extends ReservationSqlFixture {
+    @Test void checkInCannotProceedUntilDepositHasBeenRecorded(){
+        var booking=service.create(new ReservationDtos.CreateRequest(
+            guest,"HCT-FD",BigDecimal.valueOf(1200000),ReservationDtos.RentalType.PACKAGE,
+            List.of(new ReservationDtos.RoomStay("HCT-R1",now,now.plusHours(24))),key()),"HCT-FD");
+        // Mô phỏng bản ghi legacy đã xác nhận nhưng cọc chưa được thu.
+        jdbc.update("UPDATE PhieuDatPhong SET trangThai=N'Đã xác nhận',trangThaiThanhToanCoc=N'Không yêu cầu',tienDatCoc=0 WHERE maPhieuDatPhong=?",booking.id());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM GiaoDichThanhToan g JOIN HoaDon h ON h.maHoaDon=g.maHoaDon WHERE h.maPhieuDatPhong=?",Integer.class,booking.id())).isZero();
+        assertThatThrownBy(()->service.checkIn(booking.id(),new ReservationDtos.CheckInRequest(now),"HCT-FD",key()))
+            .extracting("code").isEqualTo("DEPOSIT_PAYMENT_REQUIRED");
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM PhieuDatPhong WHERE maPhieuDatPhong=?",String.class,booking.id())).isEqualTo("Đã xác nhận");
+        assertThat(jdbc.queryForObject("SELECT trangThai FROM Phong WHERE maPhong=N'HCT-R1'",String.class)).isEqualTo("Sẵn sàng");
+    }
+
     @Test void bookingKeepsSharedGuestAndDepositHasOnePaymentReceiptAndAudit(){
         var booking=create(now.plusDays(4),24,false,"HCT-R1");
         assertThat(booking.guestId()).isEqualTo(guest);assertThat(booking.employeeId()).isEqualTo("HCT-FD");

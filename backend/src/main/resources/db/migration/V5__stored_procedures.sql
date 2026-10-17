@@ -1316,7 +1316,21 @@ BEGIN
             @soTienThanhToanGoc DECIMAL(12, 2),
             @phuongThucThanhToanGoc NVARCHAR(30),
             @maPhongDaKhoa NVARCHAR(10),
-            @maHoaDonDaKhoa BIGINT;
+            @maHoaDonDaKhoa BIGINT,
+            @tienCocMatCanHoan DECIMAL(19, 2) = 0,
+            @ketQuaKhoaTienMat INT;
+        -- Khóa quỹ trước khi khóa hóa đơn, cùng thứ tự với mọi lệnh tiền mặt.
+        -- Tránh deadlock giữa hoàn cọc (invoice → cash) và thu/hoàn tiền (cash → invoice).
+        IF @lenh IN (N'refund-deposit', N'cancel-refund')
+        BEGIN
+            EXEC @ketQuaKhoaTienMat = sys.sp_getapplock
+                @Resource = N'finance-cash-custody',
+                @LockMode = 'Exclusive',
+                @LockOwner = 'Transaction',
+                @LockTimeout = 15000;
+            IF @ketQuaKhoaTienMat < 0
+                THROW 52310, N'Không khóa được số dư tiền mặt đang giữ', 1;
+        END;
         IF @lenh IN (N'deposit', N'checkout')
         BEGIN
             SELECT @trangThaiDatPhong = trangThai,
@@ -1486,7 +1500,6 @@ BEGIN
                 OR @thoiDiemNhanPhongThucTe IS NULL
                 OR @thoiDiemThaoTac <= @thoiDiemNhanPhongThucTe
                 THROW 53501, N'Giờ trả phải sau giờ nhận thực tế', 1;
-
             -- Khóa phòng theo mã rồi khóa khách trước khi tính tiền checkout.
             DECLARE duyetPhongTra CURSOR LOCAL FAST_FORWARD FOR
                 SELECT maPhong
@@ -1508,9 +1521,46 @@ BEGIN
             FROM dbo.KhachLuuTru WITH (UPDLOCK, HOLDLOCK)
             WHERE maKhachLuuTru = @maKhachLuuTru;
 
+            -- Khôi phục giờ bắt đầu gốc riêng cho từng phòng đang dùng.
+            -- Lịch sử chuyển phòng là một chuỗi; không lấy MIN toàn booking vì
+            -- các phòng trong cùng booking có thể có giờ nhận khác nhau.
+            DECLARE @gioBatDauGoc TABLE (
+                maPhong NVARCHAR(10) PRIMARY KEY,
+                thoiDiemNhanPhong DATETIME2(6) NOT NULL
+            );
+            ;WITH roomStartChain AS (
+                SELECT chiTiet.maPhieuDatPhong,
+                    chiTiet.maPhong AS maPhongHienTai,
+                    chiTiet.maPhong AS maPhongNguoc,
+                    chiTiet.thoiDiemNhanPhong AS thoiDiemBatDau,
+                    chiTiet.thoiDiemNhanPhong AS thoiDiemBatDauDoan
+                FROM dbo.ChiTietDatPhong chiTiet
+                WHERE chiTiet.maPhieuDatPhong = @maPhieuDatPhong
+                    AND chiTiet.trangThai = N'Đang có khách'
+                UNION ALL
+                SELECT chuoi.maPhieuDatPhong,
+                    chuoi.maPhongHienTai,
+                    chiTietCu.maPhong,
+                    chiTietCu.thoiDiemNhanPhong,
+                    chuoi.thoiDiemBatDauDoan
+                FROM roomStartChain chuoi
+                JOIN dbo.ChuyenPhong chuyen
+                    ON chuyen.maPhieuDatPhong = chuoi.maPhieuDatPhong
+                    AND chuyen.maPhongMoi = chuoi.maPhongNguoc
+                    AND chuyen.thoiDiemChuyenPhong = chuoi.thoiDiemBatDauDoan
+                JOIN dbo.ChiTietDatPhong chiTietCu
+                    ON chiTietCu.maPhieuDatPhong = chuoi.maPhieuDatPhong
+                    AND chiTietCu.maPhong = chuyen.maPhongCu
+            )
+            INSERT @gioBatDauGoc(maPhong, thoiDiemNhanPhong)
+            SELECT maPhongHienTai, MIN(thoiDiemBatDau)
+            FROM roomStartChain
+            GROUP BY maPhongHienTai
+            OPTION (MAXRECURSION 1000);
+
             -- Tách tiền phòng gốc, tiền gia hạn và phụ thu trả muộn; chưa trừ giảm giá VIP.
             SELECT @tongTienPhong = COALESCE(SUM(CASE
-                WHEN chiTiet.thoiDiemTraPhongBanDau > chiTiet.thoiDiemNhanPhong THEN dbo.fnTinhTongTienPhong(COALESCE(chiTiet.giaTheoNgayDaChot, loaiPhong.giaTheoNgay), COALESCE(chiTiet.giaTheoGioDaChot, loaiPhong.giaTheoGio), chiTiet.thoiDiemNhanPhong, chiTiet.thoiDiemTraPhongBanDau, CASE
+                WHEN chiTiet.thoiDiemTraPhongBanDau > gioGoc.thoiDiemNhanPhong THEN dbo.fnTinhTongTienPhong(COALESCE(chiTiet.giaTheoNgayDaChot, loaiPhong.giaTheoNgay), COALESCE(chiTiet.giaTheoGioDaChot, loaiPhong.giaTheoGio), gioGoc.thoiDiemNhanPhong, chiTiet.thoiDiemTraPhongBanDau, CASE
                     WHEN @hinhThucThue = N'Theo giờ' THEN 1
                     ELSE 0
                 END, 3)
@@ -1532,7 +1582,10 @@ BEGIN
                 ON phong.maPhong = chiTiet.maPhong
             JOIN dbo.LoaiPhong loaiPhong
                 ON loaiPhong.maLoaiPhong = phong.maLoaiPhong
-            WHERE chiTiet.maPhieuDatPhong = @maPhieuDatPhong;
+            JOIN @gioBatDauGoc gioGoc
+                ON gioGoc.maPhong = chiTiet.maPhong
+            WHERE chiTiet.maPhieuDatPhong = @maPhieuDatPhong
+                AND chiTiet.trangThai = N'Đang có khách';
 
             -- Cộng dịch vụ đã dùng và bồi thường thiết bị.
             SET @tongTienDichVu = dbo.fnTinhTongTienDichVu(@maPhieuDatPhong);
@@ -1594,15 +1647,18 @@ BEGIN
             UPDATE dbo.PhieuDatPhong
             SET trangThai = N'Đã trả phòng', thoiDiemTraPhongThucTe = @thoiDiemThaoTac, phienBan = phienBan + 1
             WHERE maPhieuDatPhong = @maPhieuDatPhong;
-            UPDATE dbo.ChiTietDatPhong
-            SET trangThai = N'Đã trả phòng'
-            WHERE maPhieuDatPhong = @maPhieuDatPhong;
             UPDATE phong
             SET trangThai = N'Đang dọn phòng', phienBan = phienBan + 1
             FROM dbo.Phong phong
             JOIN dbo.ChiTietDatPhong chiTiet
                 ON chiTiet.maPhong = phong.maPhong
-            WHERE chiTiet.maPhieuDatPhong = @maPhieuDatPhong;
+            WHERE chiTiet.maPhieuDatPhong = @maPhieuDatPhong
+                AND chiTiet.trangThai = N'Đang có khách'
+                AND phong.trangThai = N'Đang có khách';
+            UPDATE dbo.ChiTietDatPhong
+            SET trangThai = N'Đã trả phòng'
+            WHERE maPhieuDatPhong = @maPhieuDatPhong
+                AND trangThai = N'Đang có khách';
             UPDATE dbo.DatDichVuKhachSan
             SET trangThai = N'Đã hủy'
             WHERE maPhieuDatPhong = @maPhieuDatPhong
@@ -1841,6 +1897,15 @@ BEGIN
                         AND ketQuaHuy = N'Hoàn tiền'
                 )
                 THROW 53505, N'Không được tự hoàn cọc ngoài policy hủy đúng hạn', 1;
+
+            SELECT @tienCocMatCanHoan = COALESCE(SUM(soDu), 0)
+            FROM dbo.vwSoDuTienCoc
+            WHERE maHoaDon = @maHoaDon
+                AND phuongThuc = N'Tiền mặt'
+                AND soDu > 0;
+            IF @tienCocMatCanHoan > 0
+                AND dbo.fnSoDuTienMatNhanVien(@nguoiThucHien, @thoiDiemHienTai) < @tienCocMatCanHoan
+                THROW 52315, N'Số dư tiền mặt đang giữ không đủ để hoàn cọc', 1;
 
             -- Hoàn lần lượt số dư của từng giao dịch cọc, giữ liên kết với giao dịch gốc.
             DECLARE duyetTienCoc CURSOR LOCAL FAST_FORWARD FOR
@@ -2314,6 +2379,8 @@ BEGIN
         BEGIN
             IF @trangThaiDatPhong NOT IN (N'Đã xác nhận', N'Đã thanh toán cọc')
                 THROW 53410, N'Trạng thái đặt phòng không hợp lệ', 1;
+            IF @trangThaiDatCoc <> N'Đã thanh toán' OR @tienDatCocTruoc <= 0
+                THROW 53411, N'Phải xác nhận đã thu đủ tiền cọc trước khi nhận phòng', 1;
             IF @thoiDiemThaoTac IS NULL
                 SET @thoiDiemThaoTac = @thoiDiemHienTai;
             IF EXISTS (
@@ -2516,6 +2583,18 @@ BEGIN
                     AND dbo.fnKiemTraPhongTrong(maPhong, @thoiDiemNhanPhongMoi, @thoiDiemThaoTac, @thoiDiemHienTai, @maPhieuDatPhong) = 0
             )
                 THROW 51004, N'Lịch mới có booking giao nhau', 1;
+
+            IF @lenh = N'customer-reschedule' AND EXISTS (
+                SELECT 1
+                FROM dbo.DatDichVuKhachSan dichVuDat
+                WHERE dichVuDat.maPhieuDatPhong = @maPhieuDatPhong
+                    AND dichVuDat.trangThai IN (N'Chờ thanh toán', N'Đã xác nhận')
+                    AND (
+                        dichVuDat.thoiDiemDuKien < @thoiDiemNhanPhongMoi
+                        OR dichVuDat.thoiDiemKetThuc > @thoiDiemThaoTac
+                    )
+            )
+                THROW 53610, N'Không thể đổi ngày vì có dịch vụ đã đặt nằm ngoài kỳ lưu trú mới', 1;
 
             -- Khách yêu cầu gia hạn và trả cọc bổ sung.
             IF @lenh = N'customer-extend'
@@ -2844,6 +2923,7 @@ BEGIN
             @tra DATETIME2(6),
             @traGoc DATETIME2(6),
             @soKhach INT,
+            @soKhachToiDa INT,
             @soLan INT,
             @giaTheoNgayDaChot DECIMAL(12, 2),
             @giaTheoGioDaChot DECIMAL(12, 2);
@@ -2870,6 +2950,30 @@ BEGIN
                 AND trangThai = N'Sẵn sàng'
         )
             THROW 51002, N'Phòng đích không sẵn sàng', 1;
+        IF EXISTS (
+            SELECT 1
+            FROM dbo.ChiTietDatPhong
+            WHERE maPhieuDatPhong = @maPhieuDatPhong
+                AND maPhong = @maPhongMoi
+        )
+            THROW 51009, N'Phòng đích đã có trong lịch sử booking này; hãy chọn phòng khác', 1;
+        SELECT @soKhachToiDa = loaiPhong.soKhachToiDa
+        FROM dbo.Phong phong
+        JOIN dbo.LoaiPhong loaiPhong
+            ON loaiPhong.maLoaiPhong = phong.maLoaiPhong
+        WHERE phong.maPhong = @maPhongMoi;
+        IF @soKhach > @soKhachToiDa
+            THROW 51004, N'Số khách vượt sức chứa của phòng đích', 1;
+        IF EXISTS (
+            SELECT 1
+            FROM dbo.DatDichVuKhachSan dichVuDat
+            WHERE dichVuDat.maPhieuDatPhong = @maPhieuDatPhong
+                AND dichVuDat.maPhong = @maPhongCu
+                AND dichVuDat.trangThai IN (N'Chờ thanh toán', N'Đã xác nhận')
+                AND dichVuDat.thoiDiemDuKien < @tra
+                AND dichVuDat.thoiDiemKetThuc > @thoiDiemChuyen
+        )
+            THROW 53610, N'Không thể chuyển phòng khi còn dịch vụ đã đặt trong thời gian sau lúc chuyển', 1;
         IF dbo.fnKiemTraPhongTrong(@maPhongMoi, @thoiDiemChuyen, @tra, @thoiDiemHienTai, @maPhieuDatPhong) = 0
             THROW 51004, N'Phòng đích có lịch giao nhau', 1;
         UPDATE dbo.ChiTietDatPhong
@@ -4800,6 +4904,32 @@ BEGIN
             THROW 51601, N'Không tìm thấy phòng', 1;
         IF @trangThai = N'Đang có khách'
             THROW 51702, N'Không thể đưa phòng đang có khách vào bảo trì', 1;
+        IF @ngay IS NOT NULL AND dbo.fnKiemTraLichPhongTrong(
+            @maPhong,
+            CONVERT(DATETIME2(6), @ngay),
+            DATEADD(DAY, 1, CONVERT(DATETIME2(6), @ngay)),
+            SYSDATETIME(),
+            NULL
+        ) = 0
+            THROW 51705, N'Ngày bảo trì trùng với lịch đặt phòng đang còn hiệu lực', 1;
+        IF @ngay <= CONVERT(DATE, SYSDATETIME()) AND EXISTS (
+            SELECT 1
+            FROM dbo.ChiTietDatPhong chiTiet
+            JOIN dbo.PhieuDatPhong phieu
+                ON phieu.maPhieuDatPhong = chiTiet.maPhieuDatPhong
+            WHERE chiTiet.maPhong = @maPhong
+                AND chiTiet.thoiDiemTraPhong > SYSDATETIME()
+                AND chiTiet.trangThai IN (N'Giữ tạm phòng', N'Đã giữ phòng', N'Đang có khách')
+                AND (
+                    phieu.trangThai IN (N'Đã xác nhận', N'Đã thanh toán cọc', N'Đã nhận phòng')
+                    OR (
+                        phieu.trangThai = N'Chờ thanh toán'
+                        AND phieu.trangThaiThanhToanCoc = N'Chờ thanh toán'
+                        AND phieu.thoiDiemHetHanThanhToanCoc > SYSDATETIME()
+                    )
+                )
+        )
+            THROW 51705, N'Không thể bắt đầu bảo trì khi phòng còn lượt ở hoặc booking tương lai', 1;
         INSERT dbo.PhieuBaoTri(
             maPhieuBaoTri,
             maPhong,
@@ -4816,10 +4946,13 @@ BEGIN
             N'Chưa xử lý',
             @moTa
         );
-        UPDATE dbo.Phong
-        SET trangThai = N'Đang bảo trì', phienBan = phienBan + 1
-        WHERE maPhong = @maPhong
-            AND trangThai <> N'Đang bảo trì';
+        -- Phiếu cho ngày tương lai chỉ khóa đúng ngày trong hàm khả dụng.
+        -- Phiếu từ hôm nay trở về trước là yêu cầu bắt đầu ngay.
+        IF @ngay <= CONVERT(DATE, SYSDATETIME())
+            UPDATE dbo.Phong
+            SET trangThai = N'Đang bảo trì', phienBan = phienBan + 1
+            WHERE maPhong = @maPhong
+                AND trangThai <> N'Đang bảo trì';
         INSERT dbo.NhatKyKiemSoat(
             nguoiThucHien,
             hanhDong,
@@ -4867,9 +5000,10 @@ BEGIN
 
     BEGIN TRY
         BEGIN TRANSACTION;
-        DECLARE @maPhong NVARCHAR(10), @trangThaiTruoc NVARCHAR(30);
+        DECLARE @maPhong NVARCHAR(10), @trangThaiTruoc NVARCHAR(30), @ngayDuKien DATE;
         SELECT @maPhong = maPhong,
-            @trangThaiTruoc = trangThai
+            @trangThaiTruoc = trangThai,
+            @ngayDuKien = ngayDuKien
         FROM dbo.PhieuBaoTri WITH (UPDLOCK, HOLDLOCK)
         WHERE maPhieuBaoTri = @maPhieuBaoTri;
         IF @maPhong IS NULL
@@ -4894,10 +5028,39 @@ BEGIN
                 WHERE maPhong = @maPhong
             )
                 THROW 51601, N'Room not found', 1;
+            IF @trangThaiMoi = N'Đang bảo trì'
+            BEGIN
+                IF @ngayDuKien > CONVERT(DATE, SYSDATETIME())
+                    THROW 51706, N'Chỉ được bắt đầu bảo trì từ ngày dự kiến trở đi', 1;
+                IF EXISTS (
+                    SELECT 1
+                    FROM dbo.ChiTietDatPhong chiTiet
+                    JOIN dbo.PhieuDatPhong phieu
+                        ON phieu.maPhieuDatPhong = chiTiet.maPhieuDatPhong
+                    WHERE chiTiet.maPhong = @maPhong
+                        AND chiTiet.thoiDiemNhanPhong < DATEADD(DAY, 1, CONVERT(DATETIME2(6), @ngayDuKien))
+                        AND chiTiet.thoiDiemTraPhong > CONVERT(DATETIME2(6), @ngayDuKien)
+                        AND chiTiet.trangThai IN (N'Giữ tạm phòng', N'Đã giữ phòng', N'Đang có khách')
+                        AND (
+                            phieu.trangThai IN (N'Đã xác nhận', N'Đã thanh toán cọc', N'Đã nhận phòng')
+                            OR (
+                                phieu.trangThai = N'Chờ thanh toán'
+                                AND phieu.trangThaiThanhToanCoc = N'Chờ thanh toán'
+                                AND phieu.thoiDiemHetHanThanhToanCoc > SYSDATETIME()
+                            )
+                        )
+                )
+                    THROW 51705, N'Không thể bắt đầu bảo trì vì ngày dự kiến còn booking đang hiệu lực', 1;
+            END;
             UPDATE dbo.PhieuBaoTri
             SET trangThai = @trangThaiMoi
             WHERE maPhieuBaoTri = @maPhieuBaoTri;
             DECLARE @trangThaiPhong NVARCHAR(30) = N'Đang bảo trì';
+            IF @trangThaiMoi = N'Đang bảo trì'
+                UPDATE dbo.Phong
+                SET trangThai = N'Đang bảo trì', phienBan = phienBan + 1
+                WHERE maPhong = @maPhong
+                    AND trangThai <> N'Đang bảo trì';
             IF @trangThaiMoi = N'Đã hoàn thành'
                 AND NOT EXISTS (
                     SELECT 1 FROM dbo.PhieuBaoTri
@@ -5570,6 +5733,10 @@ BEGIN
         WHERE maPhong = @maPhong;
         IF @trangThaiPhong IS NULL
             THROW 51601, N'Không tìm thấy phòng', 1;
+        IF @trangThaiPhong = N'Đang có khách' AND @trangThaiMoi <> @trangThaiTruoc
+            THROW 51702, N'Nhiệm vụ dọn phòng đã cũ; không thể đổi trạng thái phòng đang có khách', 1;
+        IF @trangThaiPhong = N'Ngừng sử dụng' AND @trangThaiMoi <> @trangThaiTruoc
+            THROW 51806, N'Phòng ngừng sử dụng không thể được mở bởi nhiệm vụ buồng phòng', 1;
         IF EXISTS (
             SELECT 1
             FROM dbo.SuCoThietBi WITH (HOLDLOCK)
@@ -5602,8 +5769,33 @@ BEGIN
             IF @daHoanThanhChecklist = 0
                 OR @coCongViecCanTro = 1
                 THROW 51811, N'Phòng chỉ READY sau khi hoàn thành checklist và không còn incident blocking', 1;
+            IF EXISTS (
+                SELECT 1
+                FROM dbo.PhieuCongViecKyThuat
+                WHERE maPhong = @maPhong
+                    AND trangThai IN (N'Mới tạo', N'Đã tiếp nhận', N'Đang thực hiện', N'Chờ nghiệm thu')
+            ) OR EXISTS (
+                SELECT 1
+                FROM dbo.PhieuBaoTri
+                WHERE maPhong = @maPhong
+                    AND trangThai <> N'Đã hoàn thành'
+                    AND ngayDuKien <= CONVERT(DATE, @thoiDiemHienTai)
+            )
+                THROW 51806, N'Phòng còn công việc kỹ thuật hoặc bảo trì chưa hoàn tất', 1;
             IF @trangThaiPhong = N'Đang bảo trì'
-                THROW 51806, N'Phòng đang bị maintenance khóa', 1;
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM dbo.PhieuCongViecKyThuat
+                    WHERE maPhong = @maPhong
+                        AND trangThai = N'Đã hoàn thành'
+                )
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM dbo.PhieuBaoTri
+                    WHERE maPhong = @maPhong
+                        AND trangThai = N'Đã hoàn thành'
+                )
+                THROW 51806, N'Phòng đang bị khóa bảo trì và chưa có công việc hoàn tất để mở lại', 1;
         END;
         SET @trangThaiPhongMoi = CASE
             WHEN @trangThaiMoi = N'Sẵn sàng' THEN N'Sẵn sàng'
@@ -5628,7 +5820,26 @@ BEGIN
         UPDATE dbo.Phong
         SET trangThai = @trangThaiPhongMoi, phienBan = phienBan + 1
         WHERE maPhong = @maPhong
-            AND trangThai <> @trangThaiPhongMoi;
+            AND trangThai <> @trangThaiPhongMoi
+            AND trangThai NOT IN (N'Đang có khách', N'Ngừng sử dụng')
+            AND (
+                trangThai <> N'Đang bảo trì'
+                OR (
+                    @trangThaiPhongMoi = N'Sẵn sàng'
+                    AND EXISTS (
+                        SELECT 1
+                        FROM dbo.PhieuBaoTri
+                        WHERE maPhong = @maPhong
+                            AND trangThai = N'Đã hoàn thành'
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.PhieuCongViecKyThuat
+                        WHERE maPhong = @maPhong
+                            AND trangThai <> N'Đã bàn giao phòng'
+                    )
+                )
+            );
         DECLARE @trangThaiApiTruoc NVARCHAR(30) = CASE @trangThaiTruoc
             WHEN N'Cần dọn phòng' THEN N'NEEDS_CLEANING'
             WHEN N'Đang thực hiện' THEN N'IN_PROGRESS'
@@ -5806,6 +6017,24 @@ BEGIN
                 THROW 51702, N'Không thể tạo work order cho phòng đang có khách', 1;
             IF @trangThaiPhong = N'Ngừng sử dụng'
                 THROW 51904, N'Không thể tạo work order cho phòng ngừng sử dụng', 1;
+            IF EXISTS (
+                SELECT 1
+                FROM dbo.ChiTietDatPhong chiTiet
+                JOIN dbo.PhieuDatPhong phieu
+                    ON phieu.maPhieuDatPhong = chiTiet.maPhieuDatPhong
+                WHERE chiTiet.maPhong = @maPhong
+                    AND chiTiet.thoiDiemTraPhong > @thoiDiemHienTai
+                    AND chiTiet.trangThai IN (N'Giữ tạm phòng', N'Đã giữ phòng', N'Đang có khách')
+                    AND (
+                        phieu.trangThai IN (N'Đã xác nhận', N'Đã thanh toán cọc', N'Đã nhận phòng')
+                        OR (
+                            phieu.trangThai = N'Chờ thanh toán'
+                            AND phieu.trangThaiThanhToanCoc = N'Chờ thanh toán'
+                            AND phieu.thoiDiemHetHanThanhToanCoc > @thoiDiemHienTai
+                        )
+                    )
+            )
+                THROW 51918, N'Không thể khóa phòng kỹ thuật khi còn khách hoặc booking chưa kết thúc', 1;
             IF @maThietBi IS NOT NULL
                 AND NOT EXISTS (
                     SELECT 1
@@ -8279,6 +8508,24 @@ BEGIN
             IF @laKyThuat = 0
                 AND @laQuanLy = 0
                 THROW 52804, N'Chỉ kỹ thuật/quản lý được bắt đầu bảo trì', 1;
+            IF EXISTS (
+                SELECT 1
+                FROM dbo.ChiTietDatPhong chiTiet
+                JOIN dbo.PhieuDatPhong phieu
+                    ON phieu.maPhieuDatPhong = chiTiet.maPhieuDatPhong
+                WHERE chiTiet.maPhong = @maPhong
+                    AND chiTiet.thoiDiemTraPhong > @thoiDiemHienTai
+                    AND chiTiet.trangThai IN (N'Giữ tạm phòng', N'Đã giữ phòng', N'Đang có khách')
+                    AND (
+                        phieu.trangThai IN (N'Đã xác nhận', N'Đã thanh toán cọc', N'Đã nhận phòng')
+                        OR (
+                            phieu.trangThai = N'Chờ thanh toán'
+                            AND phieu.trangThaiThanhToanCoc = N'Chờ thanh toán'
+                            AND phieu.thoiDiemHetHanThanhToanCoc > @thoiDiemHienTai
+                        )
+                    )
+            )
+                THROW 52807, N'Không thể khóa phòng bảo trì khi còn khách hoặc booking chưa kết thúc', 1;
         END
         ELSE IF @trangThaiCu = N'Đang bảo trì'
             AND @trangThaiMoi = N'Sẵn sàng'

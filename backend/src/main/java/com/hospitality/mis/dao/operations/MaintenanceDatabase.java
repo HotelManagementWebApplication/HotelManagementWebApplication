@@ -24,7 +24,7 @@ public class MaintenanceDatabase {
         try{return jdbc.queryForObject(sql,rows,args);}
         catch(DataAccessException error){
             for(Throwable cause=error;cause!=null;cause=cause.getCause())if(cause instanceof SQLException failure){
-                String code=switch(failure.getErrorCode()){case 51601->"ROOM_NOT_FOUND";case 51701->"MAINTENANCE_EXISTS";case 51702->"ROOM_OCCUPIED";case 51703->"MAINTENANCE_NOT_FOUND";case 51704->"INVALID_MAINTENANCE_TRANSITION";default->null;};
+                String code=switch(failure.getErrorCode()){case 51601->"ROOM_NOT_FOUND";case 51701->"MAINTENANCE_EXISTS";case 51702->"ROOM_OCCUPIED";case 51703->"MAINTENANCE_NOT_FOUND";case 51704->"INVALID_MAINTENANCE_TRANSITION";case 51705->"ROOM_HAS_RESERVATION";case 51706->"MAINTENANCE_NOT_DUE";default->null;};
                 if(code!=null)throw new DomainException(code,failure.getMessage());
             }
             throw error;

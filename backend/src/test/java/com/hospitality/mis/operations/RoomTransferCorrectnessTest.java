@@ -50,6 +50,16 @@ class RoomTransferCorrectnessTest {
         jdbc.update("INSERT ChiTietDatPhong(maPhieuDatPhong,maPhong,thoiDiemNhanPhong,thoiDiemTraPhong,thoiDiemTraPhongBanDau,trangThai,soLuongKhach) VALUES(?,?,?,?,?,N'Đã giữ phòng',1)",other,"RTX-B",LocalDateTime.now().plusHours(1),to,to);
         code(()->service.transfer(id(),new RoomTransferDtos.CreateRequest("RTX-A","RTX-B",null,"overlap"),"RTX-op","RTX-overlap"),"OVERBOOKING");
     }
+    @Test void destinationCapacityAndReturningToPreviousRoomAreRejectedClearly(){
+        jdbc.update("UPDATE LoaiPhong SET soKhachToiDa=1 WHERE maLoaiPhong=N'RTX'");
+        LocalDateTime switchAt=LocalDateTime.now();
+        code(()->service.transfer(id(),new RoomTransferDtos.CreateRequest("RTX-A","RTX-B",switchAt,"capacity"),"RTX-op","RTX-capacity"),"OVERBOOKING");
+        jdbc.update("UPDATE LoaiPhong SET soKhachToiDa=2 WHERE maLoaiPhong=N'RTX'");
+        service.transfer(id(),new RoomTransferDtos.CreateRequest("RTX-A","RTX-B",switchAt,"upgrade"),"RTX-op","RTX-first-move");
+        jdbc.update("UPDATE Phong SET trangThai=N'Sẵn sàng' WHERE maPhong=N'RTX-A'");
+        code(()->service.transfer(id(),new RoomTransferDtos.CreateRequest("RTX-B","RTX-A",switchAt.plusMinutes(1),"return"),"RTX-op","RTX-return"),"ROOM_ALREADY_USED_IN_RESERVATION");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ChuyenPhong WHERE maPhieuDatPhong=?",Integer.class,id())).isEqualTo(1);
+    }
     @Test void concurrentDifferentKeysProduceOneTransfer()throws Exception{
         var gate=new CountDownLatch(1);try(var pool=Executors.newFixedThreadPool(2)){
             var a=pool.submit(()->attempt("RTX-a",gate));var b=pool.submit(()->attempt("RTX-b",gate));gate.countDown();

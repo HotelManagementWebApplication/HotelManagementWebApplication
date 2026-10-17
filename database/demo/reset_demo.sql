@@ -639,8 +639,8 @@ VALUES (
     N'FRONTDESK',
     NULL,
     DATEADD(DAY, - 3, @demoNow),
-    0.00,
-    N'Đã xác nhận',
+    2175000.00,
+    N'Đã thanh toán cọc',
     N'Theo gói',
     NULL,
     NULL,
@@ -649,7 +649,7 @@ VALUES (
     0,
     NULL,
     NULL,
-    N'Không yêu cầu'
+    N'Đã thanh toán'
 ),
 -- Booking 3: Khách đang ở phòng 601, có sự cố thiết bị.
 (
@@ -835,6 +835,9 @@ UPDATE PhieuDatPhong
 SET phuongThucBaoDam = N'VNPay'
 WHERE maPhieuDatPhong IN (5, 6)
     AND maThanhToanDatCoc IS NOT NULL;
+UPDATE PhieuDatPhong
+SET phuongThucBaoDam = N'Tại khách sạn'
+WHERE maPhieuDatPhong = 2;
 
 INSERT INTO SuDungDichVu (maPhieuDatPhong, maDichVu, ngaySuDung, soLuong, donGia) VALUES
     (1, N'BREAKFAST', DATEADD(DAY, -1, CAST(@demoNow AS date)), 2, 0.00),
@@ -878,6 +881,23 @@ VALUES (
     2400000.00,
     980000.00,
     2180000.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0
+),
+(
+    2,
+    2,
+    DATEADD(DAY, -3, @demoNow),
+    0.00,
+    2175000.00,
+    N'Tiền mặt',
+    N'Dự kiến',
+    4350000.00,
+    0.00,
+    2175000.00,
     0.00,
     0.00,
     0.00,
@@ -930,6 +950,7 @@ INSERT INTO GiaoDichThanhToan
     (maGiaoDichThanhToan, maHoaDon, soTien, phuongThuc, loai, trangThai, maThamChieu, thoiDiemPhatSinh, maNguoiThucHien, khoaChongTrung, maSuKienBenNgoai)
 VALUES
     (1, 1, 1200000.00, N'Tiền mặt', N'Thanh toán', N'Đã hoàn tất', N'DEPOSIT:1', DATEADD(DAY, -1, @demoNow), N'FRONTDESK', N'DEMO-PAY-001', NULL),
+    (6, 2, 2175000.00, N'Tiền mặt', N'Thanh toán', N'Đã hoàn tất', N'DEPOSIT:2', DATEADD(DAY, -3, @demoNow), N'FRONTDESK', N'DEMO-PAY-007', NULL),
     (2, 3, 1000000.00, N'Tiền mặt', N'Thanh toán', N'Đã hoàn tất', N'PAY:3:PARTIAL', DATEADD(HOUR, -1, @demoNow), N'FRONTDESK', N'DEMO-PAY-002', NULL),
     (3, 4, 1800000.00, N'Chuyển khoản ngân hàng', N'Thanh toán', N'Đã hoàn tất', N'DEPOSIT:4', DATEADD(DAY, -5, @demoNow), N'FRONTDESK', N'DEMO-PAY-003', NULL),
     (4, 4, 2610000.00, N'Thẻ', N'Thanh toán', N'Đã hoàn tất', N'FINAL:4', DATEADD(DAY, -2, @demoNow), N'ACCOUNTING', N'DEMO-PAY-004', NULL),
@@ -941,6 +962,7 @@ INSERT INTO BienLai
     (maBienLai, soBienLai, maHoaDon, soTien, phuongThuc, thoiDiemPhatHanh, nguoiPhatHanh)
 VALUES
     (1, N'DEP-DEMO-001', 1, 1200000.00, N'Tiền mặt', DATEADD(DAY, -1, @demoNow), N'FRONTDESK'),
+    (6, N'DEP-DEMO-002', 2, 2175000.00, N'Tiền mặt', DATEADD(DAY, -3, @demoNow), N'FRONTDESK'),
     (2, N'RCPT-DEMO-003', 3, 1000000.00, N'Tiền mặt', DATEADD(HOUR, -1, @demoNow), N'FRONTDESK'),
     (3, N'DEP-DEMO-004', 4, 1800000.00, N'Chuyển khoản ngân hàng', DATEADD(DAY, -5, @demoNow), N'FRONTDESK'),
     (4, N'RCPT-DEMO-004', 4, 2610000.00, N'Thẻ', DATEADD(DAY, -2, @demoNow), N'ACCOUNTING'),
@@ -1031,6 +1053,7 @@ INSERT INTO ButToanTaiChinh
     (maButToanTaiChinh, loaiButToan, loaiNguon, maNguon, chieuButToan, soTien, maNguoiThucHien, thoiDiemPhatSinh, ghiChu, daChotSo)
 VALUES
     (1, N'PAYMENT_RECEIVED', N'PAYMENT_TRANSACTION', N'1', N'Ghi nợ', 1200000.00, N'FRONTDESK', DATEADD(DAY, -1, @demoNow), N'Thu cọc booking demo.', 1),
+    (9, N'PAYMENT_RECEIVED', N'PAYMENT_TRANSACTION', N'6', N'Ghi nợ', 2175000.00, N'FRONTDESK', DATEADD(DAY, -3, @demoNow), N'Thu cọc tiền mặt booking lễ tân 2.', 1),
     (2, N'PAYMENT_RECEIVED', N'PAYMENT_TRANSACTION', N'4', N'Ghi nợ', 2610000.00, N'ACCOUNTING', DATEADD(DAY, -2, @demoNow), N'Thu phần còn lại hóa đơn demo.', 1),
     (3, N'EXPENSE_RECORDED', N'EXPENSE', N'1', N'Ghi có', 2350000.00, N'ACCOUNTING', DATEADD(DAY, -2, @demoNow), N'Chi vật tư vệ sinh demo.', 1),
     (4, N'PAYMENT_RECEIVED', N'PAYMENT_TRANSACTION', N'2', N'Ghi nợ', 1000000.00, N'FRONTDESK', DATEADD(HOUR, -1, @demoNow), N'Thu một phần hóa đơn 3.', 1),
@@ -1043,7 +1066,7 @@ VALUES
 -- giảm giá (không trừ tiền cọc/tiền đã thu). Cùng nguyên tắc với luồng checkout.
 INSERT INTO ButToanTaiChinh
     (maButToanTaiChinh, loaiButToan, loaiNguon, maNguon, chieuButToan, soTien, maNguoiThucHien, thoiDiemPhatSinh, ghiChu, daChotSo)
-SELECT 8 + ROW_NUMBER() OVER (ORDER BY h.maHoaDon), N'REVENUE_RECOGNIZED', N'INVOICE',
+SELECT 9 + ROW_NUMBER() OVER (ORDER BY h.maHoaDon), N'REVENUE_RECOGNIZED', N'INVOICE',
     CONVERT(NVARCHAR(100), h.maHoaDon), N'Ghi có', amount.total,
     N'FRONTDESK', b.thoiDiemTraPhongThucTe, N'CHECKOUT', 1
 FROM HoaDon h JOIN PhieuDatPhong b ON b.maPhieuDatPhong = h.maPhieuDatPhong

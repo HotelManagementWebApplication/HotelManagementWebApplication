@@ -66,6 +66,18 @@ BEGIN
     )
         SET @phongTrong = 0;
 
+    -- Phiếu bảo trì ngày-only giữ kín phòng đúng ngày dự kiến, không làm
+    -- phòng mất khả dụng ngay từ lúc lập phiếu cho một ngày trong tương lai.
+    IF EXISTS (
+        SELECT 1
+        FROM dbo.PhieuBaoTri AS baoTri
+        WHERE baoTri.maPhong = @maPhong
+            AND baoTri.trangThai IN (N'Chưa xử lý', N'Đang bảo trì')
+            AND CONVERT(DATETIME2(6), baoTri.ngayDuKien) < @denThoiDiem
+            AND DATEADD(DAY, 1, CONVERT(DATETIME2(6), baoTri.ngayDuKien)) > @tuThoiDiem
+    )
+        SET @phongTrong = 0;
+
     RETURN @phongTrong;
 END;
 GO
