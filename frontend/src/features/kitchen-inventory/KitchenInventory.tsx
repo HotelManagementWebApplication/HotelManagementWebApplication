@@ -1807,7 +1807,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
               {userProfile?.full_name ? userProfile.full_name.slice(0, 2).toUpperCase() : "VK"}
             </div>
             <div>
-              <p style={{ fontSize:11,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || "Võ Minh Kho và Dịch vụ"}</p>
+              <p style={{ fontSize:11,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || "Võ Minh Khoa"}</p>
               <p style={{ fontSize:10,color:"#94A3B8" }}>{profileRoleLabel}</p>
             </div>
           </div>
@@ -1855,7 +1855,7 @@ export default function KitchenInventory({ onBack }: { onBack: () => void }) {
                 {userProfile?.full_name ? userProfile.full_name.slice(0, 2).toUpperCase() : "VK"}
               </div>
               <div className="warehouse-profile-copy">
-                <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || "Võ Minh Kho và Dịch vụ"}</p>
+                <p style={{ fontSize:12,fontWeight:700,color:"#0F172A",lineHeight:1 }}>{userProfile?.full_name || "Võ Minh Khoa"}</p>
                 <p style={{ fontSize:10,color:"#94A3B8" }}>{profileRoleLabel}</p>
               </div>
               <ChevronDown size={12} style={{ color:"#94A3B8" }} />

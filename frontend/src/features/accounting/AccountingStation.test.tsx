@@ -83,4 +83,24 @@ describe("Accounting server pagination",()=>{
     expect(download).not.toHaveBeenCalled(); expect(screen.getByText("PAY-1")).toBeTruthy();
     expect(screen.getByText("Hiển thị 1–10 trên 150 giao dịch")).toBeTruthy();
   });
+  it("keeps the search when changing date and exports that date in both query and filename",async()=>{
+    const payments=vi.spyOn(api,"payments").mockImplementation(async(q)=>result(q?.page??0,1,q?.size??10));
+    vi.spyOn(URL,"createObjectURL").mockReturnValue("blob:test");
+    let filename="";
+    vi.spyOn(HTMLAnchorElement.prototype,"click").mockImplementation(function(this:HTMLAnchorElement){filename=this.download;});
+    mount();await screen.findByText("Hiển thị 1–1 trên 1 giao dịch");
+    fireEvent.change(screen.getByPlaceholderText("Tìm mã giao dịch, hóa đơn hoặc đặt phòng..."),{target:{value:"PAY-1"}});
+    fireEvent.change(screen.getByLabelText("Ngày đối soát"),{target:{value:"2026-10-07"}});
+    await waitFor(()=>expect(payments).toHaveBeenLastCalledWith(expect.objectContaining({from:"2026-10-07",to:"2026-10-07",search:"PAY-1"})));
+    fireEvent.click(screen.getByRole("button",{name:"Xuất giao dịch CSV"}));
+    await waitFor(()=>expect(filename).toBe("payments-2026-10-07.csv"));
+    expect(payments).toHaveBeenLastCalledWith(expect.objectContaining({from:"2026-10-07",to:"2026-10-07",search:"PAY-1",size:100}));
+  });
+  it("shows and filters a MoMo payment under its own method rather than bank transfer",async()=>{
+    const payments=vi.spyOn(api,"payments").mockResolvedValue({...result(0,1),items:[{...payment(1),method:"MOMO"}],methodCounts:{MOMO:1}});
+    mount();await screen.findByText("PAY-1");
+    expect(screen.getByRole("button",{name:"Ví MoMo 1"})).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Ví MoMo 1"}));
+    await waitFor(()=>expect(payments).toHaveBeenLastCalledWith(expect.objectContaining({method:"MOMO"})));
+  });
 });

@@ -412,5 +412,5 @@ export const ROLE_META: Record<RoleId, { label: string; labelEn: string; color: 
   director:     { label:"Giám đốc",            labelEn:"Giám đốc",    color:"#B8944A", bg:"rgba(184,148,74,0.12)", gr:"linear-gradient(135deg,#78350F,#B8944A)", desc:"Báo cáo toàn bộ, hoàn tiền và phê duyệt giá" },
   admin:        { label:"Quản trị hệ thống",    labelEn:"Quản trị hệ thống",       color:"#334155", bg:"rgba(51,65,85,0.12)", gr:"linear-gradient(135deg,#0F172A,#475569)", desc:"Tài khoản, phân quyền, cấu hình và nhật ký" },
   hr:           { label:"Nhân sự",              labelEn:"Nhân sự",          color:"#EC4899", bg:"rgba(236,72,153,0.12)", gr:"linear-gradient(135deg,#BE185D,#EC4899)", desc:"Hồ sơ nhân viên và phân ca" },
-  fnb:          { label:"Bếp & Nhà hàng",       labelEn:"Bếp & Nhà hàng",  color:"#F59E0B", bg:"rgba(245,158,11,0.12)", gr:"linear-gradient(135deg,#B45309,#F59E0B)", desc:"Điều phối nhà hàng, kho bếp, minibar và giá dịch vụ" },
+  fnb:          { label:"Kho và Dịch vụ",       labelEn:"Kho và Dịch vụ",  color:"#F59E0B", bg:"rgba(245,158,11,0.12)", gr:"linear-gradient(135deg,#B45309,#F59E0B)", desc:"Điều phối kho, dịch vụ, minibar và yêu cầu cấp phát" },
 };

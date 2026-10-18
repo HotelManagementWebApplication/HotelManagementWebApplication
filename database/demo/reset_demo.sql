@@ -63,6 +63,7 @@ DELETE FROM HinhAnhPhong;
 DELETE FROM LoaiPhongTienNghi;
 DELETE FROM TienNghi;
 DELETE FROM YeuCauKho;
+DELETE FROM TonKhoBuongPhong;
 DELETE FROM BienDongKhoDichVu;
 DELETE FROM LichSuGiaDichVu;
 UPDATE DichVu SET maNguonTaiNguyen=NULL;
@@ -491,7 +492,7 @@ VALUES
     (N'HOUSEKEEP', N'Trần Thị Buồng Phòng', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Buồng phòng', N'TP.HCM', N'0902000002', 1, 1, 0, N'Đang làm việc'),
     (N'TECHNICAL', N'Lê Hoàng Kỹ Thuật', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Kỹ thuật', N'TP.HCM', N'0902000003', 1, 1, 0, N'Đang làm việc'),
     (N'ACCOUNTING', N'Phạm Thị Kế Toán', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Kế toán', N'TP.HCM', N'0902000004', 1, 1, 0, N'Đang làm việc'),
-    (N'KITCHEN', N'Võ Minh Kho và Dịch vụ', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Nhà bếp', N'TP.HCM', N'0902000005', 1, 1, 0, N'Đang làm việc'),
+    (N'KITCHEN', N'Võ Minh Khoa', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Kho và Dịch vụ', N'TP.HCM', N'0902000005', 1, 1, 0, N'Đang làm việc'),
     (N'MANAGER', N'Hoàng Minh Quản', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Quản lý', N'TP.HCM', N'0902000006', 1, 1, 0, N'Đang làm việc'),
     (N'DIRECTOR', N'Đỗ Thanh Giám Đốc', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Giám đốc', N'TP.HCM', N'0902000007', 1, 1, 0, N'Đang làm việc'),
     (N'ADMIN', N'Quản Trị Hệ Thống', N'$2a$12$5gNPcR6X5sTK6KSqi4PPKOgq6sXai.z77eMBmEDToFQCbOmVNGoiO', N'Quản trị viên', N'TP.HCM', N'0902000008', 1, 1, 0, N'Đang làm việc'),

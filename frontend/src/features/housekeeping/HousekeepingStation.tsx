@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
-import { kitchenAccountingApi } from "../../shared/api/kitchenAccounting";
 import {stockRequestsApi} from "../../shared/api/stockRequests";
 import StockRequestDialog from "../stock-requests/StockRequestDialog";
 import { authApi } from "../../shared/api/auth";
@@ -1412,7 +1411,7 @@ function LinenScreen({ stock = [], onMove }: { stock?: LinenRow[]; onMove?: (ite
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: "#0F172A", marginBottom: 2 }}>Kho đồ vải &amp; Vật tư</h2>
-            <p style={{ fontSize: 12, color: "#94A3B8" }}>Quản lý tồn kho đồ vải, khăn, đồ dùng phòng (không bao gồm minibar)</p>
+            <p style={{ fontSize: 12, color: "#94A3B8" }}>Tồn riêng của Buồng phòng: đồ vải, khăn, đồ dùng phòng. Hàng được cộng sau khi Kho duyệt cấp.</p>
           </div>
           <button
             onClick={() => nonMinibarStock[0] && openMovement(nonMinibarStock[0], "RECEIVE")}
@@ -1883,7 +1882,7 @@ function MinibarScreen({
         >
           <Sparkles size={18} style={{ color: "#2563EB", flexShrink: 0, marginTop: 2 }} />
           <div style={{ fontSize: 12, color: "#1E40AF", lineHeight: 1.5 }}>
-            <strong>Quy trình phối hợp Kho &amp; Buồng phòng:</strong> Bộ phận Kho xuất hàng minibar cho Buồng phòng. Khi mặt hàng minibar giảm xuống <strong>dưới ngưỡng an toàn</strong>, hệ thống kích hoạt cảnh báo gửi thông báo trực tiếp tới Bộ phận Kho để xuất bổ sung. Đối với hàng còn dùng được, buồng phòng tạo phiếu <em>Trả hàng về kho</em> với trạng thái <strong>Chờ kho duyệt</strong> để Kho tiếp nhận. Hàng hỏng chỉ gửi thông báo, không cộng lại tồn.
+            <strong>Kho minibar riêng của Buồng phòng:</strong> Kho duyệt cấp hàng thì trừ kho tổng và cộng kho Buồng phòng. Trả hàng còn dùng được sẽ trừ kho Buồng phòng và cộng lại kho tổng khi được duyệt. Báo hỏng được xác nhận sẽ trừ kho Buồng phòng, không cộng vào kho tổng.
           </div>
         </div>
 
@@ -2480,7 +2479,7 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
         housekeepingTechnicalApi.incidents(),
         housekeepingTechnicalApi.rooms(),
         housekeepingTechnicalApi.checklistTemplates().catch(() => []),
-        kitchenAccountingApi.services().then(rows=>rows.filter(item=>["food","beverage","room-amenity"].includes(item.category??""))),
+        stockRequestsApi.catalog(),
       ]);
 
       if (profile) {
@@ -2786,6 +2785,12 @@ export default function HousekeepingStation({ onBack }: { onBack: () => void }) 
                 border:"1px solid #E2E8F0",background:"#F8FAFC",fontSize:12,outline:"none" }} />
           </div>
           {/* Bell */}
+          <button type="button" onClick={() => void loadData()} disabled={loading}
+            aria-label="Làm mới dữ liệu buồng phòng" title="Làm mới tồn kho và công việc"
+            style={{ width:34,height:34,borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0",
+              display:"flex",alignItems:"center",justifyContent:"center",cursor:loading?"wait":"pointer",flexShrink:0 }}>
+            <RefreshCcw size={14} style={{ color:"#475569" }} />
+          </button>
           <button style={{ width:34,height:34,borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0",
             display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative" }}>
             <Bell size={14} style={{ color:"#475569" }} />

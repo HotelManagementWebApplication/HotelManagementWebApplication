@@ -115,3 +115,37 @@ ELSE
 
 Thời gian demo được tính theo giờ Việt Nam tại lúc reset. Khả dụng thay đổi theo
 thời gian thực; đơn chờ thanh toán tự hết hiệu lực sau 10 phút.
+
+## Bổ sung dữ liệu như khách sạn đang hoạt động
+
+Khi đã có demo nền và muốn thêm dữ liệu để thử các bộ phận, chạy từ root repo:
+
+```powershell
+.\database\demo\populate_operating_demo.ps1 -PopulateExistingDemo
+```
+
+Script chỉ nhắm `QLKS` trong container SQL Server local đã biết. Nó tạo và xác
+minh backup, chép backup ra `%USERPROFILE%\.codex\backups\web-hotel-mis`, rồi nạp
+`populate_operating_demo.sql` trong một transaction. Đây là thao tác bổ sung:
+không xóa hồ sơ, không đổi mật khẩu có sẵn, không sửa schema/Flyway history.
+Chạy lại không sinh bản sao; marker `OPERATING-DEMO-V1-COMPLETE` chỉ được ghi khi
+toàn bộ dữ liệu đã qua kiểm tra. Log chi tiết được giữ cạnh backup.
+
+Bộ dữ liệu thêm 80 khách/tài khoản, 24 nhân viên cùng hồ sơ và lịch làm việc,
+238 booking (160 lịch sử, 20 đang ở, 8 đến hôm nay, 32 tương lai, 6 chờ cọc,
+10 đã hủy, 2 không đến), cùng hóa đơn, thu tiền, biên lai, VAT, công nợ, vật tư,
+nhiệm vụ vệ sinh, phiếu kỹ thuật, tài sản và yêu cầu phê duyệt liên quan.
+Các khoản thu và biến động kho được ghi qua stored procedure hiện hành.
+Số tồn của buồng phòng được xử lý theo phiên bản procedure đang triển khai;
+script này không tự triển khai thay đổi schema kho đang chờ.
+
+`verify_operating_demo.sql` kiểm tra dữ liệu ngay sau khi nạp, trước khi bắt đầu
+thử sửa các tình huống trên UI. Nó đối chiếu sổ thanh toán/biên lai/doanh thu,
+tồn kho, lịch phòng, số lượt VIP, phân ca và mệnh giá bàn giao. Hai lần nạp
+không làm tăng số dòng. Sau khi người dùng thử các thao tác, trạng thái/số dư
+có thể thay đổi hợp lệ so với fixture ban đầu.
+
+Xem [hướng dẫn thử theo từng bộ phận](operating_demo_guide.md). Ngày giờ được tính
+theo Việt Nam lúc nạp; các yêu cầu chờ cọc/dịch vụ vẫn hết hạn sau 10 phút theo
+nghiệp vụ. Dữ liệu ngân hàng mang mã `OPS-*` chỉ là chứng từ mô phỏng, không gọi
+VNPay hoặc chuyển tiền thật.

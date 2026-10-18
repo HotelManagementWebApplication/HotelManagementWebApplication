@@ -1352,6 +1352,18 @@ CREATE VIEW dbo.vwYeuCauKho AS
 SELECT r.*,d.ten,d.donViTinh FROM dbo.YeuCauKho r JOIN dbo.DichVu d ON d.maDichVu=r.maDichVu;
 GO
 
+-- =============================================================================
+-- vwTonKhoBuongPhong: danh mục vật tư với số tồn riêng, kể cả mặt hàng chưa nhận.
+-- =============================================================================
+CREATE VIEW dbo.vwTonKhoBuongPhong AS
+SELECT d.maDichVu,d.ten,d.gia,d.donViTinh,d.danhMuc,d.moTa,d.duongDanAnh,
+    COALESCE(k.soLuongTon,0) AS soLuongTonKho,d.nguongAnToan,d.dangHoatDong,
+    d.thoiLuongPhut,d.laTaiNguyen
+FROM dbo.DichVu d
+LEFT JOIN dbo.TonKhoBuongPhong k ON k.maDichVu=d.maDichVu
+WHERE d.danhMuc IN(N'Món ăn',N'Thức uống',N'Vật dụng phòng') AND d.laTaiNguyen=0;
+GO
+
 CREATE VIEW dbo.vwTieuThuDichVu AS
 SELECT N'BOOKING:'+CONVERT(NVARCHAR(30),b.maDatDichVuKhachSan) AS maLuot,
     b.maDichVu,COALESCE(b.thoiDiemSuDung,b.thoiDiemDuKien) AS thoiDiem,

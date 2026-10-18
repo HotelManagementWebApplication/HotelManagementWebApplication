@@ -1394,3 +1394,15 @@ CREATE TABLE YeuCauKho (
     CONSTRAINT chkYeuCauKho02 CHECK(soLuong>0),
     CONSTRAINT chkYeuCauKho03 CHECK(trangThai IN(N'Chờ duyệt',N'Đã duyệt',N'Từ chối'))
 );
+
+-- =============================================================================
+-- TonKhoBuongPhong: tồn riêng của bộ phận, chỉ nhận hàng từ kho tổng sau duyệt.
+-- Danh mục dùng chung DichVu; không sao chép số tồn kho tổng làm tồn đầu kỳ.
+-- =============================================================================
+CREATE TABLE TonKhoBuongPhong (
+    maDichVu NVARCHAR(10) NOT NULL,
+    soLuongTon INT NOT NULL DEFAULT 0,
+    CONSTRAINT pkTonKhoBuongPhong PRIMARY KEY(maDichVu),
+    CONSTRAINT fkTonKhoBuongPhong01 FOREIGN KEY(maDichVu) REFERENCES DichVu(maDichVu),
+    CONSTRAINT chkTonKhoBuongPhong01 CHECK(soLuongTon >= 0)
+);

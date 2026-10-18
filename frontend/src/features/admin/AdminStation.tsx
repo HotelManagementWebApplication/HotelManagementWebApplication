@@ -97,7 +97,7 @@ const ROLE_META: Record<EmployeeRole, { name: string; department: string; badgeC
   FRONT_DESK: { name: "Lễ tân", department: "Lễ tân", badgeColor: "bg-blue-50 text-blue-700 border-blue-200" },
   HOUSEKEEPING: { name: "Buồng phòng", department: "Buồng phòng", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   TECHNICAL: { name: "Kỹ thuật", department: "Kỹ thuật", badgeColor: "bg-orange-50 text-orange-700 border-orange-200" },
-  KITCHEN: { name: "Bếp & Nhà hàng", department: "Bếp & Nhà hàng", badgeColor: "bg-amber-50 text-amber-700 border-amber-200" },
+  KITCHEN: { name: "Kho và Dịch vụ", department: "Kho và Dịch vụ", badgeColor: "bg-amber-50 text-amber-700 border-amber-200" },
   ACCOUNTING: { name: "Kế toán", department: "Kế toán", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-200" },
   DIRECTOR: { name: "Giám đốc", department: "Ban giám đốc", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   ADMIN: { name: "Quản trị hệ thống", department: "CNTT", badgeColor: "bg-slate-100 text-slate-700 border-slate-200" },
@@ -580,7 +580,7 @@ export default function AdminStation({ onBack }: Props) {
                 <option value="Lễ tân">Lễ tân</option>
                 <option value="Ban quản lý">Ban quản lý</option>
                 <option value="Buồng phòng">Buồng phòng</option>
-                <option value="Bếp & Nhà hàng">Bếp & Nhà hàng</option>
+                <option value="Kho và Dịch vụ">Kho và Dịch vụ</option>
                 <option value="Kỹ thuật">Kỹ thuật</option>
                 <option value="Nhân sự">Nhân sự</option>
                 <option value="Kinh doanh">Kinh doanh</option>

@@ -80,7 +80,7 @@ class SqlServerMigrationTest {
                 "fnTinhSoDuHoaDon", "fnKiemTraTrungCaLamViec"));
         assertDatabaseObjects("V", Set.of(
                 "vwPhongCongKhai", "vwDichVuCongKhai", "vwDatPhongChiTiet", "vwDashboardLeTan",
-                "vwHoaDonChiTiet", "vwYeuCauKho", "vwCongViecBuongPhong", "vwChuyenPhong",
+                "vwHoaDonChiTiet", "vwYeuCauKho", "vwTonKhoBuongPhong", "vwCongViecBuongPhong", "vwChuyenPhong",
                 "vwCongViecKyThuat", "vwLichLamViecNhanVien", "vwDoanhThuTheoNgay"));
         assertDatabaseObjects("P", Set.of(
                 "uspTaoDatPhong", "uspLenhDatPhong", "uspLenhHoaDon",
@@ -309,7 +309,7 @@ class SqlServerMigrationTest {
                 "GiaoDichThanhToan", "HangDoiThongBao", "HinhAnhLoaiPhong", "HinhAnhPhong", "HoaDon", "HoaDonGiaTriGiaTang",
                 "KetQuaChecklistBuongPhong", "KhachLuuTru", "KhoanChi", "KiemTraBuongPhong", "LichSuGiaDichVu",
                 "LichSuGiaLoaiPhong", "LichSuHangThanhVien", "LoaiPhong", "LoaiPhongTienNghi", "MaLamMoiDangNhap",
-                "YeuCauKho", "HoSoNhanSu", "DeNghiTiepNhanNhanVien", "MauChecklistBuongPhong", "NhanVien", "NhatKyKiemSoat", "NhiemVuBuongPhong",
+                "YeuCauKho", "TonKhoBuongPhong", "HoSoNhanSu", "DeNghiTiepNhanNhanVien", "MauChecklistBuongPhong", "NhanVien", "NhatKyKiemSoat", "NhiemVuBuongPhong",
                 "NhomKhoaChongTrung", "PhieuBaoTri", "PhieuCongViecKyThuat", "PhieuDatPhong", "Phong",
                 "SuCoThietBi", "SuDungDichVu", "SuKienDangNhapNhanVien", "TaiKhoanKhachHang", "TaiSanKyThuat",
                 "ThanhToanCongNoDoiTac", "ThietBiPhong", "TienNghi", "YeuCauPheDuyet", "YeuCauThanhToanVnpay");
@@ -333,11 +333,11 @@ class SqlServerMigrationTest {
                 }
             }
 
-            assertThat(actualTables).hasSize(53);
-            assertColumnCount(statement, 516);
-            assertConstraintCount(statement, "FOREIGN KEY", 60);
+            assertThat(actualTables).hasSize(54);
+            assertColumnCount(statement, 518);
+            assertConstraintCount(statement, "FOREIGN KEY", 61);
             assertConstraintCount(statement, "UNIQUE", 31);
-            assertConstraintCount(statement, "CHECK", 147);
+            assertConstraintCount(statement, "CHECK", 148);
 
             try (var result = statement.executeQuery("select constraint_name from information_schema.table_constraints "
                     + "where table_schema='dbo' and LTRIM(RTRIM(constraint_type)) <> 'PRIMARY KEY'")) {

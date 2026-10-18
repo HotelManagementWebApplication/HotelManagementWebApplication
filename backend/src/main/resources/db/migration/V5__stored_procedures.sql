@@ -8964,6 +8964,10 @@ END;
 GO
 
 -- Yêu cầu kho: người gửi không tự quyết định; quyết định và biến động cùng transaction.
+-- =============================================================================
+-- uspLenhYeuCauKho: chuyển hàng nguyên tử giữa kho tổng và kho buồng phòng.
+-- Khóa theo mặt hàng trước, tồn buồng phòng sau; retry không chuyển lần thứ hai.
+-- =============================================================================
 CREATE PROCEDURE dbo.uspLenhYeuCauKho
  @lenh NVARCHAR(20),@id BIGINT,@dichVu NVARCHAR(10),@soLuong INT,@phong NVARCHAR(10),
  @actor NVARCHAR(50),@lyDo NVARCHAR(255),@khoa NVARCHAR(100),@now DATETIME2(6),@loai NVARCHAR(20)
@@ -8980,7 +8984,7 @@ BEGIN
   IF @lenh<>N'create' SELECT @dichVu=maDichVu FROM dbo.YeuCauKho WHERE maYeuCauKho=@id;
   DECLARE @ton INT,@nguoiGui NVARCHAR(50),@state NVARCHAR(20);
   SELECT @ton=soLuongTonKho FROM dbo.DichVu WITH(UPDLOCK,HOLDLOCK) WHERE maDichVu=@dichVu
-   AND danhMuc IN(N'Món ăn',N'Thức uống',N'Vật dụng phòng');
+   AND danhMuc IN(N'Món ăn',N'Thức uống',N'Vật dụng phòng') AND laTaiNguyen=0;
   IF @ton IS NULL THROW 53701,N'Không tìm thấy vật tư/hàng hóa',1;
   IF @lenh=N'create'
   BEGIN
@@ -9012,13 +9016,28 @@ BEGIN
    IF @state=N'Chờ duyệt'
    BEGIN
     IF @lenh=N'reject' AND NULLIF(LTRIM(RTRIM(@lyDo)),N'') IS NULL THROW 53706,N'Cần lý do từ chối',1;
-    IF @lenh=N'approve' AND @loai<>N'Báo hỏng'
+    IF @lenh=N'approve'
     BEGIN
-     DECLARE @movement NVARCHAR(20)=CASE WHEN @loai=N'Cấp hàng' THEN N'Xuất kho' ELSE N'Hoàn kho' END;
-     DECLARE @key NVARCHAR(35)=N'stock-request-'+CONVERT(NVARCHAR(20),@id),
-      @hash NVARCHAR(64)=CONVERT(NVARCHAR(64),HASHBYTES('SHA2_256',CONVERT(NVARCHAR(20),@id)),2),@bucket SMALLINT=0,
-      @reason NVARCHAR(255)=@loai+N' #'+CONVERT(NVARCHAR(20),@id)+N' cho '+@nguoiGui;
-     EXEC dbo.uspGhiBienDongKhoDichVu @dichVu,@movement,@soLuong,@actor,@reason,@key,@hash,@bucket,@now,0;
+     DECLARE @tonBuongPhong INT;
+     SELECT @tonBuongPhong=soLuongTon FROM dbo.TonKhoBuongPhong WITH(UPDLOCK,HOLDLOCK) WHERE maDichVu=@dichVu;
+     SET @tonBuongPhong=COALESCE(@tonBuongPhong,0);
+     IF @loai<>N'Cấp hàng' AND @tonBuongPhong<@soLuong
+      THROW 53708,N'Tồn kho buồng phòng không đủ để trả hoặc ghi nhận hỏng',1;
+     IF @loai=N'Cấp hàng' AND CONVERT(BIGINT,@tonBuongPhong)+@soLuong>2147483647
+      THROW 53706,N'Tồn kho buồng phòng vượt giới hạn',1;
+     IF @loai<>N'Báo hỏng'
+     BEGIN
+      DECLARE @movement NVARCHAR(20)=CASE WHEN @loai=N'Cấp hàng' THEN N'Xuất kho' ELSE N'Hoàn kho' END;
+      DECLARE @key NVARCHAR(35)=N'stock-request-'+CONVERT(NVARCHAR(20),@id),
+       @hash NVARCHAR(64)=CONVERT(NVARCHAR(64),HASHBYTES('SHA2_256',CONVERT(NVARCHAR(20),@id)),2),@bucket SMALLINT=0,
+       @reason NVARCHAR(255)=@loai+N' #'+CONVERT(NVARCHAR(20),@id)+N' cho kho buồng phòng';
+      EXEC dbo.uspGhiBienDongKhoDichVu @dichVu,@movement,@soLuong,@actor,@reason,@key,@hash,@bucket,@now,0;
+     END
+     IF NOT EXISTS(SELECT 1 FROM dbo.TonKhoBuongPhong WHERE maDichVu=@dichVu)
+      INSERT dbo.TonKhoBuongPhong(maDichVu,soLuongTon) VALUES(@dichVu,0);
+     UPDATE dbo.TonKhoBuongPhong
+      SET soLuongTon=CASE WHEN @loai=N'Cấp hàng' THEN @tonBuongPhong+@soLuong ELSE @tonBuongPhong-@soLuong END
+      WHERE maDichVu=@dichVu;
     END
     UPDATE dbo.YeuCauKho SET trangThai=@decision,nguoiDuyet=@actor,ghiChuDuyet=@lyDo,ngayDuyet=@now WHERE maYeuCauKho=@id;
     INSERT dbo.NhatKyKiemSoat(nguoiThucHien,hanhDong,loaiDoiTuong,maDoiTuong,lyDo)

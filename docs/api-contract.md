@@ -496,12 +496,18 @@ ghi “tests/build pass” cho thay đổi tương lai nếu chưa có log của
   Callback ký hợp lệ kiểm tra tham chiếu, số tiền, hết hạn và chống ghi thu lặp.
   Callback muộn chỉ ghi nhận để đối soát, không chiếm lại chỗ đã trả ra.
 - `GET /api/operations/stock-requests[/catalog]`: HOUSEKEEPING đọc yêu cầu của mình
-  và hàng hóa; KITCHEN đọc hàng đợi. `POST /api/operations/stock-requests` nhận
+  và hàng hóa; KITCHEN đọc hàng đợi. `/catalog` trả `stock` từ kho riêng Buồng phòng
+  (`TonKhoBuongPhong`), mặc định 0 khi chưa nhận hàng, dùng chung danh mục và ngưỡng
+  cảnh báo với kho tổng. `/api/services` vẫn trả tồn kho tổng. `POST /api/operations/stock-requests` nhận
   `kind` (`ISSUE`, `RETURN`, `DAMAGE`), `service_id`, `quantity`, `room_id` tùy chọn,
   `reason` và `Idempotency-Key`. Chỉ HOUSEKEEPING được tạo.
 - `POST /api/operations/stock-requests/{id}/approve` hoặc `/reject`: KITCHEN xử lý,
-  body `reason` (bắt buộc khi từ chối). Cấp/trả ghi biến động đúng một lần; báo
-  hỏng chỉ ghi tiếp nhận, không tăng tồn. Người gửi không tự duyệt.
+  body `reason` (bắt buộc khi từ chối). Cấp hàng trừ kho tổng và cộng kho Buồng phòng;
+  trả hàng trừ kho Buồng phòng và cộng kho tổng. Báo hỏng chỉ trừ kho Buồng phòng.
+  Tất cả cập nhật trong một transaction, không âm kho, retry không ghi lặp.
+  Không đủ tồn Buồng phòng trả `INSUFFICIENT_HOUSEKEEPING_STOCK` (422); phiếu vẫn
+  chờ duyệt và cả hai kho không đổi. Người gửi không tự duyệt. Phiếu chờ/từ chối
+  không đổi tồn. Kho Buồng phòng dùng chung cho cả bộ phận, không tách theo người gửi.
 - Danh mục mới qua `/api/services/catalog-proposals` và approval; bỏ API tạo trực tiếp.
 - `POST /api/finance/cash-handovers`: chỉ FRONT_DESK gửi kiểm đếm và chọn kế toán.
   `POST /api/finance/cash-handovers/{id}/confirm`: chỉ ACCOUNTING nhận được chỉ

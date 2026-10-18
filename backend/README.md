@@ -16,16 +16,14 @@ Remove-Item Env:DB_URL, Env:DB_USERNAME, Env:DB_PASSWORD -ErrorAction SilentlyCo
 $env:DB_URL = "jdbc:sqlserver://localhost:1433;databaseName=QLKS;encrypt=true;trustServerCertificate=true"
 $env:DB_USERNAME = "sa"
 $env:DB_PASSWORD = "<local-sqlserver-password>"
-$jwtBytes = New-Object byte[] 32
-[Security.Cryptography.RandomNumberGenerator]::Fill($jwtBytes)
-$env:JWT_SECRET = [Convert]::ToBase64String($jwtBytes)
 mvn spring-boot:run
 ```
 
-`JWT_SECRET` is required and must stay stable while the local session is in
-use. The example above creates a fresh key in the current shell; restarting
-with a new key invalidates existing JWTs. Keep sandbox merchant values and
-callback URLs in environment variables, not in this file or source control.
+`JWT_SECRET` is optional for local/demo startup; if omitted, the backend uses
+its built-in demo key. Set a private, stable value for shared or deployed
+environments. Changing the key invalidates existing JWTs. Keep sandbox merchant
+values and callback URLs in environment variables, not in this file or source
+control.
 
 Flyway applies exactly six demo-baseline files from
 `src/main/resources/db/migration/`: V1 schema, V2 indexes, V3 functions,

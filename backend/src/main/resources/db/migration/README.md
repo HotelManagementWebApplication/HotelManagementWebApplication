@@ -22,8 +22,8 @@ Không dựng lại database ngoài phạm vi đã được cho phép.
 Sau migration, nạp `database/demo/reset_demo.sql` để tạo dữ liệu mẫu. Script
 reset chỉ quản lý dữ liệu, không chứa định nghĩa bảng/function/view/procedure/trigger.
 
-Schema có 52 bảng nghiệp vụ, 479 cột, 52 khóa ngoại, 26 quy tắc UNIQUE và
-130 ràng buộc CHECK. Tên bảng PascalCase không dấu; tên cột camelCase không
+Schema có 54 bảng nghiệp vụ, 518 cột, 61 khóa ngoại, 31 quy tắc UNIQUE và
+148 ràng buộc CHECK. Tên bảng PascalCase không dấu; tên cột camelCase không
 dấu. Java/API giữ tên tiếng Anh; các converter ánh xạ giá trị nghiệp vụ tiếng
 Việt. Hibernate dùng `ddl-auto: validate`.
 
@@ -67,3 +67,10 @@ Backend chuyển lỗi trigger dịch vụ thành lỗi nghiệp vụ HTTP 422:
 `SERVICE_OUTSIDE_MEAL_HOURS`, `SERVICE_OUTSIDE_STAY` hoặc `INVALID_STATE`.
 Đặt bữa sai giờ phải rollback cả đơn và audit; các mốc đầu/cuối khung giờ
 phục vụ vẫn được chấp nhận, miễn còn trong kỳ lưu trú.
+
+`TonKhoBuongPhong` giữ tồn riêng của cả bộ phận; danh mục và ngưỡng cảnh báo
+vẫn thuộc `DichVu`. `vwTonKhoBuongPhong` trả 0 cho mặt hàng chưa được cấp.
+`uspLenhYeuCauKho` duyệt cấp/trả trong cùng transaction với biến động kho tổng;
+xác nhận hỏng chỉ giảm kho Buồng phòng. Không suy ra tồn đầu kỳ từ lịch sử phiếu
+cũ hoặc sao chép số tồn kho tổng. Rebuild theo quy tắc V1–V6 ở trên trước khi
+chạy phiên bản có thay đổi này; không áp dụng bằng repair checksum.

@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import FrontDeskPMS from "./FrontDeskPMS";
 import { authApi } from "../../shared/api/auth";
 import { frontDeskApi } from "../../shared/api/frontDesk";
@@ -7,6 +7,8 @@ import { ApiError } from "../../shared/api/client";
 
 describe("FrontDeskPMS Reception Interface", () => {
   const onBack = vi.fn();
+
+  afterEach(cleanup);
 
   it("counts ready rooms from the operational state instead of cleanliness badges", async () => {
     vi.mocked(frontDeskApi.dashboard).mockResolvedValue({
@@ -255,7 +257,7 @@ describe("FrontDeskPMS Reception Interface", () => {
     ]);
     render(<FrontDeskPMS onBack={onBack} />);
     fireEvent.click(screen.getByRole("button",{name:/Sơ đồ phòng/i}));
-    fireEvent.click(await screen.findByText("203",{exact:true}));
+    await screen.findByRole("heading", { name: "Sơ đồ phòng" });
     const drawer=await screen.findByLabelText("Chi tiết phòng 203");
     for(const [label,amount] of [["Tổng hóa đơn",2700000],["Đã thanh toán",1100000],["Còn phải thu",1600000]] as const) {
       const row=(await within(drawer).findByText(label)).parentElement!;
@@ -355,6 +357,34 @@ describe("FrontDeskPMS Reception Interface", () => {
         expect(screen.queryByText("Tài khoản lưu trú")).toBeNull();
       });
     }
+  });
+
+  it("checks in a confirmed arrival from its room drawer", async () => {
+    render(<FrontDeskPMS onBack={onBack} />);
+    fireEvent.click(screen.getByRole("button", { name: /Sơ đồ phòng/i }));
+    await screen.findByRole("heading", { name: "Sơ đồ phòng" });
+    fireEvent.click(await screen.findByText("102", { exact: true }));
+
+    const drawer = await screen.findByLabelText("Chi tiết phòng 102");
+    fireEvent.click(within(drawer).getByRole("button", { name: /Nhận phòng/i }));
+
+    await waitFor(() => expect(frontDeskApi.checkIn).toHaveBeenCalledWith(1002, {}, expect.any(String)));
+  });
+
+  it("adds a minibar service to the checked-in room and its reservation", async () => {
+    const addService = vi.spyOn(frontDeskApi, "addService").mockResolvedValue({} as any);
+    render(<FrontDeskPMS onBack={onBack} />);
+    fireEvent.click(screen.getByRole("button", { name: /Sơ đồ phòng/i }));
+    await screen.findByRole("heading", { name: "Sơ đồ phòng" });
+    const drawer = await screen.findByLabelText("Chi tiết phòng 203");
+    fireEvent.click(within(drawer).getByRole("button", { name: /Thêm dịch vụ/i }));
+    fireEvent.change(within(drawer).getByLabelText("Dịch vụ khách đã sử dụng"), { target: { value: "1" } });
+    fireEvent.change(within(drawer).getByLabelText("Số lượng dịch vụ"), { target: { value: "2" } });
+    fireEvent.click(within(drawer).getByRole("button", { name: "Ghi vào hóa đơn" }));
+
+    await waitFor(() => expect(addService).toHaveBeenCalledWith(1001, {
+      service_id: "1", quantity: 2, room_id: "203",
+    }, expect.any(String)));
   });
 
   it("never attaches a checked-in guest or transfer action to a room that is being cleaned", async () => {

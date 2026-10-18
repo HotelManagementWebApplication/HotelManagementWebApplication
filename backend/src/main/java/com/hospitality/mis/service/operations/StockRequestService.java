@@ -1,7 +1,6 @@
 package com.hospitality.mis.service.operations;
 
 import com.hospitality.mis.dao.operations.StockRequestDatabase;
-import com.hospitality.mis.dao.billing.ServiceCatalogDatabase;
 import com.hospitality.mis.dto.operations.StockRequestDtos;
 import com.hospitality.mis.dto.billing.ServiceDtos;
 import com.hospitality.mis.middleware.security.SecurityActor;
@@ -15,9 +14,8 @@ import java.util.*;
 @Service
 public class StockRequestService {
     private final StockRequestDatabase database;
-    private final ServiceCatalogDatabase catalog;
     private final Clock clock;
-    public StockRequestService(StockRequestDatabase database,ServiceCatalogDatabase catalog,Clock clock){this.database=database;this.catalog=catalog;this.clock=clock;}
+    public StockRequestService(StockRequestDatabase database,Clock clock){this.database=database;this.clock=clock;}
     @Transactional(readOnly=true)
     public List<StockRequestDtos.Response> list(){
         String actor=SecurityActor.currentActor();
@@ -25,7 +23,7 @@ public class StockRequestService {
         return database.list(warehouse?null:actor);
     }
     @Transactional(readOnly=true)
-    public List<ServiceDtos.Response> catalog(){return catalog.all().stream().filter(item->Set.of("food","beverage","room-amenity").contains(item.category())).toList();}
+    public List<ServiceDtos.Response> catalog(){return database.housekeepingStock();}
     @Transactional
     public StockRequestDtos.Response create(StockRequestDtos.CreateRequest request,String key){
         String room=request.roomId()==null||request.roomId().isBlank()?null:request.roomId().trim();

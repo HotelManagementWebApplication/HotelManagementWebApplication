@@ -162,10 +162,79 @@ body {
 }
 
 .frontdesk-room-drawer__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
   max-height: min(38vh, 330px);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+.frontdesk-room-drawer__workflow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.frontdesk-room-drawer__workflow-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+
+.frontdesk-room-drawer__workflow-button--wide {
+  grid-column: 1 / -1;
+}
+
+.frontdesk-room-drawer__workflow-button--secondary {
+  border-color: #E2E8F0;
+  background: #FFF;
+  color: #334155;
+  font-weight: 600;
+}
+
+.frontdesk-room-drawer__secondary-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  background: #FFF;
+  color: #334155;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.frontdesk-room-drawer__secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.frontdesk-room-drawer__actions [role="note"] {
+  padding: 7px 9px !important;
+  font-size: 10px !important;
+  line-height: 1.4 !important;
 }
 
 @media (max-width: 900px) {

@@ -21,9 +21,11 @@ class StockRequestHttpWorkflowTest {
         cleanup();
         jdbc.update("INSERT NhanVien(maNhanVien,hoVaTen,matKhau,vaiTro,soDienThoai) VALUES(N'HKRET',N'Buồng phòng test',N'not-used',N'Buồng phòng',N'0901110001'),(N'WHRET',N'Kho test',N'not-used',N'Nhà bếp',N'0901110002'),(N'HKRET2',N'Buồng phòng khác',N'not-used',N'Buồng phòng',N'0901110003')");
         jdbc.update("INSERT DichVu(maDichVu,ten,gia,donViTinh,soLuongTonKho,nguongAnToan,dangHoatDong,danhMuc) VALUES(N'RETITEM',N'Khăn trả kho',0,N'cái',5,1,0,N'Vật dụng phòng')");
+        jdbc.update("INSERT TonKhoBuongPhong(maDichVu,soLuongTon) VALUES(N'RETITEM',4)");
     }
     @AfterEach void cleanup(){
         jdbc.update("DELETE YeuCauKho WHERE maDichVu=N'RETITEM'");
+        jdbc.update("DELETE TonKhoBuongPhong WHERE maDichVu=N'RETITEM'");
         jdbc.update("DELETE BienDongKhoDichVu WHERE maDichVu=N'RETITEM'");
         jdbc.update("DELETE BanGhiChongTrung WHERE nguoiThucHien IN(N'HKRET',N'WHRET',N'HKRET2')");
         jdbc.update("DELETE NhatKyKiemSoat WHERE nguoiThucHien IN(N'HKRET',N'WHRET',N'HKRET2')");
@@ -38,9 +40,21 @@ class StockRequestHttpWorkflowTest {
         return mapper.readTree(json).get("id").asLong();
     }
     private int stock(){return jdbc.queryForObject("SELECT soLuongTonKho FROM DichVu WHERE maDichVu=N'RETITEM'",Integer.class);}
+    private int housekeepingStock(){return jdbc.queryForObject("SELECT soLuongTon FROM TonKhoBuongPhong WHERE maDichVu=N'RETITEM'",Integer.class);}
+    private long request(String kind,int quantity,String key) throws Exception {
+        var result=mvc.perform(post("/api/operations/stock-requests").with(user("HKRET").roles("HOUSEKEEPING"))
+            .header("Idempotency-Key",key).contentType(APPLICATION_JSON).content(body(quantity).replace("RETURN",kind)))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return mapper.readTree(result).get("id").asLong();
+    }
+    private void approve(long id) throws Exception {
+        mvc.perform(post("/api/operations/stock-requests/"+id+"/approve").with(user("WHRET").roles("KITCHEN"))
+            .contentType(APPLICATION_JSON).content("{}")).andExpect(status().isOk());
+    }
     @Test void requestDoesNotIncreaseStockAndRetryDoesNotDuplicate() throws Exception{
         long id=request("return-request"); assertThat(request("return-request")).isEqualTo(id);
         assertThat(stock()).isEqualTo(5);
+        assertThat(housekeepingStock()).isEqualTo(4);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM YeuCauKho WHERE maDichVu=N'RETITEM'",Integer.class)).isEqualTo(1);
         mvc.perform(post("/api/operations/stock-requests").with(user("HKRET").roles("HOUSEKEEPING")).header("Idempotency-Key","return-request").contentType(APPLICATION_JSON).content(body(3)))
             .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_CONFLICT"));
@@ -50,6 +64,7 @@ class StockRequestHttpWorkflowTest {
         for(int retry=0;retry<2;retry++)mvc.perform(post("/api/operations/stock-requests/"+id+"/approve").with(user("WHRET").roles("KITCHEN")).contentType(APPLICATION_JSON).content("{\"reason\":\"Đã kiểm đếm\"}"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("APPROVED")).andExpect(jsonPath("$.approver").value("WHRET"));
         assertThat(stock()).isEqualTo(7);
+        assertThat(housekeepingStock()).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM BienDongKhoDichVu WHERE maDichVu=N'RETITEM' AND loai=N'Hoàn kho'",Integer.class)).isEqualTo(1);
         mvc.perform(post("/api/operations/stock-requests/"+id+"/reject").with(user("WHRET").roles("KITCHEN")).contentType(APPLICATION_JSON).content("{\"reason\":\"Đổi ý\"}"))
             .andExpect(status().isUnprocessableEntity());
@@ -109,6 +124,7 @@ class StockRequestHttpWorkflowTest {
         mvc.perform(post("/api/operations/stock-requests/"+id+"/approve").with(user("WHRET").roles("KITCHEN")).contentType(APPLICATION_JSON).content("{}"))
             .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("INVALID_STOCK_REQUEST"));
         assertThat(stock()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(housekeepingStock()).isEqualTo(4);
         assertThat(jdbc.queryForObject("SELECT trangThai FROM YeuCauKho WHERE maYeuCauKho=?",String.class,id)).isEqualTo("Chờ duyệt");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM BienDongKhoDichVu WHERE maDichVu=N'RETITEM'",Integer.class)).isZero();
     }
@@ -121,8 +137,80 @@ class StockRequestHttpWorkflowTest {
             for(int retry=0;retry<2;retry++)mvc.perform(post("/api/operations/stock-requests/"+id+"/approve").with(user("WHRET").roles("KITCHEN")).contentType(APPLICATION_JSON).content("{}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("APPROVED"));
             assertThat(stock()).isEqualTo(3);
+            assertThat(housekeepingStock()).isEqualTo(kind.equals("ISSUE")?6:4);
         }
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM BienDongKhoDichVu WHERE maDichVu='RETITEM'",Integer.class)).isEqualTo(1);
+    }
+
+    @Test void catalogReadsDepartmentStockAndUnallocatedItemsStartAtZero() throws Exception {
+        mvc.perform(get("/api/operations/stock-requests/catalog").with(user("HKRET").roles("HOUSEKEEPING")))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.id == 'RETITEM')].stock").value(org.hamcrest.Matchers.contains(4)));
+        mvc.perform(get("/api/services").with(user("WHRET").roles("KITCHEN")))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.id == 'RETITEM')].stock").value(org.hamcrest.Matchers.contains(5)));
+        jdbc.update("DELETE TonKhoBuongPhong WHERE maDichVu=N'RETITEM'");
+        mvc.perform(get("/api/operations/stock-requests/catalog").with(user("HKRET").roles("HOUSEKEEPING")))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.id == 'RETITEM')].stock").value(org.hamcrest.Matchers.contains(0)));
+        approve(request("ISSUE",2,"first-allocation"));
+        assertThat(stock()).isEqualTo(3);
+        assertThat(housekeepingStock()).isEqualTo(2);
+    }
+
+    @Test void issueAndReturnMoveTheSameQuantityBetweenWarehouses() throws Exception {
+        long issue=request("ISSUE",3,"transfer-out");
+        approve(issue);approve(issue);
+        assertThat(stock()).isEqualTo(2);
+        assertThat(housekeepingStock()).isEqualTo(7);
+        long returned=request("RETURN",3,"transfer-back");
+        approve(returned);approve(returned);
+        assertThat(stock()).isEqualTo(5);
+        assertThat(housekeepingStock()).isEqualTo(4);
+    }
+
+    @Test void damageOnlyReducesHousekeepingStockOnce() throws Exception {
+        long id=request("DAMAGE",2,"damaged-items");approve(id);approve(id);
+        assertThat(stock()).isEqualTo(5);
+        assertThat(housekeepingStock()).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM BienDongKhoDichVu WHERE maDichVu=N'RETITEM'",Integer.class)).isZero();
+    }
+
+    @Test void insufficientDepartmentStockCannotBeReturnedOrWrittenOff() throws Exception {
+        for(String kind:java.util.List.of("RETURN","DAMAGE")) {
+            long id=request(kind,5,"too-many-"+kind);
+            mvc.perform(post("/api/operations/stock-requests/"+id+"/approve").with(user("WHRET").roles("KITCHEN"))
+                .contentType(APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("INSUFFICIENT_HOUSEKEEPING_STOCK"));
+            assertThat(jdbc.queryForObject("SELECT trangThai FROM YeuCauKho WHERE maYeuCauKho=?",String.class,id)).isEqualTo("Chờ duyệt");
+        }
+        assertThat(stock()).isEqualTo(5);assertThat(housekeepingStock()).isEqualTo(4);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM BienDongKhoDichVu WHERE maDichVu=N'RETITEM'",Integer.class)).isZero();
+    }
+
+    @Test void failedIssueDoesNotAddDepartmentStockAndCanBeRetriedAfterRestock() throws Exception {
+        long id=request("ISSUE",6,"insufficient-main");
+        mvc.perform(post("/api/operations/stock-requests/"+id+"/approve").with(user("WHRET").roles("KITCHEN"))
+            .contentType(APPLICATION_JSON).content("{}"))
+            .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("INSUFFICIENT_STOCK"));
+        assertThat(stock()).isEqualTo(5);assertThat(housekeepingStock()).isEqualTo(4);
+        jdbc.update("UPDATE DichVu SET soLuongTonKho=6 WHERE maDichVu=N'RETITEM'");
+        approve(id);approve(id);
+        assertThat(stock()).isZero();assertThat(housekeepingStock()).isEqualTo(10);
+    }
+
+    @Test void concurrentDifferentRequestsCannotOverdrawDepartmentStock() throws Exception {
+        long first=request("RETURN",3,"race-first"),second=request("RETURN",3,"race-second");
+        var gate=new java.util.concurrent.CountDownLatch(1);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var futures=java.util.List.of(first,second).stream().map(id->pool.submit(()->{
+                gate.await();
+                return mvc.perform(post("/api/operations/stock-requests/"+id+"/approve").with(user("WHRET").roles("KITCHEN"))
+                    .contentType(APPLICATION_JSON).content("{}")).andReturn().getResponse().getStatus();
+            })).toList();
+            gate.countDown();
+            assertThat(java.util.List.of(futures.get(0).get(15,java.util.concurrent.TimeUnit.SECONDS),futures.get(1).get(15,java.util.concurrent.TimeUnit.SECONDS)))
+                .containsExactlyInAnyOrder(200,422);
+        }
+        assertThat(stock()).isEqualTo(8);assertThat(housekeepingStock()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM YeuCauKho WHERE maDichVu=N'RETITEM' AND trangThai=N'Đã duyệt'",Integer.class)).isEqualTo(1);
     }
 
 }

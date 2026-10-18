@@ -38,7 +38,7 @@ const DEMO_ROLES = [
   { label: "Buồng phòng", email: "HOUSEKEEP", desc: "Điều phối buồng phòng" },
   { label: "Kỹ thuật", email: "TECHNICAL", desc: "Kỹ thuật & bảo trì" },
   { label: "Kế toán", email: "ACCOUNTING", desc: "Điều phối kế toán" },
-  { label: "Kho và Dịch vụ", email: "KITCHEN", desc: "Điều phối kho và dịch vụ" },
+  { label: "Kho", email: "KHO", desc: "Quản lý kho và dịch vụ" },
   { label: "Nhân sự", email: "HR", desc: "Điều phối nhân sự" },
 ];
 

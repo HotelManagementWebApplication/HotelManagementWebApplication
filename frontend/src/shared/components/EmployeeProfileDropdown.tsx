@@ -51,8 +51,8 @@ const ROLE_INFO_MAP: Record<string, { label: string; department: string; gradien
     badge: "bg-amber-50 text-amber-700 border-amber-200",
   },
   KITCHEN: {
-    label: "Bếp trưởng & Nhà hàng",
-    department: "Bộ phận Bếp & Nhà hàng",
+    label: "Quản lý Kho và Dịch vụ",
+    department: "Bộ phận Kho và Dịch vụ",
     gradient: "from-[#EA580C] to-[#F97316]",
     badge: "bg-orange-50 text-orange-700 border-orange-200",
   },
@@ -245,6 +245,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
   };
 
   const displayName = profile?.full_name || currentRoleLabel || "Nhân viên";
+  const displayEmployeeId = profile?.role === "KITCHEN" ? "KHO" : profile?.employee_id || "—";
   const displayRole = roleLabelOverride || roleMeta.label;
   const displayDepartment = departmentName || roleMeta.department;
   const displayInitials = displayName
@@ -323,7 +324,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
                   {displayName}
                 </p>
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-white/90 border border-white/20 shrink-0">
-                  {profile?.employee_id || "—"}
+                  {displayEmployeeId}
                 </span>
               </div>
               <p className="text-xs text-white/70 flex items-center gap-1.5 mt-0.5 truncate">
@@ -406,7 +407,7 @@ export const EmployeeProfileDropdown: React.FC<EmployeeProfileDropdownProps> = (
                   <BadgeCheck size={12} className="text-slate-400" /> Mã nhân viên
                 </span>
                 <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
-                  {profile?.employee_id || "—"}
+                  {displayEmployeeId}
                 </span>
               </div>
 

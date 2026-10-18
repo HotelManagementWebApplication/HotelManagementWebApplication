@@ -2,56 +2,37 @@ package com.hospitality.mis.config;
 
 
 
-import com.hospitality.mis.middleware.security.EmployeeJwtAuthenticationConverter;
-
-import com.nimbusds.jose.jwk.JWK;
-
-import com.nimbusds.jose.jwk.JWKSet;
-
-import com.nimbusds.jose.jwk.OctetSequenceKey;
-
-import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
-
-import com.nimbusds.jose.jwk.source.JWKSource;
-
-import com.nimbusds.jose.proc.SecurityContext;
-
-import org.springframework.beans.factory.annotation.Value;
-
-import org.springframework.context.annotation.Bean;
-
-import org.springframework.context.annotation.Configuration;
-
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
-
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-
-import org.springframework.security.oauth2.jwt.JwtEncoder;
-
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
-
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-
-import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
-
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-
-
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 
 import javax.crypto.SecretKey;
-
 import javax.crypto.spec.SecretKeySpec;
 
-import java.nio.charset.StandardCharsets;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 
-import java.time.Duration;
+import com.hospitality.mis.middleware.security.EmployeeJwtAuthenticationConverter;
+import com.nimbusds.jose.jwk.JWK;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.OctetSequenceKey;
+import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import com.nimbusds.jose.jwk.source.JWKSource;
+import com.nimbusds.jose.proc.SecurityContext;
 
 
 
 @Configuration
 /** Cấu hình toàn bộ vòng đời JWT: khóa ký/giải mã, kiểm tra thời gian và ánh xạ quyền.
- * Các dependency bắt buộc lấy từ cấu hình môi trường; thiếu hoặc yếu thì ứng dụng dừng
- * ngay khi khởi tạo để không chạy với cơ chế xác thực không an toàn.
+ * Nếu không cấu hình JWT_SECRET, dùng khóa demo mặc định để hỗ trợ chạy local.
+ * Môi trường dùng chung hoặc triển khai cần cấp khóa riêng đủ dài qua biến môi trường.
  */
 public class JwtConfig {
 
@@ -59,8 +40,8 @@ public class JwtConfig {
 
     @Bean
 
-    /** Tạo khóa HMAC từ bí mật cấu hình; giới hạn tối thiểu 256 bit là điều kiện an toàn bắt buộc. */
-    SecretKey jwtSecretKey(@Value("${JWT_SECRET}") String configuredSecret) {
+    /** Tạo khóa HMAC từ JWT_SECRET hoặc khóa demo mặc định; yêu cầu tối thiểu 256 bit. */
+    SecretKey jwtSecretKey(@Value("${JWT_SECRET:test-only-secret-0123456789abcdef-0123456789abcdef-0123456789abcdef}") String configuredSecret) {
 
         if (configuredSecret == null || configuredSecret.isBlank()) {
 

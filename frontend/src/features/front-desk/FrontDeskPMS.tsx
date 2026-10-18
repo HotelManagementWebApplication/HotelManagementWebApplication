@@ -990,50 +990,42 @@ function RoomDrawer({ room, rooms, onClose, onRefresh, onCheckIn, onTransferred,
       </div>
 
       {/* Action buttons */}
-      <div className="frontdesk-room-drawer__actions" style={{ padding:"14px 20px",borderTop:"1px solid #E2E8F0",
-        display:"flex",flexDirection:"column",gap:8,flexShrink:0 }}>
-        {onCreateBooking && room.occStatus === "vacant" && room.cleanStatus === "clean" && (
-          <button type="button" onClick={()=>onCreateBooking(room)} style={{ width:"100%",padding:"11px",borderRadius:9,
-            background:"#16A34A",color:"#FFF",fontSize:13,fontWeight:700,cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
-            <PlusCircle size={15} /> Đặt phòng này
+      <div className="frontdesk-room-drawer__actions" style={{ borderTop:"1px solid #E2E8F0",flexShrink:0 }}>
+        <div className="frontdesk-room-drawer__workflow">
+          {onCreateBooking && room.occStatus === "vacant" && room.cleanStatus === "clean" && (
+            <button type="button" className="frontdesk-room-drawer__workflow-button frontdesk-room-drawer__workflow-button--wide" onClick={()=>onCreateBooking(room)}
+              style={{ background:"#16A34A",color:"#FFF",cursor:"pointer" }}>
+              <PlusCircle size={14} /> Đặt phòng này
+            </button>
+          )}
+          {canCheckIn && (
+            <button className="frontdesk-room-drawer__workflow-button" onClick={()=>void handleCheckInAction()} disabled={busy!==null}
+              style={{ background:"#2563EB",color:"#FFF",cursor:busy===null?"pointer":"not-allowed" }}>
+              <CheckCircle2 size={14} /> {busy==="checkin"?"Đang nhận phòng…":"Nhận phòng (Check-in)"}
+            </button>
+          )}
+          {canConfirm && (
+            <button className="frontdesk-room-drawer__workflow-button frontdesk-room-drawer__workflow-button--wide" onClick={()=>void confirmReservation()} disabled={busy!==null}
+              style={{ background:"#16A34A",color:"#FFF",cursor:busy===null?"pointer":"not-allowed" }}>
+              <CheckCircle2 size={14} /> {busy==="confirm"?"Đang xác nhận…":`Đã nhận đủ cọc: ${fmtVND(room.folioDeposit ?? 0)}`}
+            </button>
+          )}
+          <button className="frontdesk-room-drawer__workflow-button" onClick={()=>void reviewCheckout()}
+            disabled={!validReservation||busy!==null||room.reservationStatus!=="CHECKED_IN"||checkoutStep!=="idle"}
+            style={{ background:validReservation&&room.reservationStatus==="CHECKED_IN"?"#16A34A":"#CBD5E1",color:"#FFF",
+              cursor:validReservation&&room.reservationStatus==="CHECKED_IN"?"pointer":"not-allowed" }}>
+            <CheckCircle2 size={14} /> {busy==="review"?"Đang tải hóa đơn…":"Trả phòng & Quyết toán"}
           </button>
-        )}
-        {canCheckIn && (
-          <button onClick={()=>void handleCheckInAction()} disabled={busy!==null} style={{ width:"100%",padding:"12px",borderRadius:9,
-            background:"#2563EB",color:"#FFF",fontSize:13,fontWeight:700,cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-            boxShadow:"0 2px 8px rgba(37,99,235,.3)" }}>
-            <CheckCircle2 size={16} /> {busy==="checkin"?"Đang nhận phòng…":"Nhận phòng (Check-in)"}
-          </button>
-        )}
-        {canConfirm && (
-          <button onClick={()=>void confirmReservation()} disabled={busy!==null} style={{ width:"100%",padding:"11px",borderRadius:9,
-            background:"#16A34A",color:"#FFF",fontSize:13,fontWeight:700,cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
-            <CheckCircle2 size={16} /> {busy==="confirm"?"Đang xác nhận…":`Đã nhận đủ cọc: ${fmtVND(room.folioDeposit ?? 0)}`}
-          </button>
-        )}
-        <button onClick={()=>void reviewCheckout()} disabled={!validReservation||busy!==null||room.reservationStatus!=="CHECKED_IN"||checkoutStep!=="idle"} style={{ width:"100%",padding:"12px",borderRadius:9,
-          background:validReservation&&room.reservationStatus==="CHECKED_IN"?"#16A34A":"#CBD5E1",color:"#FFF",fontSize:13,fontWeight:700,cursor:validReservation&&room.reservationStatus==="CHECKED_IN"?"pointer":"not-allowed",
-          display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-          boxShadow:validReservation&&room.reservationStatus==="CHECKED_IN"?"0 2px 8px rgba(22,163,74,.3)":"none" }}>
-          <CheckCircle2 size={16} /> {busy==="review"?"Đang tải hóa đơn…":"Trả phòng & Quyết toán"}
-        </button>
-        <button onClick={()=>setOperation(value=>value==="transfer"?null:"transfer")} disabled={!canTransferCurrentRoom||busy!==null} title={!canTransferCurrentRoom?"Chỉ chuyển được phòng hiện đang có khách và đã sẵn sàng vận hành":undefined} style={{ width:"100%",padding:"11px",borderRadius:9,
-          background:"#FFF",border:"1px solid #E2E8F0",color:"#334155",
-          fontSize:13,fontWeight:600,cursor:canTransferCurrentRoom?"pointer":"not-allowed",opacity:canTransferCurrentRoom?1:.55,
-          display:"flex",alignItems:"center",justifyContent:"center",gap:7 }}>
-          <RefreshCcw size={14} /> Chuyển phòng
-        </button>
-        <div style={{ display:"flex",gap:8 }}>
-          <button onClick={()=>setTab("service")} disabled={!validReservation||busy!==null} style={{ flex:1,padding:"10px",borderRadius:9,
-            background:"#FFF",border:"1px solid #E2E8F0",color:"#334155",
-            fontSize:12,fontWeight:600,cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",gap:5 }}>
-            <PlusCircle size={13} /> Thêm Dịch vụ
+          <button className="frontdesk-room-drawer__workflow-button frontdesk-room-drawer__workflow-button--secondary"
+            onClick={()=>setOperation(value=>value==="transfer"?null:"transfer")} disabled={!canTransferCurrentRoom||busy!==null}
+            title={!canTransferCurrentRoom?"Chỉ chuyển được phòng hiện đang có khách và đã sẵn sàng vận hành":undefined}
+            style={{ cursor:canTransferCurrentRoom?"pointer":"not-allowed",opacity:canTransferCurrentRoom?1:.55 }}>
+            <RefreshCcw size={13} /> Chuyển phòng
           </button>
         </div>
+        <button className="frontdesk-room-drawer__secondary-action" onClick={()=>setTab("service")} disabled={!validReservation||busy!==null}>
+          <PlusCircle size={13} /> Thêm dịch vụ
+        </button>
         <div role="note" style={{padding:"9px 10px",borderRadius:8,background:"#F8FAFC",border:"1px solid #E2E8F0",color:"#64748B",fontSize:11,lineHeight:1.5}}>
           Trạng thái phòng được cập nhật theo quy trình nhận/trả phòng. Dọn phòng và bảo trì do bộ phận chuyên trách xử lý để không bỏ qua checklist hoặc nghiệm thu.
         </div>

@@ -1,6 +1,6 @@
-import {kitchenAccountingApi} from "../../shared/api/kitchenAccounting";
 import {stockRequestsApi} from "../../shared/api/stockRequests";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { kitchenAccountingApi } from "../../shared/api/kitchenAccounting";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import HousekeepingStation from "./HousekeepingStation";
 import { housekeepingTechnicalApi } from "../../shared/api/housekeepingTechnical";
@@ -101,7 +101,8 @@ describe("HousekeepingStation Operational Interface", () => {
       { id: 1, name: "Thay ga trải giường", active: true },
       { id: 2, name: "Lau sàn phòng tắm", active: true },
     ]);
-    vi.spyOn(kitchenAccountingApi, "services").mockResolvedValue(mockLinen as any);
+    vi.spyOn(stockRequestsApi, "catalog").mockResolvedValue(mockLinen as any);
+    vi.spyOn(stockRequestsApi, "list").mockResolvedValue([]);
 
     vi.spyOn(housekeepingTechnicalApi, "checklistResults").mockResolvedValue([
       { id: 1, task_id: 101, item: "Thay ga trải giường", passed: false, note: null, completed_by: "EMP01", completed_at: "2026-09-20T08:05:00" },
@@ -177,6 +178,24 @@ describe("HousekeepingStation Operational Interface", () => {
       active: true,
       category: "room-amenity",
     } as any);
+  });
+
+  it("shows its own linen and minibar stock and refreshes approved allocations", async () => {
+    const centralStock=vi.spyOn(kitchenAccountingApi,"services").mockResolvedValue(mockLinen.map(item=>({...item,stock:999})) as any);
+    const water={id:"WATER",name:"Nước suối",unit:"chai",stock:3,safety_threshold:2,category:"beverage",active:true};
+    vi.mocked(stockRequestsApi.catalog).mockResolvedValue([{...mockLinen[0],stock:0},water] as any);
+    render(<HousekeepingStation onBack={onBack} />);
+    fireEvent.click(screen.getByRole("button",{name:/Đồ vải & Vật tư ca/i}));
+    const linenQuantity=(await screen.findByText("bộ trong kho")).parentElement!;
+    expect(within(linenQuantity).getByText("0")).toBeDefined();
+
+    vi.mocked(stockRequestsApi.catalog).mockResolvedValue([{...mockLinen[0],stock:7},water] as any);
+    fireEvent.click(screen.getByRole("button",{name:"Làm mới dữ liệu buồng phòng"}));
+    await waitFor(()=>expect(within(linenQuantity).getByText("7")).toBeDefined());
+    fireEvent.click(screen.getByRole("button",{name:/Minibar & Quản lý kho/i}));
+    const minibarQuantity=(await screen.findByText("chai trong kho")).parentElement!;
+    expect(within(minibarQuantity).getByText("3")).toBeDefined();
+    expect(centralStock).not.toHaveBeenCalled();
   });
 
   it("renders Overview screen with KPIs, shift tasks, and authentic employee profile", async () => {
@@ -472,7 +491,7 @@ describe("HousekeepingStation Operational Interface", () => {
     vi.spyOn(housekeepingTechnicalApi, "tasks").mockResolvedValue([]);
     vi.spyOn(housekeepingTechnicalApi, "rooms").mockResolvedValue([]);
     vi.spyOn(housekeepingTechnicalApi, "incidents").mockResolvedValue([]);
-    vi.spyOn(kitchenAccountingApi, "services").mockResolvedValue([]);
+    vi.spyOn(stockRequestsApi, "catalog").mockResolvedValue([]);
 
     render(<HousekeepingStation onBack={onBack} />);
 

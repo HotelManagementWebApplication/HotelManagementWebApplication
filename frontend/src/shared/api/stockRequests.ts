@@ -10,6 +10,7 @@ export interface StockRequestRequest { kind:"ISSUE"|"RETURN"|"DAMAGE"; service_i
 const base="/api/operations/stock-requests";
 export const stockRequestsApi={
   list:()=>apiClient.request<StockRequest[]>(base),
+  /** Shared item metadata with department stock; never the central warehouse balance. */
   catalog:()=>apiClient.request<Service[]>(`${base}/catalog`),
   create:(body:StockRequestRequest,key:string)=>apiClient.request<StockRequest>(base,{method:"POST",body,idempotencyKey:key}),
   decide:(id:number,approve:boolean,reason:string)=>apiClient.request<StockRequest>(`${base}/${id}/${approve?"approve":"reject"}`,{method:"POST",body:{reason}}),

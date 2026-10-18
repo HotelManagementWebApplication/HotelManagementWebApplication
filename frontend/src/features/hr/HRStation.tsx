@@ -243,7 +243,7 @@ export default function HRStation({ onBack }: Props) {
     let active = true;
     const departmentFor = (role: string) => ({
       FRONT_DESK: ["Bộ phận Lễ tân", "reception"], HOUSEKEEPING: ["Bộ phận Buồng phòng", "housekeeping"],
-      KITCHEN: ["Bộ phận Bếp & Nhà hàng", "fnb"], TECHNICAL: ["Bộ phận Kỹ thuật", "technical"],
+      KITCHEN: ["Bộ phận Kho và Dịch vụ", "fnb"], TECHNICAL: ["Bộ phận Kỹ thuật", "technical"],
       ACCOUNTING: ["Bộ phận Kế toán", "accounting"], HR: ["Bộ phận Nhân sự", "hr"],
       MANAGER: ["Ban quản lý", "management"], DIRECTOR: ["Ban giám đốc", "director"], ADMIN: ["Bộ phận CNTT", "admin"],
     }[role] ?? ["Bộ phận Vận hành", "operations"]);
